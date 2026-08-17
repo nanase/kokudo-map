@@ -28,6 +28,7 @@ import {
   COLOR_CONSTRUCTION,
   COLOR_FERRY,
   COLOR_FOOT,
+  COLOR_UNOPENED,
   FILTERED_LAYERS,
   hasRef,
   N_COLORS,
@@ -333,6 +334,7 @@ function wireControls() {
   $('#legend-kind').innerHTML = [
     [COLOR_FOOT, '点線国道（徒歩道・階段）'],
     [COLOR_CONSTRUCTION, '工事中・事業中'],
+    [COLOR_UNOPENED, '未開通区間（計画・未着工）'],
     [COLOR_FERRY, '海上国道（航路）'],
   ]
     .map(
@@ -513,6 +515,7 @@ function wirePopups() {
       {
         road: '車道',
         construction: '工事中・事業中',
+        unopened: '未開通区間（計画・未着工）',
         foot: '点線国道（徒歩道）',
         steps: '点線国道（階段）',
         ferry: '海上国道（航路）',

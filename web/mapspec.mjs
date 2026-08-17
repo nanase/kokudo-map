@@ -10,6 +10,7 @@ export const FONT = ['NotoSansJP-Regular'];
 
 export const KIND_FOOT = ['foot', 'steps'];
 export const KIND_CONSTRUCTION = ['construction'];
+export const KIND_UNOPENED = ['unopened'];
 export const KIND_FERRY = ['ferry'];
 
 // Kinds that are not driveable carriageway. Each gets its own dashed layer and
@@ -17,11 +18,13 @@ export const KIND_FERRY = ['ferry'];
 // road you could drive down.
 export const SPECIAL_KINDS = [
   ...KIND_CONSTRUCTION,
+  ...KIND_UNOPENED,
   ...KIND_FOOT,
   ...KIND_FERRY,
 ];
 
 export const COLOR_CONSTRUCTION = '#8A6A2F';
+export const COLOR_UNOPENED = '#7B4B94';
 export const COLOR_FOOT = '#4B5A6C';
 export const COLOR_FERRY = '#0E7490';
 
@@ -209,6 +212,22 @@ export function routeLayers() {
       },
     },
     {
+      // 未開通区間: `highway=planned`/`proposed`, a line drawn to keep the
+      // route relation continuous where no road has been built. The finest
+      // dash of the four, since less exists here than at any other kind —
+      // even a foot path is a real thing to walk on.
+      id: 'unopened',
+      type: 'line',
+      source: 'routes',
+      'source-layer': SOURCE_LAYER,
+      layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      paint: {
+        'line-color': COLOR_UNOPENED,
+        'line-width': lineWidth({ add: 0.6, scaleByN: false }),
+        'line-dasharray': [1, 3],
+      },
+    },
+    {
       id: 'foot',
       type: 'line',
       source: 'routes',
@@ -318,9 +337,16 @@ export const FILTERED_LAYERS = [
     negate: false,
     toggle: 'special',
   },
+  { id: 'unopened', kinds: KIND_UNOPENED, negate: false, toggle: 'special' },
   { id: 'foot', kinds: KIND_FOOT, negate: false, toggle: 'special' },
   { id: 'ferry', kinds: KIND_FERRY, negate: false, toggle: 'ferry' },
   { id: 'route-labels', kinds: null, negate: false, toggle: 'labels' },
 ];
 
-export const CLICKABLE_LAYERS = ['roads', 'construction', 'foot', 'ferry'];
+export const CLICKABLE_LAYERS = [
+  'roads',
+  'construction',
+  'unopened',
+  'foot',
+  'ferry',
+];

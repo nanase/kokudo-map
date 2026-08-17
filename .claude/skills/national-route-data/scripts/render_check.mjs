@@ -117,6 +117,7 @@ const report = await page.evaluate(() => {
     'casing',
     'roads',
     'construction',
+    'unopened',
     'foot',
     'ferry',
     'route-labels',
@@ -272,6 +273,7 @@ const firstOf = (kind) => features.find((f) => f.properties.kind === kind);
 for (const [kind, layer, caption] of [
   ['foot', 'foot', '点線国道（徒歩道）'],
   ['construction', 'construction', '工事中区間'],
+  ['unopened', 'unopened', '未開通区間'],
   ['ferry', 'ferry', '海上国道（航路）'],
 ]) {
   const f = firstOf(kind);

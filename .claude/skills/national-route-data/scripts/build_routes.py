@@ -179,6 +179,20 @@ def resolve_relation_routes(rels: dict[int, dict]) -> dict[int, set[int]]:
 # name-only rule was in force. The two fields are one piece of evidence.
 SEA_SECTION = re.compile(r"海上区間")
 
+# A designated section with no road built yet — a straight line an OSM mapper
+# drew to keep the route relation continuous, not something you can drive.
+# Nationwide: 86 arcs, 173.3 km (76 `proposed`, 10 `planned`), the longest
+# being 16.4 km of 国道360号 (白山白川郷ホワイトロードの代替路) and 16.1 km of
+# 国道274号 (`description=国道274号不通区間`). Left as `road` it drew as a solid
+# line — CASES.md 8 and 12's "draw a straight line across nothing and it reads
+# as driveable" mistake, this time on land instead of water.
+#
+# This check must come after the sea-section checks above, not before: 32 of
+# the 34 ways that say 海上区間 nationwide (CASES.md 12) carry
+# `highway=planned`, and checking `hw` first would reclassify them back to
+# solid road, undoing that fix.
+UNOPENED_HIGHWAYS = {"planned", "proposed"}
+
 
 def classify(tags: dict[str, str]) -> str:
     """Which legend the piece of road belongs in."""
@@ -189,6 +203,8 @@ def classify(tags: dict[str, str]) -> str:
     hw = tags.get("highway")
     if hw == "construction" or "construction" in tags:
         return "construction"
+    if hw in UNOPENED_HIGHWAYS:
+        return "unopened"
     if hw == "steps":
         return "steps"
     if hw in FOOT_HIGHWAYS:

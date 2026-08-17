@@ -35,7 +35,7 @@ FIELDS = {
     "refs": "String",   # ",18,117," — every filter tests membership in this
     "label": "String",  # 18・117 — what the symbol layer draws
     "n": "Number",      # how many designations, i.e. concurrency depth
-    "kind": "String",   # road / construction / foot / steps / ferry
+    "kind": "String",   # road / construction / unopened / foot / steps / ferry
     "src": "String",    # relation / name / tag
     "former": "Number", # 1 for 旧道, still designated until 指定解除
     "name": "String",
