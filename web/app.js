@@ -6,10 +6,17 @@
  * sections" are both plain attribute filters, evaluated in the style — no
  * recomputation, no server.
  *
- * The build runs per region because Overpass is queried by bounding box. The
- * viewer is not: it loads every region that has been built and joins them into
- * one dataset, so there is no prefecture to pick. Widening the coverage is
- * therefore a data change (add a region, build it) and never a UI change.
+ * The build runs per region because both the OSM extract and, more importantly,
+ * the corroboration guard are boxed by prefecture. The viewer is not: the
+ * regions are merged at build time into one nationwide set of tiles, so there
+ * is no prefecture to pick. Widening the coverage is a data change (add a
+ * region, build it) and never a UI change.
+ *
+ * Nationwide that set is ~130,000 arcs, which is why the geometry arrives as
+ * vector tiles: only what is on screen is ever in memory. The consequence is
+ * that the panel cannot count features to fill itself in. Every total it shows
+ * — the route list, the ranking, the selection stats — is read out of
+ * national.meta.json, where the build wrote it after deduplicating the seams.
  *
  * Style and filter shapes live in mapspec.mjs so the build-time checker can
  * validate exactly what runs here.
@@ -26,15 +33,15 @@ import {
   N_COLORS,
   N_LABELS,
   NOTHING,
+  PMTILES_URL,
   routeLayers,
+  routeSources,
   withKind,
 } from './mapspec.mjs';
 
-const EMPTY = { type: 'FeatureCollection', features: [] };
-
 const state = {
   meta: null,
-  geo: null,
+  routes: [],
   selected: new Set(),
   conc: 'off',
   labels: true,
@@ -61,6 +68,12 @@ function shield(ref, small) {
 const shieldRow = (refs, small) => refs.map((r) => shield(r, small)).join('');
 
 /* ------------------------------------------------------------------- map --- */
+// PMTiles is one archive read by byte range, so a static host serves the whole
+// country without a tile server. Any host will do — but it must answer Range
+// requests, which is why the development server is scripts/serve.py and not
+// `python -m http.server`.
+maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+
 const map = new maplibregl.Map({
   container: 'map',
   attributionControl: false,
@@ -89,46 +102,28 @@ map.addControl(
   'bottom-right',
 );
 
-/* ----------------------------------------------------------------- merge --- */
+/* ------------------------------------------------------------ aggregates --- */
 /**
- * Join every built region into one set of arcs.
+ * The build ships one table: every distinct *combination* of designations, with
+ * its length, arc count and extent. Everything the panel shows is a sum over a
+ * subset of its rows.
  *
- * The bounding boxes are rectangles, so neighbouring boxes overlap at the
- * seams and hand back the same road twice. The OSM way id is the identity and
- * deduplicates them exactly — no geometry comparison is needed.
+ * A per-route table would not do. Concurrency means an arc belongs to several
+ * routes at once, so adding two route rows counts the shared arcs twice —
+ * which is exactly the number the map exists to stop hiding.
  */
-function mergeArcs(parts) {
-  const byId = new Map();
-  for (const { geo } of parts) {
-    for (const f of geo.features) {
-      if (byId.has(f.properties.id)) continue;
-      // Label text is derived once here rather than stored per feature on disk.
-      f.properties.label = f.properties.refs_list.join('・');
-      byId.set(f.properties.id, f);
-    }
-  }
-  return { type: 'FeatureCollection', features: [...byId.values()] };
-}
-
-/**
- * Per-route totals over the merged arcs.
- *
- * These are recomputed rather than summed from the per-region masters: an arc
- * returned by two overlapping boxes is counted once here and twice there.
- */
-function routesOf(features) {
+function routesOf(combos) {
   const by = new Map();
-  for (const f of features) {
-    const p = f.properties;
-    for (const ref of p.refs_list) {
+  for (const c of combos) {
+    for (const ref of c.refs) {
       let e = by.get(ref);
       if (!e) {
         e = { ref, km: 0, arcs: 0, max_n: 1 };
         by.set(ref, e);
       }
-      e.km += p.km;
-      e.arcs++;
-      e.max_n = Math.max(e.max_n, p.n);
+      e.km += c.km;
+      e.arcs += c.arcs;
+      e.max_n = Math.max(e.max_n, c.n);
     }
   }
   const out = [...by.values()].sort((a, b) => a.ref - b.ref);
@@ -136,107 +131,42 @@ function routesOf(features) {
   return out;
 }
 
-/** Concurrency combinations over the merged arcs: deepest first, then longest. */
-function rankingOf(features) {
-  const by = new Map();
-  for (const f of features) {
-    const p = f.properties;
-    if (p.n < 2) continue;
-    // `refs` is already sorted and delimiter-wrapped, so it is the combination.
-    let e = by.get(p.refs);
-    if (!e) {
-      e = { refs: p.refs_list, n: p.n, km: 0, arcs: 0, names: new Map() };
-      by.set(p.refs, e);
-    }
-    e.km += p.km;
-    e.arcs++;
-    if (p.name) e.names.set(p.name, (e.names.get(p.name) || 0) + 1);
+/** Totals over the combinations a selection touches. An empty selection means
+ *  everything, which is what the map is already showing. */
+function statsFor(selected) {
+  let arcs = 0;
+  let km = 0;
+  let conc = 0;
+  for (const c of state.meta.combinations) {
+    if (selected.size && !c.refs.some((r) => selected.has(r))) continue;
+    arcs += c.arcs;
+    km += c.km;
+    if (c.n >= 2) conc += c.arcs;
   }
-  const out = [...by.values()].sort((a, b) => b.n - a.n || b.km - a.km);
-  for (const e of out) {
-    e.names = [...e.names.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([n]) => n);
-  }
-  return out;
-}
-
-/**
- * Termini merged across regions.
- * A terminus inside an overlap is reported by both regions, so points are
- * keyed by rounded position; shared points union their route numbers.
- */
-function mergeTermini(parts) {
-  const at = (t) => `${t.lat.toFixed(5)},${t.lon.toFixed(5)}`;
-  const single = new Map();
-  const shared = new Map();
-  for (const { meta } of parts) {
-    for (const t of meta.termini) single.set(`${at(t)}/${t.ref}`, t);
-    for (const t of meta.shared_termini) {
-      const cur = shared.get(at(t));
-      if (cur) {
-        cur.refs = [...new Set([...cur.refs, ...t.refs])].sort((a, b) => a - b);
-      } else {
-        shared.set(at(t), { lat: t.lat, lon: t.lon, refs: [...t.refs] });
-      }
-    }
-  }
-  return {
-    termini: [...single.values()],
-    shared_termini: [...shared.values()].sort(
-      (a, b) => b.refs.length - a.refs.length,
-    ),
-  };
-}
-
-/**
- * One metadata record for the whole map.
- * Freshness is reported at its worst: the map is only as current as its
- * stalest region, and saying otherwise would overstate it.
- */
-function mergeMeta(parts, features) {
-  const metas = parts.map((p) => p.meta);
-  const min = (vals) => vals.filter(Boolean).sort()[0] || null;
-  const max = (vals) => vals.filter(Boolean).sort().slice(-1)[0] || null;
-  return {
-    osm_timestamp: min(metas.map((m) => m.osm_timestamp)),
-    oldest_edit: min(metas.map((m) => m.oldest_edit)),
-    newest_edit: max(metas.map((m) => m.newest_edit)),
-    endpoints: [...new Set(metas.map((m) => new URL(m.endpoint).host))],
-    total_km: features.reduce((s, f) => s + f.properties.km, 0),
-    arc_count: features.length,
-    routes: routesOf(features),
-    concurrency_ranking: rankingOf(features),
-    ...mergeTermini(parts),
-  };
+  return { arcs, km, conc };
 }
 
 /* ----------------------------------------------------------------- boot --- */
 async function boot() {
-  const index = await fetch('data/regions.json').then((r) => r.json());
+  const [index, meta] = await Promise.all([
+    fetch('data/regions.json').then((r) => r.json()),
+    fetch('data/national.meta.json').then((r) => r.json()),
+  ]);
   if (!index.length) throw new Error('data/regions.json is empty');
-
-  const parts = await Promise.all(
-    index.map(async (r) => ({
-      meta: await fetch(`data/${r.region}.meta.json`).then((x) => x.json()),
-      geo: await fetch(`data/${r.region}.geojson`).then((x) => x.json()),
-    })),
-  );
-
-  state.geo = mergeArcs(parts);
-  state.meta = mergeMeta(parts, state.geo.features);
+  state.meta = meta;
+  state.routes = routesOf(meta.combinations);
 
   await new Promise((res) => (map.loaded() ? res() : map.once('load', res)));
 
-  map.addSource('routes', { type: 'geojson', data: EMPTY });
-  map.addSource('termini', { type: 'geojson', data: EMPTY });
+  // The archive is addressed absolutely: the protocol handler resolves the URL
+  // itself and has no page to be relative to.
+  const sources = routeSources(new URL(PMTILES_URL, location.href).href);
+  for (const [id, src] of Object.entries(sources)) map.addSource(id, src);
   for (const layer of routeLayers()) map.addLayer(layer);
 
   wirePopups();
   wireControls();
 
-  map.getSource('routes').setData(state.geo);
   map.getSource('termini').setData(terminiFeatures(state.meta));
 
   buildUI();
@@ -249,20 +179,17 @@ async function boot() {
   $('#loading').classList.add('done');
 }
 
-/** Open on the union of the built regions, or on the one named by ?region=. */
+/**
+ * Open on the roads themselves, or on the box named by ?region=.
+ *
+ * The union of the region boxes is not the same thing: they are rectangles
+ * drawn around prefecture outlines, and 東京都 reaches 南鳥島, so their union
+ * spans a third of the Pacific. The extent of the arcs is what there is to see.
+ */
 function fitInitialView(index) {
   const wanted = new URLSearchParams(location.search).get('region');
-  const boxes = index.filter((r) => r.region === wanted);
-  const use = boxes.length ? boxes : index;
-  const [w, s, e, n] = use.reduce(
-    ([w, s, e, n], r) => [
-      Math.min(w, r.bbox[0]),
-      Math.min(s, r.bbox[1]),
-      Math.max(e, r.bbox[2]),
-      Math.max(n, r.bbox[3]),
-    ],
-    [Infinity, Infinity, -Infinity, -Infinity],
-  );
+  const box = index.find((r) => r.region === wanted)?.bbox || state.meta.bbox;
+  const [w, s, e, n] = box;
   map.fitBounds(
     [
       [w, s],
@@ -326,7 +253,7 @@ function applyFilters() {
 /* -------------------------------------------------------------------- ui --- */
 function buildUI() {
   const list = $('#route-list');
-  list.innerHTML = state.meta.routes
+  list.innerHTML = state.routes
     .map(
       (r) =>
         `<label data-ref="${r.ref}" title="${r.km} km / 最大 ${r.max_n} 重用">` +
@@ -442,20 +369,11 @@ function setSelection(refs) {
 
 function updateStats() {
   const sel = state.selected;
-  let arcs = 0;
-  let km = 0;
-  let conc = 0;
-  for (const f of state.geo.features) {
-    const p = f.properties;
-    if (sel.size && !p.refs_list.some((r) => sel.has(r))) continue;
-    arcs++;
-    km += p.km;
-    if (p.n >= 2) conc++;
-  }
+  const { arcs, km, conc } = statsFor(sel);
   $('#stats').innerHTML =
-    `<span>選択路線　${sel.size || state.meta.routes.length} / ${state.meta.routes.length}</span>` +
+    `<span>選択路線　${sel.size || state.routes.length} / ${state.routes.length}</span>` +
     `<span>対象アーク　${arcs.toLocaleString()}</span>` +
-    `<span>延長　${km.toFixed(0)} km</span>` +
+    `<span>延長　${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</span>` +
     `<span>重用アーク　${conc.toLocaleString()}</span>`;
   // Nothing to say when nothing is picked: the map is already showing
   // everything, and the count above states it.
@@ -465,8 +383,8 @@ function updateStats() {
 /** The ranking is folded away by default, so its size has to show on the tab. */
 function renderRanking() {
   const sel = state.selected;
-  const matching = state.meta.concurrency_ranking.filter(
-    (e) => !sel.size || e.refs.some((r) => sel.has(r)),
+  const matching = state.meta.combinations.filter(
+    (e) => e.n >= 2 && (!sel.size || e.refs.some((r) => sel.has(r))),
   );
   const rows = matching.slice(0, 25);
   $('#ranking-count').textContent = matching.length
@@ -531,14 +449,22 @@ document.addEventListener('click', (e) => {
   }
 });
 
+/**
+ * Frame where the given routes actually run together.
+ * The geometry is in tiles and mostly off screen, so the extent comes from the
+ * combination table, which carries the bounding box of each combination.
+ */
 function zoomToRefs(refs) {
   const set = new Set(refs);
   const b = new maplibregl.LngLatBounds();
   let hit = false;
-  for (const f of state.geo.features) {
-    if (f.properties.n < 2) continue;
-    if (f.properties.refs_list.filter((r) => set.has(r)).length < 2) continue;
-    for (const c of f.geometry.coordinates) b.extend(c);
+  for (const c of state.meta.combinations) {
+    if (c.n < 2) continue;
+    if (c.refs.filter((r) => set.has(r)).length < 2) continue;
+    b.extend([
+      [c.bbox[0], c.bbox[1]],
+      [c.bbox[2], c.bbox[3]],
+    ]);
     hit = true;
   }
   if (hit) map.fitBounds(b, { padding: 60, maxZoom: 13 });
@@ -556,10 +482,9 @@ function wirePopups() {
     });
     if (!hits.length) return;
     const p = hits[0].properties;
-    // GeoJSON sources keep arrays, but a round-trip through the tile
-    // serialiser can hand them back as JSON strings.
-    const refs =
-      typeof p.refs_list === 'string' ? JSON.parse(p.refs_list) : p.refs_list;
+    // A vector tile has no array type, so the designations travel as the same
+    // delimiter-wrapped key the filters test, and are split back out here.
+    const refs = p.refs.split(',').filter(Boolean).map(Number);
     const kindText =
       {
         road: '車道',

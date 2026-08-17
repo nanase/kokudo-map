@@ -16,13 +16,13 @@ import sys
 from collections import Counter
 from datetime import datetime, timezone
 
-from _paths import DATA
+from _paths import REGIONS
 from expectations import for_region
 
 region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
 expect = for_region(region)
-gj = json.loads((DATA / f"{region}.geojson").read_text(encoding="utf-8"))
-meta = json.loads((DATA / f"{region}.meta.json").read_text(encoding="utf-8"))
+gj = json.loads((REGIONS / f"{region}.geojson").read_text(encoding="utf-8"))
+meta = json.loads((REGIONS / f"{region}.meta.json").read_text(encoding="utf-8"))
 feats = gj["features"]
 
 fails: list[str] = []
@@ -96,6 +96,25 @@ for r, where in expect["absent"]:
 uncorroborated = refs_present - set(meta["corroborated_refs"])
 check(not uncorroborated, f"every route present is corroborated by a relation ({sorted(uncorroborated)})")
 
+# ...and the invariant behind *that*: the vouching set is regional. A general
+# national route can be numbered 1-58 or 101-507, six of them abolished — 459
+# numbers. Judged over the whole country every one of them is corroborated
+# somewhere, the guard filters nothing, and 長野県道372号 is 国道372号 again.
+# So the guard is only a guard while this set stays small. Measured over all 47
+# prefectures the largest is well under a third of 459; the threshold is set
+# from that measurement, not from taste.
+corroborated = set(meta["corroborated_refs"])
+check(len(corroborated) < 153,
+      f"the corroborated set is regional, not national "
+      f"({len(corroborated)} of 459 possible numbers)")
+
+# What the guard actually threw away here. Bare numeric `ref` is the format
+# 都道府県道 use too, so on any real prefecture this is non-empty.
+rejected = meta.get("rejected_refs", {})
+print(f"NOTE  corroborated {len(corroborated)} numbers; rejected "
+      f"{len(rejected)} uncorroborated ref tokens "
+      f"({sum(rejected.values())} ways)")
+
 # Provenance must be recorded so the map can say where a designation came from.
 srcs = Counter(f["properties"]["src"] for f in feats)
 check(set(srcs) <= {"relation", "name", "tag"}, f"arc sources are known values ({dict(srcs)})")
@@ -152,7 +171,14 @@ check(not asym, f"per-route max_n covers every arc it appears on ({asym} violati
 
 n2 = sum(1 for f in feats if f["properties"]["n"] >= 2)
 check(n2 > 0, f"concurrent arcs found: {n2}")
-check(meta["concurrency_ranking"][0]["n"] >= 3, f"ranking is sorted by concurrency depth (top n={meta['concurrency_ranking'][0]['n']})")
+# Depth of 3 is a fact about the country, not about every prefecture — 香川県
+# and 沖縄県 need not have a triple. verify_national.py asserts the deeper one
+# over the merged data, where it is genuinely known.
+ranking = meta["concurrency_ranking"]
+check(bool(ranking) and ranking[0]["n"] >= 2,
+      f"ranking is sorted by concurrency depth (top n={ranking[0]['n'] if ranking else 0})")
+check(all(ranking[i]["n"] >= ranking[i + 1]["n"] for i in range(len(ranking) - 1)),
+      "ranking is ordered deepest first")
 
 # Length bookkeeping: summing per-route km double-counts concurrency exactly
 # as much as the arcs say it should.

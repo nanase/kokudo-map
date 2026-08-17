@@ -13,13 +13,15 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { ROOT } from './_paths.mjs';
+import { REGIONS, ROOT } from './_paths.mjs';
 
 // Imported by path rather than by a fixed relative depth: these scripts belong
 // to the skill, so how far they sit below the project is not fixed.
 const {
   baseStyle,
   routeLayers,
+  routeSources,
+  PMTILES_URL,
   buildFilter,
   withKind,
   hasRef,
@@ -32,10 +34,10 @@ const spec = require('@maplibre/maplibre-gl-style-spec');
 
 const REGION = process.argv[2] || 'nagano';
 const geo = JSON.parse(
-  readFileSync(join(ROOT, `web/data/${REGION}.geojson`), 'utf8'),
+  readFileSync(join(REGIONS, `${REGION}.geojson`), 'utf8'),
 );
 const meta = JSON.parse(
-  readFileSync(join(ROOT, `web/data/${REGION}.meta.json`), 'utf8'),
+  readFileSync(join(REGIONS, `${REGION}.meta.json`), 'utf8'),
 );
 console.log(`region: ${REGION} (${meta.label})`);
 
@@ -47,14 +49,10 @@ const ok = (cond, msg) =>
 /* ---- 1. the whole style must satisfy the spec ----------------------------- */
 function styleWith(filters) {
   const style = baseStyle();
-  style.sources.routes = {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-  };
-  style.sources.termini = {
-    type: 'geojson',
-    data: { type: 'FeatureCollection', features: [] },
-  };
+  // The viewer's own source definitions, not stand-ins: a `source-layer` on a
+  // layer is only valid against a vector source, so validating the layers over
+  // invented GeoJSON sources would pass while the real map failed.
+  Object.assign(style.sources, routeSources(PMTILES_URL));
   const layers = routeLayers();
   if (filters) {
     for (const l of layers)
@@ -84,10 +82,31 @@ validate(
   'style with no filters validates against the MapLibre spec',
 );
 
+// The archive states which zooms it holds and the protocol passes that on. A
+// zoom range restated in the style is a second, silent answer to the same
+// question: pinning maxzoom:14 against a z12 archive left every layer blank
+// past z12 while the style still validated.
+const src = routeSources(PMTILES_URL).routes;
+ok(
+  src.minzoom === undefined && src.maxzoom === undefined,
+  `the vector source does not restate the archive's zoom range ` +
+    `(${JSON.stringify(src)})`,
+);
+ok(
+  routeLayers()
+    .filter((l) => l.source === 'routes')
+    .every((l) => l['source-layer'] === 'routes'),
+  'every layer on the vector source names its source-layer',
+);
+
 // Every filter combination the UI can produce must also validate in place.
 // Scenarios are derived from the region's own data so the same checks work
 // wherever they are run. The deepest concurrency is the most demanding case.
-const deepest = meta.concurrency_ranking[0].refs;
+// A prefecture with no concurrency at all would still have to produce a valid
+// style, so the scenarios fall back to its longest route rather than throwing.
+const deepest = meta.concurrency_ranking.length
+  ? meta.concurrency_ranking[0].refs
+  : [meta.routes[0].ref];
 const single = deepest[0];
 const pair = deepest.slice(0, 2);
 
@@ -216,10 +235,13 @@ for (const ref of busiest) {
 }
 
 /* ---- 5. spot-check the deepest concurrency ------------------------------- */
+// How deep the deepest stack goes is a fact about the country, not about every
+// prefecture — verify_national.py asserts the six-fold one over the merged
+// data. Here it only has to exist and be at the top of the ranking.
 const top = meta.concurrency_ranking[0];
 ok(
-  top.n >= 3,
-  `deepest concurrency in ${meta.label} is ${top.n}x ${JSON.stringify(top.refs)}`,
+  top?.n >= 2,
+  `deepest concurrency in ${meta.label} is ${top?.n}x ${JSON.stringify(top?.refs)}`,
 );
 // Every number of the deepest combination must land on the same arcs — the
 // thing the map exists to show — and the filter primitive must agree with the

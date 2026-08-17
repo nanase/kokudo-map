@@ -30,6 +30,31 @@ export const GSI_TILES =
 const GSI_GLYPHS =
   'https://gsi-cyberjapan.github.io/optimal_bvmap/glyphs/{fontstack}/{range}.pbf';
 
+/* The arcs arrive as vector tiles. Nationwide they are ~130,000 features, so
+ * the viewer cannot hold them: it draws what is on screen and reads every total
+ * it displays out of national.meta.json instead. */
+export const PMTILES_URL = 'data/national.pmtiles';
+export const SOURCE_LAYER = 'routes';
+
+/** The sources the route layers expect. The checker builds its style from this
+ *  same function, so a layer can never be validated against a source shape the
+ *  viewer does not actually create. */
+export function routeSources(url) {
+  return {
+    // No `maxzoom` here on purpose. The archive states its own, and the
+    // protocol hands MapLibre a TileJSON that carries it. Repeating the number
+    // here once made the style ask for a zoom the archive did not contain, and
+    // everything below it silently stopped drawing.
+    routes: { type: 'vector', url: `pmtiles://${url}` },
+    // Termini are a few thousand points and every one of them is in the panel
+    // already, so they stay plain GeoJSON.
+    termini: {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] },
+    },
+  };
+}
+
 /* ------------------------------------------------------------- filtering --- */
 
 /** Membership test that cannot be fooled by substrings: ",4," never hits ",14,". */
@@ -142,6 +167,7 @@ export function routeLayers() {
       id: 'casing',
       type: 'line',
       source: 'routes',
+      'source-layer': SOURCE_LAYER,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#FFFFFF',
@@ -153,6 +179,7 @@ export function routeLayers() {
       id: 'roads',
       type: 'line',
       source: 'routes',
+      'source-layer': SOURCE_LAYER,
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': colorByN,
@@ -163,6 +190,7 @@ export function routeLayers() {
       id: 'construction',
       type: 'line',
       source: 'routes',
+      'source-layer': SOURCE_LAYER,
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': COLOR_CONSTRUCTION,
@@ -174,6 +202,7 @@ export function routeLayers() {
       id: 'foot',
       type: 'line',
       source: 'routes',
+      'source-layer': SOURCE_LAYER,
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': COLOR_FOOT,
@@ -188,6 +217,7 @@ export function routeLayers() {
       id: 'ferry',
       type: 'line',
       source: 'routes',
+      'source-layer': SOURCE_LAYER,
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': COLOR_FERRY,
@@ -201,6 +231,7 @@ export function routeLayers() {
       id: 'route-labels',
       type: 'symbol',
       source: 'routes',
+      'source-layer': SOURCE_LAYER,
       minzoom: 8,
       layout: {
         'symbol-placement': 'line',

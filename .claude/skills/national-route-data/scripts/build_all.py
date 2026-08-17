@@ -1,0 +1,129 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
+"""Build every region from cache, then pack and check the nationwide product.
+
+The per-region half is deliberately unchanged: each prefecture is judged inside
+its own box, because the corroboration guard only filters while the set of route
+numbers it trusts is a prefecture's worth rather than the country's. What is new
+is the second half — merging the regions, cutting tiles, and asking the
+questions that only exist once the map is nationwide.
+
+Every region is built and checked before anything is packed, and the failures
+are reported together. Stopping at the first one would mean learning about 47
+prefectures one run at a time. Packing still only happens if all of them passed:
+a half-built set packed into an archive looks exactly like a complete one.
+
+Usage:  uv run scripts/build_all.py [region ...]   (default: every region)
+        uv run scripts/build_all.py --skip-verify  (build and pack only)
+        uv run scripts/build_all.py --no-pack      (per-region only)
+"""
+from __future__ import annotations
+
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+from _paths import ROOT
+from regions import REGIONS
+
+HERE = Path(__file__).resolve().parent
+
+
+def run(cmd: list[str]) -> tuple[int, str]:
+    r = subprocess.run(
+        cmd, cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+    )
+    return r.returncode, (r.stdout or "") + (r.stderr or "")
+
+
+def stage(label: str, cmd: list[str]) -> None:
+    """A whole-country stage. These do stop at the first failure."""
+    print(f"\n{'=' * 70}\n{label}\n{'=' * 70}", flush=True)
+    r = subprocess.run(cmd, cwd=ROOT)
+    if r.returncode != 0:
+        raise SystemExit(f"\n{label} failed with exit code {r.returncode}")
+
+
+def verdict(out: str) -> str:
+    lines = [ln for ln in out.splitlines() if "passed," in ln]
+    return lines[-1] if lines else "no verdict"
+
+
+def failures(out: str) -> list[str]:
+    return [ln.strip() for ln in out.splitlines() if ln.startswith("FAIL")]
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    skip_verify = "--skip-verify" in args
+    no_pack = "--no-pack" in args
+    wanted = [a for a in args if not a.startswith("--")] or list(REGIONS)
+
+    started = time.time()
+    broken: dict[str, list[str]] = {}
+
+    for i, region in enumerate(wanted, 1):
+        label = REGIONS[region]["label"]
+        head = f"[{i:>2}/{len(wanted)}] {region:<11} {label:<5}"
+
+        code, out = run(["uv", "run", str(HERE / "build_routes.py"), region])
+        if code != 0:
+            print(f"{head} 判定に失敗\n{out}", flush=True)
+            broken[region] = ["build_routes.py failed"]
+            continue
+        if skip_verify:
+            print(f"{head} 判定のみ", flush=True)
+            continue
+
+        code, out = run(["uv", "run", str(HERE / "verify.py"), region])
+        bad = failures(out)
+        line = f"{head} {verdict(out)}"
+
+        code2, out2 = run(["node", str(HERE / "check_expressions.mjs"), region])
+        bad += failures(out2)
+        line += f" | 式 {verdict(out2)}"
+
+        print(line, flush=True)
+        for f in bad:
+            print(f"        {f}", flush=True)
+        if bad:
+            broken[region] = bad
+
+    print(f"\n{len(wanted)} region(s) in {time.time() - started:.0f}s", flush=True)
+
+    if broken:
+        print(f"\n{'=' * 70}")
+        print(f"{len(broken)} region(s) did not pass — nothing was packed")
+        print(f"{'=' * 70}")
+        for region, bad in broken.items():
+            print(f"\n{region} ({REGIONS[region]['label']}) — {len(bad)}")
+            for f in bad:
+                print(f"  {f}")
+        raise SystemExit(1)
+
+    if no_pack:
+        return
+
+    # 47 prefectures of GeoJSON, the merged features and the whole tile pyramid
+    # are live at once here; the default heap is not enough.
+    stage("配信データ — 地域を結合してタイルを切る",
+          ["node", "--max-old-space-size=6144", str(HERE / "pack_web.mjs")])
+    stage("配信データ — PMTiles にまとめる",
+          ["uv", "run", str(HERE / "pack_pmtiles.py")])
+    if not skip_verify:
+        stage("全国検証 — 結合後にしか答えられないことを確認する",
+              ["uv", "run", str(HERE / "verify_national.py")])
+
+    print(f"\n{'=' * 70}")
+    print(f"すべて通った。{time.time() - started:.0f}s")
+    print("ブラウザでの実描画は次で確認する。")
+    print("  mise run serve   （別の端末で）")
+    print("  mise run render-check")
+
+
+if __name__ == "__main__":
+    main()

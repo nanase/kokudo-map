@@ -124,10 +124,21 @@ def main() -> None:
     ep, base_ts = pick_endpoint()
     print(f"\nfetching {region} ({bb})")
 
-    # 1. the trusted core: national route relations and their member ways
+    # 1. the trusted core: national route relations and their member ways.
+    #
+    # `network=JP:national` is not the only evidence a relation is a 国道 route.
+    # Measured over the whole country, 582 route=road relations named 国道N号
+    # carry that network and 43 carry no `network` at all — and for 国道478号 the
+    # untagged one is the only relation there is. Name is the same evidence
+    # RULES.md 問1 規則 b accepts from a way, so it is accepted here too, unless
+    # a 都道府県道 network says otherwise.
     core = run(ep, f"""
 [out:json][timeout:900];
-relation["type"="route"]["route"="road"]["network"~"^JP:national"]({bb})->.parents;
+(
+  relation["type"="route"]["route"="road"]["network"~"^JP:national"]({bb});
+  relation["type"="route"]["route"="road"]["name"~"^国道[0-9]+号"]
+          ["network"!~"^JP:prefectural"]({bb});
+)->.parents;
 relation(r.parents)->.kids;
 (.parents; .kids;)->.rels;
 .rels out body;

@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
-import { ROOT } from './_paths.mjs';
+import { DATA, REGIONS, ROOT } from './_paths.mjs';
 
 // Read the basemap URL from the real style rather than restating it, for the
 // same reason the expression checker imports mapspec: a copy stops checking
@@ -20,7 +20,9 @@ const { GSI_TILES } = await import(
 const TILE_HOST = new URL(GSI_TILES).host;
 
 // Not named URL — that would shadow the global URL constructor used below.
-const PAGE = 'http://localhost:8000/';
+// PORT follows serve.py, for when something else already holds 8000.
+const PAGE =
+  process.env.MAP_URL || `http://localhost:${process.env.PORT || 8000}/`;
 
 // The screenshots are evidence for one run, not a build product, so they are
 // written outside the working tree. Pass a directory to keep them somewhere.
@@ -29,21 +31,40 @@ const OUTDIR =
 mkdirSync(OUTDIR, { recursive: true });
 const shot = (name) => join(OUTDIR, `${name}.png`);
 
-const read = (p) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'));
+const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
 
-// Same join the viewer performs: overlapping bounding boxes return the same
-// way twice, and the OSM way id deduplicates them.
-const index = read('web/data/regions.json');
+// The same join the packer performed. It is redone here from the per-region
+// builds rather than read back out of the tiles, so the probes below are
+// derived from what the build decided and not from what the archive happens to
+// contain — the point of the run is to find out whether those agree.
+const index = read(join(DATA, 'regions.json'));
+const meta = read(join(DATA, 'national.meta.json'));
 const byId = new Map();
+// Where each region's roads actually are. A region's box is a rectangle drawn
+// around a prefecture outline — 東京都 reaches 南鳥島 — so flying to the box
+// would point the camera at open sea.
+const extents = new Map();
 for (const r of index) {
-  for (const f of read(`web/data/${r.region}.geojson`).features) {
+  const box = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const f of read(join(REGIONS, `${r.region}.geojson`)).features) {
+    for (const [x, y] of f.geometry.coordinates) {
+      if (x < box[0]) box[0] = x;
+      if (y < box[1]) box[1] = y;
+      if (x > box[2]) box[2] = x;
+      if (y > box[3]) box[3] = y;
+    }
     if (!byId.has(f.properties.id)) byId.set(f.properties.id, f);
   }
+  extents.set(r.region, box);
 }
 const features = [...byId.values()];
 console.log(
-  `regions built: ${index.map((r) => r.label).join(', ')} ` +
-    `— ${features.length.toLocaleString()} arcs after dedupe`,
+  `regions built: ${index.length} — ${features.length.toLocaleString()} arcs after dedupe`,
+);
+console.log(
+  `national.meta.json: ${meta.arc_count.toLocaleString()} arcs, ` +
+    `${meta.combinations.length.toLocaleString()} combinations, ` +
+    `${meta.termini.length.toLocaleString()} termini`,
 );
 
 const browser = await chromium.launch();
@@ -147,6 +168,14 @@ ok(
 ok(
   report.routeCount >= Math.max(...index.map((r) => r.routes)),
   `the route list covers every region at once (${report.routeCount} routes)`,
+);
+// The panel no longer counts features — it cannot, since most of them are not
+// loaded — so what it states has to be the build's number rather than whatever
+// happened to be on screen when it was drawn.
+ok(
+  report.stats.includes(meta.arc_count.toLocaleString()),
+  `the panel states the nationwide arc count, not the loaded one ` +
+    `(${meta.arc_count.toLocaleString()} in "${report.stats}")`,
 );
 ok(
   JSON.stringify(report.concOptions) === JSON.stringify(['off', 'all']),
@@ -301,11 +330,12 @@ if (ferryArc) {
 }
 
 // --- every region's data must actually be on the map ------------------------
-// One region loading and the rest silently failing would look almost the same
-// from the panel, so each box is visited and its roads counted.
+// One region failing to make it into the archive would look almost the same
+// from the panel, so every prefecture is visited and its roads counted.
 console.log('');
+const empty = [];
 for (const r of index) {
-  const [w, s, e, n] = r.bbox;
+  const [w, s, e, n] = extents.get(r.region);
   await page.evaluate(
     (b) => window.map.fitBounds(b, { padding: 10, duration: 0 }),
     [
@@ -313,12 +343,39 @@ for (const r of index) {
       [e, n],
     ],
   );
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(2500);
   const roads = await page.evaluate(
     () => window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
   );
-  ok(roads > 0, `${r.label} renders roads without being selected (${roads})`);
+  if (roads === 0) empty.push(r.label);
+  process.stdout.write(
+    `\r  ${r.label.padEnd(6)} ${String(roads).padStart(6)} roads   `,
+  );
 }
+process.stdout.write('\n');
+ok(
+  empty.length === 0,
+  `every prefecture renders roads from the archive (${empty.length ? empty.join(', ') : 'all ' + index.length})`,
+);
+
+// The whole country at once is the view the project exists for, and the zoom
+// where a missing low-zoom tile pyramid would show.
+await page.evaluate(
+  (b) =>
+    window.map.fitBounds(
+      [
+        [b[0], b[1]],
+        [b[2], b[3]],
+      ],
+      { padding: 20, duration: 0 },
+    ),
+  meta.bbox,
+);
+await page.waitForTimeout(6000);
+const wide = await page.evaluate(
+  () => window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
+);
+ok(wide > 0, `the whole country draws at the overview zoom (${wide} roads)`);
 await page.screenshot({ path: shot('6-nationwide') });
 
 console.log(fails.length ? '\n' + fails.join('\n') : '');

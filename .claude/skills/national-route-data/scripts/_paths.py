@@ -21,4 +21,11 @@ def project_root(start: Path | None = None) -> Path:
 
 ROOT = project_root()
 CACHE = ROOT / "build" / "cache"
+PBF = ROOT / "build" / "pbf"
+
+# Per-region GeoJSON and meta. Intermediate, not served: nationwide they come to
+# ~70 MB across 47 files, and the viewer reads the packed tiles instead.
+REGIONS = ROOT / "build" / "regions"
+
+# What the viewer actually fetches.
 DATA = ROOT / "web" / "data"

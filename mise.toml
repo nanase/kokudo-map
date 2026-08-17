@@ -7,21 +7,50 @@ bun = "1.3"
 # The build scripts belong to the national-route-data skill.
 SKILL = ".claude/skills/national-route-data/scripts"
 
+[tasks.fetch-pbf]
+description = "Geofabrik から japan-latest.osm.pbf を取得する（約 2.5 GB）"
+run = """
+mkdir -p build/pbf
+curl -L --retry 3 -C - -o build/pbf/japan-latest.osm.pbf \
+  https://download.geofabrik.de/asia/japan-latest.osm.pbf
+"""
+
+[tasks.extract]
+description = "pbf から 47 都道府県ぶんのキャッシュを切り出す"
+run = "uv run {{env.SKILL}}/extract_pbf.py {{arg(name='regions', var=true, default='')}}"
+
+[tasks.build-all]
+description = "全地域を作り直し、結合して配信データまで通す"
+run = "uv run {{env.SKILL}}/build_all.py {{arg(name='regions', var=true, default='')}}"
+
 [tasks.build]
-description = "取得から検証まで通す"
+description = "1 地域を取得から検証まで通す"
 run = "uv run {{env.SKILL}}/pipeline.py {{arg(name='region', default='nagano')}}"
 
 [tasks.rebuild]
-description = "キャッシュから再生成する（取得しない）"
+description = "1 地域をキャッシュから再生成する（取得しない）"
 run = "uv run {{env.SKILL}}/pipeline.py {{arg(name='region', default='nagano')}} --skip-fetch"
+
+[tasks.pack]
+description = "build/regions/ から web/data/ を作り直す"
+run = """
+node --max-old-space-size=6144 {{env.SKILL}}/pack_web.mjs
+uv run {{env.SKILL}}/pack_pmtiles.py
+uv run {{env.SKILL}}/verify_national.py
+"""
 
 [tasks.audit]
 description = "鎖が切れている路線を機械的に探す"
 run = "uv run {{env.SKILL}}/audit.py {{arg(name='region', default='nagano')}}"
 
+[tasks.compare]
+description = "Overpass 由来の基準と pbf 由来の生成物を突き合わせる"
+run = "uv run {{env.SKILL}}/compare_sources.py {{arg(name='region', default='nagano')}}"
+
 [tasks.serve]
 description = "ローカルサーバを起動する (http://localhost:8000/)"
-run = "python -m http.server 8000 -d web"
+# PMTiles は Range 要求で読むので、http.server では配れない。
+run = "uv run {{env.SKILL}}/serve.py {{arg(name='port', default='8000')}}"
 
 [tasks.render-check]
 description = "ブラウザで実描画を確認する（serve を先に起動）"

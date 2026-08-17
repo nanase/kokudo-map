@@ -1,5 +1,15 @@
-# Overpass responses — large, re-fetchable, and not the deliverable
-build/cache/
+# OSM 由来のデータは追跡しない。理由は二つある。
+#
+#   ライセンス  道路データは ODbL 1.0 である。コードは MIT なので、生成物を
+#               同じ木に置くと配布条件の違う二つを一度に配ることになる。
+#               生成物を持たなければ、この repo が配るのはコードだけになる。
+#   大きさ      全国で pbf 2.5 GB、中間 GeoJSON 70 MB、タイル 50 MB になる。
+#               タイルは gzip 済みで圧縮も差分も効かず、作り直すたびに丸ごと
+#               履歴に積まれる。
+#
+# どちらも `mise run extract` と `mise run pack` で正確に作り直せる。
+build/
+web/data/
 
 node_modules/
 __pycache__/

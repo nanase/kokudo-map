@@ -22,3 +22,8 @@ export function projectRoot(from = dirname(fileURLToPath(import.meta.url))) {
 }
 
 export const ROOT = projectRoot();
+
+/* Per-region GeoJSON and meta: intermediate, not served. What the viewer
+ * fetches is packed into web/data by pack_web.mjs. */
+export const REGIONS = join(ROOT, 'build', 'regions');
+export const DATA = join(ROOT, 'web', 'data');

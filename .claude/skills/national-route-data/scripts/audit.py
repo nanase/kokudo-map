@@ -36,7 +36,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 
-from _paths import CACHE, DATA
+from _paths import CACHE, REGIONS as DATA
 
 NODE_GAP_M = 50
 LINK_GAP_M = 2000

@@ -35,7 +35,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 
-from _paths import CACHE, DATA as OUT
+from _paths import CACHE, REGIONS as OUT
 from regions import for_region
 
 # Route numbers a general national route can legally have: 1-58 and 101-507,
@@ -47,7 +47,16 @@ NAME_NUM = re.compile(r"国道\s*(\d+)\s*号")
 
 FOOT_HIGHWAYS = {"path", "footway", "steps", "track", "cycleway", "bridleway"}
 NATIONAL_GRADE = {"trunk", "motorway"}
-NATIONAL_GRADE_UNDER_CONSTRUCTION = {"trunk", "motorway", "primary"}
+
+# The same grades, for a road still being built. `primary` used to be here, and
+# it was the one back door through the rule that keeps primary out: RULES.md
+# excludes it because a bare numeric `ref` on a primary proves nothing — 3,305
+# relation-less primary ways in 長野県 carry one and not one is named 国道.
+# `construction=primary` let exactly that class back in. 北海道道39号奥尻島線 became
+# 国道39号 292 km from where 国道39号 runs, and 京都府の山手幹線 and 岩屋バイパス
+# became 国道2号. Nationwide it admitted 5 legitimate arcs (栗東水口道路, 1.6 km of
+# 国道1号) against those; the road will come back when it opens and is retagged.
+NATIONAL_GRADE_UNDER_CONSTRUCTION = {"trunk", "motorway"}
 
 # bbox edge tolerance (deg) for suppressing endpoints that are artefacts of
 # clipping the region rather than real termini
@@ -90,6 +99,12 @@ def tokens(ref: str | None) -> set[int]:
 # typo in OSM that put a Mie-prefecture route number into Yamanashi. Only the
 # primary name fields are read, and even those are corroborated below.
 NAME_FIELDS = ("name", "name:ja")
+
+# Every way tag the rules in this file consult, and therefore the only ones a
+# nationwide extract has to carry. extract_pbf.py imports this rather than
+# restating it: a rule that starts reading a new tag must widen the set here, or
+# the tag will silently be absent from the cache it builds from.
+TAGS_USED = frozenset({*NAME_FIELDS, "ref", "highway", "construction", "route"})
 
 # Sections bypassed by a newer alignment. These are deliberately *kept*: a
 # 旧道 stays legally designated until 指定解除, which lags the bypass opening by
@@ -144,9 +159,21 @@ def resolve_relation_routes(rels: dict[int, dict]) -> dict[int, set[int]]:
     return own
 
 
+# A sea section of a national route: the designation continues across water with
+# no road under it. OSM names these 国道N号（海上区間） with great consistency, and
+# most of them carry no `route=ferry` — nationwide, 20 arcs and 1,390 km of open
+# water were classified as carriageway and drawn as solid line, against 2 arcs
+# and 63 km that were tagged as a ferry. A 295 km straight line you appear to be
+# able to drive down is the exact confusion the dashed 海上国道 layer exists to
+# prevent, so the name is read as the evidence it plainly is.
+SEA_SECTION = re.compile(r"海上区間")
+
+
 def classify(tags: dict[str, str]) -> str:
     """Which legend the piece of road belongs in."""
     if tags.get("route") == "ferry":
+        return "ferry"
+    if SEA_SECTION.search(" ".join(tags.get(k, "") for k in NAME_FIELDS)):
         return "ferry"
     hw = tags.get("highway")
     if hw == "construction" or "construction" in tags:
@@ -156,6 +183,23 @@ def classify(tags: dict[str, str]) -> str:
     if hw in FOOT_HIGHWAYS:
         return "foot"
     return "road"
+
+
+# 都市高速道路 number their own routes, and the number lands in `ref` looking
+# exactly like a national one. 首都高速4号新宿線 carries `ref=4`; 国道4号 is the
+# road to Aomori. Nationwide this put 303 arcs and 208 km of urban expressway on
+# to eleven national routes, and the corroboration guard cannot see it, because
+# 国道4号 really does run through the same prefecture.
+#
+# Only rule (c) consults this. A way a relation vouches for is unaffected, and
+# so is one whose own name says 国道N号 — some urban expressway sections really
+# are designated, and they say so.
+URBAN_EXPRESSWAY = re.compile(r"高速\s*\d+\s*号")
+
+
+def names_an_expressway_route(tags: dict[str, str]) -> bool:
+    blob = " ".join(tags.get(k, "") for k in NAME_FIELDS)
+    return bool(URBAN_EXPRESSWAY.search(blob)) and not NAME_NUM.search(blob)
 
 
 def is_national_grade(tags: dict[str, str]) -> bool:
@@ -242,7 +286,8 @@ def main() -> None:
         # --- is it a national route? -------------------------------------
         if from_rel or from_name:
             source = "relation" if from_rel else "name"
-        elif from_tag and wid not in pref_ids and (wid in vouched or is_national_grade(tags)):
+        elif (from_tag and wid not in pref_ids and not names_an_expressway_route(tags)
+              and (wid in vouched or is_national_grade(tags))):
             # Relation-less but mapped as a national road and unclaimed by any
             # prefectural route: this is the bypass case.
             source = "tag"
@@ -427,7 +472,17 @@ def main() -> None:
         "endpoint": raw["endpoint"],
         # Every route number the region's relations vouch for. Nothing in
         # `routes` may fall outside this set — see build/verify.py.
+        #
+        # This set is what makes the guard a guard, and it only works because it
+        # is regional. Judged over the whole country it would approach all 459
+        # numbers and filter nothing, putting 長野県道372号 back on the map as
+        # 国道372号. verify.py asserts it stays well short of that.
         "corroborated_refs": sorted(corroborated),
+        # Numbers a way claimed for itself that no relation here vouches for,
+        # with how many ways claimed each. Almost all of these are 都道府県道
+        # sharing the bare-number `ref` format. Recorded so the guard's effect
+        # is a measured number rather than an assurance.
+        "rejected_refs": {str(k): v for k, v in sorted(rejected.items())},
         "oldest_edit": edits[0] if edits else None,
         "newest_edit": edits[-1] if edits else None,
         "total_km": round(total_km, 1),
