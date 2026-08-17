@@ -1,0 +1,20 @@
+{
+  "name": "national-route-map",
+  "version": "0.1.0",
+  "private": true,
+  "description": "国道に特化した地図。重用区間の全指定を保持し、縮尺によらず番号を表示する。",
+  "license": "MIT",
+  "scripts": {
+    "check": "node .claude/skills/national-route-data/scripts/check_expressions.mjs",
+    "render-check": "node .claude/skills/national-route-data/scripts/render_check.mjs",
+    "serve": "python -m http.server 8000 -d web",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
+    "@maplibre/maplibre-gl-style-spec": "^26.2.1",
+    "playwright": "^1.62.1"
+  }
+}

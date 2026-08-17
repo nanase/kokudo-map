@@ -1,0 +1,183 @@
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["requests"]
+# ///
+"""Fetch the raw OSM objects for one region from Overpass and cache them.
+
+Three separate queries, because they answer three different questions and
+because one combined query is both slower and impossible to de-merge (a way
+returned by two `out` statements arrives twice, and the ids-only copy is
+indistinguishable from the copy with geometry):
+
+  1. national-route relations (+ their child relations) and every way they
+     contain — the trusted core;
+  2. national-grade ways carrying a numeric `ref` or a 国道N号 name, whether or
+     not any relation contains them — route relations are maintained far less
+     diligently than the ways themselves, so bypasses that have been open for
+     years are routinely absent from them;
+  3. the ways held by *prefectural* route relations — a negative signal, since
+     都道府県道 use the same bare numeric `ref` format as national routes.
+
+Freshness matters and is not automatic: public Overpass mirrors can fall
+badly behind. We probe every endpoint, pick the freshest, and record its
+`timestamp_osm_base` so the map can state which day it is showing.
+
+Usage:  uv run build/fetch_osm.py [region]
+"""
+from __future__ import annotations
+
+import json
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+import requests
+
+from _paths import CACHE
+from regions import REGIONS, for_region
+
+ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+]
+
+# Warn if the freshest mirror we can reach is older than this.
+STALE_AFTER_DAYS = 7
+
+# Grades a general national route is plausibly mapped at. `primary` is
+# deliberately excluded: in this region 3,305 relation-less `primary` ways carry
+# a numeric ref and *none* is named 国道, so admitting them would drag in
+# thousands of 主要地方道 for no gain.
+NATIONAL_GRADES = "trunk|motorway|construction"
+
+UA = {"User-Agent": "NationalRouteMap/0.2 (build pipeline)"}
+
+
+def probe(ep: str, tries: int = 3) -> tuple[str | None, str | None]:
+    """Return (timestamp_osm_base, error) for an endpoint.
+
+    Public mirrors answer 429/504 under load even for a trivial query, so a
+    single failure says nothing about availability.
+    """
+    last = "unknown"
+    for i in range(tries):
+        try:
+            r = requests.post(ep, data={"data": "[out:json][timeout:60];node(1);out ids;"},
+                              headers=UA, timeout=90)
+            r.raise_for_status()
+            return r.json().get("osm3s", {}).get("timestamp_osm_base"), None
+        except Exception as e:  # noqa: BLE001
+            last = str(e)[:90]
+            if i < tries - 1:
+                time.sleep(15)
+    return None, last
+
+
+def pick_endpoint() -> tuple[str, str]:
+    print("probing Overpass mirrors for data freshness")
+    now = datetime.now(timezone.utc)
+    best: tuple[str, str, float] | None = None
+    for ep in ENDPOINTS:
+        ts, err = probe(ep)
+        host = ep.split("/")[2]
+        if not ts:
+            print(f"  {host:28} unreachable: {err}")
+            continue
+        age = (now - datetime.fromisoformat(ts.replace("Z", "+00:00"))).total_seconds()
+        print(f"  {host:28} base={ts}  age={age/86400:.1f} days")
+        if best is None or age < best[2]:
+            best = (ep, ts, age)
+
+    if best is None:
+        raise SystemExit("no Overpass mirror is reachable")
+
+    ep, ts, age = best
+    print(f"  -> using {ep.split('/')[2]} (data of {ts})")
+    if age > STALE_AFTER_DAYS * 86400:
+        print(f"  WARNING: freshest available data is {age/86400:.1f} days old; "
+              f"recent road openings will be missing.")
+    return ep, ts
+
+
+def run(ep: str, query: str, label: str, tries: int = 4) -> dict:
+    last: Exception | None = None
+    for i in range(tries):
+        try:
+            print(f"  [{label}] attempt {i + 1}", flush=True)
+            r = requests.post(ep, data={"data": query}, headers=UA, timeout=900)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:  # noqa: BLE001
+            print(f"    failed: {str(e)[:120]}", flush=True)
+            last = e
+            time.sleep(20)
+    raise SystemExit(f"query {label!r} failed after {tries} attempts: {last}")
+
+
+def main() -> None:
+    region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
+    spec = for_region(region)
+    bb = ",".join(str(v) for v in spec["bbox"])
+
+    ep, base_ts = pick_endpoint()
+    print(f"\nfetching {region} ({bb})")
+
+    # 1. the trusted core: national route relations and their member ways
+    core = run(ep, f"""
+[out:json][timeout:900];
+relation["type"="route"]["route"="road"]["network"~"^JP:national"]({bb})->.parents;
+relation(r.parents)->.kids;
+(.parents; .kids;)->.rels;
+.rels out body;
+way(r.rels)({bb});
+out meta geom;
+""", "national relations + members")
+
+    # 2. candidates the relations may have missed
+    cand = run(ep, f"""
+[out:json][timeout:900];
+(
+  way["highway"~"^({NATIONAL_GRADES})$"]["ref"~"^[0-9]+(;[0-9]+)*$"]({bb});
+  way["highway"]["name"~"^国道[0-9]+号"]({bb});
+);
+out meta geom;
+""", "candidate ways")
+
+    # 3. negative signal: ways that prefectural routes claim
+    pref = run(ep, f"""
+[out:json][timeout:900];
+relation["type"="route"]["route"="road"]["network"~"^JP:prefectural"]({bb})->.pr;
+way(r.pr)({bb});
+out ids;
+""", "prefectural member ways")
+
+    doc = {
+        "region": region,
+        "label": spec["label"],
+        "bbox": spec["bbox"],
+        "endpoint": ep,
+        "timestamp_osm_base": base_ts,
+        "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "core": core["elements"],
+        "candidates": cand["elements"],
+        "prefectural_way_ids": [e["id"] for e in pref["elements"] if e["type"] == "way"],
+    }
+
+    rels = sum(1 for e in doc["core"] if e["type"] == "relation")
+    ways = sum(1 for e in doc["core"] if e["type"] == "way")
+    print(f"\n  national relations: {rels}")
+    print(f"  member ways:        {ways}")
+    print(f"  candidate ways:     {sum(1 for e in doc['candidates'] if e['type'] == 'way')}")
+    print(f"  prefectural ways:   {len(doc['prefectural_way_ids'])}")
+
+    CACHE.mkdir(parents=True, exist_ok=True)
+    out = CACHE / f"{region}.raw.json"
+    out.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    print(f"\n  data base: {base_ts}")
+    print(f"  cached -> {out} ({out.stat().st_size / 1e6:.1f} MB)")
+
+
+if __name__ == "__main__":
+    main()

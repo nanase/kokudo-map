@@ -1,0 +1,12 @@
+# Overpass responses — large, re-fetchable, and not the deliverable
+build/cache/
+
+node_modules/
+__pycache__/
+.venv/
+
+# Machine-local Claude Code settings, not shared
+.claude/settings.local.json
+
+# Screenshots from render_check.mjs
+*.png

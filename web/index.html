@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>国道マップ — 長野県 試作</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+  <aside id="panel">
+    <header>
+      <h1>国道マップ</h1>
+      <label class="region-pick">
+        <span class="sr-only">地域</span>
+        <select id="region"></select>
+      </label>
+      <p class="sub" id="region-sub">試作版</p>
+    </header>
+
+    <section class="block">
+      <div class="block-hd">
+        <h2>路線</h2>
+        <div class="hd-actions">
+          <button type="button" id="sel-all" class="mini">全選択</button>
+          <button type="button" id="sel-none" class="mini">解除</button>
+        </div>
+      </div>
+      <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 15）" autocomplete="off">
+      <div id="route-list" class="route-list" role="group" aria-label="国道の選択"></div>
+      <p class="hint" id="sel-hint">未選択のときは全路線を表示します。</p>
+    </section>
+
+    <section class="block">
+      <div class="block-hd"><h2>重用区間</h2></div>
+      <div class="radios" role="radiogroup" aria-label="重用区間の表示">
+        <label><input type="radio" name="conc" value="off" checked> 強調しない</label>
+        <label><input type="radio" name="conc" value="all"> 重用区間のみ表示</label>
+        <label><input type="radio" name="conc" value="sel"> 選択路線どうしの重用のみ</label>
+      </div>
+      <div id="legend-n" class="legend"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-hd"><h2>表示</h2></div>
+      <div class="checks">
+        <label><input type="checkbox" id="t-labels" checked> 路線番号を常時表示</label>
+        <label><input type="checkbox" id="t-termini" checked> 起点・終点</label>
+        <label><input type="checkbox" id="t-special" checked> 点線国道・工事中</label>
+      </div>
+      <div id="legend-kind" class="legend"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-hd"><h2>重用ランキング</h2></div>
+      <p class="hint">通常の地図が番号の若いものだけを描いてしまう区間。行をクリックすると絞り込みます。</p>
+      <div id="ranking" class="ranking"></div>
+    </section>
+
+    <section class="block">
+      <div class="block-hd"><h2>起終点を共有する地点</h2></div>
+      <div id="shared" class="ranking"></div>
+    </section>
+
+    <footer>
+      <div id="stats" class="stats"></div>
+      <dl id="freshness" class="freshness"></dl>
+      <p class="credit">
+        道路データ © OpenStreetMap contributors（ODbL 1.0）／
+        背景地図 <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>
+      </p>
+    </footer>
+  </aside>
+
+  <main id="map-wrap">
+    <div id="map"></div>
+    <div id="loading">データを読み込んでいます…</div>
+  </main>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

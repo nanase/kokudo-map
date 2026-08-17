@@ -1,0 +1,243 @@
+/* 国道マップ — 標識の青を基調にした操作面。地図に主役を譲るため彩度は抑える。 */
+:root {
+  --sign-blue: #00449E;
+  --sign-blue-lt: #1E6FD9;
+
+  --n1: #1B62C4;  /* 単独指定 */
+  --n2: #D98324;  /* 二重用 */
+  --n3: #C2352B;  /* 三重用 */
+  --n4: #7B3E9D;  /* 四重用以上 */
+
+  --panel: #FFFFFF;
+  --panel-2: #F2F5F9;
+  --line: #D7DFEA;
+  --line-2: #E7ECF3;
+  --ink: #121A24;
+  --ink-2: #46566A;
+  --ink-3: #6C7E93;
+  --focus: #1E6FD9;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --panel: #131C29;
+    --panel-2: #0E161F;
+    --line: #27364A;
+    --line-2: #1D2938;
+    --ink: #E6EDF6;
+    --ink-2: #B2C1D3;
+    --ink-3: #8799AE;
+    --n1: #5C9BEE;
+    --n2: #E7A951;
+    --n3: #E8756A;
+    --n4: #B183D6;
+    --sign-blue: #79AEF7;
+    --focus: #79AEF7;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI",
+               "Yu Gothic", "Noto Sans JP", "Segoe UI", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--panel-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+#app { display: flex; height: 100%; }
+
+/* ---------------------------------------------------------------- panel --- */
+#panel {
+  width: 340px;
+  flex: 0 0 340px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 8px;
+}
+#panel header {
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; background: var(--panel); z-index: 2;
+}
+#panel h1 {
+  margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em;
+}
+#panel .sub {
+  margin: 2px 0 0; font-size: .75rem; color: var(--ink-3);
+  font-family: ui-monospace, Consolas, monospace; letter-spacing: .08em;
+}
+#panel header { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; }
+#panel header h1 { grid-column: 1; }
+#panel .sub { grid-column: 1; }
+.region-pick { grid-column: 2; grid-row: 1 / span 2; }
+.region-pick select {
+  font: inherit; font-size: .82rem; padding: 4px 8px; cursor: pointer;
+  background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 3px;
+}
+.region-pick select:hover { border-color: var(--sign-blue); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+.block { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
+.block-hd {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin-bottom: 10px;
+}
+.block h2 {
+  margin: 0; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-3);
+  font-family: ui-monospace, Consolas, monospace;
+}
+.hd-actions { display: flex; gap: 6px; }
+
+button.mini {
+  font: inherit; font-size: .72rem; padding: 2px 8px; cursor: pointer;
+  background: var(--panel-2); color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: 3px;
+}
+button.mini:hover { border-color: var(--sign-blue); color: var(--sign-blue); }
+
+input[type="search"] {
+  font: inherit; width: 100%; padding: 6px 9px; margin-bottom: 10px;
+  background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 3px;
+}
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* route checkbox grid --------------------------------------------------- */
+.route-list {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 3px; max-height: 260px; overflow-y: auto;
+  border: 1px solid var(--line-2); border-radius: 3px; padding: 5px;
+  background: var(--panel-2);
+}
+.route-list label {
+  display: flex; align-items: center; gap: 4px; cursor: pointer;
+  font-family: ui-monospace, Consolas, monospace; font-size: .78rem;
+  padding: 2px 3px; border-radius: 2px; color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.route-list label:hover { background: var(--panel); color: var(--ink); }
+.route-list label.on { color: var(--sign-blue); font-weight: 700; }
+.route-list label.hidden { display: none; }
+.route-list input { margin: 0; accent-color: var(--sign-blue); }
+.route-list .mn { font-size: .62rem; color: var(--ink-3); font-weight: 400; }
+
+.radios, .checks { display: flex; flex-direction: column; gap: 5px; }
+.radios label, .checks label {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  color: var(--ink-2); font-size: .82rem;
+}
+.radios input, .checks input { accent-color: var(--sign-blue); margin: 0; }
+
+.hint { margin: 8px 0 0; font-size: .72rem; color: var(--ink-3); line-height: 1.5; }
+
+/* legends --------------------------------------------------------------- */
+.legend { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 12px; }
+.legend .item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: .72rem; color: var(--ink-2);
+  font-family: ui-monospace, Consolas, monospace;
+}
+.legend .swatch { width: 20px; height: 0; border-top-width: 3px; border-top-style: solid; }
+
+/* ranking --------------------------------------------------------------- */
+.ranking { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.ranking .row {
+  display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+  padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 3px;
+  background: var(--panel-2); cursor: pointer; text-align: left;
+  font: inherit; color: var(--ink-2); width: 100%;
+}
+.ranking .row:hover { border-color: var(--sign-blue); }
+.ranking .row .shields { display: flex; gap: 3px; flex-wrap: wrap; }
+.ranking .row .km {
+  font-family: ui-monospace, Consolas, monospace; font-size: .72rem;
+  color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ranking .row .nm {
+  grid-column: 1 / -1; font-size: .7rem; color: var(--ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ranking .empty { font-size: .75rem; color: var(--ink-3); }
+
+/* おにぎり（国道番号標識）------------------------------------------------- */
+.shield {
+  position: relative; width: 26px; height: 23px; flex: 0 0 auto;
+  display: grid; place-items: center;
+}
+.shield svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.shield span {
+  position: relative; font-family: ui-monospace, Consolas, monospace;
+  font-size: 9px; font-weight: 700; color: var(--sign-blue);
+  line-height: 1; margin-top: -3px; letter-spacing: -.02em;
+}
+.shield.sm { width: 21px; height: 19px; }
+.shield.sm span { font-size: 7.5px; }
+
+/* footer ---------------------------------------------------------------- */
+#panel footer { padding: 14px 18px 4px; margin-top: auto; }
+.stats {
+  font-family: ui-monospace, Consolas, monospace; font-size: .72rem;
+  color: var(--ink-2); background: var(--panel-2);
+  border: 1px solid var(--line-2); border-radius: 3px;
+  padding: 8px 10px; display: grid; gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+/* Data provenance: which day of OSM this map is showing. */
+.freshness {
+  margin: 8px 0 0; display: grid; grid-template-columns: max-content 1fr;
+  gap: 1px 10px; font-size: .68rem; line-height: 1.55;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.freshness dt { color: var(--ink-3); }
+.freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.freshness dd.warn { color: #B4690E; font-weight: 700; }
+@media (prefers-color-scheme: dark) { .freshness dd.warn { color: #E7B457; } }
+
+.credit { font-size: .66rem; color: var(--ink-3); margin: 10px 0 0; line-height: 1.5; }
+.credit a { color: var(--ink-3); }
+
+/* ----------------------------------------------------------------- map --- */
+#map-wrap { flex: 1; position: relative; min-width: 0; }
+#map { position: absolute; inset: 0; }
+#loading {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: var(--panel-2); color: var(--ink-3);
+  font-size: .85rem; z-index: 5;
+}
+#loading.done { display: none; }
+
+/* popup ----------------------------------------------------------------- */
+.maplibregl-popup-content {
+  font-family: inherit; font-size: .8rem; padding: 12px 14px;
+  border-radius: 4px; background: var(--panel); color: var(--ink);
+  box-shadow: 0 4px 20px rgba(0,0,0,.22);
+}
+.maplibregl-popup-tip { border-top-color: var(--panel) !important; border-bottom-color: var(--panel) !important; }
+.pop-hd {
+  display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
+  margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line-2);
+}
+.pop-n {
+  font-family: ui-monospace, Consolas, monospace; font-size: .7rem;
+  color: var(--ink-3); margin-left: 4px;
+}
+.pop-row { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); }
+.pop-row dt { color: var(--ink-3); font-size: .72rem; }
+.pop-row dd { margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: .72rem; }
+
+@media (max-width: 860px) {
+  #app { flex-direction: column; }
+  #panel { width: 100%; flex: 0 0 auto; max-height: 48%; border-right: 0; border-bottom: 1px solid var(--line); }
+  #map-wrap { flex: 1; }
+}

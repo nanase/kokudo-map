@@ -1,0 +1,28 @@
+[tools]
+node = "22"
+python = "3.12"
+bun = "1.3"
+
+[env]
+# The build scripts belong to the national-route-data skill.
+SKILL = ".claude/skills/national-route-data/scripts"
+
+[tasks.build]
+description = "取得から検証まで通す"
+run = "uv run {{env.SKILL}}/pipeline.py {{arg(name='region', default='nagano')}}"
+
+[tasks.rebuild]
+description = "キャッシュから再生成する（取得しない）"
+run = "uv run {{env.SKILL}}/pipeline.py {{arg(name='region', default='nagano')}} --skip-fetch"
+
+[tasks.audit]
+description = "鎖が切れている路線を機械的に探す"
+run = "uv run {{env.SKILL}}/audit.py {{arg(name='region', default='nagano')}}"
+
+[tasks.serve]
+description = "ローカルサーバを起動する (http://localhost:8000/)"
+run = "python -m http.server 8000 -d web"
+
+[tasks.render-check]
+description = "ブラウザで実描画を確認する（serve を先に起動）"
+run = "node {{env.SKILL}}/render_check.mjs shot"
