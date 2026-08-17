@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>国道マップ — 長野県 試作</title>
+<title>国道マップ</title>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -13,11 +13,6 @@
   <aside id="panel">
     <header>
       <h1>国道マップ</h1>
-      <label class="region-pick">
-        <span class="sr-only">地域</span>
-        <select id="region"></select>
-      </label>
-      <p class="sub" id="region-sub">試作版</p>
     </header>
 
     <section class="block">
@@ -38,7 +33,6 @@
       <div class="radios" role="radiogroup" aria-label="重用区間の表示">
         <label><input type="radio" name="conc" value="off" checked> 強調しない</label>
         <label><input type="radio" name="conc" value="all"> 重用区間のみ表示</label>
-        <label><input type="radio" name="conc" value="sel"> 選択路線どうしの重用のみ</label>
       </div>
       <div id="legend-n" class="legend"></div>
     </section>
@@ -54,14 +48,24 @@
     </section>
 
     <section class="block">
-      <div class="block-hd"><h2>重用ランキング</h2></div>
-      <p class="hint">通常の地図が番号の若いものだけを描いてしまう区間。行をクリックすると絞り込みます。</p>
-      <div id="ranking" class="ranking"></div>
+      <details id="ranking-block">
+        <summary>
+          <h2>重用ランキング</h2>
+          <span class="count" id="ranking-count"></span>
+        </summary>
+        <p class="hint">通常の地図が番号の若いものだけを描いてしまう区間。行をクリックすると絞り込みます。</p>
+        <div id="ranking" class="ranking"></div>
+      </details>
     </section>
 
     <section class="block">
-      <div class="block-hd"><h2>起終点を共有する地点</h2></div>
-      <div id="shared" class="ranking"></div>
+      <details id="shared-block">
+        <summary>
+          <h2>起終点を共有する地点</h2>
+          <span class="count" id="shared-count"></span>
+        </summary>
+        <div id="shared" class="ranking"></div>
+      </details>
     </section>
 
     <footer>

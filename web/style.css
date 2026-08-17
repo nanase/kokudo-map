@@ -68,25 +68,6 @@ body {
 #panel h1 {
   margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em;
 }
-#panel .sub {
-  margin: 2px 0 0; font-size: .75rem; color: var(--ink-3);
-  font-family: ui-monospace, Consolas, monospace; letter-spacing: .08em;
-}
-#panel header { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; }
-#panel header h1 { grid-column: 1; }
-#panel .sub { grid-column: 1; }
-.region-pick { grid-column: 2; grid-row: 1 / span 2; }
-.region-pick select {
-  font: inherit; font-size: .82rem; padding: 4px 8px; cursor: pointer;
-  background: var(--panel-2); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 3px;
-}
-.region-pick select:hover { border-color: var(--sign-blue); }
-.sr-only {
-  position: absolute; width: 1px; height: 1px; overflow: hidden;
-  clip-path: inset(50%); white-space: nowrap;
-}
-
 .block { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
 .block-hd {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -98,6 +79,27 @@ body {
   font-family: ui-monospace, Consolas, monospace;
 }
 .hd-actions { display: flex; gap: 6px; }
+
+/* folded block ----------------------------------------------------------
+   Reference material that is worth having but not worth the sidebar height
+   it costs. Folded shut, the summary still states how much is inside. */
+.block > details > summary {
+  display: flex; align-items: baseline; gap: 10px; cursor: pointer;
+  list-style: none;
+}
+.block > details > summary::-webkit-details-marker { display: none; }
+.block > details > summary::after {
+  content: ""; margin-left: auto; align-self: center;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid var(--ink-3);
+}
+.block > details[open] > summary::after { transform: rotate(180deg); }
+.block > details[open] > summary { margin-bottom: 10px; }
+.block > details > summary:hover h2 { color: var(--sign-blue); }
+.block > details > summary .count {
+  font-family: ui-monospace, Consolas, monospace; font-size: .68rem;
+  color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
 
 button.mini {
   font: inherit; font-size: .72rem; padding: 2px 8px; cursor: pointer;

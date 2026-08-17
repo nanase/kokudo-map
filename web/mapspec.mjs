@@ -24,28 +24,17 @@ const GSI_GLYPHS =
 /** Membership test that cannot be fooled by substrings: ",4," never hits ",14,". */
 export const hasRef = (ref) => ['in', `,${ref},`, ['get', 'refs']];
 
-/** How many of the given routes run over this arc. */
-export const selectedCount = (refs) => [
-  '+',
-  ...refs.map((r) => ['case', hasRef(r), 1, 0]),
-];
-
 /**
  * The filter every road layer shares.
  * `selected` narrows which routes are drawn; `conc` narrows to concurrency.
+ *
+ * Concurrency is a property of the road, not of the selection: an arc carrying
+ * 18 and 117 is a 重用区間 whether or not both numbers happen to be ticked.
  */
 export function buildFilter(selected, conc) {
   const parts = [];
   if (selected.length) parts.push(['any', ...selected.map(hasRef)]);
-
-  if (conc === 'all') {
-    parts.push(['>=', ['get', 'n'], 2]);
-  } else if (conc === 'sel') {
-    // Concurrency *among the chosen routes only* — an arc carrying 18 and 117
-    // counts as concurrent only when both are selected.
-    if (selected.length >= 2) parts.push(['>=', selectedCount(selected), 2]);
-    else parts.push(['>=', ['get', 'n'], 2]);
-  }
+  if (conc === 'all') parts.push(['>=', ['get', 'n'], 2]);
 
   return parts.length ? ['all', ...parts] : true;
 }

@@ -7,6 +7,3 @@ __pycache__/
 
 # Machine-local Claude Code settings, not shared
 .claude/settings.local.json
-
-# Screenshots from render_check.mjs
-*.png

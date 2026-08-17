@@ -51,7 +51,7 @@ def main() -> None:
     print(f"\n{'=' * 70}")
     print("すべて通った。ブラウザでの実描画は render_check.mjs で確認する。")
     print("ローカルサーバを起動してから次を実行する。")
-    print(f"  node {Path(HERE / 'render_check.mjs').relative_to(ROOT)} shot")
+    print(f"  node {Path(HERE / 'render_check.mjs').relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,15 @@
-/* 国道マップ — 長野県 試作
+/* 国道マップ
  *
  * The design premise from the feasibility study: every arc already carries the
  * complete set of route designations over it, wrapped in delimiters as
  * `refs = ",18,117,406,"`. So "show only route N" and "show only concurrent
  * sections" are both plain attribute filters, evaluated in the style — no
  * recomputation, no server.
+ *
+ * The build runs per region because Overpass is queried by bounding box. The
+ * viewer is not: it loads every region that has been built and joins them into
+ * one dataset, so there is no prefecture to pick. Widening the coverage is
+ * therefore a data change (add a region, build it) and never a UI change.
  *
  * Style and filter shapes live in mapspec.mjs so the build-time checker can
  * validate exactly what runs here.
@@ -27,8 +32,6 @@ import {
 const EMPTY = { type: 'FeatureCollection', features: [] };
 
 const state = {
-  regions: [],
-  region: null,
   meta: null,
   geo: null,
   selected: new Set(),
@@ -65,7 +68,7 @@ const map = new maplibregl.Map({
   zoom: 7.6,
 });
 
-// exposed for debugging and for build/render_check.mjs
+// exposed for debugging and for scripts/render_check.mjs
 window.map = map;
 
 map.addControl(
@@ -84,24 +87,143 @@ map.addControl(
   'bottom-right',
 );
 
+/* ----------------------------------------------------------------- merge --- */
+/**
+ * Join every built region into one set of arcs.
+ *
+ * The bounding boxes are rectangles, so neighbouring boxes overlap at the
+ * seams and hand back the same road twice. The OSM way id is the identity and
+ * deduplicates them exactly — no geometry comparison is needed.
+ */
+function mergeArcs(parts) {
+  const byId = new Map();
+  for (const { geo } of parts) {
+    for (const f of geo.features) {
+      if (byId.has(f.properties.id)) continue;
+      // Label text is derived once here rather than stored per feature on disk.
+      f.properties.label = f.properties.refs_list.join('・');
+      byId.set(f.properties.id, f);
+    }
+  }
+  return { type: 'FeatureCollection', features: [...byId.values()] };
+}
+
+/**
+ * Per-route totals over the merged arcs.
+ *
+ * These are recomputed rather than summed from the per-region masters: an arc
+ * returned by two overlapping boxes is counted once here and twice there.
+ */
+function routesOf(features) {
+  const by = new Map();
+  for (const f of features) {
+    const p = f.properties;
+    for (const ref of p.refs_list) {
+      let e = by.get(ref);
+      if (!e) {
+        e = { ref, km: 0, arcs: 0, max_n: 1 };
+        by.set(ref, e);
+      }
+      e.km += p.km;
+      e.arcs++;
+      e.max_n = Math.max(e.max_n, p.n);
+    }
+  }
+  const out = [...by.values()].sort((a, b) => a.ref - b.ref);
+  for (const e of out) e.km = Math.round(e.km * 10) / 10;
+  return out;
+}
+
+/** Concurrency combinations over the merged arcs: deepest first, then longest. */
+function rankingOf(features) {
+  const by = new Map();
+  for (const f of features) {
+    const p = f.properties;
+    if (p.n < 2) continue;
+    // `refs` is already sorted and delimiter-wrapped, so it is the combination.
+    let e = by.get(p.refs);
+    if (!e) {
+      e = { refs: p.refs_list, n: p.n, km: 0, arcs: 0, names: new Map() };
+      by.set(p.refs, e);
+    }
+    e.km += p.km;
+    e.arcs++;
+    if (p.name) e.names.set(p.name, (e.names.get(p.name) || 0) + 1);
+  }
+  const out = [...by.values()].sort((a, b) => b.n - a.n || b.km - a.km);
+  for (const e of out) {
+    e.names = [...e.names.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([n]) => n);
+  }
+  return out;
+}
+
+/**
+ * Termini merged across regions.
+ * A terminus inside an overlap is reported by both regions, so points are
+ * keyed by rounded position; shared points union their route numbers.
+ */
+function mergeTermini(parts) {
+  const at = (t) => `${t.lat.toFixed(5)},${t.lon.toFixed(5)}`;
+  const single = new Map();
+  const shared = new Map();
+  for (const { meta } of parts) {
+    for (const t of meta.termini) single.set(`${at(t)}/${t.ref}`, t);
+    for (const t of meta.shared_termini) {
+      const cur = shared.get(at(t));
+      if (cur) {
+        cur.refs = [...new Set([...cur.refs, ...t.refs])].sort((a, b) => a - b);
+      } else {
+        shared.set(at(t), { lat: t.lat, lon: t.lon, refs: [...t.refs] });
+      }
+    }
+  }
+  return {
+    termini: [...single.values()],
+    shared_termini: [...shared.values()].sort(
+      (a, b) => b.refs.length - a.refs.length,
+    ),
+  };
+}
+
+/**
+ * One metadata record for the whole map.
+ * Freshness is reported at its worst: the map is only as current as its
+ * stalest region, and saying otherwise would overstate it.
+ */
+function mergeMeta(parts, features) {
+  const metas = parts.map((p) => p.meta);
+  const min = (vals) => vals.filter(Boolean).sort()[0] || null;
+  const max = (vals) => vals.filter(Boolean).sort().slice(-1)[0] || null;
+  return {
+    osm_timestamp: min(metas.map((m) => m.osm_timestamp)),
+    oldest_edit: min(metas.map((m) => m.oldest_edit)),
+    newest_edit: max(metas.map((m) => m.newest_edit)),
+    endpoints: [...new Set(metas.map((m) => new URL(m.endpoint).host))],
+    total_km: features.reduce((s, f) => s + f.properties.km, 0),
+    arc_count: features.length,
+    routes: routesOf(features),
+    concurrency_ranking: rankingOf(features),
+    ...mergeTermini(parts),
+  };
+}
+
 /* ----------------------------------------------------------------- boot --- */
 async function boot() {
-  state.regions = await fetch('data/regions.json').then((r) => r.json());
-  if (!state.regions.length) throw new Error('data/regions.json is empty');
+  const index = await fetch('data/regions.json').then((r) => r.json());
+  if (!index.length) throw new Error('data/regions.json is empty');
 
-  // ?region=niigata wins, then the hash from a shared link, then the first one.
-  const wanted = new URLSearchParams(location.search).get('region');
-  const initial =
-    state.regions.find((r) => r.region === wanted) || state.regions[0];
-
-  const sel = $('#region');
-  sel.innerHTML = state.regions
-    .map((r) => `<option value="${r.region}">${r.label}</option>`)
-    .join('');
-  sel.value = initial.region;
-  sel.addEventListener('change', () =>
-    loadRegion(sel.value, { recenter: true }),
+  const parts = await Promise.all(
+    index.map(async (r) => ({
+      meta: await fetch(`data/${r.region}.meta.json`).then((x) => x.json()),
+      geo: await fetch(`data/${r.region}.geojson`).then((x) => x.json()),
+    })),
   );
+
+  state.geo = mergeArcs(parts);
+  state.meta = mergeMeta(parts, state.geo.features);
 
   await new Promise((res) => (map.loaded() ? res() : map.once('load', res)));
 
@@ -111,49 +233,44 @@ async function boot() {
 
   wirePopups();
   wireControls();
-  await loadRegion(initial.region, { recenter: !location.hash });
-  $('#loading').classList.add('done');
-}
 
-/** Swap the whole map over to another region's data. */
-async function loadRegion(region, { recenter = false } = {}) {
-  const entry = state.regions.find((r) => r.region === region);
-  const [meta, geo] = await Promise.all([
-    fetch(`data/${region}.meta.json`).then((r) => r.json()),
-    fetch(`data/${region}.geojson`).then((r) => r.json()),
-  ]);
+  map.getSource('routes').setData(state.geo);
+  map.getSource('termini').setData(terminiFeatures(state.meta));
 
-  // Label text is derived once here rather than stored per feature on disk.
-  for (const f of geo.features) {
-    f.properties.label = f.properties.refs_list.join('・');
-  }
-
-  state.region = region;
-  state.meta = meta;
-  state.geo = geo;
-  state.selected = new Set();
-
-  map.getSource('routes').setData(geo);
-  map.getSource('termini').setData(terminiOf(meta));
-
-  $('#region').value = region;
-  $('#region-sub').textContent = `${meta.label} 試作版`;
   buildUI();
   applyFilters();
 
-  if (recenter) {
-    const [w, s, e, n] = entry.bbox;
-    map.fitBounds(
-      [
-        [w, s],
-        [e, n],
-      ],
-      { padding: 24, duration: 0 },
-    );
-  }
+  // A shared link's hash wins. Otherwise open on everything that is built, or
+  // on one region if ?region= names it — a view hint, not a data switch.
+  if (!location.hash) fitInitialView(index);
+
+  $('#loading').classList.add('done');
 }
 
-function terminiOf(meta) {
+/** Open on the union of the built regions, or on the one named by ?region=. */
+function fitInitialView(index) {
+  const wanted = new URLSearchParams(location.search).get('region');
+  const boxes = index.filter((r) => r.region === wanted);
+  const use = boxes.length ? boxes : index;
+  const [w, s, e, n] = use.reduce(
+    ([w, s, e, n], r) => [
+      Math.min(w, r.bbox[0]),
+      Math.min(s, r.bbox[1]),
+      Math.max(e, r.bbox[2]),
+      Math.max(n, r.bbox[3]),
+    ],
+    [Infinity, Infinity, -Infinity, -Infinity],
+  );
+  map.fitBounds(
+    [
+      [w, s],
+      [e, n],
+    ],
+    { padding: 24, duration: 0 },
+  );
+}
+
+function terminiFeatures(meta) {
   return {
     type: 'FeatureCollection',
     features: [
@@ -223,10 +340,7 @@ function buildUI() {
   renderFreshness();
 }
 
-/**
- * Listeners and legends that outlive a region switch.
- * Wiring these inside buildUI would stack a fresh listener on every switch.
- */
+/** Listeners and legends that are wired once. */
 function wireControls() {
   const list = $('#route-list');
   list.addEventListener('change', (e) => {
@@ -310,7 +424,7 @@ function renderFreshness() {
     '<dt>区間の更新</dt>' +
     `<dd>${m.oldest_edit} 〜 ${m.newest_edit}</dd>` +
     '<dt>取得元</dt>' +
-    `<dd>${new URL(m.endpoint).host}</dd>` +
+    `<dd>${m.endpoints.join(' / ')}</dd>` +
     (stale
       ? '<dt></dt><dd class="warn">最近の開通は反映されていない可能性があります</dd>'
       : '');
@@ -335,9 +449,7 @@ function updateStats() {
     if (sel.size && !p.refs_list.some((r) => sel.has(r))) continue;
     arcs++;
     km += p.km;
-    const depth =
-      sel.size >= 2 ? p.refs_list.filter((r) => sel.has(r)).length : p.n;
-    if (depth >= 2) conc++;
+    if (p.n >= 2) conc++;
   }
   $('#stats').innerHTML =
     `<span>選択路線　${sel.size || state.meta.routes.length} / ${state.meta.routes.length}</span>` +
@@ -349,11 +461,17 @@ function updateStats() {
     : '未選択のときは全路線を表示します。';
 }
 
+/** The ranking is folded away by default, so its size has to show on the tab. */
 function renderRanking() {
   const sel = state.selected;
-  const rows = state.meta.concurrency_ranking
-    .filter((e) => !sel.size || e.refs.some((r) => sel.has(r)))
-    .slice(0, 25);
+  const matching = state.meta.concurrency_ranking.filter(
+    (e) => !sel.size || e.refs.some((r) => sel.has(r)),
+  );
+  const rows = matching.slice(0, 25);
+  $('#ranking-count').textContent = matching.length
+    ? `${rows.length} / ${matching.length} 組`
+    : '';
+
   const el = $('#ranking');
   if (!rows.length) {
     el.innerHTML = '<p class="empty">該当する重用区間はありません。</p>';
@@ -373,8 +491,14 @@ function renderRanking() {
     .join('');
 }
 
+/** Folded away like the ranking, so the summary has to carry its size. */
 function renderShared() {
-  const rows = state.meta.shared_termini.slice(0, 20);
+  const all = state.meta.shared_termini;
+  const rows = all.slice(0, 20);
+  $('#shared-count').textContent = all.length
+    ? `${rows.length} / ${all.length} 地点`
+    : '';
+
   const el = $('#shared');
   if (!rows.length) {
     el.innerHTML = '<p class="empty">該当地点はありません。</p>';

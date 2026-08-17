@@ -1,24 +1,50 @@
 /* Load the real page in Chromium and confirm it actually renders:
- * no console errors, layers present, features queryable, filters switching. */
-import { readFileSync } from 'node:fs';
+ * no console errors, layers present, features queryable, filters switching.
+ *
+ * The page joins every built region into one map, so the probes here are
+ * derived from the same join rather than from a single region's file. */
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 
 import { ROOT } from './_paths.mjs';
 
 // Not named URL — that would shadow the global URL constructor used below.
-const OUT = process.argv[2] || 'shot';
-const REGION = process.argv[3] || 'nagano';
-const PAGE = `http://localhost:8000/?region=${REGION}`;
+const PAGE = 'http://localhost:8000/';
 
-const geo = JSON.parse(
-  readFileSync(join(ROOT, `web/data/${REGION}.geojson`), 'utf8'),
+// The screenshots are evidence for one run, not a build product, so they are
+// written outside the working tree. Pass a directory to keep them somewhere.
+const OUTDIR =
+  process.argv[2] || mkdtempSync(join(tmpdir(), 'national-route-map-'));
+mkdirSync(OUTDIR, { recursive: true });
+const shot = (name) => join(OUTDIR, `${name}.png`);
+
+const read = (p) => JSON.parse(readFileSync(join(ROOT, p), 'utf8'));
+
+// Same join the viewer performs: overlapping bounding boxes return the same
+// way twice, and the OSM way id deduplicates them.
+const index = read('web/data/regions.json');
+const byId = new Map();
+for (const r of index) {
+  for (const f of read(`web/data/${r.region}.geojson`).features) {
+    if (!byId.has(f.properties.id)) byId.set(f.properties.id, f);
+  }
+}
+const features = [...byId.values()];
+console.log(
+  `regions built: ${index.map((r) => r.label).join(', ')} ` +
+    `— ${features.length.toLocaleString()} arcs after dedupe`,
 );
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 
 const errors = [];
+const fails = [];
+const ok = (cond, msg) =>
+  cond ? console.log('PASS  ' + msg) : fails.push('FAIL  ' + msg);
+
 page.on('console', (m) => {
   if (m.type() === 'error') errors.push(m.text());
 });
@@ -60,6 +86,16 @@ const report = await page.evaluate(() => {
   out.rankingRows = document.querySelectorAll('#ranking .row').length;
   out.sharedRows = document.querySelectorAll('#shared .row').length;
   out.stats = document.querySelector('#stats').innerText.replace(/\n/g, ' | ');
+  // The three UI decisions this page is built around.
+  out.regionPickers = document.querySelectorAll('select#region').length;
+  out.concOptions = [...document.querySelectorAll('input[name=conc]')].map(
+    (i) => i.value,
+  );
+  out.folded = ['ranking', 'shared'].map((name) => ({
+    name,
+    open: document.querySelector(`#${name}-block`).open,
+    count: document.querySelector(`#${name}-count`).innerText,
+  }));
   return out;
 });
 
@@ -78,7 +114,30 @@ console.log(
 );
 console.log('stats:', report.stats);
 
-await page.screenshot({ path: `${OUT}-1-all.png` });
+/* ---- the UI contract ------------------------------------------------------ */
+ok(
+  report.regionPickers === 0,
+  'no region picker: the map is not scoped to one prefecture',
+);
+ok(
+  report.routeCount >= Math.max(...index.map((r) => r.routes)),
+  `the route list covers every region at once (${report.routeCount} routes)`,
+);
+ok(
+  JSON.stringify(report.concOptions) === JSON.stringify(['off', 'all']),
+  `concurrency has two modes, not three (${report.concOptions.join(', ')})`,
+);
+// Reference lists are folded shut, but a fold that hides its own existence is
+// worse than the height it saves, so each summary must still state its size.
+for (const b of report.folded) {
+  ok(b.open === false, `the ${b.name} list starts folded`);
+  ok(
+    /\d/.test(b.count),
+    `the folded ${b.name} list still states its size ("${b.count}")`,
+  );
+}
+
+await page.screenshot({ path: shot('1-all') });
 
 // --- switch to "concurrent sections only" -----------------------------------
 await page.click('input[name=conc][value=all]');
@@ -88,10 +147,16 @@ const concStats = await page.evaluate(() => ({
   stats: document.querySelector('#stats').innerText.replace(/\n/g, ' | '),
 }));
 console.log('\nafter "重用区間のみ": renderedRoads=' + concStats.roads);
-await page.screenshot({ path: `${OUT}-2-concurrent.png` });
+await page.screenshot({ path: shot('2-concurrent') });
 
-// --- click the deepest concurrency row (18/117/406) --------------------------
+// --- unfold the ranking and click its deepest row ---------------------------
 await page.click('input[name=conc][value=off]');
+await page.click('#ranking-block > summary');
+await page.waitForTimeout(500);
+ok(
+  await page.evaluate(() => document.querySelector('#ranking-block').open),
+  'the ranking unfolds when its summary is clicked',
+);
 await page.click('#ranking .row');
 await page.waitForTimeout(4000);
 const selStats = await page.evaluate(() => ({
@@ -106,23 +171,13 @@ console.log(
     JSON.stringify(selStats.checked),
 );
 console.log('  ' + selStats.stats);
-await page.screenshot({ path: `${OUT}-3-selected.png` });
-
-// --- selection-scoped concurrency -------------------------------------------
-await page.click('input[name=conc][value=sel]');
-await page.waitForTimeout(3500);
-const scoped = await page.evaluate(
-  () => window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
-);
-console.log('after "選択路線どうしの重用のみ": renderedRoads=' + scoped);
-await page.screenshot({ path: `${OUT}-4-scoped.png` });
+await page.screenshot({ path: shot('3-selected') });
 
 // --- zoom in where the most routes run together -----------------------------
 // The route-number labels have a minzoom, so they only prove themselves close
 // in. The spot is derived from the data rather than hard-coded to one region.
-await page.click('input[name=conc][value=off]');
 await page.click('#sel-none');
-const deepest = geo.features.reduce((a, b) =>
+const deepest = features.reduce((a, b) =>
   b.properties.n > a.properties.n ? b : a,
 );
 const at =
@@ -130,7 +185,7 @@ const at =
     Math.floor(deepest.geometry.coordinates.length / 2)
   ];
 console.log(
-  `\ndeepest concurrency here: ${deepest.properties.n}x ` +
+  `\ndeepest concurrency anywhere: ${deepest.properties.n}x ` +
     `${JSON.stringify(deepest.properties.refs_list)} — ${deepest.properties.name}`,
 );
 await page.evaluate((c) => window.map.jumpTo({ center: c, zoom: 12.4 }), at);
@@ -153,12 +208,12 @@ console.log(
   '  multi-designation labels: ' + (labelled.multi.join(' , ') || 'none'),
 );
 console.log('  rendered terminus labels: ' + labelled.termini);
-await page.screenshot({ path: `${OUT}-5-labels.png` });
+await page.screenshot({ path: shot('4-labels') });
 
 // --- 点線国道 / 工事中: locate them from the data instead of guessing -------
 const midOf = (f) =>
   f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)];
-const firstOf = (kind) => geo.features.find((f) => f.properties.kind === kind);
+const firstOf = (kind) => features.find((f) => f.properties.kind === kind);
 
 for (const [kind, layer, caption] of [
   ['foot', 'foot', '点線国道（徒歩道）'],
@@ -188,43 +243,35 @@ for (const [kind, layer, caption] of [
     `  layer "${layer}" rendered ${seen.length} arcs` +
       (seen.length ? ': ' + JSON.stringify(seen[0]) : ''),
   );
-  await page.screenshot({ path: `${OUT}-6-${kind}.png` });
+  await page.screenshot({ path: shot(`5-${kind}`) });
 }
 
-// --- switching region must swap the data, not stack listeners ----------------
-const others = await page.evaluate(
-  (cur) =>
-    [...document.querySelectorAll('#region option')]
-      .map((o) => o.value)
-      .filter((v) => v !== cur),
-  REGION,
-);
-if (others.length) {
-  const other = others[0];
-  const before = await page.innerText('#stats');
-  await page.selectOption('#region', other);
-  await page.waitForTimeout(6000);
-  const after = await page.evaluate(() => ({
-    stats: document.querySelector('#stats').innerText.replace(/\n/g, ' | '),
-    sub: document.querySelector('#region-sub').innerText,
-    routes: document.querySelectorAll('#route-list label').length,
-    roads: window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
-  }));
-  console.log(`\nswitched region to ${other}:`);
-  console.log('  ' + after.sub + ' / route checkboxes ' + after.routes);
-  console.log('  ' + after.stats);
-  console.log('  rendered roads: ' + after.roads);
-  if (before.replace(/\n/g, ' | ') === after.stats) {
-    console.log(
-      '  WARNING: stats did not change — the switch may not have loaded new data',
-    );
-  }
-  await page.screenshot({ path: `${OUT}-7-switched.png` });
+// --- every region's data must actually be on the map ------------------------
+// One region loading and the rest silently failing would look almost the same
+// from the panel, so each box is visited and its roads counted.
+console.log('');
+for (const r of index) {
+  const [w, s, e, n] = r.bbox;
+  await page.evaluate(
+    (b) => window.map.fitBounds(b, { padding: 10, duration: 0 }),
+    [
+      [w, s],
+      [e, n],
+    ],
+  );
+  await page.waitForTimeout(4000);
+  const roads = await page.evaluate(
+    () => window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
+  );
+  ok(roads > 0, `${r.label} renders roads without being selected (${roads})`);
 }
+await page.screenshot({ path: shot('6-nationwide') });
 
+console.log(fails.length ? '\n' + fails.join('\n') : '');
 console.log(
   '\nconsole errors: ' +
     (errors.length ? '\n  ' + errors.join('\n  ') : 'none'),
 );
+console.log('screenshots: ' + OUTDIR);
 await browser.close();
-process.exit(errors.length ? 1 : 0);
+process.exit(errors.length || fails.length ? 1 : 0);

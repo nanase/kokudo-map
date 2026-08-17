@@ -23,7 +23,6 @@ const {
   buildFilter,
   withKind,
   hasRef,
-  selectedCount,
   FILTERED_LAYERS,
   SPECIAL_KINDS,
 } = await import(pathToFileURL(join(ROOT, 'web', 'mapspec.mjs')).href);
@@ -98,8 +97,7 @@ const scenarios = [
   [deepest, 'off', 'multi route'],
   [[], 'all', 'all concurrency'],
   [pair, 'all', 'selection + all concurrency'],
-  [deepest, 'sel', 'selection-scoped concurrency'],
-  [[single], 'sel', 'selection-scoped with one route (falls back)'],
+  [deepest, 'all', 'deepest selection + all concurrency'],
 ];
 
 for (const [selected, conc, label] of scenarios) {
@@ -132,11 +130,6 @@ function jsPredicate(selected, conc) {
   return (p) => {
     if (set.size && !p.refs_list.some((r) => set.has(r))) return false;
     if (conc === 'all') return p.n >= 2;
-    if (conc === 'sel') {
-      if (set.size >= 2)
-        return p.refs_list.filter((r) => set.has(r)).length >= 2;
-      return p.n >= 2;
-    }
     return true;
   };
 }
@@ -228,13 +221,19 @@ ok(
   top.n >= 3,
   `deepest concurrency in ${meta.label} is ${top.n}x ${JSON.stringify(top.refs)}`,
 );
-const depth = compile(['>=', selectedCount(top.refs), 2]);
-const depthHits = geo.features.filter(
-  (f) => evaluate(depth, f) === true,
+// Every number of the deepest combination must land on the same arcs — the
+// thing the map exists to show — and the filter primitive must agree with the
+// stored list about which arcs those are.
+const together = compile(['all', ...top.refs.map(hasRef)]);
+const byExpr = geo.features.filter(
+  (f) => evaluate(together, f) === true,
+).length;
+const byList = geo.features.filter((f) =>
+  top.refs.every((r) => f.properties.refs_list.includes(r)),
 ).length;
 ok(
-  depthHits > 0,
-  `selected-depth expression finds ${depthHits} arcs shared by ${JSON.stringify(top.refs)}`,
+  byExpr === byList && byExpr > 0,
+  `${JSON.stringify(top.refs)} run together on ${byExpr} arcs (list agrees: ${byList})`,
 );
 
 console.log(fails.length ? '\n' + fails.join('\n') : '');

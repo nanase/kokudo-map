@@ -25,4 +25,5 @@ run = "python -m http.server 8000 -d web"
 
 [tasks.render-check]
 description = "ブラウザで実描画を確認する（serve を先に起動）"
-run = "node {{env.SKILL}}/render_check.mjs shot"
+# 引数なしなら一時ディレクトリに撮る。保存先を指定するときだけ渡す。
+run = "node {{env.SKILL}}/render_check.mjs {{arg(name='outdir', default='')}}"
