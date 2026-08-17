@@ -6,6 +6,10 @@ bun = "1.3"
 [env]
 # The build scripts belong to the national-route-data skill.
 SKILL = ".claude/skills/national-route-data/scripts"
+# コンソールが表せない字で落ちないようにする。文字コードは変えず、扱いだけ変える。
+# 日本語 Windows の cp932 は「尾駮バイパス」の駮も、区切りの — も表せない。
+# それで青森県の判定と PMTiles の書き出しが最後の 1 行で落ちた。
+PYTHONIOENCODING = ":replace"
 
 [tasks.fetch-pbf]
 description = "Geofabrik から japan-latest.osm.pbf を取得する（約 2.5 GB）"

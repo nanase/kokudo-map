@@ -16,6 +16,16 @@
   --ink-2: #46566A;
   --ink-3: #6C7E93;
   --focus: #1E6FD9;
+
+  /* 国道番号標識の配色。地の青、白の縁、白抜きの番号である。
+     標識は明るい配色でも暗い配色でも同じ色なので、下の切り替えには入れない。 */
+  --shield-face: #00449E;
+  --shield-edge: #FFFFFF;
+  --shield-ink: #FFFFFF;
+
+  /* 地図の上の出典表示。MapLibre が白い下敷きを敷くので、本文の色を継ぐと
+     暗い配色のときに白い字が白い下敷きに載って消える。ここだけ固定する。 */
+  --attrib-ink: #26313F;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -172,19 +182,17 @@ input[type="search"] {
 }
 .ranking .empty { font-size: .75rem; color: var(--ink-3); }
 
-/* おにぎり（国道番号標識）------------------------------------------------- */
-.shield {
-  position: relative; width: 26px; height: 23px; flex: 0 0 auto;
-  display: grid; place-items: center;
+/* おにぎり（国道番号標識）-------------------------------------------------
+   実物と同じ配色にしてある。白い縁は明るい配色の面では見えないが、暗い面では
+   標識と地の境目になる。実物が縁を持っているのも同じ理由である。 */
+.shield { width: 34px; height: 30px; flex: 0 0 auto; display: block; }
+.shield svg { display: block; width: 100%; height: 100%; }
+.shield path { fill: var(--shield-face); stroke: var(--shield-edge); }
+.shield text {
+  fill: var(--shield-ink); font-family: ui-monospace, Consolas, monospace;
+  font-size: 14px; font-weight: 700;
 }
-.shield svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.shield span {
-  position: relative; font-family: ui-monospace, Consolas, monospace;
-  font-size: 9px; font-weight: 700; color: var(--sign-blue);
-  line-height: 1; margin-top: -3px; letter-spacing: -.02em;
-}
-.shield.sm { width: 21px; height: 19px; }
-.shield.sm span { font-size: 7.5px; }
+.shield.sm { width: 25px; height: 22px; }
 
 /* footer ---------------------------------------------------------------- */
 #panel footer { padding: 14px 18px 4px; margin-top: auto; }
@@ -206,10 +214,11 @@ input[type="search"] {
 .freshness dd.warn { color: #B4690E; font-weight: 700; }
 @media (prefers-color-scheme: dark) { .freshness dd.warn { color: #E7B457; } }
 
-.credit { font-size: .66rem; color: var(--ink-3); margin: 10px 0 0; line-height: 1.5; }
-.credit a { color: var(--ink-3); }
-
 /* ----------------------------------------------------------------- map --- */
+/* 出典表示は地図の上、MapLibre の白い下敷きの上にある。本文の色を継がせない。 */
+.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib a { color: var(--attrib-ink); }
+
 #map-wrap { flex: 1; position: relative; min-width: 0; }
 #map { position: absolute; inset: 0; }
 #loading {

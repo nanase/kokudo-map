@@ -21,21 +21,28 @@ Usage:  uv run scripts/build_all.py [region ...]   (default: every region)
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 from _paths import ROOT
-from regions import REGIONS
+from regions import REGIONS, named_regions
 
 HERE = Path(__file__).resolve().parent
+
+# What comes back is read as UTF-8, so the child has to write UTF-8. A pipe is
+# not a console, so Python otherwise falls back to the system locale — cp932 on
+# a Japanese Windows — and 尾駮バイパス has a kanji cp932 does not contain. 青森県
+# died printing its own progress line, and it was reported as a build failure.
+CHILD_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
 
 def run(cmd: list[str]) -> tuple[int, str]:
     r = subprocess.run(
         cmd, cwd=ROOT, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
+        encoding="utf-8", errors="replace", env=CHILD_ENV,
     )
     return r.returncode, (r.stdout or "") + (r.stderr or "")
 
@@ -58,10 +65,12 @@ def failures(out: str) -> list[str]:
 
 
 def main() -> None:
+    # A road name this terminal cannot encode must not be what stops the build.
+    sys.stdout.reconfigure(errors="replace")
     args = sys.argv[1:]
     skip_verify = "--skip-verify" in args
     no_pack = "--no-pack" in args
-    wanted = [a for a in args if not a.startswith("--")] or list(REGIONS)
+    wanted = named_regions([a for a in args if not a.startswith("--")])
 
     started = time.time()
     broken: dict[str, list[str]] = {}

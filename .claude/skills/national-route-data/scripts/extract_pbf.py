@@ -40,7 +40,7 @@ from datetime import datetime, timezone
 import osmium
 
 from _paths import CACHE, PBF
-from regions import REGIONS
+from regions import REGIONS, named_regions
 
 # The build reads these way tags and no others. Keeping the rest would triple
 # the memory this pass needs for nothing. build_routes.TAGS_USED is the
@@ -359,10 +359,7 @@ def main() -> None:
 
     path = take("--pbf", path)
     node_index = take("--index", node_index)
-    wanted = args or list(REGIONS)
-    for r in wanted:
-        if r not in REGIONS:
-            raise SystemExit(f"unknown region {r!r}; known: {', '.join(REGIONS)}")
+    wanted = named_regions(args)
 
     base_ts = read_header(path)
     age = (datetime.now(timezone.utc)

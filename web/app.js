@@ -53,15 +53,27 @@ const state = {
 const $ = (sel) => document.querySelector(sel);
 
 /* ---------------------------------------------------------------- shields --- */
-/** An inverted-triangle route marker ("おにぎり") with the number inside. */
+/**
+ * An inverted-triangle route marker ("おにぎり") with the number inside.
+ *
+ * Coloured like the real 国道番号標識 — a white number on the sign blue, inside
+ * the white border the sign carries — rather than as blue text on the panel
+ * colour, which left it competing with whatever the map showed behind a popup.
+ *
+ * The number is SVG text with `textLength` rather than an HTML span, because a
+ * three-digit number is wider than the triangle at the height it sits: it used
+ * to spill onto the panel behind, and white on white would be nothing at all.
+ */
 function shield(ref, small) {
+  const digits = String(ref).length;
+  const width = digits >= 3 ? 23 : digits === 2 ? 16 : 8;
   return (
     `<span class="shield${small ? ' sm' : ''}">` +
-    '<svg viewBox="0 0 44 40" aria-hidden="true">' +
-    '<path d="M4 5 H40 L22 35 Z" stroke="#00449E" stroke-width="4" ' +
-    'stroke-linejoin="round" style="fill:var(--panel)"/>' +
-    '</svg>' +
-    `<span>${ref}</span></span>`
+    `<svg viewBox="0 0 48 42" role="img" aria-label="国道${ref}号">` +
+    '<path d="M3 4 H45 L24 39 Z" stroke-width="3" stroke-linejoin="round"/>' +
+    `<text x="24" y="16.5" text-anchor="middle" textLength="${width}" ` +
+    `lengthAdjust="spacingAndGlyphs">${ref}</text>` +
+    '</svg></span>'
   );
 }
 
@@ -94,10 +106,15 @@ map.addControl(
   new maplibregl.ScaleControl({ maxWidth: 110, unit: 'metric' }),
   'bottom-right',
 );
+// The one place the sources are credited. The panel used to say the same thing
+// in its footer, which is two answers to one question and one of them free to
+// go stale; the map's own control is the copy that has to be there.
 map.addControl(
   new maplibregl.AttributionControl({
     compact: false,
-    customAttribution: '道路データ © OpenStreetMap contributors (ODbL 1.0)',
+    customAttribution:
+      '道路データ <a href="https://www.openstreetmap.org/copyright" ' +
+      'target="_blank" rel="noopener">© OpenStreetMap contributors</a> (ODbL 1.0)',
   }),
   'bottom-right',
 );
@@ -481,7 +498,14 @@ function wirePopups() {
       layers: CLICKABLE_LAYERS,
     });
     if (!hits.length) return;
-    const p = hits[0].properties;
+    // A junction, a parallel alignment or a grade separation puts several arcs
+    // under one pixel, and they come back in the tile's order, which is
+    // arbitrary — a click on the four-fold stack in 福岡 reported 国道202号 alone.
+    // The deepest arc under the cursor is the one drawn on top (line-sort-key)
+    // and the one the map exists to keep, so that is the one described.
+    const p = hits.reduce((a, b) =>
+      b.properties.n > a.properties.n ? b : a,
+    ).properties;
     // A vector tile has no array type, so the designations travel as the same
     // delimiter-wrapped key the filters test, and are split back out here.
     const refs = p.refs.split(',').filter(Boolean).map(Number);

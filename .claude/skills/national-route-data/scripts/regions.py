@@ -94,3 +94,17 @@ def for_region(region: str) -> dict:
             f"known: {', '.join(REGIONS)}"
         )
     return REGIONS[region]
+
+
+def named_regions(args: list[str]) -> list[str]:
+    """The regions named on a command line, or every region if none were.
+
+    A task runner that fills an omitted variadic argument in hands the script an
+    empty token, and on Windows the quotes come through as characters: `mise run
+    extract` arrived as the single argument `''`. That names no region rather
+    than a region called `''`, which is what it was reported as.
+    """
+    named = [a for a in args if a.strip("'\"")]
+    for r in named:
+        for_region(r)
+    return named or list(REGIONS)

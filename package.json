@@ -7,7 +7,7 @@
   "scripts": {
     "check": "node .claude/skills/national-route-data/scripts/check_expressions.mjs",
     "render-check": "node .claude/skills/national-route-data/scripts/render_check.mjs",
-    "serve": "python -m http.server 8000 -d web",
+    "serve": "uv run .claude/skills/national-route-data/scripts/serve.py",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write ."

@@ -180,7 +180,17 @@ export function routeLayers() {
       type: 'line',
       source: 'routes',
       'source-layer': SOURCE_LAYER,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        // Concurrency draws over single designations. Without a sort key the
+        // order is whatever the tile happens to hold, so a four-fold section
+        // could be buried under a lone number — and clicked as one, which is
+        // how a stack of four reported 国道202号 alone in 福岡. `line-sort-key`
+        // sorts ascending and draws the highest last, so `n` puts the deepest
+        // stack on top. One layer per depth would say the same thing four times.
+        'line-sort-key': ['get', 'n'],
+      },
       paint: {
         'line-color': colorByN,
         'line-width': lineWidth(),
@@ -239,6 +249,11 @@ export function routeLayers() {
         'text-font': FONT,
         'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 13, 13],
         'symbol-spacing': 220,
+        // Labels are placed in sort-key order and a label that collides with an
+        // already-placed one is dropped. Negating `n` places the deepest stack
+        // first, so the label a conventional map rounds down is the last one to
+        // be given up rather than the first.
+        'symbol-sort-key': ['-', 0, ['get', 'n']],
         'text-rotation-alignment': 'viewport',
         'text-pitch-alignment': 'viewport',
       },

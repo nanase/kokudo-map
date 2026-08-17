@@ -100,11 +100,16 @@ def tokens(ref: str | None) -> set[int]:
 # primary name fields are read, and even those are corroborated below.
 NAME_FIELDS = ("name", "name:ja")
 
+# Where a way may say it is a sea section. Mappers put it in the name about half
+# the time and in `description` the other half, and the two halves are different
+# routes, not the same ones said twice — see SEA_SECTION below.
+SEA_FIELDS = (*NAME_FIELDS, "description", "note")
+
 # Every way tag the rules in this file consult, and therefore the only ones a
 # nationwide extract has to carry. extract_pbf.py imports this rather than
 # restating it: a rule that starts reading a new tag must widen the set here, or
 # the tag will silently be absent from the cache it builds from.
-TAGS_USED = frozenset({*NAME_FIELDS, "ref", "highway", "construction", "route"})
+TAGS_USED = frozenset({*SEA_FIELDS, "ref", "highway", "construction", "route"})
 
 # Sections bypassed by a newer alignment. These are deliberately *kept*: a
 # 旧道 stays legally designated until 指定解除, which lags the bypass opening by
@@ -160,12 +165,18 @@ def resolve_relation_routes(rels: dict[int, dict]) -> dict[int, set[int]]:
 
 
 # A sea section of a national route: the designation continues across water with
-# no road under it. OSM names these 国道N号（海上区間） with great consistency, and
-# most of them carry no `route=ferry` — nationwide, 20 arcs and 1,390 km of open
-# water were classified as carriageway and drawn as solid line, against 2 arcs
-# and 63 km that were tagged as a ferry. A 295 km straight line you appear to be
-# able to drive down is the exact confusion the dashed 海上国道 layer exists to
-# prevent, so the name is read as the evidence it plainly is.
+# no road under it. Most carry no `route=ferry` — nationwide, 20 arcs and 1,390
+# km of open water were classified as carriageway and drawn as solid line,
+# against 2 arcs and 63 km that were tagged as a ferry. A 295 km straight line
+# you appear to be able to drive down is the exact confusion the dashed 海上国道
+# layer exists to prevent, so the words 海上区間 are read as the evidence they
+# plainly are.
+#
+# They are not always in the name. Of the 34 ways in Japan that say 海上区間, 20
+# say it in `name` and 14 only in `description` or `note` — and the 14 are other
+# routes, not the same ones said twice: 16, 28, 30, 42, 57, 259, 317, 324 were
+# drawn as solid road across 東京湾, 明石海峡, 備讃瀬戸, 伊勢湾 and 有明海 while the
+# name-only rule was in force. The two fields are one piece of evidence.
 SEA_SECTION = re.compile(r"海上区間")
 
 
@@ -173,7 +184,7 @@ def classify(tags: dict[str, str]) -> str:
     """Which legend the piece of road belongs in."""
     if tags.get("route") == "ferry":
         return "ferry"
-    if SEA_SECTION.search(" ".join(tags.get(k, "") for k in NAME_FIELDS)):
+    if SEA_SECTION.search(" ".join(tags.get(k, "") for k in SEA_FIELDS)):
         return "ferry"
     hw = tags.get("highway")
     if hw == "construction" or "construction" in tags:
