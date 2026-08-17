@@ -41,6 +41,8 @@ EXPECTATIONS: dict[str, dict] = {
         "kinds": {
             # 清水峠が点線国道
             291: ["foot"],
+            # 350号は佐渡を経由する海上国道
+            350: ["ferry"],
         },
         "named": [],
     },

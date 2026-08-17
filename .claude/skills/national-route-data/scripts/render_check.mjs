@@ -6,9 +6,18 @@
 import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
 import { ROOT } from './_paths.mjs';
+
+// Read the basemap URL from the real style rather than restating it, for the
+// same reason the expression checker imports mapspec: a copy stops checking
+// the thing it was written to check.
+const { GSI_TILES } = await import(
+  pathToFileURL(join(ROOT, 'web', 'mapspec.mjs')).href
+);
+const TILE_HOST = new URL(GSI_TILES).host;
 
 // Not named URL — that would shadow the global URL constructor used below.
 const PAGE = 'http://localhost:8000/';
@@ -45,10 +54,25 @@ const fails = [];
 const ok = (cond, msg) =>
   cond ? console.log('PASS  ' + msg) : fails.push('FAIL  ' + msg);
 
+// 国土地理院 serves no raster tile where there is nothing to draw, so panning
+// out over open sea answers 404. That is the basemap working as designed, and
+// the ferry checks go there deliberately. Every *other* failed request is a
+// real fault and is reported with its URL.
+const blankTiles = [];
+
 page.on('console', (m) => {
-  if (m.type() === 'error') errors.push(m.text());
+  if (m.type() !== 'error') return;
+  // Resource failures carry no URL in the console text. They are caught below
+  // with one, so keeping both would only duplicate them.
+  if (m.text().startsWith('Failed to load resource')) return;
+  errors.push(m.text());
 });
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+page.on('response', (r) => {
+  if (r.status() < 400) return;
+  if (new URL(r.url()).host === TILE_HOST) blankTiles.push(r.url());
+  else errors.push(`${r.status()} ${r.url()}`);
+});
 
 await page.goto(PAGE, { waitUntil: 'networkidle', timeout: 90000 });
 
@@ -73,6 +97,7 @@ const report = await page.evaluate(() => {
     'roads',
     'construction',
     'foot',
+    'ferry',
     'route-labels',
     'termini-dot',
     'termini-label',
@@ -218,6 +243,7 @@ const firstOf = (kind) => features.find((f) => f.properties.kind === kind);
 for (const [kind, layer, caption] of [
   ['foot', 'foot', '点線国道（徒歩道）'],
   ['construction', 'construction', '工事中区間'],
+  ['ferry', 'ferry', '海上国道（航路）'],
 ]) {
   const f = firstOf(kind);
   if (!f) {
@@ -243,7 +269,35 @@ for (const [kind, layer, caption] of [
     `  layer "${layer}" rendered ${seen.length} arcs` +
       (seen.length ? ': ' + JSON.stringify(seen[0]) : ''),
   );
+  ok(
+    seen.length > 0,
+    `${caption} draws on its own dashed layer (${seen.length} arcs)`,
+  );
   await page.screenshot({ path: shot(`5-${kind}`) });
+}
+
+// --- 海上国道 must switch off on its own ------------------------------------
+// The sea sections are the one kind with no road underneath, so taking them
+// off the map is exactly what the toggle is for.
+const ferryArc = firstOf('ferry');
+if (ferryArc) {
+  const ferries = () =>
+    page.evaluate(
+      () => window.map.queryRenderedFeatures({ layers: ['ferry'] }).length,
+    );
+  const shown = await ferries();
+  await page.uncheck('#t-ferry');
+  await page.waitForTimeout(3000);
+  const hidden = await ferries();
+  await page.check('#t-ferry');
+  await page.waitForTimeout(3000);
+  const back = await ferries();
+  ok(
+    shown > 0 && hidden === 0 && back === shown,
+    `海上国道 switches off and back on (${shown} → ${hidden} → ${back})`,
+  );
+} else {
+  console.log('\n海上国道: no ferry arc built — the toggle is not exercised');
 }
 
 // --- every region's data must actually be on the map ------------------------
@@ -269,8 +323,10 @@ await page.screenshot({ path: shot('6-nationwide') });
 
 console.log(fails.length ? '\n' + fails.join('\n') : '');
 console.log(
-  '\nconsole errors: ' +
-    (errors.length ? '\n  ' + errors.join('\n  ') : 'none'),
+  `\nbasemap tiles with nothing to draw (open sea etc.): ${blankTiles.length}`,
+);
+console.log(
+  'console errors: ' + (errors.length ? '\n  ' + errors.join('\n  ') : 'none'),
 );
 console.log('screenshots: ' + OUTDIR);
 await browser.close();

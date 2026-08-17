@@ -19,6 +19,7 @@ import {
   buildFilter,
   CLICKABLE_LAYERS,
   COLOR_CONSTRUCTION,
+  COLOR_FERRY,
   COLOR_FOOT,
   FILTERED_LAYERS,
   hasRef,
@@ -39,6 +40,7 @@ const state = {
   labels: true,
   termini: true,
   special: true,
+  ferry: true,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -380,6 +382,7 @@ function wireControls() {
   toggle('#t-labels', 'labels');
   toggle('#t-termini', 'termini');
   toggle('#t-special', 'special');
+  toggle('#t-ferry', 'ferry');
 
   $('#legend-n').innerHTML = N_COLORS.map(
     (c, i) =>
@@ -389,6 +392,7 @@ function wireControls() {
   $('#legend-kind').innerHTML = [
     [COLOR_FOOT, '点線国道（徒歩道・階段）'],
     [COLOR_CONSTRUCTION, '工事中・事業中'],
+    [COLOR_FERRY, '海上国道（航路）'],
   ]
     .map(
       ([c, t]) =>

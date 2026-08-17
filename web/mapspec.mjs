@@ -10,12 +10,23 @@ export const FONT = ['NotoSansJP-Regular'];
 
 export const KIND_FOOT = ['foot', 'steps'];
 export const KIND_CONSTRUCTION = ['construction'];
-export const SPECIAL_KINDS = [...KIND_CONSTRUCTION, ...KIND_FOOT];
+export const KIND_FERRY = ['ferry'];
+
+// Kinds that are not driveable carriageway. Each gets its own dashed layer and
+// is taken out of the solid road layers, so none of them can be mistaken for a
+// road you could drive down.
+export const SPECIAL_KINDS = [
+  ...KIND_CONSTRUCTION,
+  ...KIND_FOOT,
+  ...KIND_FERRY,
+];
 
 export const COLOR_CONSTRUCTION = '#8A6A2F';
 export const COLOR_FOOT = '#4B5A6C';
+export const COLOR_FERRY = '#0E7490';
 
-const GSI_TILES = 'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png';
+export const GSI_TILES =
+  'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png';
 const GSI_GLYPHS =
   'https://gsi-cyberjapan.github.io/optimal_bvmap/glyphs/{fontstack}/{range}.pbf';
 
@@ -171,6 +182,20 @@ export function routeLayers() {
       },
     },
     {
+      // 海上国道: the designation continues across water with no road under
+      // it. The longest dash of the three dashed kinds, because it is the one
+      // that runs for kilometres at a stretch.
+      id: 'ferry',
+      type: 'line',
+      source: 'routes',
+      layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      paint: {
+        'line-color': COLOR_FERRY,
+        'line-width': lineWidth({ add: 0.6, scaleByN: false }),
+        'line-dasharray': [4, 2.5],
+      },
+    },
+    {
       // The point of the whole project: numbers stay on screen regardless of
       // scale, and every designation is listed, not just the lowest.
       id: 'route-labels',
@@ -248,7 +273,8 @@ export const FILTERED_LAYERS = [
     toggle: 'special',
   },
   { id: 'foot', kinds: KIND_FOOT, negate: false, toggle: 'special' },
+  { id: 'ferry', kinds: KIND_FERRY, negate: false, toggle: 'ferry' },
   { id: 'route-labels', kinds: null, negate: false, toggle: 'labels' },
 ];
 
-export const CLICKABLE_LAYERS = ['roads', 'construction', 'foot'];
+export const CLICKABLE_LAYERS = ['roads', 'construction', 'foot', 'ferry'];
