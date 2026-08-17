@@ -355,9 +355,6 @@ function wireControls() {
     applyFilters();
   });
 
-  $('#sel-all').addEventListener('click', () =>
-    setSelection(state.meta.routes.map((r) => r.ref)),
-  );
   $('#sel-none').addEventListener('click', () => setSelection([]));
 
   $('#route-filter').addEventListener('input', (e) => {
@@ -460,9 +457,9 @@ function updateStats() {
     `<span>対象アーク　${arcs.toLocaleString()}</span>` +
     `<span>延長　${km.toFixed(0)} km</span>` +
     `<span>重用アーク　${conc.toLocaleString()}</span>`;
-  $('#sel-hint').textContent = sel.size
-    ? `${sel.size} 路線を選択中。`
-    : '未選択のときは全路線を表示します。';
+  // Nothing to say when nothing is picked: the map is already showing
+  // everything, and the count above states it.
+  $('#sel-hint').textContent = sel.size ? `${sel.size} 路線を選択中。` : '';
 }
 
 /** The ranking is folded away by default, so its size has to show on the tab. */

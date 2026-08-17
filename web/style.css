@@ -237,6 +237,10 @@ input[type="search"] {
 .pop-row { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); }
 .pop-row dt { color: var(--ink-3); font-size: .72rem; }
 .pop-row dd { margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: .72rem; }
+/* The OSM way link is the only anchor in a popup. The browser default is a
+   near-black blue that all but disappears on the dark panel, so it takes the
+   theme-aware sign blue like everything else. */
+.maplibregl-popup-content a { color: var(--sign-blue); }
 
 @media (max-width: 860px) {
   #app { flex-direction: column; }
