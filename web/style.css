@@ -169,6 +169,9 @@ input[type="search"] {
 }
 .route-list label {
   display: flex; align-items: center; gap: 4px; cursor: pointer;
+  /* 数字を選ばせない。459 個の的が 3 px 間隔で並んでいるので、少しでも
+     手が動くとチェックではなく文字の範囲選択になってしまう。 */
+  -webkit-user-select: none; user-select: none;
   font-family: ui-monospace, Consolas, monospace; font-size: .78rem;
   padding: 2px 3px; border-radius: 2px; color: var(--ink-2);
   font-variant-numeric: tabular-nums;
