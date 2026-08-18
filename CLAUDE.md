@@ -10,20 +10,11 @@
 
 ## コマンド
 
-| コマンド | 内容 |
-| --- | --- |
-| `mise run fetch-pbf` | Geofabrik の pbf を取得する。約 2.5 GB |
-| `mise run extract` | pbf から 47 地域ぶんのキャッシュを切り出す |
-| `mise run build-all` | 全地域を作り直し、配信データまで通す |
-| `mise run rebuild <region>` | 1 地域だけ作り直す |
-| `mise run pack` | `build/regions/` から `web/data/` を作り直す |
-| `mise run publish-data` | 配信データを Release に上げ、Pages を配り直す |
-| `mise run audit <region>` | 鎖が切れている路線を機械的に探す |
-| `mise run compare <region>` | Overpass 由来の基準と突き合わせる |
-| `mise run serve` | http://localhost:8000/ |
-| `mise run render-check` | Chromium で実描画を確認する |
+データと配信は mise、コードと資材は bun が持つ。作る物が Python か JavaScript かで分ける。
 
-初回は `mise trust` が必要である。`serve` は `python -m http.server` ではない。PMTiles は Range 要求で読むので、それに答えられるサーバが要る。
+一覧は `mise tasks` と `bun run` が出す。何をする物かは README の「動かす」にある。ここに書き写すと、片方が黙って古くなる。
+
+初回は `mise trust` と `mise install` が要る。`serve` は `python -m http.server` ではない。PMTiles は Range 要求で読むので、それに答えられるサーバが要る。
 
 ## 変えてはいけない判断
 

@@ -27,6 +27,7 @@ mise run serve        # http://localhost:8000/
 | `mise run fetch-pbf` | pbf を取得する |
 | `mise run extract` | pbf から地域ごとのキャッシュを切り出す |
 | `mise run build-all` | 全地域を作り直し、配信データまで通す |
+| `mise run build <地域>` | 1 地域を Overpass から取得して作り直す |
 | `mise run rebuild <地域>` | 1 地域だけ作り直す |
 | `mise run pack` | `build/regions/` から `web/data/` を作り直す |
 | `mise run publish-data` | 配信データを Release に上げ、Pages を配り直す |
@@ -36,6 +37,8 @@ mise run serve        # http://localhost:8000/
 | `mise run render-check` | Chromium で実描画を確認する |
 
 `serve` は `python -m http.server` ではない。PMTiles は Range 要求で読むので、それに答えられるサーバが要る。
+
+道具は二つある。**データと配信は mise、コードと資材は bun** である。作る物が Python か JavaScript かで分けてあり、同じ名前は両方に置かない。`scripts/check_docs.mjs` がそれを毎回確かめる。
 
 `uv` が依存を解決するので pip install は不要である。その `uv` 自身も含めて、道具の版は `mise.toml` だけが述べる。Node は検証とタイル化に使う。パッケージ管理には bun を使う。
 
@@ -64,6 +67,7 @@ bun run lint:fix             # 安全な自動修正込みで検査
 bun run test                 # 単体テスト
 bun run check                # スタイルと絞り込み式（生成済みの地域が要る）
 bun run check --spec-only    # 同上。データを読まない
+bun run check:docs           # 命令の一覧が食い違っていないか
 ```
 
 ## 構成

@@ -11,8 +11,7 @@
     "brand": "node scripts/make_brand.mjs",
     "test": "bun test test/",
     "check": "node .claude/skills/national-route-data/scripts/check_expressions.mjs",
-    "render-check": "node .claude/skills/national-route-data/scripts/render_check.mjs",
-    "serve": "uv run .claude/skills/national-route-data/scripts/serve.py",
+    "check:docs": "node scripts/check_docs.mjs",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write ."
