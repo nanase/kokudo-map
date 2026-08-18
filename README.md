@@ -194,7 +194,10 @@ mise run publish-data   # web/data/ を R2(data.nanase.cc)に上げる
 1. リポジトリを作って push する
 2. Settings → Pages → Source を **GitHub Actions** にする
 3. Cloudflare で R2 バケットを作り、`data.nanase.cc` に紐づける
-4. `bun x wrangler login` を済ませて `mise run publish-data` を実行する
+4. `bun x wrangler login` を済ませる
+5. `bun x wrangler r2 bucket cors set kokudo-map-data --file .claude/skills/national-route-data/scripts/r2-cors.json` で CORS を許可する
+   - `nanase.cc`(Pages)から `data.nanase.cc`(R2)への `fetch` は別オリジン越しになるので、許可が無いとブラウザが読み取りを止める
+6. `mise run publish-data` を実行する
 
 ## 結果
 
