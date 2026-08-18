@@ -1,3 +1,9 @@
+# mise が入れた道具を PATH の先頭に置く。
+# 既定の false では末尾に足すので、システムに入っている node や python が
+# 先に見つかり、上の [tools] が実質何も決めていない状態になる。
+[settings]
+activate_aggressive = true
+
 [tools]
 node = "22"
 python = "3.12"

@@ -42,6 +42,8 @@ mise run serve        # http://localhost:8000/
 
 `uv` が依存を解決するので pip install は不要である。その `uv` 自身も含めて、道具の版は `mise.toml` だけが述べる。Node は検証とタイル化に使う。パッケージ管理には bun を使う。
 
+`mise.toml` は入れた道具を PATH の先頭に置く設定にしてある。既定では末尾に足すので、システムに別途入っている node や python が先に見つかり、宣言した版が使われないまま気付けない。効くのはこのディレクトリの下だけである。
+
 ```sh
 bun install
 bun x playwright install chromium   # 実描画チェックにのみ必要
