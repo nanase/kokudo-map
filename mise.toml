@@ -28,11 +28,9 @@ PYTHONIOENCODING = ":replace"
 
 [tasks.fetch-pbf]
 description = "Geofabrik から japan-latest.osm.pbf を取得する（約 2.5 GB）"
-run = """
-mkdir -p build/pbf
-curl -L --retry 3 -C - -o build/pbf/japan-latest.osm.pbf \
-  https://download.geofabrik.de/asia/japan-latest.osm.pbf
-"""
+# 1 行で書く。mise は Windows では cmd に渡すので、複数行の run は 1 行目しか
+# 実行されず、しかも黙って成功する。--create-dirs が mkdir の代わりをする。
+run = "curl -L --retry 3 -C - --create-dirs -o build/pbf/japan-latest.osm.pbf https://download.geofabrik.de/asia/japan-latest.osm.pbf"
 
 [tasks.extract]
 description = "pbf から 47 都道府県ぶんのキャッシュを切り出す"
@@ -52,11 +50,10 @@ run = "uv run {{env.SKILL}}/pipeline.py {{arg(name='region', default='nagano')}}
 
 [tasks.pack]
 description = "build/regions/ から web/data/ を作り直す"
-run = """
-node --max-old-space-size=6144 {{env.SKILL}}/pack_web.mjs
-uv run {{env.SKILL}}/pack_pmtiles.py
-uv run {{env.SKILL}}/verify_national.py
-"""
+# 段の順番は build_all.py が持っている。ここに書き写した複製は、複数行の
+# run が Windows で 1 行目しか実行されないせいで、タイルを切っただけで
+# 黙って終わっていた。PMTiles にも全国検証にも届いていなかった。
+run = "uv run {{env.SKILL}}/build_all.py --pack-only"
 
 [tasks.publish-data]
 description = "web/data/ を Release に上げ、Pages を配り直す"

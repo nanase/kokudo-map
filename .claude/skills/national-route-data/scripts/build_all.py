@@ -70,7 +70,15 @@ def main() -> None:
     args = sys.argv[1:]
     skip_verify = "--skip-verify" in args
     no_pack = "--no-pack" in args
-    wanted = named_regions([a for a in args if not a.startswith("--")])
+    # --pack-only は、生成済みの地域から配信データだけを作り直す。
+    # 地域ごとの判定は回さない。段の順番を知っているのはこの関数だけに
+    # したいので、`mise run pack` もここを呼ぶ。
+    pack_only = "--pack-only" in args
+    wanted = (
+        []
+        if pack_only
+        else named_regions([a for a in args if not a.startswith("--")])
+    )
 
     started = time.time()
     broken: dict[str, list[str]] = {}
@@ -102,7 +110,11 @@ def main() -> None:
         if bad:
             broken[region] = bad
 
-    print(f"\n{len(wanted)} region(s) in {time.time() - started:.0f}s", flush=True)
+    if not pack_only:
+        print(
+            f"\n{len(wanted)} region(s) in {time.time() - started:.0f}s",
+            flush=True,
+        )
 
     if broken:
         print(f"\n{'=' * 70}")

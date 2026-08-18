@@ -66,11 +66,38 @@ ok(
   `package.json に無いのに README が挙げている: ${list(unknown)}`,
 );
 
-/* ---- 4. 命令の一覧は 1 か所にしかない ------------------------------------ */
+/* ---- 4. 黙って半分しか実行されないタスクが無い --------------------------- */
+/* mise は Windows では inline の run を `cmd /c` に渡す。複数行を書くと 1 行目
+ * しか実行されず、しかも終了コードは 0 になる。`mise run pack` はそれで、タイル
+ * を切ったあと PMTiles にも全国検証にも届かないまま成功を名乗っていた。
+ *
+ * 対処は 1 行にするか、そのタスクに `shell` を明示するかである。どちらでもない
+ * 複数行の run をここで止める。プロジェクト設定の
+ * `windows_default_inline_shell_args` は mise が安全上の理由で無視するので、
+ * 設定ひとつで直すことはできない。 */
+const TRIPLE = '"'.repeat(3);
+const multiline = [];
+for (const m of mise.matchAll(
+  /^\[tasks\.([\w:-]+)\]([\s\S]*?)(?=^\[tasks\.|^\[[a-z]|$(?![\s\S]))/gm,
+)) {
+  const [, name, body] = m;
+  const i = body.indexOf(`run = ${TRIPLE}`);
+  if (i === -1) continue;
+  const rest = body.slice(i + 6 + TRIPLE.length);
+  const script = rest.slice(0, rest.indexOf(TRIPLE));
+  const lines = script.split('\n').filter((l) => l.trim());
+  if (lines.length > 1 && !/^shell = /m.test(body)) multiline.push(name);
+}
+ok(
+  multiline.length === 0,
+  `複数行なのに shell を明示していないタスク: ${list(multiline)}`,
+);
+
+/* ---- 5. 命令の一覧は 1 か所にしかない ------------------------------------ */
 // CLAUDE.md がタスクの表を持っていた頃、README と二重に古くなった。
 const claude = read('CLAUDE.md');
 ok(!/^\| `mise run /m.test(claude), 'CLAUDE.md がタスクの表を持ち直していない');
 
 console.log(fails.length ? `\n${fails.join('\n')}` : '');
-console.log(`\n${fails.length ? '失敗' : '合格'}: ${5 - fails.length}/5`);
+console.log(`\n${fails.length ? '失敗' : '合格'}: ${6 - fails.length}/6`);
 process.exit(fails.length ? 1 : 0);
