@@ -151,7 +151,10 @@ button.mini {
   background: var(--panel-2); color: var(--ink-2);
   border: 1px solid var(--line); border-radius: 3px;
 }
-button.mini:hover { border-color: var(--sign-blue); color: var(--sign-blue); }
+button.mini:hover:not(:disabled) {
+  border-color: var(--sign-blue); color: var(--sign-blue);
+}
+button.mini:disabled { color: var(--ink-3); opacity: .55; cursor: default; }
 
 input[type="search"] {
   font: inherit; width: 100%; padding: 6px 9px; margin-bottom: 10px;

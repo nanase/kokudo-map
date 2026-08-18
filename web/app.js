@@ -514,9 +514,15 @@ function updateStats() {
     `<span>対象アーク　${arcs.toLocaleString()}</span>` +
     `<span>延長　${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</span>` +
     `<span>重用アーク　${conc.toLocaleString()}</span>`;
-  // Nothing to say when nothing is picked: the map is already showing
-  // everything, and the count above states it.
-  $('#sel-hint').textContent = sel.size ? `${sel.size} 路線を選択中。` : '';
+
+  // The button says how much it would undo, so nothing else has to say how
+  // much is selected. A line under the list stating "1 路線を選択中。" was a
+  // second answer to a question the button and the count above both answer.
+  // With nothing picked there is nothing to undo, and a button that cannot act
+  // should say so by being unavailable rather than by doing nothing.
+  const clear = $('#sel-none');
+  clear.disabled = sel.size === 0;
+  clear.textContent = sel.size ? `${sel.size} 路線を選択解除` : '選択解除';
 }
 
 /** The ranking is folded away by default, so its size has to show on the tab. */

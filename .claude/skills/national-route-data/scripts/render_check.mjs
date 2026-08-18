@@ -224,6 +224,44 @@ ok(
   `unfolding puts the map back (${folding.back} vs ${folding.open})`,
 );
 
+// The clear button is the only place the size of the selection is stated. A
+// hint line under the list used to say "1 路線を選択中。" as well — a second
+// answer to one question, and the one free to go stale. The button also has to
+// go unavailable when there is nothing to undo rather than sit there doing
+// nothing when pressed.
+const clearBtn = () =>
+  page.evaluate(() => {
+    const b = document.querySelector('#sel-none');
+    return { text: b.textContent, disabled: b.disabled };
+  });
+const idle = await clearBtn();
+ok(
+  idle.disabled && idle.text === '選択解除',
+  `with nothing picked the clear button is unavailable ("${idle.text}", disabled=${idle.disabled})`,
+);
+await page.locator('#route-list input').first().check();
+await page.waitForTimeout(1500);
+const one = await clearBtn();
+ok(
+  !one.disabled && one.text === '1 路線を選択解除',
+  `the clear button states how much it would undo ("${one.text}")`,
+);
+await page.click('#sel-none');
+await page.waitForTimeout(1500);
+const back = await clearBtn();
+ok(
+  back.disabled &&
+    back.text === '選択解除' &&
+    (await page.evaluate(
+      () => document.querySelectorAll('#route-list input:checked').length === 0,
+    )),
+  `pressing it clears the selection and goes quiet again ("${back.text}")`,
+);
+ok(
+  await page.evaluate(() => !document.querySelector('#sel-hint')),
+  'the selection size is not also stated in a hint under the list',
+);
+
 await page.screenshot({ path: shot('1-all') });
 
 // --- switch to "concurrent sections only" -----------------------------------
@@ -303,7 +341,7 @@ await page.screenshot({ path: shot('3-ranking-jump') });
 // --- zoom in where the most routes run together -----------------------------
 // The route-number labels have a minzoom, so they only prove themselves close
 // in. The spot is derived from the data rather than hard-coded to one region.
-await page.click('#sel-none');
+// Nothing to clear here: going to a ranking row no longer selects anything.
 const deepest = features.reduce((a, b) =>
   b.properties.n > a.properties.n ? b : a,
 );
