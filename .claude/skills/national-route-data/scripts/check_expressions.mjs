@@ -32,14 +32,45 @@ const {
 const require = createRequire(join(ROOT, 'package.json'));
 const spec = require('@maplibre/maplibre-gl-style-spec');
 
-const REGION = process.argv[2] || 'nagano';
-const geo = JSON.parse(
-  readFileSync(join(REGIONS, `${REGION}.geojson`), 'utf8'),
-);
-const meta = JSON.parse(
-  readFileSync(join(REGIONS, `${REGION}.meta.json`), 'utf8'),
-);
-console.log(`region: ${REGION} (${meta.label})`);
+/* This check has two halves, and only one of them needs a build.
+ *
+ * Section 1 asks whether the style and the filter expressions are legal
+ * MapLibre — a question about the code, answerable anywhere, which is what
+ * lets CI run it on a clone with no data in it. Sections 2 to 5 evaluate those
+ * same expressions over real arcs and compare the result against plain JS,
+ * which needs a region to have been built.
+ *
+ * `--spec-only` asks for the first half alone. Without it, missing data is an
+ * error rather than a quietly smaller run: someone checking their work on a
+ * built tree should hear about it, not be handed a pass that skipped the
+ * comparison.
+ */
+const args = process.argv.slice(2);
+const SPEC_ONLY = args.includes('--spec-only');
+const REGION = args.find((a) => !a.startsWith('--')) || 'nagano';
+
+let geo = null;
+let meta = null;
+if (SPEC_ONLY) {
+  console.log('--spec-only: 仕様の検査だけを行う（データを読まない）');
+} else {
+  try {
+    geo = JSON.parse(readFileSync(join(REGIONS, `${REGION}.geojson`), 'utf8'));
+    meta = JSON.parse(
+      readFileSync(join(REGIONS, `${REGION}.meta.json`), 'utf8'),
+    );
+  } catch {
+    console.error(
+      `build/regions/ に ${REGION} が無い。
+` +
+        `  作る:      mise run rebuild ${REGION}
+` +
+        '  仕様だけ:  bun run check --spec-only',
+    );
+    process.exit(1);
+  }
+  console.log(`region: ${REGION} (${meta.label})`);
+}
 
 let pass = 0;
 const fails = [];
@@ -110,9 +141,15 @@ ok(
 // wherever they are run. The deepest concurrency is the most demanding case.
 // A prefecture with no concurrency at all would still have to produce a valid
 // style, so the scenarios fall back to its longest route rather than throwing.
-const deepest = meta.concurrency_ranking.length
-  ? meta.concurrency_ranking[0].refs
-  : [meta.routes[0].ref];
+// With --spec-only there is no region to read them from. A stand-in does:
+// this section asks whether a filter is legal MapLibre, and legality does not
+// depend on which numbers are inside it. 18・117・406 is the concurrency this
+// project has used as its worked example throughout.
+const deepest = !meta
+  ? [18, 117, 406]
+  : meta.concurrency_ranking.length
+    ? meta.concurrency_ranking[0].refs
+    : [meta.routes[0].ref];
 const single = deepest[0];
 const pair = deepest.slice(0, 2);
 
@@ -132,6 +169,12 @@ for (const [selected, conc, label] of scenarios) {
     filters[id] = kinds ? withKind(base, kinds, negate) : base;
   }
   validate(styleWith(filters), `filters validate in the style — ${label}`);
+}
+
+if (SPEC_ONLY) {
+  console.log(`
+${pass} passed, ${fails.length} failed（仕様のみ）`);
+  process.exit(fails.length ? 1 : 0);
 }
 
 /* ---- 2. do the filters select the same arcs as plain JS? ----------------- */

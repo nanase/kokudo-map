@@ -57,9 +57,11 @@ bun x playwright install chromium   # 実描画チェックにのみ必要
 `bunfig.toml` で `minimumReleaseAge` を設定してあり、公開から 3 日経っていないパッケージは入らない。サプライチェーン攻撃で悪意あるバージョンが公開直後に出回っても、既知の期間はそれを踏まない。
 
 ```sh
-bun run lint       # 静的検査
-bun run format     # 整形
-bun run lint:fix   # 安全な自動修正込みで検査
+bun run lint                 # 静的検査
+bun run format               # 整形
+bun run lint:fix             # 安全な自動修正込みで検査
+bun run check                # スタイルと絞り込み式（生成済みの地域が要る）
+bun run check --spec-only    # 同上。データを読まない
 ```
 
 ## 構成
@@ -71,7 +73,7 @@ bun run lint:fix   # 安全な自動修正込みで検査
 | `web/shield.mjs` | 国道番号標識の形。画面も favicon も共有画像もここから描く |
 | `web/glyphs/` | ラベルの SDF グリフ。数字と `・` の 11 字 |
 | `scripts/` | 地図そのものの道具。データ生成には関わらない |
-| `.github/workflows/` | GitHub Pages への配信 |
+| `.github/workflows/` | 検査と GitHub Pages への配信 |
 | `.claude/skills/national-route-data/` | 生成と品質管理の手順、判定ルール、スクリプト |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |
 
@@ -247,6 +249,10 @@ Actions は落としてきた資産を `SHA256SUMS` で検算してから配る�
 地域ごとの既知の事実は `expectations.py` に分けてある。地域を足すのはデータの編集であって、コードの変更ではない。
 
 `check_expressions.mjs` は `web/mapspec.mjs` を読み込んで検査する。式を書き写した初版は、複製が通るのに本物が MapLibre に拒否される状態を招いた。検証対象を書き写した時点で、検証は検証でなくなる。
+
+この検査は二つに分かれる。仕様への適合はコードだけで答えられる問いなので、`--spec-only` を付ければデータの無い場所でも走る。式を実データで評価する側は生成済みの地域が要る。
+
+push と pull request では GitHub Actions が前者を回す。静的検査、仕様の検査、Python の構文、資材が組めること、共有用の札の差し替え先が残っていることを見る。判定の正しさと実描画は 2.5 GB の pbf と 47 地域ぶんの生成を要求するので、手元でしか答えられない。`main` への配信は検査を通らなければ走らない。
 
 番号がどの県に出たかは、県ごとの検査では言えない。裏取りは県の中で閉じているので、遠くの県への漏れはどの 1 県からも見えない。`verify_national.py` は路線ごとの実在範囲を見てそれを断定する。
 

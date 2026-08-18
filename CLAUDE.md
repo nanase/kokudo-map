@@ -55,5 +55,5 @@
 | `web/mapspec.mjs` | スタイルと絞り込み式。検証スクリプトも同じ物を読む |
 | `scripts/` | 地図の資材を作る道具。グリフ、favicon、ライブラリの複製 |
 | `.claude/skills/national-route-data/` | 手順、判定ルール、スクリプト |
-| `.github/workflows/` | GitHub Pages への配信 |
+| `.github/workflows/` | 検査と GitHub Pages への配信 |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |

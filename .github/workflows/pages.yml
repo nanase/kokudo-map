@@ -26,7 +26,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # 検査は check.yml が一度だけ定義している。ここで書き写すと二箇所になる。
+  # 通らないものは配らない。
+  check:
+    uses: ./.github/workflows/check.yml
+
   deploy:
+    needs: check
     runs-on: ubuntu-latest
     environment:
       name: github-pages
