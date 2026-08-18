@@ -488,6 +488,7 @@ for (const [kind, layer, caption] of [
   ['foot', 'foot', '点線国道（徒歩道）'],
   ['construction', 'construction', '工事中区間'],
   ['unopened', 'unopened', '未開通区間'],
+  ['expressway', 'expressway', '自動車専用道路'],
   ['ferry', 'ferry', '海上国道（航路）'],
 ]) {
   const f = firstOf(kind);
@@ -521,11 +522,50 @@ for (const [kind, layer, caption] of [
   await page.screenshot({ path: shot(`5-${kind}`) });
 }
 
+// --- 自動車専用道路 must switch off on its own -------------------------------
+// Unlike the dashed kinds, this one is ordinary driveable carriageway styled
+// exactly like `roads` — the toggle is the only thing distinguishing it, so
+// it is the only thing worth exercising here. Navigated explicitly rather than
+// relying on wherever the kind loop above left the camera, so this check does
+// not depend on its position in that loop.
+const expresswayArc = firstOf('expressway');
+if (expresswayArc) {
+  await page.evaluate(
+    (c) => window.map.jumpTo({ center: c, zoom: 13.5 }),
+    midOf(expresswayArc),
+  );
+  await page.waitForTimeout(3000);
+  const expressways = () =>
+    page.evaluate(
+      () => window.map.queryRenderedFeatures({ layers: ['expressway'] }).length,
+    );
+  const shown = await expressways();
+  await page.uncheck('#t-expressway');
+  await page.waitForTimeout(3000);
+  const hidden = await expressways();
+  await page.check('#t-expressway');
+  await page.waitForTimeout(3000);
+  const back = await expressways();
+  ok(
+    shown > 0 && hidden === 0 && back === shown,
+    `自動車専用道路 switches off and back on (${shown} → ${hidden} → ${back})`,
+  );
+} else {
+  console.log('\n自動車専用道路: no expressway arc built — the toggle is not exercised');
+}
+
 // --- 海上国道 must switch off on its own ------------------------------------
 // The sea sections are the one kind with no road underneath, so taking them
-// off the map is exactly what the toggle is for.
+// off the map is exactly what the toggle is for. Navigated explicitly — the
+// expressway check above already moved the camera off wherever the kind loop
+// left it, so this can no longer assume it is still there either.
 const ferryArc = firstOf('ferry');
 if (ferryArc) {
+  await page.evaluate(
+    (c) => window.map.jumpTo({ center: c, zoom: 13.5 }),
+    midOf(ferryArc),
+  );
+  await page.waitForTimeout(3000);
   const ferries = () =>
     page.evaluate(
       () => window.map.queryRenderedFeatures({ layers: ['ferry'] }).length,

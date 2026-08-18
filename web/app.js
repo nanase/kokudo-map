@@ -53,6 +53,7 @@ const state = {
   termini: true,
   special: true,
   ferry: true,
+  expressway: true,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -443,6 +444,7 @@ function wireControls() {
     });
   toggle('#t-labels', 'labels');
   toggle('#t-termini', 'termini');
+  toggle('#t-expressway', 'expressway');
   toggle('#t-special', 'special');
   toggle('#t-ferry', 'ferry');
 
@@ -680,6 +682,7 @@ function wirePopups() {
     const kindText =
       {
         road: '車道',
+        expressway: '車道（自動車専用道路）',
         construction: '工事中・事業中',
         unopened: '未開通区間（計画・未着工）',
         foot: '点線国道（徒歩道）',

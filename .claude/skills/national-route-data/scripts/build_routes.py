@@ -193,6 +193,24 @@ SEA_SECTION = re.compile(r"海上区間")
 # solid road, undoing that fix.
 UNOPENED_HIGHWAYS = {"planned", "proposed"}
 
+# 高速道路として指定された国道: grade-separated, no at-grade access, mapped
+# `highway=motorway`. These carry an expressway route number of their own
+# (第二神明道路 is `ref=E93;2`, 東海環状自動車道 is `ref=C3;475`) on top of the
+# national-route number, and drive differently from an ordinary at-grade 国道
+# — which is what put them behind the `ref=E93;2`-shaped bug in the first
+# place (see extract_pbf.py's REF_NUMERIC history). They are real, driveable
+# carriageway, so they stay a solid line rather than joining the dashed kinds
+# above; they get their own legend/toggle because the class itself is a
+# different kind of road, not because anything about it is incomplete.
+#
+# `highway=motorway` alone is the signal, not the presence of an E-prefixed
+# `ref`: measured nationwide, 6,321 candidate ways carry both, 6,619 are
+# motorway-graded under a different numbering prefix (C3, A1, …), and only 199
+# carry an expressway ref without being motorway-graded — all 199 of them
+# `construction=motorway`, already claimed by the `construction` bucket above.
+# Matching on the `ref` shape would miss the C/A-prefixed roads and gain
+# nothing over matching the grade OSM already tags for exactly this class.
+
 
 def classify(tags: dict[str, str]) -> str:
     """Which legend the piece of road belongs in."""
@@ -209,6 +227,8 @@ def classify(tags: dict[str, str]) -> str:
         return "steps"
     if hw in FOOT_HIGHWAYS:
         return "foot"
+    if hw == "motorway":
+        return "expressway"
     return "road"
 
 

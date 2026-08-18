@@ -12,6 +12,7 @@ export const KIND_FOOT = ['foot', 'steps'];
 export const KIND_CONSTRUCTION = ['construction'];
 export const KIND_UNOPENED = ['unopened'];
 export const KIND_FERRY = ['ferry'];
+export const KIND_EXPRESSWAY = ['expressway'];
 
 // Kinds that are not driveable carriageway. Each gets its own dashed layer and
 // is taken out of the solid road layers, so none of them can be mistaken for a
@@ -22,6 +23,14 @@ export const SPECIAL_KINDS = [
   ...KIND_FOOT,
   ...KIND_FERRY,
 ];
+
+// `expressway` (highway=motorway: 第二神明道路, 神戸淡路鳴門自動車道, …) is real,
+// driveable carriageway — it does not belong with the dashed kinds above — but
+// it is its own layer rather than folding into `roads`, because it is a
+// different kind of road (grade-separated, no at-grade access, its own route
+// number) that a reader may want to switch off independently of construction
+// or 点線国道.
+export const EXCLUDE_FROM_ROADS_LAYER = [...SPECIAL_KINDS, ...KIND_EXPRESSWAY];
 
 export const COLOR_CONSTRUCTION = '#8A6A2F';
 export const COLOR_UNOPENED = '#7B4B94';
@@ -238,6 +247,37 @@ export function routeLayers() {
       },
     },
     {
+      // 高速道路として指定された国道 (highway=motorway): real carriageway, styled
+      // exactly like `roads` — concurrency is still the point — but its own
+      // layer so it can be switched off on its own, the same way 点線国道 or
+      // 工事中 can.
+      id: 'expressway-casing',
+      type: 'line',
+      source: 'routes',
+      'source-layer': SOURCE_LAYER,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#FFFFFF',
+        'line-opacity': 0.85,
+        'line-width': lineWidth({ add: 2.6 }),
+      },
+    },
+    {
+      id: 'expressway',
+      type: 'line',
+      source: 'routes',
+      'source-layer': SOURCE_LAYER,
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        'line-sort-key': ['get', 'n'],
+      },
+      paint: {
+        'line-color': colorByN,
+        'line-width': lineWidth(),
+      },
+    },
+    {
       id: 'construction',
       type: 'line',
       source: 'routes',
@@ -367,8 +407,20 @@ export function routeLayers() {
 
 /** Which layers the shared filter is applied to, and how. */
 export const FILTERED_LAYERS = [
-  { id: 'casing', kinds: SPECIAL_KINDS, negate: true },
-  { id: 'roads', kinds: SPECIAL_KINDS, negate: true },
+  { id: 'casing', kinds: EXCLUDE_FROM_ROADS_LAYER, negate: true },
+  { id: 'roads', kinds: EXCLUDE_FROM_ROADS_LAYER, negate: true },
+  {
+    id: 'expressway-casing',
+    kinds: KIND_EXPRESSWAY,
+    negate: false,
+    toggle: 'expressway',
+  },
+  {
+    id: 'expressway',
+    kinds: KIND_EXPRESSWAY,
+    negate: false,
+    toggle: 'expressway',
+  },
   {
     id: 'construction',
     kinds: KIND_CONSTRUCTION,
@@ -383,6 +435,7 @@ export const FILTERED_LAYERS = [
 
 export const CLICKABLE_LAYERS = [
   'roads',
+  'expressway',
   'construction',
   'unopened',
   'foot',
