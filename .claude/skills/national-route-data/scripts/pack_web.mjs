@@ -203,7 +203,11 @@ const meta = {
   total_km:
     Math.round(features.reduce((s, f) => s + f.properties.km, 0) * 10) / 10,
   bbox: dataBbox.map((v) => Math.round(v * 1e5) / 1e5),
-  source: { type: 'vector', tiles: 'national-routes.pmtiles', maxzoom: MAXZOOM },
+  source: {
+    type: 'vector',
+    tiles: 'national-routes.pmtiles',
+    maxzoom: MAXZOOM,
+  },
   combinations: combos,
   ...termini,
 };
