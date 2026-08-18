@@ -13,6 +13,7 @@
 
 ```sh
 mise trust            # 初回のみ
+mise install          # 初回のみ。node・python・bun・uv が入る
 mise run fetch-pbf    # Geofabrik の japan-latest.osm.pbf、約 2.5 GB
 mise run extract      # pbf から 47 地域ぶんを切り出す
 mise run build-all    # 判定 → 検証 → 結合 → タイル化 → 全国検証
@@ -36,7 +37,7 @@ mise run serve        # http://localhost:8000/
 
 `serve` は `python -m http.server` ではない。PMTiles は Range 要求で読むので、それに答えられるサーバが要る。
 
-`uv` が依存を解決するので pip install は不要である。Node は検証とタイル化に使う。パッケージ管理には bun を使う。
+`uv` が依存を解決するので pip install は不要である。その `uv` 自身も含めて、道具の版は `mise.toml` だけが述べる。Node は検証とタイル化に使う。パッケージ管理には bun を使う。
 
 ```sh
 bun install

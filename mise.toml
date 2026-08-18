@@ -2,6 +2,10 @@
 node = "22"
 python = "3.12"
 bun = "1.3"
+# ほぼ全てのタスクが `uv run` で始まるのに、道具として宣言されていなかった。
+# 手元では別に入れた uv が拾われていたので気付かない。CI や他人の環境では
+# 最初のタスクで転ぶ。依存を解決するのは uv なので、その uv 自身をここが述べる。
+uv = "0.9"
 
 [env]
 # The build scripts belong to the national-route-data skill.
