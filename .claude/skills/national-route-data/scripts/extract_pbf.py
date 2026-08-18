@@ -45,13 +45,23 @@ from regions import REGIONS, named_regions
 # The build reads these way tags and no others. Keeping the rest would triple
 # the memory this pass needs for nothing. build_routes.TAGS_USED is the
 # authority; it is imported rather than restated so the two cannot drift.
-from build_routes import TAGS_USED
+#
+# `tokens` is imported for the same reason: whether a `ref` carries a national
+# route number is answered once, by build_routes.py, and read here rather than
+# re-answered with a second pattern. A second pattern is how 第二神明道路
+# (`ref=E93;2`, no 国道2号 relation) and 神戸淡路鳴門自動車道 (`ref=E28;28`, no
+# relation at all) went missing nationwide: a full-string `^[0-9]+(;[0-9]+)*$`
+# match rejected the whole `ref` the moment one semicolon-token carried an
+# E-road prefix, so the road never became a candidate and build_routes.py never
+# saw it to corroborate. `tokens()` already tests token by token — it has to,
+# to accept `ref=4;6;14;17` — so it accepts `E93;2` for the same reason it
+# accepts `2;28;250`.
+from build_routes import TAGS_USED, tokens
 
 SOURCE_URL = "https://download.geofabrik.de/asia/japan-latest.osm.pbf"
 
 # Same shapes the Overpass queries use, so the two paths admit the same ways.
 CANDIDATE_GRADES = {"trunk", "motorway", "construction"}
-REF_NUMERIC = re.compile(r"^[0-9]+(;[0-9]+)*$")
 NAME_KOKUDO = re.compile(r"^国道[0-9]+号")
 
 # The same pattern for relation names, but tolerant of full-width digits — one
@@ -211,7 +221,7 @@ def pass_ways(path: str, member_ways: set[int], member_nodes: set[int], idx: str
             if hw is None:
                 continue
             ref = tags.get("ref")
-            keep = (hw in CANDIDATE_GRADES and ref is not None and REF_NUMERIC.match(ref)) or bool(
+            keep = (hw in CANDIDATE_GRADES and bool(tokens(ref))) or bool(
                 NAME_KOKUDO.match(tags.get("name") or "")
             )
         if not keep:
@@ -336,8 +346,7 @@ def inside(pt, box) -> bool:
 def is_candidate(tags: dict[str, str]) -> bool:
     if "highway" not in tags:
         return False
-    ref = tags.get("ref")
-    if tags["highway"] in CANDIDATE_GRADES and ref and REF_NUMERIC.match(ref):
+    if tags["highway"] in CANDIDATE_GRADES and tokens(tags.get("ref")):
         return True
     return bool(NAME_KOKUDO.match(tags.get("name") or ""))
 
