@@ -99,6 +99,15 @@ const map = new maplibregl.Map({
 // exposed for debugging and for scripts/render_check.mjs
 window.map = map;
 
+// Registered synchronously, before any fetch can let the map race ahead: `load`
+// fires exactly once in the map's lifetime, while `map.loaded()` flips back to
+// false whenever a source is mid-fetch. Branching on the latter risked
+// attaching `once('load', ...)` after the one and only `load` had already
+// fired — a hung `boot()` with no error, reproducible whenever the browser
+// cache made everything else resolve fast enough to win the race (a reload,
+// typically, unlike a cold first visit).
+const mapLoaded = new Promise((res) => map.once('load', res));
+
 map.addControl(
   new maplibregl.NavigationControl({ visualizePitch: false }),
   'top-right',
@@ -174,7 +183,7 @@ async function boot() {
   state.meta = meta;
   state.routes = routesOf(meta.combinations);
 
-  await new Promise((res) => (map.loaded() ? res() : map.once('load', res)));
+  await mapLoaded;
 
   // The archive is addressed absolutely: the protocol handler resolves the URL
   // itself and has no page to be relative to.
