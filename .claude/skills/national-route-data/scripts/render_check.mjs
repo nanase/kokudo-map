@@ -192,6 +192,38 @@ for (const b of report.folded) {
   );
 }
 
+// The panel folds away to give the map the window. The failure this guards is
+// not the CSS but the canvas: MapLibre sizes it from its container, and a
+// canvas left at the old width draws the country into part of the screen.
+const folding = await page.evaluate(async () => {
+  const width = () =>
+    Math.round(document.querySelector('#map canvas').getBoundingClientRect().width);
+  const settle = () => new Promise((r) => setTimeout(r, 900));
+  const btn = document.querySelector('#panel-toggle');
+  const open = width();
+  btn.click();
+  await settle();
+  const folded = {
+    width: width(),
+    inert: document.querySelector('#panel').inert,
+  };
+  btn.click();
+  await settle();
+  return { open, folded, back: width() };
+});
+ok(
+  folding.folded.width > folding.open,
+  `folding the panel hands the map its width (${folding.open} → ${folding.folded.width})`,
+);
+ok(
+  folding.folded.inert,
+  'the folded panel is inert, so tab cannot reach the controls parked off screen',
+);
+ok(
+  folding.back === folding.open,
+  `unfolding puts the map back (${folding.back} vs ${folding.open})`,
+);
+
 await page.screenshot({ path: shot('1-all') });
 
 // --- switch to "concurrent sections only" -----------------------------------
