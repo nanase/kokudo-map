@@ -11,6 +11,7 @@
       "web/**/*.{js,mjs}",
       ".claude/**/*.{js,mjs}",
       "scripts/**/*.{js,mjs}",
+      "test/**/*.{js,mjs}",
       "*.{js,mjs}",
       "!web/data"
     ]

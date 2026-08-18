@@ -30,6 +30,10 @@ jobs:
       - name: 静的検査
         run: bun run lint
 
+      # 集計、絞り込み式、標識の作図。データを持たずに答えられる問いを見る。
+      - name: 単体テスト
+        run: bun test test/
+
       # スタイルと絞り込み式が MapLibre の仕様に適合するか。式を書き写した複製
       # ではなく web/mapspec.mjs 自身を読んで検査する。
       - name: スタイルと絞り込み式

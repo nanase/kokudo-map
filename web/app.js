@@ -21,6 +21,8 @@
  * Style and filter shapes live in mapspec.mjs so the build-time checker can
  * validate exactly what runs here.
  */
+
+import { routesOf, statsFor } from './aggregate.mjs';
 import {
   baseStyle,
   buildFilter,
@@ -184,50 +186,6 @@ map.addControl(
   }
   set(open);
 })();
-
-/* ------------------------------------------------------------ aggregates --- */
-/**
- * The build ships one table: every distinct *combination* of designations, with
- * its length, arc count and extent. Everything the panel shows is a sum over a
- * subset of its rows.
- *
- * A per-route table would not do. Concurrency means an arc belongs to several
- * routes at once, so adding two route rows counts the shared arcs twice —
- * which is exactly the number the map exists to stop hiding.
- */
-function routesOf(combos) {
-  const by = new Map();
-  for (const c of combos) {
-    for (const ref of c.refs) {
-      let e = by.get(ref);
-      if (!e) {
-        e = { ref, km: 0, arcs: 0, max_n: 1 };
-        by.set(ref, e);
-      }
-      e.km += c.km;
-      e.arcs += c.arcs;
-      e.max_n = Math.max(e.max_n, c.n);
-    }
-  }
-  const out = [...by.values()].sort((a, b) => a.ref - b.ref);
-  for (const e of out) e.km = Math.round(e.km * 10) / 10;
-  return out;
-}
-
-/** Totals over the combinations a selection touches. An empty selection means
- *  everything, which is what the map is already showing. */
-function statsFor(selected) {
-  let arcs = 0;
-  let km = 0;
-  let conc = 0;
-  for (const c of state.meta.combinations) {
-    if (selected.size && !c.refs.some((r) => selected.has(r))) continue;
-    arcs += c.arcs;
-    km += c.km;
-    if (c.n >= 2) conc += c.arcs;
-  }
-  return { arcs, km, conc };
-}
 
 /* ----------------------------------------------------------------- boot --- */
 async function boot() {
@@ -460,7 +418,7 @@ function setSelection(refs) {
 
 function updateStats() {
   const sel = state.selected;
-  const { arcs, km, conc } = statsFor(sel);
+  const { arcs, km, conc } = statsFor(state.meta.combinations, sel);
   $('#stats').innerHTML =
     `<span>選択路線　${sel.size || state.routes.length} / ${state.routes.length}</span>` +
     `<span>対象アーク　${arcs.toLocaleString()}</span>` +
