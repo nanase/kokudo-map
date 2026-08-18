@@ -194,7 +194,7 @@ mise run publish-data   # web/data/ を R2(data.nanase.cc)に上げる
 1. リポジトリを作って push する
 2. Settings → Pages → Source を **GitHub Actions** にする
 3. Cloudflare で R2 バケットを作り、`data.nanase.cc` に紐づける
-4. `bunx wrangler login` を済ませて `mise run publish-data` を実行する
+4. `bun x wrangler login` を済ませて `mise run publish-data` を実行する
 
 ## 結果
 

@@ -38,14 +38,16 @@ FILES = ["national-routes.pmtiles", "national.meta.json", "regions.json"]
 
 
 def wrangler(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    # `bunx` 自体は mise がシムを作らないことがある。`bun x` は bun 本体の
+    # サブコマンドなので、mise.toml が述べる bun さえ入っていれば必ず通る。
     return subprocess.run(
-        ["bunx", "wrangler", *args], text=True, capture_output=True, check=check
+        ["bun", "x", "wrangler", *args], text=True, capture_output=True, check=check
     )
 
 
 def preflight() -> None:
     """Fail with the actual reason rather than with wrangler's."""
-    if shutil.which("bunx") is None:
+    if shutil.which("bun") is None:
         sys.exit("bun が見つからない。mise install で入るはずである。")
 
     missing = [f for f in FILES if not (DATA / f).is_file()]
@@ -56,7 +58,7 @@ def preflight() -> None:
 
     if wrangler("whoami", check=False).returncode != 0:
         sys.exit(
-            "wrangler が Cloudflare にログインしていない。`bunx wrangler login` を実行する。"
+            "wrangler が Cloudflare にログインしていない。`bun x wrangler login` を実行する。"
         )
 
 
