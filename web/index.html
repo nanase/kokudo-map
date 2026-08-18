@@ -3,7 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>国道マップ</title>
+<title>国道マップ — 重用区間で番号を丸めない日本の国道地図</title>
+<meta name="description" content="日本の一般国道 459 路線を全国 1 枚で表示する地図。重用区間では重なるすべての番号を出し、縮尺を引いても番号を省略しない。出典は OpenStreetMap。">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+<!-- 共有されたときに出る札。%SITE_URL% は配信時に Actions が実際の URL に
+     差し替える。GitHub Pages の URL を述べるのはそこだけである。 -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="国道マップ">
+<meta property="og:description" content="重用区間で番号を丸めない。縮尺で番号を省略しない。全国 47 都道府県・一般国道 459 路線。">
+<meta property="og:url" content="%SITE_URL%">
+<meta property="og:image" content="%SITE_URL%og.png">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <link rel="stylesheet" href="style.css">
 </head>

@@ -8,6 +8,7 @@
     "postinstall": "node scripts/vendor_web.mjs",
     "vendor": "node scripts/vendor_web.mjs",
     "glyphs": "node scripts/make_glyphs.mjs",
+    "brand": "node scripts/make_brand.mjs",
     "check": "node .claude/skills/national-route-data/scripts/check_expressions.mjs",
     "render-check": "node .claude/skills/national-route-data/scripts/render_check.mjs",
     "serve": "uv run .claude/skills/national-route-data/scripts/serve.py",

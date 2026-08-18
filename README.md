@@ -45,13 +45,14 @@ bun x playwright install chromium   # 実描画チェックにのみ必要
 
 `bun install` は続けて `scripts/vendor_web.mjs` を走らせ、MapLibre と PMTiles を `node_modules` から `web/vendor/` に複製する。地図はそこから読む。CDN は読まない。
 
-ラベルのグリフは生成物だが、めったに変わらないので追跡する。作り直すのは字の顔ぶれが変わったときだけである。
+地図の資材は生成物だが、めったに変わらないので追跡する。作り直すのは元を変えたときだけである。
 
-```sh
-bun run glyphs   # web/glyphs/ を焼き直す
-```
+| コマンド | 作る物 |
+| --- | --- |
+| `bun run glyphs` | `web/glyphs/` — ラベルの SDF グリフ |
+| `bun run brand` | `web/favicon.svg` と `web/og.png` |
 
-字は 11 種しかない。ラベルは路線番号を `・` で繋いだ物だけなので、日本語フォント一式は要らない。2 ファイル 5 kB で足りる。
+グリフは 11 字しかない。ラベルは路線番号を `・` で繋いだ物だけなので、日本語フォント一式は要らない。2 ファイル 5 kB で足りる。
 
 `bunfig.toml` で `minimumReleaseAge` を設定してあり、公開から 3 日経っていないパッケージは入らない。サプライチェーン攻撃で悪意あるバージョンが公開直後に出回っても、既知の期間はそれを踏まない。
 
@@ -67,6 +68,7 @@ bun run lint:fix   # 安全な自動修正込みで検査
 | --- | --- |
 | `web/` | 地図本体。MapLibre GL JS と配信データ |
 | `web/mapspec.mjs` | スタイルと絞り込み式の定義。検証スクリプトも同じ物を読む |
+| `web/shield.mjs` | 国道番号標識の形。画面も favicon も共有画像もここから描く |
 | `web/glyphs/` | ラベルの SDF グリフ。数字と `・` の 11 字 |
 | `scripts/` | 地図そのものの道具。データ生成には関わらない |
 | `.github/workflows/` | GitHub Pages への配信 |
@@ -156,7 +158,7 @@ mise run pack
 
 GitHub Pages に置く。バンドラは無く、配るのは `web/` の中身そのものである。読むパスはすべて相対なので、`user.github.io/<repo>/` の下でもそのまま動く。
 
-Actions が組み立てるのは二つだけである。ブラウザ用ライブラリを `web/vendor/` に複製することと、配信データを `web/data/` に置くことである。
+Actions が組み立てるのは三つである。ブラウザ用ライブラリを `web/vendor/` に複製すること、配信データを `web/data/` に置くこと、そして共有用の札に実際の公開 URL を埋めることである。`index.html` は `%SITE_URL%` と書いて待っている。GitHub Pages の URL を述べるのは Actions だけで、リポジトリのどこにも書かない。
 
 配信データは git に入っていないので、Release の資産として置き、Actions がそこから取る。
 
@@ -265,12 +267,6 @@ Actions は落としてきた資産を `SHA256SUMS` で検算してから配る�
   - 車道と紛れないよう破線で描き、表示は個別に切り替えられる
 
 ## 次の作業
-
-公開の前に片付けるもの。配信の仕組みは通ったが、これらはまだ残っている。
-
-- [ ] favicon、`meta description`、OGP が無い
-
-地図そのものの課題。
 
 - [ ] 六重用が四重用と同じ色になる
   - 凡例が「四重用以上」で丸めている

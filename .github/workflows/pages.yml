@@ -64,9 +64,17 @@ jobs:
         run: cd web/data && sha256sum -c SHA256SUMS
 
       - uses: actions/configure-pages@v5
+        id: pages
 
-      # web/ をそのまま配る。ビルド手順は無い。index.html が読むのは
-      # 相対パスだけなので、user.github.io/<repo>/ の下でもそのまま動く。
+      # 共有されたときの札は絶対 URL でないと読まれない。その URL を述べるのは
+      # ここだけである。index.html は %SITE_URL% と書いて待っている。
+      - name: 公開 URL を埋める
+        run: |
+          sed -i "s|%SITE_URL%|${{ steps.pages.outputs.base_url }}/|g" web/index.html
+          ! grep -q '%SITE_URL%' web/index.html
+
+      # 組み上がった web/ をそのまま配る。バンドラは通さない。index.html が
+      # 読むのは相対パスだけなので、user.github.io/<repo>/ の下でも動く。
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
