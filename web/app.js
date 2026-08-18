@@ -647,7 +647,7 @@ function wirePopups() {
         ferry: '海上国道（航路）',
       }[p.kind] || p.kind;
 
-    // Where the designation came from is worth showing: "refタグ" means no OSM
+    // Which OSM tagging the designation was read out of. "ref タグ" means no
     // route relation lists this road, so the number is inferred from its tags.
     const srcText =
       {
@@ -677,7 +677,7 @@ function wirePopups() {
           `<div class="pop-row"><dt>区分</dt><dd>${kindText}</dd></div>` +
           `<div class="pop-row"><dt>延長</dt><dd>${Number(p.km).toFixed(2)} km</dd></div>` +
           `<div class="pop-row"><dt>最終更新</dt><dd>${p.updated || '—'}</dd></div>` +
-          `<div class="pop-row"><dt>根拠</dt><dd>${srcText}</dd></div>` +
+          `<div class="pop-row"><dt>典拠</dt><dd>${srcText}</dd></div>` +
           (Number(p.former)
             ? '<div class="pop-row"><dt>備考</dt><dd>旧道（指定解除前）</dd></div>'
             : '') +
