@@ -337,6 +337,110 @@ console.log(
 console.log('  rendered terminus labels: ' + labelled.termini);
 await page.screenshot({ path: shot('4-labels') });
 
+// --- clicking an arc: what the popup says, and the shadow that marks it -----
+// The camera is on the deepest concurrency, so the arc under the middle of the
+// canvas is the demanding case: several designations, one popup.
+const target = await page.evaluate(() => {
+  const m = window.map;
+  const r = m.getCanvas().getBoundingClientRect();
+  const cx = Math.round(r.width / 2);
+  const cy = Math.round(r.height / 2);
+  const ring = (d) => [
+    [d, 0],
+    [0, d],
+    [-d, 0],
+    [0, -d],
+    [d, d],
+    [-d, -d],
+    [d, -d],
+    [-d, d],
+  ];
+  for (let d = 0; d < 320; d += 5) {
+    for (const [dx, dy] of ring(d)) {
+      const f = m.queryRenderedFeatures([cx + dx, cy + dy], {
+        layers: ['roads'],
+      })[0];
+      if (f)
+        return {
+          x: cx + dx + r.x,
+          y: cy + dy + r.y,
+          id: f.properties.id,
+          refs: f.properties.refs.split(',').filter(Boolean),
+        };
+    }
+  }
+  return null;
+});
+if (!target) {
+  fails.push('FAIL  no arc under the canvas centre to click');
+} else {
+  await page.mouse.click(target.x, target.y);
+  await page.waitForTimeout(1500);
+  const opened = await page.evaluate(() => {
+    const el = document.querySelector('.maplibregl-popup-content');
+    return {
+      text: el ? el.innerText.replace(/\n/g, ' | ') : null,
+      shields: [...document.querySelectorAll('.shield-btn')].map(
+        (b) => b.dataset.ref,
+      ),
+      shadow: window.map
+        .queryRenderedFeatures({ layers: ['picked'] })
+        .map((f) => f.properties.id),
+    };
+  });
+  console.log('');
+  console.log('clicked an arc: ' + opened.text);
+  ok(opened.text !== null, 'clicking an arc opens a popup');
+  // The figure is one OSM way's length, not the route's, and the label has to
+  // say so: as 延長 it read as though 国道4号 were 0.13 km long.
+  ok(
+    /区間長/.test(opened.text ?? '') && !/延長/.test(opened.text ?? ''),
+    'the popup calls the arc length 区間長, not 延長',
+  );
+  ok(/典拠/.test(opened.text ?? ''), 'the popup calls the tagging 典拠');
+  ok(
+    JSON.stringify(opened.shields) === JSON.stringify(target.refs),
+    `every designation on the arc is a button (${opened.shields.join(', ')})`,
+  );
+  ok(
+    opened.shadow.length > 0 && opened.shadow.every((id) => id === target.id),
+    `the shadow marks the arc that was clicked and nothing else ` +
+      `(${opened.shadow.length} parts of way ${target.id})`,
+  );
+  await page.screenshot({ path: shot('7-picked') });
+
+  // The sign is the button: pressing it narrows the map to that one route.
+  await page.click('.shield-btn');
+  await page.waitForTimeout(2500);
+  const narrowed = await page.evaluate(() => ({
+    checked: [...document.querySelectorAll('#route-list input:checked')].map(
+      (i) => i.value,
+    ),
+  }));
+  ok(
+    JSON.stringify(narrowed.checked) === JSON.stringify([target.refs[0]]),
+    `pressing a sign selects that route alone (${narrowed.checked.join(', ')})`,
+  );
+
+  // Closing the popup has to take the shadow with it, or the map keeps a dark
+  // smear over a road nothing is describing any more.
+  await page.click('.maplibregl-popup-close-button');
+  await page.waitForTimeout(1200);
+  const closed = await page.evaluate(
+    () => window.map.queryRenderedFeatures({ layers: ['picked'] }).length,
+  );
+  ok(closed === 0, `closing the popup clears the shadow (${closed} left)`);
+}
+
+// Back to everything: the checks below count what each prefecture draws.
+await page.evaluate(() => {
+  for (const cb of document.querySelectorAll('#route-list input:checked')) {
+    cb.checked = false;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+});
+await page.waitForTimeout(1500);
+
 // --- 点線国道 / 工事中: locate them from the data instead of guessing -------
 const midOf = (f) =>
   f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)];

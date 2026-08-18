@@ -34,6 +34,7 @@ import {
   N_COLORS,
   N_LABELS,
   NOTHING,
+  pickedFilter,
   PMTILES_URL,
   routeLayers,
   routeSources,
@@ -44,6 +45,9 @@ const state = {
   meta: null,
   routes: [],
   selected: new Set(),
+  // The OSM way id of the arc a popup is open on, or null. Its only use is the
+  // shadow under it; nothing else on the map is scoped to one arc.
+  picked: null,
   conc: 'off',
   labels: true,
   termini: true,
@@ -367,6 +371,8 @@ function applyFilters() {
     map.setFilter(id, kinds ? withKind(base, kinds, negate) : base);
   }
 
+  map.setFilter('picked', pickedFilter(base, state.picked));
+
   const sel = [...state.selected];
   let tFilter = true;
   if (!state.termini) tFilter = ['==', ['get', 'count'], -1];
@@ -429,6 +435,10 @@ function wireControls() {
   const toggle = (id, key) =>
     $(id).addEventListener('change', (e) => {
       state[key] = e.target.checked;
+      // The shadow layer is not restricted by kind, so a toggle that takes the
+      // picked arc off the map would otherwise leave its shadow lying on the
+      // basemap with no road inside it.
+      state.picked = null;
       applyFilters();
     });
   toggle('#t-labels', 'labels');
@@ -616,6 +626,29 @@ document.addEventListener('click', (ev) => {
 });
 
 /* ---------------------------------------------------------------- popups --- */
+/**
+ * At most one popup is open, and the shadow on the map belongs to it.
+ *
+ * MapLibre's own `closeOnClick` would close the previous popup from a click
+ * handler registered after this file's, so the old popup's close would land
+ * after the new one had already claimed the shadow and would take it away
+ * again. Holding the popup here and closing it explicitly keeps the two in
+ * step whichever way it ends: the close button, another arc, or empty map.
+ */
+let popup = null;
+
+function pick(id) {
+  state.picked = id;
+  applyFilters();
+}
+
+function closePopup() {
+  const p = popup;
+  popup = null;
+  p?.remove();
+  if (state.picked !== null) pick(null);
+}
+
 function wirePopups() {
   for (const id of CLICKABLE_LAYERS) {
     map.on('mouseenter', id, () => (map.getCanvas().style.cursor = 'pointer'));
@@ -625,6 +658,7 @@ function wirePopups() {
     const hits = map.queryRenderedFeatures(ev.point, {
       layers: CLICKABLE_LAYERS,
     });
+    closePopup();
     if (!hits.length) return;
     // A junction, a parallel alignment or a grade separation puts several arcs
     // under one pixel, and they come back in the tile's order, which is
@@ -667,7 +701,11 @@ function wirePopups() {
       )
       .join('');
 
-    new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
+    popup = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: false,
+      maxWidth: '300px',
+    })
       .setLngLat(ev.lngLat)
       .setHTML(
         `<div class="pop-hd">${heading}` +
@@ -689,6 +727,8 @@ function wirePopups() {
           '</dl>',
       )
       .addTo(map);
+    popup.on('close', closePopup);
+    pick(p.id);
   });
 }
 

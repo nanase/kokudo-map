@@ -89,6 +89,20 @@ export function withKind(base, kinds, negate) {
 /** A filter that matches nothing, for hiding a layer without removing it. */
 export const NOTHING = ['==', ['get', 'n'], -1];
 
+/**
+ * The shadow under the arc a popup is describing.
+ *
+ * The OSM way id identifies an arc on its own — the build keys its deduplication
+ * on it — so no other test is needed to pick out one road. The shared filter is
+ * still folded in: an arc the selection has taken off the map must not keep a
+ * shadow where it used to be.
+ */
+export function pickedFilter(base, id) {
+  if (id == null) return NOTHING;
+  const test = ['==', ['get', 'id'], id];
+  return base === true ? test : ['all', base, test];
+}
+
 /* ------------------------------------------------------------------ paint --- */
 
 export const colorByN = [
@@ -165,6 +179,30 @@ export function baseStyle() {
  */
 export function routeLayers() {
   return [
+    {
+      // The one arc a popup is describing, lifted off the basemap by a shadow.
+      // A map line takes no CSS drop-shadow, so the shadow is a line of its
+      // own: wider than the road, blurred, black, drawn underneath everything
+      // else so the road keeps its own colour on top. It draws nothing until
+      // an arc is clicked; app.js narrows it to that arc's OSM way id.
+      //
+      // It has to clear the white casing, which is already 2.6 px wider than
+      // the road: at +9 px and a 5 px blur the ring that was left outside the
+      // casing was too thin and too diffuse to see at all. Widening it and
+      // tightening the blur is what made it read.
+      id: 'picked',
+      type: 'line',
+      source: 'routes',
+      'source-layer': SOURCE_LAYER,
+      filter: NOTHING,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#000000',
+        'line-opacity': 0.6,
+        'line-blur': 3,
+        'line-width': lineWidth({ add: 11 }),
+      },
+    },
     {
       // A white casing keeps the lines legible over the raster basemap.
       id: 'casing',
