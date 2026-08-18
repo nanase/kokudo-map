@@ -206,6 +206,11 @@ input[type="search"] {
   font: inherit; color: var(--ink-2); width: 100%;
 }
 .ranking .row:hover { border-color: var(--sign-blue); }
+/* 直前に飛んだ行。一覧は動かないので、どれを見ているのかは印でしか分からない。 */
+.ranking .row.on {
+  border-color: var(--sign-blue); background: var(--panel);
+  box-shadow: inset 3px 0 0 var(--sign-blue);
+}
 .ranking .row .shields { display: flex; gap: 3px; flex-wrap: wrap; }
 .ranking .row .km {
   font-family: ui-monospace, Consolas, monospace; font-size: .72rem;

@@ -212,21 +212,61 @@ ok(
   await page.evaluate(() => document.querySelector('#ranking-block').open),
   'the ranking unfolds when its summary is clicked',
 );
+// A row names one concurrency and states where it is. Clicking it has to go
+// there and leave the list alone — both used to fail. The camera was framed on
+// the union of every combination sharing two of the row's numbers, which for
+// the 高知市 row spanned 132.5°E–134.7°E, most of 四国; and selecting the row's
+// routes rebuilt the list under the cursor, moving the row that was clicked.
+const before = await page.evaluate(() => {
+  const rows = [...document.querySelectorAll('#ranking .row')];
+  return {
+    refs: rows.map((r) => r.dataset.refs),
+    bbox: rows[0].dataset.bbox.split(',').map(Number),
+  };
+});
 await page.click('#ranking .row');
-await page.waitForTimeout(4000);
-const selStats = await page.evaluate(() => ({
-  checked: [...document.querySelectorAll('#route-list input:checked')].map(
-    (i) => i.value,
+await page.waitForTimeout(400);
+await page
+  .waitForFunction(() => !window.map.isMoving(), null, { timeout: 30000 })
+  .catch(() => {});
+await page.waitForTimeout(3500);
+const jumped = await page.evaluate(() => ({
+  center: window.map.getCenter().toArray(),
+  zoom: window.map.getZoom(),
+  refs: [...document.querySelectorAll('#ranking .row')].map(
+    (r) => r.dataset.refs,
   ),
+  marked: document.querySelectorAll('#ranking .row.on').length,
+  checked: document.querySelectorAll('#route-list input:checked').length,
   roads: window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
-  stats: document.querySelector('#stats').innerText.replace(/\n/g, ' | '),
 }));
+const [bw, bs, be, bn] = before.bbox;
+const [clng, clat] = jumped.center;
+console.log('');
 console.log(
-  'after clicking top ranking row: selected=' +
-    JSON.stringify(selStats.checked),
+  `clicked ranking row 国道${before.refs[0].split(',').join('・')} — ` +
+    `camera ${clng.toFixed(4)}, ${clat.toFixed(4)} @z${jumped.zoom.toFixed(2)}, ` +
+    `${jumped.roads} roads on screen`,
 );
-console.log('  ' + selStats.stats);
-await page.screenshot({ path: shot('3-selected') });
+// A degenerate box — one arc long, no extent at all — leaves the camera on its
+// own centre, so the tolerance is what the padding can move it by.
+ok(
+  clng >= bw - 0.02 &&
+    clng <= be + 0.02 &&
+    clat >= bs - 0.02 &&
+    clat <= bn + 0.02,
+  `clicking a ranking row goes to that section (in ${before.bbox.join(', ')})`,
+);
+ok(
+  JSON.stringify(jumped.refs) === JSON.stringify(before.refs),
+  'the ranking list does not rebuild under the cursor',
+);
+ok(jumped.marked === 1, `the row that was clicked is marked (${jumped.marked})`);
+ok(
+  jumped.checked === 0,
+  `going to a row leaves the route selection alone (${jumped.checked} ticked)`,
+);
+await page.screenshot({ path: shot('3-ranking-jump') });
 
 // --- zoom in where the most routes run together -----------------------------
 // The route-number labels have a minzoom, so they only prove themselves close

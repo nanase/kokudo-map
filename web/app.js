@@ -528,7 +528,8 @@ function renderRanking() {
   el.innerHTML = rows
     .map(
       (e) =>
-        `<button type="button" class="row" data-refs="${e.refs.join(',')}">` +
+        `<button type="button" class="row" data-refs="${e.refs.join(',')}" ` +
+        `data-bbox="${e.bbox.join(',')}">` +
         `<span class="shields">${shieldRow(e.refs, true)}</span>` +
         `<span class="km">${e.km.toFixed(1)} km</span>` +
         (e.names.length
@@ -564,40 +565,47 @@ function renderShared() {
     .join('');
 }
 
-// Clicking a ranking / shared-terminus row narrows the map to those routes.
-document.addEventListener('click', (e) => {
-  const row = e.target.closest('.ranking .row');
+/**
+ * Clicking a ranking / shared-terminus row goes to that place.
+ *
+ * Each row carries the extent of the one thing it names — the combination's own
+ * bounding box, or the terminus' coordinate — and the camera is sent there and
+ * nowhere else. It used to derive the extent by re-scanning the whole table for
+ * every combination sharing two of the row's numbers, and the union of those
+ * covered a quarter of a region: clicking 国道32・55・56・195・197・493, which
+ * run together for 4 km in 高知市, framed 132.5°E–134.7°E, most of 四国.
+ *
+ * The click does not touch the selection either. The ranking is a view of the
+ * selection, so selecting the row's routes rebuilt the list under the cursor
+ * and the row that was just clicked moved or vanished. Narrowing to a route is
+ * what the checkboxes are for; this list's job is to take you somewhere.
+ */
+document.addEventListener('click', (ev) => {
+  const row = ev.target.closest('.ranking .row');
   if (!row) return;
-  const refs = row.dataset.refs.split(',').map(Number);
-  setSelection(refs);
+
+  for (const other of row.parentElement.querySelectorAll('.row.on')) {
+    other.classList.remove('on');
+  }
+  row.classList.add('on');
+
   if (row.dataset.at) {
     const [lon, lat] = row.dataset.at.split(',').map(Number);
     map.flyTo({ center: [lon, lat], zoom: 12 });
-  } else {
-    zoomToRefs(refs);
+    return;
   }
+  // A short concurrency can be a few metres of carriageway, and one that is a
+  // single arc long has no extent at all, so the box is only a hint about where
+  // to point: maxZoom keeps a degenerate one from asking for infinite scale.
+  const [w, s, e, n] = row.dataset.bbox.split(',').map(Number);
+  map.fitBounds(
+    [
+      [w, s],
+      [e, n],
+    ],
+    { padding: 80, maxZoom: 14 },
+  );
 });
-
-/**
- * Frame where the given routes actually run together.
- * The geometry is in tiles and mostly off screen, so the extent comes from the
- * combination table, which carries the bounding box of each combination.
- */
-function zoomToRefs(refs) {
-  const set = new Set(refs);
-  const b = new maplibregl.LngLatBounds();
-  let hit = false;
-  for (const c of state.meta.combinations) {
-    if (c.n < 2) continue;
-    if (c.refs.filter((r) => set.has(r)).length < 2) continue;
-    b.extend([
-      [c.bbox[0], c.bbox[1]],
-      [c.bbox[2], c.bbox[3]],
-    ]);
-    hit = true;
-  }
-  if (hit) map.fitBounds(b, { padding: 60, maxZoom: 13 });
-}
 
 /* ---------------------------------------------------------------- popups --- */
 function wirePopups() {
