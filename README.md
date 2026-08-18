@@ -28,6 +28,7 @@ mise run serve        # http://localhost:8000/
 | `mise run build-all` | 全地域を作り直し、配信データまで通す |
 | `mise run rebuild <地域>` | 1 地域だけ作り直す |
 | `mise run pack` | `build/regions/` から `web/data/` を作り直す |
+| `mise run publish-data` | 配信データを Release に上げ、Pages を配り直す |
 | `mise run audit <地域>` | 鎖が切れている路線を機械的に探す |
 | `mise run compare <地域>` | Overpass 由来の基準と突き合わせる |
 | `mise run serve` | ローカルサーバを起動する |
@@ -56,6 +57,7 @@ bun run lint:fix   # 安全な自動修正込みで検査
 | --- | --- |
 | `web/` | 地図本体。MapLibre GL JS と配信データ |
 | `web/mapspec.mjs` | スタイルと絞り込み式の定義。検証スクリプトも同じ物を読む |
+| `.github/workflows/` | GitHub Pages への配信 |
 | `.claude/skills/national-route-data/` | 生成と品質管理の手順、判定ルール、スクリプト |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |
 
@@ -113,13 +115,15 @@ pbf は 1 度だけ読み、47 地域ぶんのキャッシュに切り分ける�
 
 全国のアークは 1 つの GeoJSON では配れない。閲覧側は特徴量を手元に持たない。
 
-| ファイル | 中身 | git |
-| --- | --- | --- |
-| `web/data/national.pmtiles` | 全国のベクタタイル。Range 要求で読む | 追跡しない |
-| `web/data/national.meta.json` | 画面が出す集計 | 追跡する |
-| `web/data/regions.json` | 地域の一覧。`?region=` の初期表示に使う | 追跡する |
+| ファイル | 中身 |
+| --- | --- |
+| `web/data/national.pmtiles` | 全国のベクタタイル。Range 要求で読む |
+| `web/data/national.meta.json` | 画面が出す集計 |
+| `web/data/regions.json` | 地域の一覧。`?region=` の初期表示に使う |
 
-タイルは追跡しない。既に gzip されていて圧縮も差分も効かないので、作り直すたびに同じ大きさの塊が履歴に積まれる。clone した直後は次で作れる。
+三つとも git では追跡しない。理由は二つある。道路データは ODbL 1.0 で、MIT のコードと同じ木に置くと配布条件の違う二つを一度に配ることになる。それにタイルは既に gzip されていて圧縮も差分も効かないので、作り直すたびに同じ大きさの塊が履歴へ丸ごと積まれる。
+
+clone した直後は次で作れる。
 
 ```sh
 mise run pack
@@ -135,6 +139,34 @@ mise run pack
 ```
 
 路線一覧も、重用ランキングも、選択したときの延長も、この表の部分和である。数の出どころが一つなので、三つの数字が食い違うことがない。
+
+## 公開する
+
+GitHub Pages に置く。`web/` をそのまま配るだけで、組み立ての手順は無い。読むパスはすべて相対なので、`user.github.io/<repo>/` の下でもそのまま動く。
+
+配信データは git に入っていないので、Release の資産として置き、Actions がそこから取る。
+
+```sh
+mise run publish-data   # web/data/ を Release に上げ、Pages を配り直す
+```
+
+| 何 | どこ |
+| --- | --- |
+| コード | リポジトリ |
+| 配信データ | Release `data-latest` の資産 |
+| 組み立てと配信 | `.github/workflows/pages.yml` |
+
+タグは固定で、中身は作り直すたびに差し替わる。古いタイルを並べても答えられる問いが無いからである。どの日の OpenStreetMap かは `national.meta.json` が述べる。
+
+Actions は落としてきた資産を `SHA256SUMS` で検算してから配る。合わなければ配らない。コードを `main` に push したときも配り直す。そのときデータは触らない。
+
+### 初回だけ
+
+1. リポジトリを作って push する
+2. Settings → Pages → Source を **GitHub Actions** にする
+3. `gh auth login` を済ませて `mise run publish-data` を実行する
+
+`gh` が要る。Release を作り、資産を上げ、workflow を起動するのがそれである。
 
 ## 結果
 
@@ -221,6 +253,18 @@ mise run pack
   - 車道と紛れないよう破線で描き、表示は個別に切り替えられる
 
 ## 次の作業
+
+公開の前に片付けるもの。配信の仕組みは通ったが、これらはまだ残っている。
+
+- [ ] OSM の名称をエスケープせずに popup へ入れている
+  - OSM は誰でも編集できるので、公開すると実際に踏める
+- [ ] MapLibre と PMTiles を unpkg から浮動版で読んでいる
+  - 版を固定して同梱する。`maplibre-gl` は `package.json` にも無い
+- [ ] glyphs が国土地理院のデモ配信である（既知の制約）
+  - ラベルは路線番号だけなので、必要な字は数字と `・` しかない
+- [ ] favicon、`meta description`、OGP が無い
+
+地図そのものの課題。
 
 - [ ] 六重用が四重用と同じ色になる
   - 凡例が「四重用以上」で丸めている

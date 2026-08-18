@@ -17,6 +17,7 @@
 | `mise run build-all` | 全地域を作り直し、配信データまで通す |
 | `mise run rebuild <region>` | 1 地域だけ作り直す |
 | `mise run pack` | `build/regions/` から `web/data/` を作り直す |
+| `mise run publish-data` | 配信データを Release に上げ、Pages を配り直す |
 | `mise run audit <region>` | 鎖が切れている路線を機械的に探す |
 | `mise run compare <region>` | Overpass 由来の基準と突き合わせる |
 | `mise run serve` | http://localhost:8000/ |
@@ -53,4 +54,5 @@
 | `web/data/national.meta.json` | 画面が出す集計。指定の組み合わせ単位 |
 | `web/mapspec.mjs` | スタイルと絞り込み式。検証スクリプトも同じ物を読む |
 | `.claude/skills/national-route-data/` | 手順、判定ルール、スクリプト |
+| `.github/workflows/` | GitHub Pages への配信 |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |

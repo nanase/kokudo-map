@@ -43,6 +43,11 @@ uv run {{env.SKILL}}/pack_pmtiles.py
 uv run {{env.SKILL}}/verify_national.py
 """
 
+[tasks.publish-data]
+description = "web/data/ を Release に上げ、Pages を配り直す"
+# データは git に入れない。Release の資産として置き、Actions がそこから取る。
+run = "uv run {{env.SKILL}}/publish_data.py"
+
 [tasks.audit]
 description = "鎖が切れている路線を機械的に探す"
 run = "uv run {{env.SKILL}}/audit.py {{arg(name='region', default='nagano')}}"
