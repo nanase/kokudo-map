@@ -675,7 +675,10 @@ function wirePopups() {
           '<dl style="margin:0;display:grid;gap:3px">' +
           `<div class="pop-row"><dt>名称</dt><dd>${p.name || '—'}</dd></div>` +
           `<div class="pop-row"><dt>区分</dt><dd>${kindText}</dd></div>` +
-          `<div class="pop-row"><dt>延長</dt><dd>${Number(p.km).toFixed(2)} km</dd></div>` +
+          // Not the route's length: the length of the one road that was
+          // clicked, which is one OSM way. Labelled 延長 it read as though
+          // 国道4号 were 0.13 km long.
+          `<div class="pop-row"><dt>区間長</dt><dd>${Number(p.km).toFixed(2)} km</dd></div>` +
           `<div class="pop-row"><dt>最終更新</dt><dd>${p.updated || '—'}</dd></div>` +
           `<div class="pop-row"><dt>典拠</dt><dd>${srcText}</dd></div>` +
           (Number(p.former)
