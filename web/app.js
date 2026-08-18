@@ -181,6 +181,13 @@ const map = new maplibregl.Map({
   container: 'map',
   attributionControl: false,
   hash: true,
+  // MapLibre otherwise draws anything in the CJK blocks with the reader's own
+  // system font instead of asking the glyph server — a sensible default when
+  // the alternative is megabytes of Japanese ranges. Here the whole alphabet
+  // is ten digits and `・`, all of it already served, so local rendering only
+  // buys a separator that changes shape from machine to machine and vanishes
+  // where no CJK font is installed.
+  localIdeographFontFamily: false,
   style: baseStyle(),
   center: [138.0, 36.2],
   zoom: 7.6,

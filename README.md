@@ -45,6 +45,14 @@ bun x playwright install chromium   # 実描画チェックにのみ必要
 
 `bun install` は続けて `scripts/vendor_web.mjs` を走らせ、MapLibre と PMTiles を `node_modules` から `web/vendor/` に複製する。地図はそこから読む。CDN は読まない。
 
+ラベルのグリフは生成物だが、めったに変わらないので追跡する。作り直すのは字の顔ぶれが変わったときだけである。
+
+```sh
+bun run glyphs   # web/glyphs/ を焼き直す
+```
+
+字は 11 種しかない。ラベルは路線番号を `・` で繋いだ物だけなので、日本語フォント一式は要らない。2 ファイル 5 kB で足りる。
+
 `bunfig.toml` で `minimumReleaseAge` を設定してあり、公開から 3 日経っていないパッケージは入らない。サプライチェーン攻撃で悪意あるバージョンが公開直後に出回っても、既知の期間はそれを踏まない。
 
 ```sh
@@ -59,6 +67,7 @@ bun run lint:fix   # 安全な自動修正込みで検査
 | --- | --- |
 | `web/` | 地図本体。MapLibre GL JS と配信データ |
 | `web/mapspec.mjs` | スタイルと絞り込み式の定義。検証スクリプトも同じ物を読む |
+| `web/glyphs/` | ラベルの SDF グリフ。数字と `・` の 11 字 |
 | `scripts/` | 地図そのものの道具。データ生成には関わらない |
 | `.github/workflows/` | GitHub Pages への配信 |
 | `.claude/skills/national-route-data/` | 生成と品質管理の手順、判定ルール、スクリプト |
@@ -251,8 +260,6 @@ Actions は落としてきた資産を `SHA256SUMS` で検算してから配る�
 - 起終点は暫定である
   - bbox の縁で切れた端点は除外している
   - 政令の別表との突き合わせは未実施
-- glyphs は国土地理院のデモ配信を参照している
-  - 本番では自前でホストする
 - 海上国道は部分的である
   - リレーションに含まれる航路だけが入る
   - 車道と紛れないよう破線で描き、表示は個別に切り替えられる
@@ -261,8 +268,6 @@ Actions は落としてきた資産を `SHA256SUMS` で検算してから配る�
 
 公開の前に片付けるもの。配信の仕組みは通ったが、これらはまだ残っている。
 
-- [ ] glyphs が国土地理院のデモ配信である（既知の制約）
-  - ラベルは路線番号だけなので、必要な字は数字と `・` しかない
 - [ ] favicon、`meta description`、OGP が無い
 
 地図そのものの課題。
@@ -283,4 +288,6 @@ Actions は落としてきた資産を `SHA256SUMS` で検算してから配る�
 
 - コードは MIT
 - 道路データは © OpenStreetMap contributors, ODbL 1.0
-- 背景地図と glyphs は国土地理院
+- 背景地図は国土地理院
+- ラベルのグリフは Noto Sans JP, SIL Open Font License 1.1
+- MapLibre GL JS と PMTiles は BSD-3-Clause

@@ -7,6 +7,7 @@
   "scripts": {
     "postinstall": "node scripts/vendor_web.mjs",
     "vendor": "node scripts/vendor_web.mjs",
+    "glyphs": "node scripts/make_glyphs.mjs",
     "check": "node .claude/skills/national-route-data/scripts/check_expressions.mjs",
     "render-check": "node .claude/skills/national-route-data/scripts/render_check.mjs",
     "serve": "uv run .claude/skills/national-route-data/scripts/serve.py",
@@ -16,8 +17,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.8",
+    "@mapbox/tiny-sdf": "^2.2.0",
     "@maplibre/maplibre-gl-style-spec": "^26.2.1",
     "geojson-vt": "^4.0.3",
+    "pbf": "^5.1.2",
     "playwright": "^1.62.1",
     "vt-pbf": "^3.1.3"
   },

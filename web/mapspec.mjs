@@ -39,8 +39,13 @@ export const COLOR_FERRY = '#0E7490';
 
 export const GSI_TILES =
   'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png';
-const GSI_GLYPHS =
-  'https://gsi-cyberjapan.github.io/optimal_bvmap/glyphs/{fontstack}/{range}.pbf';
+/* Served from this site. The labels are route numbers joined with `・`, so the
+ * whole alphabet is ten digits and one separator — eleven glyphs in two range
+ * files, about 5 kB. scripts/make_glyphs.mjs bakes them from Noto Sans JP.
+ *
+ * It used to be 国土地理院's demo endpoint: someone else's Pages site, offered
+ * as a demonstration, whose disappearance would take every label with it. */
+const GLYPHS = 'glyphs/{fontstack}/{range}.pbf';
 
 /* The arcs arrive as vector tiles. Nationwide they are ~130,000 features, so
  * the viewer cannot hold them: it draws what is on screen and reads every total
@@ -157,9 +162,8 @@ function lineWidth({ add = 0, scaleByN = true } = {}) {
 export function baseStyle() {
   return {
     version: 8,
-    // Glyphs are required for any symbol layer. This is the GSI demo endpoint
-    // (CJK-capable); self-host the PBFs before treating the map as production.
-    glyphs: GSI_GLYPHS,
+    // Glyphs are required for any symbol layer.
+    glyphs: GLYPHS,
     sources: {
       gsi: {
         type: 'raster',
