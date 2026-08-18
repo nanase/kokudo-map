@@ -234,6 +234,14 @@ input[type="search"] {
 }
 .shield.sm { width: 25px; height: 22px; }
 
+/* ポップアップの標識は押せる。標識そのものが路線の名前なので、脇に別の
+   ボタンを足すより標識自体を的にするほうが短い。 */
+.shield-btn {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  border-radius: 4px; line-height: 0;
+}
+.shield-btn:hover { background: var(--line-2); }
+
 /* footer ---------------------------------------------------------------- */
 #panel footer { padding: 14px 18px 4px; margin-top: auto; }
 .stats {

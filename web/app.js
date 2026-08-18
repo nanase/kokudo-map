@@ -607,6 +607,14 @@ document.addEventListener('click', (ev) => {
   );
 });
 
+// A sign inside a popup narrows the map to that one route. Delegated because
+// popups come and go: the element the click lands on did not exist when this
+// was wired, and will not exist by the time the next popup opens.
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.shield-btn');
+  if (btn) setSelection([Number(btn.dataset.ref)]);
+});
+
 /* ---------------------------------------------------------------- popups --- */
 function wirePopups() {
   for (const id of CLICKABLE_LAYERS) {
@@ -648,10 +656,21 @@ function wirePopups() {
         tag: 'ref タグ（リレーション未登録）',
       }[p.src] || p.src;
 
+    // Each sign in the header is a way to say "only this one". A road carrying
+    // six designations is exactly where that is worth asking for, and the
+    // sign is already the name of the route in the reader's hand.
+    const heading = refs
+      .map(
+        (r) =>
+          `<button type="button" class="shield-btn" data-ref="${r}" ` +
+          `title="国道${r}号だけを表示">${shield(r)}</button>`,
+      )
+      .join('');
+
     new maplibregl.Popup({ closeButton: true, maxWidth: '300px' })
       .setLngLat(ev.lngLat)
       .setHTML(
-        `<div class="pop-hd">${shieldRow(refs)}` +
+        `<div class="pop-hd">${heading}` +
           `<span class="pop-n">${refs.length > 1 ? `${refs.length} 重用` : '単独指定'}</span></div>` +
           '<dl style="margin:0;display:grid;gap:3px">' +
           `<div class="pop-row"><dt>名称</dt><dd>${p.name || '—'}</dd></div>` +
