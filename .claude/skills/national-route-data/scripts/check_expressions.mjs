@@ -43,8 +43,14 @@ console.log(`region: ${REGION} (${meta.label})`);
 
 let pass = 0;
 const fails = [];
-const ok = (cond, msg) =>
-  cond ? (pass++, console.log('PASS  ' + msg)) : fails.push('FAIL  ' + msg);
+const ok = (cond, msg) => {
+  if (!cond) {
+    fails.push(`FAIL  ${msg}`);
+    return;
+  }
+  pass++;
+  console.log(`PASS  ${msg}`);
+};
 
 /* ---- 1. the whole style must satisfy the spec ----------------------------- */
 function styleWith(filters) {
@@ -68,12 +74,12 @@ function validate(style, label) {
     : spec.validateStyle(style);
   if (errs.length) {
     fails.push(
-      `FAIL  ${label}:\n    ` + errs.map((e) => `${e.message}`).join('\n    '),
+      `FAIL  ${label}:\n    ${errs.map((e) => `${e.message}`).join('\n    ')}`,
     );
     return false;
   }
   pass++;
-  console.log('PASS  ' + label);
+  console.log(`PASS  ${label}`);
   return true;
 }
 
@@ -132,7 +138,7 @@ for (const [selected, conc, label] of scenarios) {
 const compile = (expr) => {
   const r = spec.expression.createExpression(expr, { type: 'boolean' });
   if (r.result === 'error') {
-    fails.push('FAIL  compile: ' + r.value.map((e) => e.message).join('; '));
+    fails.push(`FAIL  compile: ${r.value.map((e) => e.message).join('; ')}`);
     return null;
   }
   return r.value;
@@ -258,6 +264,6 @@ ok(
   `${JSON.stringify(top.refs)} run together on ${byExpr} arcs (list agrees: ${byList})`,
 );
 
-console.log(fails.length ? '\n' + fails.join('\n') : '');
+console.log(fails.length ? `\n${fails.join('\n')}` : '');
 console.log(`\n${pass} passed, ${fails.length} failed`);
 process.exit(fails.length ? 1 : 0);

@@ -73,7 +73,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors = [];
 const fails = [];
 const ok = (cond, msg) =>
-  cond ? console.log('PASS  ' + msg) : fails.push('FAIL  ' + msg);
+  cond ? console.log(`PASS  ${msg}`) : fails.push(`FAIL  ${msg}`);
 
 // 国土地理院 serves no raster tile where there is nothing to draw, so panning
 // out over open sea answers 404. That is the basemap working as designed, and
@@ -88,7 +88,7 @@ page.on('console', (m) => {
   if (m.text().startsWith('Failed to load resource')) return;
   errors.push(m.text());
 });
-page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('response', (r) => {
   if (r.status() < 400) return;
   if (new URL(r.url()).host === TILE_HOST) blankTiles.push(r.url());
@@ -105,7 +105,7 @@ await page.waitForFunction(
   { timeout: 90000 },
 );
 await page
-  .waitForFunction(() => window.map && window.map.isStyleLoaded(), null, {
+  .waitForFunction(() => window.map?.isStyleLoaded(), null, {
     timeout: 90000,
   })
   .catch(() => {});
@@ -197,7 +197,9 @@ for (const b of report.folded) {
 // canvas left at the old width draws the country into part of the screen.
 const folding = await page.evaluate(async () => {
   const width = () =>
-    Math.round(document.querySelector('#map canvas').getBoundingClientRect().width);
+    Math.round(
+      document.querySelector('#map canvas').getBoundingClientRect().width,
+    );
   const settle = () => new Promise((r) => setTimeout(r, 900));
   const btn = document.querySelector('#panel-toggle');
   const open = width();
@@ -271,7 +273,7 @@ const concStats = await page.evaluate(() => ({
   roads: window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
   stats: document.querySelector('#stats').innerText.replace(/\n/g, ' | '),
 }));
-console.log('\nafter "重用区間のみ": renderedRoads=' + concStats.roads);
+console.log(`\nafter "重用区間のみ": renderedRoads=${concStats.roads}`);
 await page.screenshot({ path: shot('2-concurrent') });
 
 // --- unfold the ranking and click its deepest row ---------------------------
@@ -331,7 +333,10 @@ ok(
   JSON.stringify(jumped.refs) === JSON.stringify(before.refs),
   'the ranking list does not rebuild under the cursor',
 );
-ok(jumped.marked === 1, `the row that was clicked is marked (${jumped.marked})`);
+ok(
+  jumped.marked === 1,
+  `the row that was clicked is marked (${jumped.marked})`,
+);
 ok(
   jumped.checked === 0,
   `going to a row leaves the route selection alone (${jumped.checked} ticked)`,
@@ -367,12 +372,12 @@ const labelled = await page.evaluate(() => {
   };
 });
 console.log('zoomed in at z12.4:');
-console.log('  rendered route labels: ' + labelled.count);
-console.log('  label values: ' + labelled.sample.join(' , '));
+console.log(`  rendered route labels: ${labelled.count}`);
+console.log(`  label values: ${labelled.sample.join(' , ')}`);
 console.log(
-  '  multi-designation labels: ' + (labelled.multi.join(' , ') || 'none'),
+  `  multi-designation labels: ${labelled.multi.join(' , ') || 'none'}`,
 );
-console.log('  rendered terminus labels: ' + labelled.termini);
+console.log(`  rendered terminus labels: ${labelled.termini}`);
 await page.screenshot({ path: shot('4-labels') });
 
 // --- clicking an arc: what the popup says, and the shadow that marks it -----
@@ -427,7 +432,7 @@ if (!target) {
     };
   });
   console.log('');
-  console.log('clicked an arc: ' + opened.text);
+  console.log(`clicked an arc: ${opened.text}`);
   ok(opened.text !== null, 'clicking an arc opens a popup');
   // The figure is one OSM way's length, not the route's, and the label has to
   // say so: as 延長 it read as though 国道4号 were 0.13 km long.
@@ -513,7 +518,7 @@ for (const [kind, layer, caption] of [
   );
   console.log(
     `  layer "${layer}" rendered ${seen.length} arcs` +
-      (seen.length ? ': ' + JSON.stringify(seen[0]) : ''),
+      (seen.length ? `: ${JSON.stringify(seen[0])}` : ''),
   );
   ok(
     seen.length > 0,
@@ -551,7 +556,9 @@ if (expresswayArc) {
     `自動車専用道路 switches off and back on (${shown} → ${hidden} → ${back})`,
   );
 } else {
-  console.log('\n自動車専用道路: no expressway arc built — the toggle is not exercised');
+  console.log(
+    '\n自動車専用道路: no expressway arc built — the toggle is not exercised',
+  );
 }
 
 // --- 海上国道 must switch off on its own ------------------------------------
@@ -611,7 +618,7 @@ for (const r of index) {
 process.stdout.write('\n');
 ok(
   empty.length === 0,
-  `every prefecture renders roads from the archive (${empty.length ? empty.join(', ') : 'all ' + index.length})`,
+  `every prefecture renders roads from the archive (${empty.length ? empty.join(', ') : `all ${index.length}`})`,
 );
 
 // The whole country at once is the view the project exists for, and the zoom
@@ -634,13 +641,13 @@ const wide = await page.evaluate(
 ok(wide > 0, `the whole country draws at the overview zoom (${wide} roads)`);
 await page.screenshot({ path: shot('6-nationwide') });
 
-console.log(fails.length ? '\n' + fails.join('\n') : '');
+console.log(fails.length ? `\n${fails.join('\n')}` : '');
 console.log(
   `\nbasemap tiles with nothing to draw (open sea etc.): ${blankTiles.length}`,
 );
 console.log(
-  'console errors: ' + (errors.length ? '\n  ' + errors.join('\n  ') : 'none'),
+  `console errors: ${errors.length ? `\n  ${errors.join('\n  ')}` : 'none'}`,
 );
-console.log('screenshots: ' + OUTDIR);
+console.log(`screenshots: ${OUTDIR}`);
 await browser.close();
 process.exit(errors.length || fails.length ? 1 : 0);

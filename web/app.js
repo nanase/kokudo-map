@@ -34,8 +34,8 @@ import {
   N_COLORS,
   N_LABELS,
   NOTHING,
-  pickedFilter,
   PMTILES_URL,
+  pickedFilter,
   routeLayers,
   routeSources,
   withKind,
@@ -289,7 +289,7 @@ function terminiFeatures(meta) {
       ...meta.shared_termini.map((t) => ({
         type: 'Feature',
         properties: {
-          refs: ',' + t.refs.join(',') + ',',
+          refs: `,${t.refs.join(',')},`,
           label: t.refs.join('・'),
           shared: 1,
           count: t.refs.length,
@@ -693,5 +693,5 @@ function wirePopups() {
 
 boot().catch((err) => {
   console.error(err);
-  $('#loading').textContent = 'データの読み込みに失敗しました: ' + err.message;
+  $('#loading').textContent = `データの読み込みに失敗しました: ${err.message}`;
 });
