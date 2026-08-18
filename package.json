@@ -5,6 +5,8 @@
   "description": "国道に特化した地図。重用区間の全指定を保持し、縮尺によらず番号を表示する。",
   "license": "MIT",
   "scripts": {
+    "postinstall": "node scripts/vendor_web.mjs",
+    "vendor": "node scripts/vendor_web.mjs",
     "check": "node .claude/skills/national-route-data/scripts/check_expressions.mjs",
     "render-check": "node .claude/skills/national-route-data/scripts/render_check.mjs",
     "serve": "uv run .claude/skills/national-route-data/scripts/serve.py",
@@ -17,7 +19,10 @@
     "@maplibre/maplibre-gl-style-spec": "^26.2.1",
     "geojson-vt": "^4.0.3",
     "playwright": "^1.62.1",
-    "pmtiles": "^4.5.0",
     "vt-pbf": "^3.1.3"
+  },
+  "dependencies": {
+    "maplibre-gl": "5.24.0",
+    "pmtiles": "4.5.0"
   }
 }

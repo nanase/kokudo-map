@@ -11,6 +11,10 @@
 build/
 web/data/
 
+# ブラウザ用ライブラリの複製。版は package.json と bun.lock が述べる。
+# 複製を追跡すると版を二箇所で述べることになり、片方が黙って古くなる。
+web/vendor/
+
 node_modules/
 __pycache__/
 .venv/

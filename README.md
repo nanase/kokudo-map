@@ -43,6 +43,8 @@ bun install
 bun x playwright install chromium   # 実描画チェックにのみ必要
 ```
 
+`bun install` は続けて `scripts/vendor_web.mjs` を走らせ、MapLibre と PMTiles を `node_modules` から `web/vendor/` に複製する。地図はそこから読む。CDN は読まない。
+
 `bunfig.toml` で `minimumReleaseAge` を設定してあり、公開から 3 日経っていないパッケージは入らない。サプライチェーン攻撃で悪意あるバージョンが公開直後に出回っても、既知の期間はそれを踏まない。
 
 ```sh
@@ -57,6 +59,7 @@ bun run lint:fix   # 安全な自動修正込みで検査
 | --- | --- |
 | `web/` | 地図本体。MapLibre GL JS と配信データ |
 | `web/mapspec.mjs` | スタイルと絞り込み式の定義。検証スクリプトも同じ物を読む |
+| `scripts/` | 地図そのものの道具。データ生成には関わらない |
 | `.github/workflows/` | GitHub Pages への配信 |
 | `.claude/skills/national-route-data/` | 生成と品質管理の手順、判定ルール、スクリプト |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |
@@ -142,7 +145,9 @@ mise run pack
 
 ## 公開する
 
-GitHub Pages に置く。`web/` をそのまま配るだけで、組み立ての手順は無い。読むパスはすべて相対なので、`user.github.io/<repo>/` の下でもそのまま動く。
+GitHub Pages に置く。バンドラは無く、配るのは `web/` の中身そのものである。読むパスはすべて相対なので、`user.github.io/<repo>/` の下でもそのまま動く。
+
+Actions が組み立てるのは二つだけである。ブラウザ用ライブラリを `web/vendor/` に複製することと、配信データを `web/data/` に置くことである。
 
 配信データは git に入っていないので、Release の資産として置き、Actions がそこから取る。
 
@@ -256,10 +261,6 @@ Actions は落としてきた資産を `SHA256SUMS` で検算してから配る�
 
 公開の前に片付けるもの。配信の仕組みは通ったが、これらはまだ残っている。
 
-- [ ] OSM の名称をエスケープせずに popup へ入れている
-  - OSM は誰でも編集できるので、公開すると実際に踏める
-- [ ] MapLibre と PMTiles を unpkg から浮動版で読んでいる
-  - 版を固定して同梱する。`maplibre-gl` は `package.json` にも無い
 - [ ] glyphs が国土地理院のデモ配信である（既知の制約）
   - ラベルは路線番号だけなので、必要な字は数字と `・` しかない
 - [ ] favicon、`meta description`、OGP が無い

@@ -35,6 +35,18 @@ jobs:
       # 版はタグで指定している。より厳しくするならコミット SHA で留める。
       - uses: actions/checkout@v4
 
+      # 道具の版は mise.toml だけが述べる。ここで書き写すと二箇所になる。
+      - uses: jdx/mise-action@v2
+
+      # ブラウザ用ライブラリを web/vendor/ に複製する。unpkg は読まない。
+      # 版は bun.lock が留めているので、ここで解決が動くことはない。
+      - name: ライブラリを組み込む
+        run: |
+          bun install --frozen-lockfile --production
+          bun run vendor
+          test -s web/vendor/maplibre-gl.js
+          test -s web/vendor/pmtiles.js
+
       - name: 配信データを Release から取る
         env:
           GH_TOKEN: ${{ github.token }}
