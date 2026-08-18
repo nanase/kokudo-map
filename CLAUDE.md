@@ -35,14 +35,18 @@
   - 式を書き写した複製を検査しても検証にはならない
 - 同じ問いに二箇所で答えない
   - 片方が黙って古くなる
+- 配信データ(PMTiles・meta.json)は GitHub Pages を経由させない
+  - Pages の裏側(Fastly)は、ファイル先頭以外への Range 要求に対して要求と無関係なバイト列を返す不具合を持つ
+  - PMTiles の読み取りはほぼ全てそのような Range 要求なので、Pages 経由では地図が描けない
+  - 同じ Cloudflare ゾーン内の R2(`data.nanase.cc`)には無く、そちらに置く
 
 ## 構成
 
 | 場所 | 中身 |
 | --- | --- |
-| `web/` | 地図本体と配信データ |
-| `web/data/national-routes.pmtiles` | 全国のベクタタイル |
-| `web/data/national.meta.json` | 画面が出す集計。指定の組み合わせ単位 |
+| `web/` | 地図本体。配信データは手元用の中間置き場 |
+| `web/data/national-routes.pmtiles` | 全国のベクタタイル。手元では `web/data/`、公開先は `data.nanase.cc`(R2) |
+| `web/data/national.meta.json` | 画面が出す集計。指定の組み合わせ単位。公開先は同上 |
 | `web/mapspec.mjs` | スタイルと絞り込み式。検証スクリプトも同じ物を読む |
 | `scripts/` | 地図の資材を作る道具。グリフ、favicon、ライブラリの複製 |
 | `test/` | データを持たずに答えられることの単体テスト |

@@ -205,7 +205,7 @@ const meta = {
   bbox: dataBbox.map((v) => Math.round(v * 1e5) / 1e5),
   source: {
     type: 'vector',
-    tiles: 'national-routes.pmtiles',
+    tiles: 'https://data.nanase.cc/national-routes.pmtiles',
     maxzoom: MAXZOOM,
   },
   combinations: combos,

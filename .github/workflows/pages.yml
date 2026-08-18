@@ -4,15 +4,18 @@
 # コードと同じ木に置かないため、また 55 MB の gzip 済みタイルを作り直すたびに
 # 履歴へ丸ごと積まないためである。理由は .gitignore に書いてある。
 #
-# その代わり、データは Release の資産として置く。ここではそれを落としてきて
-# web/ に組み立て、Pages に渡す。上げるのは手元の `mise run publish-data` である。
+# データ自体は GitHub Pages を経由しない。data.nanase.cc(Cloudflare R2)に
+# 直接置き、`mise run publish-data` がそこへ上げる。GitHub Pages の裏側にいる
+# Fastly が、ファイル先頭以外への Range 要求を壊す不具合を抱えており、Pages
+# 経由では PMTiles を正しく配れなかった。ここではコードだけを配り、web/ の中の
+# 相対パス('data/…')を data.nanase.cc の絶対 URL に書き換える。
 name: Pages に配る
 
 on:
-  # コードを変えたとき
+  # コードを変えたときだけ。データの差し替えは Pages を経由しないので、
+  # publish_data.py はもうこれを叩かない。
   push:
     branches: [main]
-  # データを差し替えたとき（publish_data.py がこれを叩く）
   workflow_dispatch:
 
 permissions:
@@ -53,21 +56,16 @@ jobs:
           test -s web/vendor/maplibre-gl.js
           test -s web/vendor/pmtiles.js
 
-      - name: 配信データを Release から取る
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # data.nanase.cc に直接向ける。'data/…' は手元の scripts/serve.py 用の
+      # 相対パスなので、置き換え忘れれば 404 になって検査で気付く。
+      - name: 配信データの向き先を書き換える
         run: |
-          mkdir -p web/data
-          gh release download data-latest --dir web/data --clobber \
-            --pattern 'national-routes.pmtiles' \
-            --pattern 'national.meta.json' \
-            --pattern 'regions.json' \
-            --pattern 'SHA256SUMS'
-
-      # 落ちてきた物が上げた物と同じであることを確かめる。ここで落ちれば、
-      # 壊れたデータが公開されることはない。
-      - name: 中身を検算する
-        run: cd web/data && sha256sum -c SHA256SUMS
+          sed -i "s|'data/national-routes.pmtiles'|'https://data.nanase.cc/national-routes.pmtiles'|" web/mapspec.mjs
+          sed -i "s|'data/regions.json'|'https://data.nanase.cc/regions.json'|" web/app.js
+          sed -i "s|'data/national.meta.json'|'https://data.nanase.cc/national.meta.json'|" web/app.js
+          ! grep -q "'data/national-routes.pmtiles'" web/mapspec.mjs
+          ! grep -q "'data/regions.json'" web/app.js
+          ! grep -q "'data/national.meta.json'" web/app.js
 
       - uses: actions/configure-pages@v5
         id: pages

@@ -56,8 +56,8 @@ description = "build/regions/ から web/data/ を作り直す"
 run = "uv run {{env.SKILL}}/build_all.py --pack-only"
 
 [tasks.publish-data]
-description = "web/data/ を Release に上げ、Pages を配り直す"
-# データは git に入れない。Release の資産として置き、Actions がそこから取る。
+description = "web/data/ を R2(data.nanase.cc)に上げる"
+# データは git に入れない。R2 の資産として置き、サイトはそこから直接読む。
 run = "uv run {{env.SKILL}}/publish_data.py"
 
 [tasks.audit]

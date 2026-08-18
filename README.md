@@ -173,33 +173,28 @@ mise run pack
 
 ## 公開する
 
-GitHub Pages に置く。バンドラは無く、配るのは `web/` の中身そのものである。読むパスはすべて相対なので、`user.github.io/<repo>/` の下でもそのまま動く。
+コードは GitHub Pages に、配信データは Cloudflare R2(`data.nanase.cc`)に置く。分けているのは選択ではなく回避である。GitHub Pages の裏側にいる Fastly は、ファイルの先頭(バイト 0)から始まらない Range 要求に対して、要求したファイルと無関係なバイト列を返す不具合を抱えている。PMTiles はほぼ全ての読み取りがそのような Range 要求なので、Pages 経由では地図が描けなかった。同じ Cloudflare ゾーンの内側にある R2 にはこの不具合が無い。
 
-Actions が組み立てるのは三つである。ブラウザ用ライブラリを `web/vendor/` に複製すること、配信データを `web/data/` に置くこと、そして共有用の札に実際の公開 URL を埋めることである。`index.html` は `%SITE_URL%` と書いて待っている。GitHub Pages の URL を述べるのは Actions だけで、リポジトリのどこにも書かない。
-
-配信データは git に入っていないので、Release の資産として置き、Actions がそこから取る。
+コード側(`web/vendor/`・`web/*.mjs`・`web/*.js`・`index.html`)はバンドラを通さず、`web/` の中身をそのまま配る。読むパスは元々すべて相対で、`user.github.io/<repo>/` の下でもそのまま動く。配信データだけは例外で、`web/mapspec.mjs` と `web/app.js` が持つ `'data/…'` という相対パスを、配る直前に Actions が `https://data.nanase.cc/…` へ書き換える(手元で `mise run serve` する分には相対パスのまま、`build/regions/` から作った `web/data/` を読む)。
 
 ```sh
-mise run publish-data   # web/data/ を Release に上げ、Pages を配り直す
+mise run publish-data   # web/data/ を R2(data.nanase.cc)に上げる
 ```
 
 | 何 | どこ |
 | --- | --- |
-| コード | リポジトリ |
-| 配信データ | Release `data-latest` の資産 |
+| コード | リポジトリ → GitHub Pages |
+| 配信データ | R2 バケット `kokudo-map-data` → `data.nanase.cc` |
 | 組み立てと配信 | `.github/workflows/pages.yml` |
 
-タグは固定で、中身は作り直すたびに差し替わる。古いタイルを並べても答えられる問いが無いからである。どの日の OpenStreetMap かは `national.meta.json` が述べる。
-
-Actions は落としてきた資産を `SHA256SUMS` で検算してから配る。合わなければ配らない。コードを `main` に push したときも配り直す。そのときデータは触らない。
+データの更新は Pages の再デプロイを要らない。`data.nanase.cc` は上げた直後から新しい内容を返す。コードを `main` に push したときは Pages だけが作り直る。そのときデータは触らない。
 
 ### 初回だけ
 
 1. リポジトリを作って push する
 2. Settings → Pages → Source を **GitHub Actions** にする
-3. `gh auth login` を済ませて `mise run publish-data` を実行する
-
-`gh` が要る。Release を作り、資産を上げ、workflow を起動するのがそれである。
+3. Cloudflare で R2 バケットを作り、`data.nanase.cc` に紐づける
+4. `bunx wrangler login` を済ませて `mise run publish-data` を実行する
 
 ## 結果
 
