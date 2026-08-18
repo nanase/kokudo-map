@@ -20,6 +20,19 @@
  *
  * Style and filter shapes live in mapspec.mjs so the build-time checker can
  * validate exactly what runs here.
+ *
+ * What is left in this file is the part that needs a live map and a live page:
+ * the map itself, the one mutable `state`, the filters that state drives, the
+ * listeners, and boot order. Everything that is a plain function of the data
+ * was moved out so it can be checked directly — see test/.
+ *
+ *   mapspec.mjs    style, layers, filter expressions
+ *   aggregate.mjs  the panel's numbers, read off the combination table
+ *   panel.mjs      the sidebar's markup
+ *   popup.mjs      what a clicked arc says about itself
+ *   termini.mjs    起点・終点 as a GeoJSON source
+ *   shield.mjs     the 国道番号標識
+ *   html.mjs       escaping, because OSM text is untrusted
  */
 
 import { routesOf, statsFor } from './aggregate.mjs';
@@ -27,14 +40,8 @@ import {
   baseStyle,
   buildFilter,
   CLICKABLE_LAYERS,
-  COLOR_CONSTRUCTION,
-  COLOR_FERRY,
-  COLOR_FOOT,
-  COLOR_UNOPENED,
   FILTERED_LAYERS,
   hasRef,
-  N_COLORS,
-  N_LABELS,
   NOTHING,
   PMTILES_URL,
   pickedFilter,
@@ -42,7 +49,22 @@ import {
   routeSources,
   withKind,
 } from './mapspec.mjs';
-import { shield, shieldRow } from './shield.mjs';
+import {
+  clearLabel,
+  concurrencies,
+  countLabel,
+  freshnessHTML,
+  legendKindHTML,
+  legendNHTML,
+  RANKING_ROWS,
+  rankingHTML,
+  routeListHTML,
+  SHARED_ROWS,
+  sharedHTML,
+  statsHTML,
+} from './panel.mjs';
+import { deepest, popupHTML } from './popup.mjs';
+import { terminiFeatures } from './termini.mjs';
 
 const state = {
   meta: null,
@@ -60,33 +82,6 @@ const state = {
 };
 
 const $ = (sel) => document.querySelector(sel);
-
-/**
- * Escape a value for interpolation into HTML.
- *
- * The panel and the popups are assembled as HTML strings, and some of what
- * goes into them is written by whoever last edited the road in OpenStreetMap:
- * `name` above all, but also `kind` and `src` where the lookup falls through
- * to the raw tag value. Anyone can edit OSM, so a name is untrusted input that
- * arrives by way of the build, and pasting it into `innerHTML` unescaped is
- * script injection with a mapper as the author.
- *
- * Numbers computed here — arc counts, lengths, route designations that have
- * been through `Number()` — cannot carry markup and are left alone. Everything
- * that reached the viewer as a string goes through this.
- */
-const esc = (v) =>
-  String(v ?? '').replace(
-    /[&<>"']/g,
-    (c) =>
-      ({
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#39;',
-      })[c],
-  );
 
 /* ------------------------------------------------------------------- map --- */
 // PMTiles is one archive read by byte range, so a static host serves the whole
@@ -240,34 +235,6 @@ function fitInitialView(index) {
   );
 }
 
-function terminiFeatures(meta) {
-  return {
-    type: 'FeatureCollection',
-    features: [
-      ...meta.shared_termini.map((t) => ({
-        type: 'Feature',
-        properties: {
-          refs: `,${t.refs.join(',')},`,
-          label: t.refs.join('・'),
-          shared: 1,
-          count: t.refs.length,
-        },
-        geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
-      })),
-      ...meta.termini.map((t) => ({
-        type: 'Feature',
-        properties: {
-          refs: `,${t.ref},`,
-          label: String(t.ref),
-          shared: 0,
-          count: 1,
-        },
-        geometry: { type: 'Point', coordinates: [t.lon, t.lat] },
-      })),
-    ],
-  };
-}
-
 /* --------------------------------------------------------------- filters --- */
 function applyFilters() {
   const base = buildFilter([...state.selected], state.conc);
@@ -295,24 +262,15 @@ function applyFilters() {
 
 /* -------------------------------------------------------------------- ui --- */
 function buildUI() {
-  const list = $('#route-list');
-  list.innerHTML = state.routes
-    .map(
-      (r) =>
-        `<label data-ref="${r.ref}" title="${r.km} km / 最大 ${r.max_n} 重用">` +
-        `<input type="checkbox" value="${r.ref}">` +
-        `<span>${r.ref}</span>` +
-        (r.max_n > 1 ? `<span class="mn">×${r.max_n}</span>` : '') +
-        '</label>',
-    )
-    .join('');
-
+  $('#route-list').innerHTML = routeListHTML(state.routes);
   $('#route-filter').value = '';
+  $('#legend-n').innerHTML = legendNHTML();
+  $('#legend-kind').innerHTML = legendKindHTML();
+  $('#freshness').innerHTML = freshnessHTML(state.meta);
   renderShared();
-  renderFreshness();
 }
 
-/** Listeners and legends that are wired once. */
+/** Listeners that are wired once. */
 function wireControls() {
   const list = $('#route-list');
   list.addEventListener('change', (e) => {
@@ -355,56 +313,6 @@ function wireControls() {
   toggle('#t-expressway', 'expressway');
   toggle('#t-special', 'special');
   toggle('#t-ferry', 'ferry');
-
-  $('#legend-n').innerHTML = N_COLORS.map(
-    (c, i) =>
-      `<span class="item"><span class="swatch" style="border-top-color:${c}"></span>${N_LABELS[i]}</span>`,
-  ).join('');
-
-  $('#legend-kind').innerHTML = [
-    [COLOR_FOOT, '点線国道（徒歩道・階段）'],
-    [COLOR_CONSTRUCTION, '工事中・事業中'],
-    [COLOR_UNOPENED, '未開通区間（計画・未着工）'],
-    [COLOR_FERRY, '海上国道（航路）'],
-  ]
-    .map(
-      ([c, t]) =>
-        `<span class="item"><span class="swatch" style="border-top-color:${c};` +
-        `border-top-style:dashed"></span>${t}</span>`,
-    )
-    .join('');
-}
-
-/**
- * State plainly which day of OpenStreetMap this map shows.
- * Two different dates matter and are easy to confuse:
- *   osm_timestamp — the moment the OSM database was read (how current we are);
- *   the per-way edit dates — when each road was last touched by a mapper,
- *   which is what actually determines whether a new bypass is here yet.
- */
-function renderFreshness() {
-  const m = state.meta;
-  const base = new Date(m.osm_timestamp);
-  const ageDays = Math.floor((Date.now() - base.getTime()) / 86400000);
-  const fmt = (d) =>
-    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-` +
-    `${String(d.getUTCDate()).padStart(2, '0')} ${String(d.getUTCHours()).padStart(2, '0')}:` +
-    `${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
-
-  const ageText =
-    ageDays <= 0 ? '当日' : ageDays === 1 ? '1 日前' : `${ageDays} 日前`;
-  const stale = ageDays > 7;
-
-  $('#freshness').innerHTML =
-    '<dt>データ基準</dt>' +
-    `<dd class="${stale ? 'warn' : ''}">${fmt(base)}（${ageText}）</dd>` +
-    '<dt>区間の更新</dt>' +
-    `<dd>${esc(m.oldest_edit)} 〜 ${esc(m.newest_edit)}</dd>` +
-    '<dt>取得元</dt>' +
-    `<dd>${esc(m.endpoints.join(' / '))}</dd>` +
-    (stale
-      ? '<dt></dt><dd class="warn">最近の開通は反映されていない可能性があります</dd>'
-      : '');
 }
 
 function setSelection(refs) {
@@ -418,77 +326,34 @@ function setSelection(refs) {
 
 function updateStats() {
   const sel = state.selected;
-  const { arcs, km, conc } = statsFor(state.meta.combinations, sel);
-  $('#stats').innerHTML =
-    `<span>選択路線　${sel.size || state.routes.length} / ${state.routes.length}</span>` +
-    `<span>対象アーク　${arcs.toLocaleString()}</span>` +
-    `<span>延長　${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</span>` +
-    `<span>重用アーク　${conc.toLocaleString()}</span>`;
+  const totals = statsFor(state.meta.combinations, sel);
+  $('#stats').innerHTML = statsHTML(sel.size, state.routes.length, totals);
 
-  // The button says how much it would undo, so nothing else has to say how
-  // much is selected. A line under the list stating "1 路線を選択中。" was a
-  // second answer to a question the button and the count above both answer.
-  // With nothing picked there is nothing to undo, and a button that cannot act
-  // should say so by being unavailable rather than by doing nothing.
+  // A button that cannot act should say so by being unavailable rather than by
+  // doing nothing.
   const clear = $('#sel-none');
   clear.disabled = sel.size === 0;
-  clear.textContent = sel.size ? `${sel.size} 路線を選択解除` : '選択解除';
+  clear.textContent = clearLabel(sel.size);
 }
 
 /** The ranking is folded away by default, so its size has to show on the tab. */
 function renderRanking() {
-  const sel = state.selected;
-  const matching = state.meta.combinations.filter(
-    (e) => e.n >= 2 && (!sel.size || e.refs.some((r) => sel.has(r))),
+  const matching = concurrencies(state.meta.combinations, state.selected);
+  const rows = matching.slice(0, RANKING_ROWS);
+  $('#ranking-count').textContent = countLabel(
+    rows.length,
+    matching.length,
+    '組',
   );
-  const rows = matching.slice(0, 25);
-  $('#ranking-count').textContent = matching.length
-    ? `${rows.length} / ${matching.length} 組`
-    : '';
-
-  const el = $('#ranking');
-  if (!rows.length) {
-    el.innerHTML = '<p class="empty">該当する重用区間はありません。</p>';
-    return;
-  }
-  el.innerHTML = rows
-    .map(
-      (e) =>
-        `<button type="button" class="row" data-refs="${e.refs.join(',')}" ` +
-        `data-bbox="${e.bbox.join(',')}">` +
-        `<span class="shields">${shieldRow(e.refs, true)}</span>` +
-        `<span class="km">${e.km.toFixed(1)} km</span>` +
-        (e.names.length
-          ? `<span class="nm">${esc(e.names.join(' / '))}</span>`
-          : '') +
-        '</button>',
-    )
-    .join('');
+  $('#ranking').innerHTML = rankingHTML(rows);
 }
 
 /** Folded away like the ranking, so the summary has to carry its size. */
 function renderShared() {
   const all = state.meta.shared_termini;
-  const rows = all.slice(0, 20);
-  $('#shared-count').textContent = all.length
-    ? `${rows.length} / ${all.length} 地点`
-    : '';
-
-  const el = $('#shared');
-  if (!rows.length) {
-    el.innerHTML = '<p class="empty">該当地点はありません。</p>';
-    return;
-  }
-  el.innerHTML = rows
-    .map(
-      (t) =>
-        `<button type="button" class="row" data-refs="${t.refs.join(',')}" ` +
-        `data-at="${t.lon},${t.lat}">` +
-        `<span class="shields">${shieldRow(t.refs, true)}</span>` +
-        `<span class="km">${t.refs.length} 路線</span>` +
-        '</button>',
-    )
-    .join('');
+  const rows = all.slice(0, SHARED_ROWS);
+  $('#shared-count').textContent = countLabel(rows.length, all.length, '地点');
+  $('#shared').innerHTML = sharedHTML(rows);
 }
 
 /**
@@ -533,14 +398,6 @@ document.addEventListener('click', (ev) => {
   );
 });
 
-// A sign inside a popup narrows the map to that one route. Delegated because
-// popups come and go: the element the click lands on did not exist when this
-// was wired, and will not exist by the time the next popup opens.
-document.addEventListener('click', (ev) => {
-  const btn = ev.target.closest('.shield-btn');
-  if (btn) setSelection([Number(btn.dataset.ref)]);
-});
-
 /* ---------------------------------------------------------------- popups --- */
 /**
  * At most one popup is open, and the shadow on the map belongs to it.
@@ -576,78 +433,28 @@ function wirePopups() {
     });
     closePopup();
     if (!hits.length) return;
-    // A junction, a parallel alignment or a grade separation puts several arcs
-    // under one pixel, and they come back in the tile's order, which is
-    // arbitrary — a click on the four-fold stack in 福岡 reported 国道202号 alone.
-    // The deepest arc under the cursor is the one drawn on top (line-sort-key)
-    // and the one the map exists to keep, so that is the one described.
-    const p = hits.reduce((a, b) =>
-      b.properties.n > a.properties.n ? b : a,
-    ).properties;
-    // A vector tile has no array type, so the designations travel as the same
-    // delimiter-wrapped key the filters test, and are split back out here.
-    const refs = p.refs.split(',').filter(Boolean).map(Number);
-    const kindText =
-      {
-        road: '車道',
-        expressway: '車道（自動車専用道路）',
-        construction: '工事中・事業中',
-        unopened: '未開通区間（計画・未着工）',
-        foot: '点線国道（徒歩道）',
-        steps: '点線国道（階段）',
-        ferry: '海上国道（航路）',
-      }[p.kind] || p.kind;
 
-    // Which OSM tagging the designation was read out of. "ref タグ" means no
-    // route relation lists this road, so the number is inferred from its tags.
-    const srcText =
-      {
-        relation: 'ルートリレーション',
-        name: '名称（国道N号）',
-        tag: 'ref タグ（リレーション未登録）',
-      }[p.src] || p.src;
-
-    // Each sign in the header is a way to say "only this one". A road carrying
-    // six designations is exactly where that is worth asking for, and the
-    // sign is already the name of the route in the reader's hand.
-    const heading = refs
-      .map(
-        (r) =>
-          `<button type="button" class="shield-btn" data-ref="${r}" ` +
-          `title="国道${r}号だけを表示">${shield(r)}</button>`,
-      )
-      .join('');
-
+    const p = deepest(hits);
     popup = new maplibregl.Popup({
       closeButton: true,
       closeOnClick: false,
       maxWidth: '300px',
     })
       .setLngLat(ev.lngLat)
-      .setHTML(
-        `<div class="pop-hd">${heading}` +
-          `<span class="pop-n">${refs.length > 1 ? `${refs.length} 重用` : '単独指定'}</span></div>` +
-          '<dl style="margin:0;display:grid;gap:3px">' +
-          `<div class="pop-row"><dt>名称</dt><dd>${esc(p.name) || '—'}</dd></div>` +
-          `<div class="pop-row"><dt>区分</dt><dd>${esc(kindText)}</dd></div>` +
-          // Not the route's length: the length of the one road that was
-          // clicked, which is one OSM way. Labelled 延長 it read as though
-          // 国道4号 were 0.13 km long.
-          `<div class="pop-row"><dt>区間長</dt><dd>${Number(p.km).toFixed(2)} km</dd></div>` +
-          `<div class="pop-row"><dt>最終更新</dt><dd>${esc(p.updated) || '—'}</dd></div>` +
-          `<div class="pop-row"><dt>典拠</dt><dd>${esc(srcText)}</dd></div>` +
-          (Number(p.former)
-            ? '<div class="pop-row"><dt>備考</dt><dd>旧道（指定解除前）</dd></div>'
-            : '') +
-          `<div class="pop-row"><dt>OSM</dt><dd><a href="https://www.openstreetmap.org/way/${esc(p.id)}" ` +
-          `target="_blank" rel="noopener">way/${esc(p.id)}</a></dd></div>` +
-          '</dl>',
-      )
+      .setHTML(popupHTML(p))
       .addTo(map);
     popup.on('close', closePopup);
     pick(p.id);
   });
 }
+
+// A sign inside a popup narrows the map to that one route. Delegated because
+// popups come and go: the element the click lands on did not exist when this
+// was wired, and will not exist by the time the next popup opens.
+document.addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.shield-btn');
+  if (btn) setSelection([Number(btn.dataset.ref)]);
+});
 
 boot().catch((err) => {
   console.error(err);

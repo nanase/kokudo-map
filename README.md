@@ -72,8 +72,13 @@ bun run check --spec-only    # 同上。データを読まない
 | --- | --- |
 | `web/` | 地図本体。MapLibre GL JS と配信データ |
 | `web/mapspec.mjs` | スタイルと絞り込み式の定義。検証スクリプトも同じ物を読む |
+| `web/app.js` | 地図と操作の繋ぎ込み。生きた地図と頁が要る部分だけが残る |
 | `web/aggregate.mjs` | 画面が出す数を組み合わせ表から読む |
+| `web/panel.mjs` | 側面の一覧・集計・凡例の組み立て |
+| `web/popup.mjs` | 押したアークが自分について述べること |
+| `web/termini.mjs` | 起点・終点を GeoJSON にする |
 | `web/shield.mjs` | 国道番号標識の形。画面も favicon も共有画像もここから描く |
+| `web/html.mjs` | エスケープ。OSM の文字は信用できない |
 | `web/glyphs/` | ラベルの SDF グリフ。数字と `・` の 11 字 |
 | `scripts/` | 地図そのものの道具。データ生成には関わらない |
 | `test/` | データを持たずに答えられることの単体テスト |
