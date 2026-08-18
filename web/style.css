@@ -1,5 +1,10 @@
 /* 国道マップ — 標識の青を基調にした操作面。地図に主役を譲るため彩度は抑える。 */
 :root {
+  /* ブラウザが自前で描く部品（スクロールバー、チェックボックス、検索欄の
+     消去ボタン）に、どちらの面の上にいるかを伝える。これを言わないと暗い
+     配色でもスクロールバーだけが白いままになる。 */
+  color-scheme: light;
+
   --sign-blue: #00449E;
   --sign-blue-lt: #1E6FD9;
 
@@ -17,6 +22,11 @@
   --ink-3: #6C7E93;
   --focus: #1E6FD9;
 
+  /* スクロールバー。地図と操作面のあいだで一番目に入る必要のないものなので、
+     溝は透かし、つまみだけを枠線の色より一段濃くする。 */
+  --scroll-thumb: #C2CDDC;
+  --scroll-thumb-hover: #9FB0C5;
+
   /* 国道番号標識の配色。地の青、白の縁、白抜きの番号である。
      標識は明るい配色でも暗い配色でも同じ色なので、下の切り替えには入れない。 */
   --shield-face: #00449E;
@@ -29,6 +39,11 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
+
+    --scroll-thumb: #33445C;
+    --scroll-thumb-hover: #48607E;
+
     --panel: #131C29;
     --panel-2: #0E161F;
     --line: #27364A;
@@ -46,6 +61,26 @@
 }
 
 * { box-sizing: border-box; }
+
+/* スクロールバー ----------------------------------------------------------
+   同じ見た目を二通りで書く。標準の 2 行が Firefox と新しい Chrome に効き、
+   ::-webkit- の側が Safari と古い Chrome に効く。両方を解する Chrome は
+   標準の側を採る。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb {
+  /* 透かした枠を内側の余白として使い、つまみを溝より細く見せる。 */
+  background: var(--scroll-thumb); background-clip: content-box;
+  border: 2px solid transparent; border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover); background-clip: content-box;
+}
 html, body { height: 100%; margin: 0; }
 body {
   font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI",
