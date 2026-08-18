@@ -59,7 +59,7 @@ jobs:
         run: |
           mkdir -p web/data
           gh release download data-latest --dir web/data --clobber \
-            --pattern 'national.pmtiles' \
+            --pattern 'national-routes.pmtiles' \
             --pattern 'national.meta.json' \
             --pattern 'regions.json' \
             --pattern 'SHA256SUMS'

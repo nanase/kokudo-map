@@ -4,8 +4,8 @@
  * shippable as one file nor loadable as 47. So the viewer stops holding the
  * features at all:
  *
- *   national.pmtiles    vector tiles — only what is on screen is in memory
- *   national.meta.json  every total the panel shows, computed here instead
+ *   national-routes.pmtiles  vector tiles — only what is on screen is in memory
+ *   national.meta.json       every total the panel shows, computed here instead
  *
  * The second file is what makes the first possible. app.js used to derive the
  * route list, the concurrency ranking and the selection totals by walking every
@@ -203,7 +203,7 @@ const meta = {
   total_km:
     Math.round(features.reduce((s, f) => s + f.properties.km, 0) * 10) / 10,
   bbox: dataBbox.map((v) => Math.round(v * 1e5) / 1e5),
-  source: { type: 'vector', tiles: 'national.pmtiles', maxzoom: MAXZOOM },
+  source: { type: 'vector', tiles: 'national-routes.pmtiles', maxzoom: MAXZOOM },
   combinations: combos,
   ...termini,
 };

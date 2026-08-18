@@ -50,7 +50,7 @@ const GLYPHS = 'glyphs/{fontstack}/{range}.pbf';
 /* The arcs arrive as vector tiles. Nationwide they are ~130,000 features, so
  * the viewer cannot hold them: it draws what is on screen and reads every total
  * it displays out of national.meta.json instead. */
-export const PMTILES_URL = 'data/national.pmtiles';
+export const PMTILES_URL = 'data/national-routes.pmtiles';
 export const SOURCE_LAYER = 'routes';
 
 /** The sources the route layers expect. The checker builds its style from this

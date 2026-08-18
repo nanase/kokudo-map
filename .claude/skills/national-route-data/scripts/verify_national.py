@@ -124,7 +124,7 @@ age = (datetime.now(timezone.utc)
 check(age <= 7, f"OSM data is {age} days old (threshold 7)")
 
 # --- the archive the browser downloads ---------------------------------------
-path = DATA / "national.pmtiles"
+path = DATA / "national-routes.pmtiles"
 check(path.exists(), f"{path.name} exists")
 if path.exists():
     with open(path, "r+b") as f:

@@ -180,13 +180,13 @@ describe('種別の切り分け', () => {
 });
 
 describe('ソース', () => {
-  const sources = routeSources('data/national.pmtiles');
+  const sources = routeSources('data/national-routes.pmtiles');
 
   test('アーカイブに maxzoom を書き足さない', () => {
     // アーカイブ自身が持つ範囲を TileJSON が伝える。ここで重ねて述べると、
     // 実際には無い zoom を要求して、それより下が黙って消える。
     expect(sources.routes.maxzoom).toBeUndefined();
-    expect(sources.routes.url).toBe('pmtiles://data/national.pmtiles');
+    expect(sources.routes.url).toBe('pmtiles://data/national-routes.pmtiles');
   });
 
   test('起終点は GeoJSON で、最初は空である', () => {

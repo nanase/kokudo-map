@@ -38,7 +38,7 @@ WORKFLOW = "pages.yml"
 
 # Exactly what the viewer fetches. index.html, app.js and the rest travel with
 # the repository; only these are built.
-FILES = ["national.pmtiles", "national.meta.json", "regions.json"]
+FILES = ["national-routes.pmtiles", "national.meta.json", "regions.json"]
 SUMS = "SHA256SUMS"
 
 NOTES = """\
@@ -46,7 +46,7 @@ NOTES = """\
 
 | ファイル | 中身 |
 | --- | --- |
-| `national.pmtiles` | 全国のベクタタイル。Range 要求で読む |
+| `national-routes.pmtiles` | 全国のベクタタイル。Range 要求で読む |
 | `national.meta.json` | 画面が出す集計。指定の組み合わせ単位 |
 | `regions.json` | 地域の一覧 |
 | `SHA256SUMS` | 上の 3 つのチェックサム |

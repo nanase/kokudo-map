@@ -148,7 +148,7 @@ pbf は 1 度だけ読み、47 地域ぶんのキャッシュに切り分ける�
 
 | ファイル | 中身 |
 | --- | --- |
-| `web/data/national.pmtiles` | 全国のベクタタイル。Range 要求で読む |
+| `web/data/national-routes.pmtiles` | 全国のベクタタイル。Range 要求で読む |
 | `web/data/national.meta.json` | 画面が出す集計 |
 | `web/data/regions.json` | 地域の一覧。`?region=` の初期表示に使う |
 
@@ -244,7 +244,7 @@ Actions は落としてきた資産を `SHA256SUMS` で検算してから配る�
 
 | ファイル | 大きさ |
 | --- | --- |
-| `national.pmtiles` | 53.4 MB、51,918 タイル、z0-14 |
+| `national-routes.pmtiles` | 53.4 MB、51,918 タイル、z0-14 |
 | `national.meta.json` | 0.43 MB |
 | `regions.json` | 5.7 kB |
 

@@ -26,7 +26,7 @@ from pmtiles.writer import Writer
 from _paths import DATA, ROOT
 
 TILEDIR = ROOT / "build" / "tiles"
-OUT = DATA / "national.pmtiles"
+OUT = DATA / "national-routes.pmtiles"
 
 # Which properties ride in the tiles, and what the viewer does with each. Stated
 # here because a PMTiles archive is expected to describe its own layers.

@@ -41,7 +41,7 @@
 | 場所 | 中身 |
 | --- | --- |
 | `web/` | 地図本体と配信データ |
-| `web/data/national.pmtiles` | 全国のベクタタイル |
+| `web/data/national-routes.pmtiles` | 全国のベクタタイル |
 | `web/data/national.meta.json` | 画面が出す集計。指定の組み合わせ単位 |
 | `web/mapspec.mjs` | スタイルと絞り込み式。検証スクリプトも同じ物を読む |
 | `scripts/` | 地図の資材を作る道具。グリフ、favicon、ライブラリの複製 |
