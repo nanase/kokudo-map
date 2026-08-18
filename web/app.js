@@ -129,6 +129,49 @@ map.addControl(
   'bottom-right',
 );
 
+/* ----------------------------------------------------------------- panel --- */
+/**
+ * Fold the sidebar away to give the map the whole window.
+ *
+ * The button is map chrome, not panel chrome: it has to stay on screen while
+ * the panel is off it, or there would be no way back. Wired here rather than in
+ * wireControls() so it answers before the data has arrived.
+ *
+ * `inert` is what actually takes the folded panel out of play — the CSS only
+ * slides it off the left edge, and a checkbox parked off screen is still
+ * reachable by tab and still readable by a screen reader.
+ */
+(() => {
+  const app = $('#app');
+  const panel = $('#panel');
+  const btn = $('#panel-toggle');
+
+  const set = (open) => {
+    app.classList.toggle('panel-off', !open);
+    panel.inert = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    btn.title = open ? 'サイドバーを隠す' : 'サイドバーを表示';
+    try {
+      localStorage.setItem('panel-open', open ? '1' : '0');
+    } catch {
+      /* private browsing: the choice simply does not outlive the tab */
+    }
+  };
+
+  // The canvas follows on its own: MapLibre watches its container with a
+  // ResizeObserver, and the panel changes width in one step (see style.css on
+  // why it does not slide), so one observation is all it takes.
+  btn.addEventListener('click', () => set(app.classList.contains('panel-off')));
+
+  let open = true;
+  try {
+    open = localStorage.getItem('panel-open') !== '0';
+  } catch {
+    /* ditto */
+  }
+  set(open);
+})();
+
 /* ------------------------------------------------------------ aggregates --- */
 /**
  * The build ships one table: every distinct *combination* of designations, with

@@ -221,6 +221,26 @@ input[type="search"] {
 
 #map-wrap { flex: 1; position: relative; min-width: 0; }
 #map { position: absolute; inset: 0; }
+
+/* パネルの開閉 ------------------------------------------------------------
+   畳んだパネルは負の余白で画面の外へ出す。display:none にすると路線一覧の
+   スクロール位置が開き直すたびに戻ってしまう。表示のまま外に出している以上
+   中の操作に tab で入れてしまうので、app.js が inert を付けて塞ぐ。
+
+   滑らせない。幅が変わるあいだ地図の canvas も追随させることになり、
+   MapLibre はその連続した変化を間引くので、滑り終えても canvas が途中の幅の
+   まま 1 秒ほど残る。開閉は一瞬で済ませる。 */
+#app.panel-off #panel { margin-left: -340px; }
+#panel-toggle {
+  position: absolute; top: 10px; left: 10px; z-index: 4;
+  width: 30px; height: 30px; padding: 0; display: grid; place-items: center;
+  background: var(--panel); color: var(--ink-2); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.24);
+}
+#panel-toggle:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
+#panel-toggle svg { width: 18px; height: 18px; transition: transform .18s ease; }
+#app.panel-off #panel-toggle svg { transform: rotate(180deg); }
 #loading {
   position: absolute; inset: 0; display: grid; place-items: center;
   background: var(--panel-2); color: var(--ink-3);
@@ -254,5 +274,7 @@ input[type="search"] {
 @media (max-width: 860px) {
   #app { flex-direction: column; }
   #panel { width: 100%; flex: 0 0 auto; max-height: 48%; border-right: 0; border-bottom: 1px solid var(--line); }
+  /* 横並びではないので、左へずらしても隠れない。高さが割合なので畳めもしない。 */
+  #app.panel-off #panel { margin-left: 0; display: none; }
   #map-wrap { flex: 1; }
 }
