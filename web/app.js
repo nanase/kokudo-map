@@ -196,7 +196,7 @@ map.addControl(
  * wireControls() so it answers before the data has arrived.
  *
  * `inert` is what actually takes the folded panel out of play — the CSS only
- * slides it off the left edge, and a checkbox parked off screen is still
+ * parks it past the left edge, and a checkbox sitting off screen is still
  * reachable by tab and still readable by a screen reader.
  */
 (() => {
