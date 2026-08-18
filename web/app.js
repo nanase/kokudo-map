@@ -58,6 +58,33 @@ const state = {
 
 const $ = (sel) => document.querySelector(sel);
 
+/**
+ * Escape a value for interpolation into HTML.
+ *
+ * The panel and the popups are assembled as HTML strings, and some of what
+ * goes into them is written by whoever last edited the road in OpenStreetMap:
+ * `name` above all, but also `kind` and `src` where the lookup falls through
+ * to the raw tag value. Anyone can edit OSM, so a name is untrusted input that
+ * arrives by way of the build, and pasting it into `innerHTML` unescaped is
+ * script injection with a mapper as the author.
+ *
+ * Numbers computed here — arc counts, lengths, route designations that have
+ * been through `Number()` — cannot carry markup and are left alone. Everything
+ * that reached the viewer as a string goes through this.
+ */
+const esc = (v) =>
+  String(v ?? '').replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[c],
+  );
+
 /* ---------------------------------------------------------------- shields --- */
 /**
  * A convex polygon with its corners rounded off to radius `r`.
@@ -491,9 +518,9 @@ function renderFreshness() {
     '<dt>データ基準</dt>' +
     `<dd class="${stale ? 'warn' : ''}">${fmt(base)}（${ageText}）</dd>` +
     '<dt>区間の更新</dt>' +
-    `<dd>${m.oldest_edit} 〜 ${m.newest_edit}</dd>` +
+    `<dd>${esc(m.oldest_edit)} 〜 ${esc(m.newest_edit)}</dd>` +
     '<dt>取得元</dt>' +
-    `<dd>${m.endpoints.join(' / ')}</dd>` +
+    `<dd>${esc(m.endpoints.join(' / '))}</dd>` +
     (stale
       ? '<dt></dt><dd class="warn">最近の開通は反映されていない可能性があります</dd>'
       : '');
@@ -551,7 +578,7 @@ function renderRanking() {
         `<span class="shields">${shieldRow(e.refs, true)}</span>` +
         `<span class="km">${e.km.toFixed(1)} km</span>` +
         (e.names.length
-          ? `<span class="nm">${e.names.join(' / ')}</span>`
+          ? `<span class="nm">${esc(e.names.join(' / '))}</span>`
           : '') +
         '</button>',
     )
@@ -720,19 +747,19 @@ function wirePopups() {
         `<div class="pop-hd">${heading}` +
           `<span class="pop-n">${refs.length > 1 ? `${refs.length} 重用` : '単独指定'}</span></div>` +
           '<dl style="margin:0;display:grid;gap:3px">' +
-          `<div class="pop-row"><dt>名称</dt><dd>${p.name || '—'}</dd></div>` +
-          `<div class="pop-row"><dt>区分</dt><dd>${kindText}</dd></div>` +
+          `<div class="pop-row"><dt>名称</dt><dd>${esc(p.name) || '—'}</dd></div>` +
+          `<div class="pop-row"><dt>区分</dt><dd>${esc(kindText)}</dd></div>` +
           // Not the route's length: the length of the one road that was
           // clicked, which is one OSM way. Labelled 延長 it read as though
           // 国道4号 were 0.13 km long.
           `<div class="pop-row"><dt>区間長</dt><dd>${Number(p.km).toFixed(2)} km</dd></div>` +
-          `<div class="pop-row"><dt>最終更新</dt><dd>${p.updated || '—'}</dd></div>` +
-          `<div class="pop-row"><dt>典拠</dt><dd>${srcText}</dd></div>` +
+          `<div class="pop-row"><dt>最終更新</dt><dd>${esc(p.updated) || '—'}</dd></div>` +
+          `<div class="pop-row"><dt>典拠</dt><dd>${esc(srcText)}</dd></div>` +
           (Number(p.former)
             ? '<div class="pop-row"><dt>備考</dt><dd>旧道（指定解除前）</dd></div>'
             : '') +
-          `<div class="pop-row"><dt>OSM</dt><dd><a href="https://www.openstreetmap.org/way/${p.id}" ` +
-          `target="_blank" rel="noopener">way/${p.id}</a></dd></div>` +
+          `<div class="pop-row"><dt>OSM</dt><dd><a href="https://www.openstreetmap.org/way/${esc(p.id)}" ` +
+          `target="_blank" rel="noopener">way/${esc(p.id)}</a></dd></div>` +
           '</dl>',
       )
       .addTo(map);
