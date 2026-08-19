@@ -1,19 +1,19 @@
-# 地図を GitHub Pages に配る。
+# 地図を GitHub Pages に配ります。
 #
-# 配信データ（タイルと集計）はリポジトリに入っていない。ODbL のデータを MIT の
+# 配信データ（タイルと集計）はリポジトリに入っていません。ODbL のデータを MIT の
 # コードと同じ木に置かないため、また 55 MB の gzip 済みタイルを作り直すたびに
-# 履歴へ丸ごと積まないためである。理由は .gitignore に書いてある。
+# 履歴へ丸ごと積まないためです。理由は .gitignore に書いてあります。
 #
-# データ自体は GitHub Pages を経由しない。data.nanase.cc(Cloudflare R2)に
-# 直接置き、`mise run publish-data` がそこへ上げる。GitHub Pages の裏側にいる
+# データ自体は GitHub Pages を経由しません。data.nanase.cc(Cloudflare R2)に
+# 直接置き、`mise run publish-data` がそこへ上げます。GitHub Pages の裏側にいる
 # Fastly が、ファイル先頭以外への Range 要求を壊す不具合を抱えており、Pages
-# 経由では PMTiles を正しく配れなかった。ここではコードだけを配り、web/ の中の
-# 相対パス('data/…')を data.nanase.cc の絶対 URL に書き換える。
+# 経由では PMTiles を正しく配れませんでした。ここではコードだけを配り、web/ の中の
+# 相対パス('data/…')を data.nanase.cc の絶対 URL に書き換えます。
 name: Pages に配る
 
 on:
-  # コードを変えたときだけ。データの差し替えは Pages を経由しないので、
-  # publish_data.py はもうこれを叩かない。
+  # コードを変えたときだけです。データの差し替えは Pages を経由しないので、
+  # publish_data.py はもうこれを叩きません。
   push:
     branches: [main]
   workflow_dispatch:
@@ -23,14 +23,14 @@ permissions:
   pages: write
   id-token: write
 
-# 配信は 1 本ずつ。走っている途中のものは止めない（中途半端な公開を避ける）。
+# 配信は 1 本ずつです。走っている途中のものは止めません(中途半端な公開を避ける)。
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  # 検査は check.yml が一度だけ定義している。ここで書き写すと二箇所になる。
-  # 通らないものは配らない。
+  # 検査は check.yml が一度だけ定義しています。ここで書き写すと二箇所になります。
+  # 通らないものは配りません。
   check:
     uses: ./.github/workflows/check.yml
 
@@ -41,14 +41,14 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      # 版はタグで指定している。より厳しくするならコミット SHA で留める。
+      # 版はタグで指定しています。より厳しくするならコミット SHA で留めます。
       - uses: actions/checkout@v4
 
-      # 道具の版は mise.toml だけが述べる。ここで書き写すと二箇所になる。
+      # 道具の版は mise.toml だけが述べます。ここで書き写すと二箇所になります。
       - uses: jdx/mise-action@v2
 
-      # ブラウザ用ライブラリを web/vendor/ に複製する。unpkg は読まない。
-      # 版は bun.lock が留めているので、ここで解決が動くことはない。
+      # ブラウザ用ライブラリを web/vendor/ に複製します。unpkg は読みません。
+      # 版は bun.lock が留めているので、ここで解決が動くことはありません。
       - name: ライブラリを組み込む
         run: |
           bun install --frozen-lockfile --production
@@ -56,8 +56,8 @@ jobs:
           test -s web/vendor/maplibre-gl.js
           test -s web/vendor/pmtiles.js
 
-      # data.nanase.cc に直接向ける。'data/…' は手元の scripts/serve.py 用の
-      # 相対パスなので、置き換え忘れれば 404 になって検査で気付く。
+      # data.nanase.cc に直接向けます。'data/…' は手元の scripts/serve.py 用の
+      # 相対パスなので、置き換え忘れれば 404 になって検査で気付きます。
       - name: 配信データの向き先を書き換える
         run: |
           sed -i "s|'data/national-routes.pmtiles'|'https://data.nanase.cc/national-routes.pmtiles'|" web/mapspec.mjs
@@ -70,15 +70,15 @@ jobs:
       - uses: actions/configure-pages@v5
         id: pages
 
-      # 共有されたときの札は絶対 URL でないと読まれない。その URL を述べるのは
-      # ここだけである。index.html は %SITE_URL% と書いて待っている。
+      # 共有されたときの札は絶対 URL でないと読まれません。その URL を述べるのは
+      # ここだけです。index.html は %SITE_URL% と書いて待っています。
       - name: 公開 URL を埋める
         run: |
           sed -i "s|%SITE_URL%|${{ steps.pages.outputs.base_url }}/|g" web/index.html
           ! grep -q '%SITE_URL%' web/index.html
 
-      # 組み上がった web/ をそのまま配る。バンドラは通さない。index.html が
-      # 読むのは相対パスだけなので、user.github.io/<repo>/ の下でも動く。
+      # 組み上がった web/ をそのまま配ります。バンドラは通しません。index.html が
+      # 読むのは相対パスだけなので、user.github.io/<repo>/ の下でも動きます。
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
