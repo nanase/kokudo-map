@@ -46,7 +46,7 @@ describe('routeListHTML', () => {
   });
 
   test('絞り込みのために番号を data 属性に持つ', () => {
-    // 「15」と打つと 15・150・151… が残る前方一致に使う。
+    // 「15」と打つと 15・150・151… が残る前方一致に使います。
     expect(routeListHTML(routes)).toContain('data-ref="7"');
   });
 });
@@ -82,7 +82,7 @@ describe('clearLabel', () => {
   });
 
   test('選択があれば数を自分で言う', () => {
-    // これがあるので、選択数を述べる行が別に要らない。
+    // これがあるので、選択数を述べる行が別に要りません。
     expect(clearLabel(1)).toBe('1 路線を選択解除');
     expect(clearLabel(12)).toBe('12 路線を選択解除');
   });
@@ -100,7 +100,7 @@ describe('concurrencies', () => {
   });
 
   test('選択はどれを並べるかだけを絞る', () => {
-    // 重用かどうかは道路の性質であって、選択の結果ではない。
+    // 重用かどうかは道路の性質であって、選択の結果ではありません。
     const picked = concurrencies(combos, new Set([7]));
     expect(picked).toHaveLength(1);
     expect(picked[0].refs).toEqual([7, 8]);
@@ -121,14 +121,14 @@ describe('countLabel', () => {
   });
 
   test('全体が 0 なら何も言わない', () => {
-    // 折り畳んだ見出しに「0 / 0 組」と出るより、何も出ないほうがよい。
+    // 折り畳んだ見出しに「0 / 0 組」と出るより、何も出ないほうがよいです。
     expect(countLabel(0, 0, '組')).toBe('');
   });
 });
 
 describe('rankingHTML', () => {
   test('行は自分の範囲を持ち、そこへ飛べる', () => {
-    // 表を再走査して範囲を求めていた頃は、四国の四分の一を映していた。
+    // 表を再走査して範囲を求めていた頃は、四国の四分の一を映していました。
     const html = rankingHTML([combo([7, 8], 4.21, 18)]);
     expect(html).toContain('data-bbox="138,36,139,37"');
     expect(html).toContain('data-refs="7,8"');
@@ -178,7 +178,7 @@ describe('凡例', () => {
   });
 
   test('走れない種別は破線で示す', () => {
-    // 地図でも破線なので、凡例も破線でなければ対応が読み取れない。
+    // 地図でも破線なので、凡例も破線でなければ対応が読み取れません。
     const html = legendKindHTML();
     expect(html.match(/border-top-style:dashed/g)).toHaveLength(4);
   });
@@ -194,7 +194,7 @@ describe('freshnessHTML', () => {
   const at = (iso) => new Date(iso).getTime();
 
   test('基準時刻は UTC で出す', () => {
-    // 閲覧者の時間帯で表示すると、同じデータが人によって違う日付になる。
+    // 閲覧者の時間帯で表示すると、同じデータが人によって違う日付になります。
     expect(freshness(meta, at('2026-08-16T21:00:00Z'))).toContain(
       '2026-08-16 20:21Z',
     );

@@ -37,10 +37,10 @@ describe('routesOf', () => {
   });
 
   test('1 路線の延長は、その番号を含む組み合わせすべての和である', () => {
-    // 7 号は単独 100 km、8 号との重用 10 km、6 重用 4 km を通る。
+    // 7 号は単独 100 km、8 号との重用 10 km、6 重用 4 km を通ります。
     expect(by(7).km).toBe(114);
     expect(by(7).arcs).toBe(1140);
-    // 459 号は 6 重用の 4 km にしか出てこない。
+    // 459 号は 6 重用の 4 km にしか出てきません。
     expect(by(459).km).toBe(4);
     expect(by(459).arcs).toBe(40);
   });
@@ -52,8 +52,8 @@ describe('routesOf', () => {
   });
 
   test('max_n は行の並び順に影響されない', () => {
-    // 最も深い重用が表の最後にあるとは限らない。`Math.max` を単なる代入に
-    // すると、この並びでだけ 1 に潰れる。
+    // 最も深い重用が表の最後にあるとは限りません。`Math.max` を単なる代入に
+    // すると、この並びでだけ 1 に潰れます。
     const deepFirst = [row([7, 8, 17], 1, 10), row([7], 100, 1000)];
     expect(routesOf(deepFirst).find((r) => r.ref === 7).max_n).toBe(3);
   });
@@ -63,7 +63,7 @@ describe('routesOf', () => {
   });
 
   test('路線の延長を足すと、重用のぶんだけ実延長を超える', () => {
-    // これが路線別の表で全体を語れない理由である。実延長は 614 km しかない。
+    // これが路線別の表で全体を語れない理由です。実延長は 614 km しかありません。
     const sumOfRoutes = routes.reduce((a, r) => a + r.km, 0);
     const actual = COMBOS.reduce((a, c) => a + c.km, 0);
     expect(actual).toBe(614);
@@ -86,7 +86,7 @@ describe('statsFor', () => {
   });
 
   test('選択した路線を含む組み合わせだけを数える', () => {
-    // 459 号は 6 重用の行にしか居ないので、その 1 行だけが残る。
+    // 459 号は 6 重用の行にしか居ないので、その 1 行だけが残ります。
     expect(statsFor(COMBOS, new Set([459]))).toEqual({
       arcs: 40,
       km: 4,
@@ -95,7 +95,7 @@ describe('statsFor', () => {
   });
 
   test('重なる区間を二重に数えない', () => {
-    // 7 号と 8 号を両方選んでも、共有する 2 行はそれぞれ 1 回だけ入る。
+    // 7 号と 8 号を両方選んでも、共有する 2 行はそれぞれ 1 回だけ入ります。
     const both = statsFor(COMBOS, new Set([7, 8]));
     const seven = statsFor(COMBOS, new Set([7]));
     const eight = statsFor(COMBOS, new Set([8]));
@@ -129,9 +129,9 @@ describe('二つの読み方が食い違わない', () => {
   });
 
   test('1 路線だけ選んだときの延長は routesOf の値以上になる', () => {
-    // statsFor はその路線を含む行を丸ごと数えるので、重用相手のぶんも入る。
-    // routesOf はその路線に帰属する量だけを持つ。等しくなるのは重用が無い
-    // ときだけで、逆転は起こらない。
+    // statsFor はその路線を含む行を丸ごと数えるので、重用相手のぶんも入ります。
+    // routesOf はその路線に帰属する量だけを持ちます。等しくなるのは重用が無い
+    // ときだけで、逆転は起こりません。
     for (const r of routesOf(COMBOS)) {
       const picked = statsFor(COMBOS, new Set([r.ref]));
       expect(picked.km).toBeGreaterThanOrEqual(r.km);

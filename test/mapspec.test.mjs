@@ -28,8 +28,8 @@ import {
 /* ------------------------------------------------------------- filtering --- */
 describe('buildFilter', () => {
   test('選択も強調も無ければ、絞り込まない', () => {
-    // `true` は「全部通す」であって、空の ['all'] ではない。ここを配列にすると
-    // 何も描かれない側に倒れる。
+    // `true` は「全部通す」であって、空の ['all'] ではありません。ここを配列にすると
+    // 何も描かれない側に倒れます。
     expect(buildFilter([], 'off')).toBe(true);
   });
 
@@ -38,8 +38,8 @@ describe('buildFilter', () => {
   });
 
   test('重用のみは n>=2 で、選択とは独立に効く', () => {
-    // 重用かどうかは道路の性質であって選択の結果ではない。18 と 117 が重なる
-    // 区間は、両方を選んでいなくても重用区間である。
+    // 重用かどうかは道路の性質であって選択の結果ではありません。18 と 117 が重なる
+    // 区間は、両方を選んでいなくても重用区間です。
     expect(buildFilter([], 'all')).toEqual(['all', ['>=', ['get', 'n'], 2]]);
     expect(buildFilter([18], 'all')).toEqual([
       'all',
@@ -51,7 +51,7 @@ describe('buildFilter', () => {
 
 describe('hasRef', () => {
   test('区切り文字で囲むので、部分一致で誤爆しない', () => {
-    // これを `['in', '4', ['get','refs']]` と書くと 14 号も 400 号も引っ掛かる。
+    // これを `['in', '4', ['get','refs']]` と書くと 14 号も 400 号も引っ掛かります。
     expect(hasRef(4)).toEqual(['in', ',4,', ['get', 'refs']]);
   });
 
@@ -88,7 +88,7 @@ describe('pickedFilter', () => {
   });
 
   test('way id は 0 でも有効な id である', () => {
-    // `if (!id)` と書くと 0 が null と同じ扱いになる。
+    // `if (!id)` と書くと 0 が null と同じ扱いになります。
     expect(pickedFilter(true, 0)).toEqual(['==', ['get', 'id'], 0]);
   });
 
@@ -147,7 +147,7 @@ describe('種別の切り分け', () => {
   });
 
   test('高速道路は破線の仲間ではない', () => {
-    // 実在する走行可能な車道である。破線にすると走れない道と紛れる。
+    // 実在する走行可能な車道です。破線にすると走れない道と紛れます。
     expect(SPECIAL_KINDS).not.toContain('expressway');
   });
 
@@ -167,8 +167,8 @@ describe('種別の切り分け', () => {
   });
 
   test('切り替えられる種別が、車道レイヤーから外れたままにならない', () => {
-    // 破線と高速道路は roads から外してある。外したなら、代わりに自分の
-    // レイヤーで描かれていなければ、その種別はどこにも出ない。
+    // 破線と高速道路は roads から外してあります。外したなら、代わりに自分の
+    // レイヤーで描かれていなければ、その種別はどこにも出ません。
     const shown = new Set(
       FILTERED_LAYERS.filter((l) => l.kinds && !l.negate).flatMap(
         (l) => l.kinds,
@@ -183,8 +183,8 @@ describe('ソース', () => {
   const sources = routeSources('data/national-routes.pmtiles');
 
   test('アーカイブに maxzoom を書き足さない', () => {
-    // アーカイブ自身が持つ範囲を TileJSON が伝える。ここで重ねて述べると、
-    // 実際には無い zoom を要求して、それより下が黙って消える。
+    // アーカイブ自身が持つ範囲を TileJSON が伝えます。ここで重ねて述べると、
+    // 実際には無い zoom を要求して、それより下が黙って消えます。
     expect(sources.routes.maxzoom).toBeUndefined();
     expect(sources.routes.url).toBe('pmtiles://data/national-routes.pmtiles');
   });

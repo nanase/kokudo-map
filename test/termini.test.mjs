@@ -22,19 +22,19 @@ describe('terminiFeatures', () => {
   });
 
   test('共有地点が先に来る', () => {
-    // あとから描かれるものが上に載る。共有地点のほうが伝える量が多い。
+    // あとから描かれるものが上に載ります。共有地点のほうが伝える量が多いです。
     expect(props(0).shared).toBe(1);
     expect(props(1).shared).toBe(0);
   });
 
   test('refs はアークと同じ区切りで書く', () => {
-    // 路線を絞る式がひとつで済むのは、この形が揃っているからである。
+    // 路線を絞る式がひとつで済むのは、この形が揃っているためです。
     expect(props(0).refs).toBe(',7,8,17,');
     expect(props(1).refs).toBe(',18,');
   });
 
   test('番号の照合が部分一致で誤爆しない', () => {
-    // 4 号の端点を、14 号や 400 号の端点として拾ってはいけない。
+    // 4 号の端点を、14 号や 400 号の端点として拾ってはいけません。
     const needle = hasRef(4)[1];
     expect(props(2).refs.includes(needle)).toBe(true);
     expect(props(0).refs.includes(needle)).toBe(false);

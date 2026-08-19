@@ -94,7 +94,7 @@ ok(
 );
 
 /* ---- 5. 命令の一覧は 1 か所にしかない ------------------------------------ */
-// CLAUDE.md がタスクの表を持っていた頃、README と二重に古くなった。
+// CLAUDE.md がタスクの表を持っていた頃、README と二重に古くなりました。
 const claude = read('CLAUDE.md');
 ok(!/^\| `mise run /m.test(claude), 'CLAUDE.md がタスクの表を持ち直していない');
 

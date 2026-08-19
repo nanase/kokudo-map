@@ -38,8 +38,8 @@ FILES = ["national-routes.pmtiles", "national.meta.json", "regions.json"]
 
 
 def wrangler(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    # `bunx` 自体は mise がシムを作らないことがある。`bun x` は bun 本体の
-    # サブコマンドなので、mise.toml が述べる bun さえ入っていれば必ず通る。
+    # `bunx` 自体は mise がシムを作らないことがあります。`bun x` は bun 本体の
+    # サブコマンドなので、mise.toml が述べる bun さえ入っていれば必ず通ります。
     return subprocess.run(
         ["bun", "x", "wrangler", *args], text=True, capture_output=True, check=check
     )

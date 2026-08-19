@@ -17,7 +17,7 @@ describe('esc', () => {
   });
 
   test('属性から抜け出させない', () => {
-    // `title="..."` の中に置かれても、引用符を閉じて属性を足せない。
+    // `title="..."` の中に置かれても、引用符を閉じて属性を足せません。
     expect(esc('" onmouseover="alert(1)')).toBe(
       '&quot; onmouseover=&quot;alert(1)',
     );
@@ -27,7 +27,7 @@ describe('esc', () => {
   });
 
   test('& を先に置き換えるので二重エスケープにならない', () => {
-    // '<' → '&lt;' としたあとに & を処理すると '&amp;lt;' になる。
+    // '<' → '&lt;' としたあとに & を処理すると '&amp;lt;' になります。
     expect(esc('<')).toBe('&lt;');
     expect(esc('&')).toBe('&amp;');
     expect(esc('&lt;')).toBe('&amp;lt;');
@@ -40,7 +40,7 @@ describe('esc', () => {
   });
 
   test('null と undefined は空文字になる', () => {
-    // popup の「名称」は値が無ければ — を出す。'null' と出てはいけない。
+    // popup の「名称」は値が無ければ — を出します。'null' と出てはいけません。
     expect(esc(null)).toBe('');
     expect(esc(undefined)).toBe('');
   });

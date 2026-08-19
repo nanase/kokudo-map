@@ -70,9 +70,9 @@ def main() -> None:
     args = sys.argv[1:]
     skip_verify = "--skip-verify" in args
     no_pack = "--no-pack" in args
-    # --pack-only は、生成済みの地域から配信データだけを作り直す。
-    # 地域ごとの判定は回さない。段の順番を知っているのはこの関数だけに
-    # したいので、`mise run pack` もここを呼ぶ。
+    # --pack-only は、生成済みの地域から配信データだけを作り直します。
+    # 地域ごとの判定は回しません。段の順番を知っているのはこの関数だけに
+    # したいので、`mise run pack` もここを呼びます。
     pack_only = "--pack-only" in args
     wanted = (
         []

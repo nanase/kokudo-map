@@ -20,7 +20,7 @@ const nums = (d) =>
   [...d.matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => Number(m[0]));
 
 describe('roundedPolygon', () => {
-  // 一辺 100 の正方形。直角なので、どの角も半径ぶんちょうど手前で折れる。
+  // 一辺 100 の正方形です。直角なので、どの角も半径ぶんちょうど手前で折れます。
   const SQUARE = [
     [0, 0],
     [100, 0],
@@ -45,7 +45,7 @@ describe('roundedPolygon', () => {
   });
 
   test('直角では半径ぶんちょうど手前で折れる', () => {
-    // tan(90°/2) = 1 なので後退量は半径そのものになる。手計算できる唯一の角。
+    // tan(90°/2) = 1 なので後退量は半径そのものになります。手計算できる唯一の角です。
     const d = roundedPolygon(SQUARE, 10);
     expect(d).toContain('10 0');
     expect(d).toContain('90 0');
@@ -53,7 +53,7 @@ describe('roundedPolygon', () => {
   });
 
   test('鋭い角ほど深く手前で折れる', () => {
-    // 同じ半径でも、角が尖っているほど円弧は辺の奥から始まる。
+    // 同じ半径でも、角が尖っているほど円弧は辺の奥から始まります。
     const sharp = [
       [0, 0],
       [100, 0],
@@ -81,8 +81,8 @@ describe('roundedPolygon', () => {
   });
 
   test('円弧の掃引方向は常に 1 である', () => {
-    // 画面座標（y は下向き）で頂点を時計回りに並べることが前提になっている。
-    // ここが 0 になると角が外側に膨らむ。
+    // 画面座標（y は下向き）で頂点を時計回りに並べることが前提になっています。
+    // ここが 0 になると角が外側に膨らみます。
     for (const m of roundedPolygon(SQUARE, 10).matchAll(
       /A(\S+) (\S+) 0 0 (\d)/g,
     )) {
@@ -97,7 +97,7 @@ describe('SHIELD_PATH', () => {
   });
 
   test('48x42 の viewBox に収まる', () => {
-    // 標識は 0 0 48 42 の中に描かれる。はみ出せば縁が切られる。
+    // 標識は 0 0 48 42 の中に描かれます。はみ出せば縁が切られます。
     const v = nums(SHIELD_PATH);
     for (const n of v) {
       expect(n).toBeGreaterThanOrEqual(0);
@@ -114,8 +114,8 @@ describe('shield', () => {
   });
 
   test('桁が増えるほど文字幅を詰める', () => {
-    // 3 桁は三角形より広くなるので、textLength で押し込む。放っておくと
-    // 白い数字が背後の面へはみ出して読めなくなる。
+    // 3 桁は三角形より広くなるので、textLength で押し込みます。放っておくと
+    // 白い数字が背後の面へはみ出して読めなくなります。
     const width = (ref) => Number(shield(ref).match(/textLength="(\d+)"/)[1]);
     expect(width(1)).toBeLessThan(width(18));
     expect(width(18)).toBeLessThan(width(459));
