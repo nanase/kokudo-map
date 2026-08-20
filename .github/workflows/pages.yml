@@ -118,8 +118,13 @@ jobs:
           payload=$(printf '%s\n' "${paths[@]}" \
             | jq -R --arg base "$SITE_URL" '$base + "/" + .' \
             | jq -s '{files: .}')
+          echo "パージ対象:"
+          echo "$payload" | jq .
+
           response=$(curl -sSf -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
             -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data "$payload")
-          echo "$response" | grep -q '"success":true'
+          echo "Cloudflare の応答:"
+          echo "$response" | jq .
+          echo "$response" | jq -e '.success == true' > /dev/null
