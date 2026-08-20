@@ -41,7 +41,7 @@ jobs:
 
       # uv 越しに走らせます。この構成の Python は全部 uv が起動するので、
       # 構文を見るついでに uv が入っていること自体を毎回確かめられます。
-      # 命令の一覧が mise.toml・package.json・README で食い違わないことを確かめます。
+      # 命令の一覧が mise.toml・package.json・docs/development.md で食い違わないことを確かめます。
       - name: 文書と定義の突き合わせ
         run: bun run check:docs
 

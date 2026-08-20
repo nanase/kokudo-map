@@ -12,7 +12,7 @@
 
 データと配信は mise が、コードと資材は bun が持ちます。作る物が Python か JavaScript かで分けます。
 
-一覧は `mise tasks` と `bun run` が出します。何をする物かは README の「動かす」にあります。ここに書き写すと、片方が黙って古くなります。
+一覧は `mise tasks` と `bun run` が出します。何をする物かは [docs/development.md](docs/development.md) にあります。ここに書き写すと、片方が黙って古くなります。
 
 初回は `mise trust` と `mise install` が要ります。`serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが要ります。
 

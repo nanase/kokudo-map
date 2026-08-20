@@ -6,9 +6,9 @@
  * what the task is made of, not by taste.
  *
  * What goes wrong is not the split but the copies of it. A task's name lives in
- * mise.toml, and again in README's table, and once lived in CLAUDE.md as well;
- * `mise run build` had already fallen out of both tables without anyone
- * noticing, because nothing was reading them. This does.
+ * mise.toml, and again in docs/development.md's table, and once lived in
+ * CLAUDE.md as well; `mise run build` had already fallen out of both tables
+ * without anyone noticing, because nothing was reading them. This does.
  *
  * The parsing is deliberately shallow — task headers and table rows, by line.
  * It is checking that two lists of names agree, and a TOML parser would not
@@ -33,7 +33,7 @@ const ok = (cond, msg) => {
 };
 
 const mise = read('mise.toml');
-const readme = read('README.md');
+const devDoc = read('docs/development.md');
 const pkg = JSON.parse(read('package.json'));
 
 const miseTasks = new Set(all(mise, /^\[tasks\.([\w-]+)\]/gm));
@@ -48,22 +48,22 @@ ok(
     : 'mise と bun で名前が重なっていない',
 );
 
-/* ---- 2. README の表が mise のタスクと一致する ---------------------------- */
-const inReadme = new Set(all(readme, /^\| `mise run ([\w-]+)/gm));
-const missing = [...miseTasks].filter((t) => !inReadme.has(t));
-const extra = [...inReadme].filter((t) => !miseTasks.has(t));
-ok(missing.length === 0, `README の表に無い mise タスク: ${list(missing)}`);
-ok(extra.length === 0, `mise に無いのに README が挙げている: ${list(extra)}`);
+/* ---- 2. docs/development.md の表が mise のタスクと一致する --------------- */
+const inDevDoc = new Set(all(devDoc, /^\| `mise run ([\w-]+)/gm));
+const missing = [...miseTasks].filter((t) => !inDevDoc.has(t));
+const extra = [...inDevDoc].filter((t) => !miseTasks.has(t));
+ok(missing.length === 0, `development.md の表に無い mise タスク: ${list(missing)}`);
+ok(extra.length === 0, `mise に無いのに development.md が挙げている: ${list(extra)}`);
 
-/* ---- 3. README が挙げる bun のコマンドが実在する ------------------------- */
-const inReadmeBun = new Set([
-  ...all(readme, /^bun run ([\w:-]+)/gm),
-  ...all(readme, /^\| `bun run ([\w:-]+)`/gm),
+/* ---- 3. development.md が挙げる bun のコマンドが実在する ------------------ */
+const inDevDocBun = new Set([
+  ...all(devDoc, /^bun run ([\w:-]+)/gm),
+  ...all(devDoc, /^\| `bun run ([\w:-]+)`/gm),
 ]);
-const unknown = [...inReadmeBun].filter((s) => !pkgScripts.has(s));
+const unknown = [...inDevDocBun].filter((s) => !pkgScripts.has(s));
 ok(
   unknown.length === 0,
-  `package.json に無いのに README が挙げている: ${list(unknown)}`,
+  `package.json に無いのに development.md が挙げている: ${list(unknown)}`,
 );
 
 /* ---- 4. 黙って半分しか実行されないタスクが無い --------------------------- */

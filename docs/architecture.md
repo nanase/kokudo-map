@@ -1,6 +1,6 @@
 # 配信アーキテクチャ
 
-[README](../README.md) から辿る詳細文書です。`national-routes.pmtiles`・`national.meta.json`・`regions.json` をどう作り、どこに置くかをまとめます。
+[開発](development.md) から辿る詳細文書です。`national-routes.pmtiles`・`national.meta.json`・`regions.json` をどう作り、どこに置くかをまとめます。
 
 ## 配信の形
 

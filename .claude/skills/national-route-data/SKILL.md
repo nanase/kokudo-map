@@ -75,7 +75,7 @@ way 自身が主張する番号は、同じ地域の国道リレーションが�
 | `web/data/national.meta.json` | 画面が出す集計。指定の組み合わせ単位 |
 | `web/data/regions.json` | 地域の一覧。`?region=` の初期表示に使う |
 
-この三つは git に入れません。公開するときは `scripts/publish_data.py` が data.nanase.cc(Cloudflare R2)へ直接上げます。GitHub Pages の裏側(Fastly)が Range 要求の先頭以外を壊す不具合を抱えており、Pages 経由では配れませんでした。手順は README の「公開する」にあります。
+この三つは git に入れません。公開するときは `scripts/publish_data.py` が data.nanase.cc(Cloudflare R2)へ直接上げます。GitHub Pages の裏側(Fastly)が Range 要求の先頭以外を壊す不具合を抱えており、Pages 経由では配れませんでした。手順は [docs/architecture.md](../../../docs/architecture.md) にあります。
 
 集計は**指定の組み合わせ**ごとに 1 行です。路線別の表では足りません。重用区間のアークは複数の路線に属するので、路線の行を足すと共有部分を二重に数えます。それは地図が隠すのをやめさせたい数そのものです。
 
