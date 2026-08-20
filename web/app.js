@@ -241,29 +241,29 @@ class HideRoutesControl {
 }
 
 /* -------------------------------------------------------------- gsi shade --- */
+/** How full the drop sits for each shade — 濃い brims, 薄い is a third full. */
+const SHADE_FILL = { light: 0.32, normal: 0.66, dark: 1 };
+
 /**
- * Three vertical bars, filled left-to-right by how many steps deep the
- * current shade sits — 薄い fills one, 濃い fills all three. An intensity
- * gauge reads the same way regardless of the word for "dark" the reader
- * knows, which a kanji glyph does not.
+ * A water drop, filled from the bottom by how dark the current shade is.
+ * Ink/water density is a more immediate read of "how dark" than an abstract
+ * gauge, and does not depend on already knowing the kanji for 濃い/薄い.
  */
 function shadeIcon(level) {
-  const filled = GSI_SHADE_LEVELS.indexOf(level) + 1;
-  const bars = [
-    { x: 4, h: 7 },
-    { x: 10.5, h: 12 },
-    { x: 17, h: 17 },
-  ];
-  const rects = bars
-    .map(({ x, h }, i) => {
-      const y = 20 - h;
-      return i < filled
-        ? `<rect x="${x}" y="${y}" width="4.5" height="${h}" rx="1" fill="currentColor"/>`
-        : `<rect x="${x}" y="${y}" width="4.5" height="${h}" rx="1" fill="none" ` +
-            'stroke="currentColor" stroke-width="1.6"/>';
-    })
-    .join('');
-  return `<svg viewBox="0 0 24 24" aria-hidden="true">${rects}</svg>`;
+  const drop = 'M12 2.4C12 2.4 5 11.2 5 15.6a7 7 0 0 0 14 0C19 11.2 12 2.4 12 2.4Z';
+  const top = 2.4;
+  const bottom = 22.6; // 15.6 + 7 の半径ぶん下
+  const fillH = (bottom - top) * SHADE_FILL[level];
+  const fillY = (bottom - fillH).toFixed(2);
+  return (
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    `<defs><clipPath id="shade-drop-clip"><path d="${drop}"/></clipPath></defs>` +
+    `<path d="${drop}" fill="none" stroke="currentColor" stroke-width="1.7"/>` +
+    '<g clip-path="url(#shade-drop-clip)">' +
+    `<rect x="3" y="${fillY}" width="18" height="${fillH.toFixed(2)}" fill="currentColor"/>` +
+    '</g>' +
+    '</svg>'
+  );
 }
 
 /**
