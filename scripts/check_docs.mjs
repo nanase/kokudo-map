@@ -52,8 +52,14 @@ ok(
 const inDevDoc = new Set(all(devDoc, /^\| `mise run ([\w-]+)/gm));
 const missing = [...miseTasks].filter((t) => !inDevDoc.has(t));
 const extra = [...inDevDoc].filter((t) => !miseTasks.has(t));
-ok(missing.length === 0, `development.md の表に無い mise タスク: ${list(missing)}`);
-ok(extra.length === 0, `mise に無いのに development.md が挙げている: ${list(extra)}`);
+ok(
+  missing.length === 0,
+  `development.md の表に無い mise タスク: ${list(missing)}`,
+);
+ok(
+  extra.length === 0,
+  `mise に無いのに development.md が挙げている: ${list(extra)}`,
+);
 
 /* ---- 3. development.md が挙げる bun のコマンドが実在する ------------------ */
 const inDevDocBun = new Set([
