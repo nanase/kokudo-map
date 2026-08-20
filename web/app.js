@@ -40,7 +40,11 @@ import {
   baseStyle,
   buildFilter,
   CLICKABLE_LAYERS,
+  DEFAULT_SHADE,
   FILTERED_LAYERS,
+  GSI_SHADE_LABELS,
+  GSI_SHADE_LEVELS,
+  GSI_SHADE_OPACITY,
   hasRef,
   NOTHING,
   PMTILES_URL,
@@ -92,6 +96,21 @@ const $ = (sel) => document.querySelector(sel);
 // `python -m http.server`.
 maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
 
+/**
+ * How dark the base map sits under the routes, read before the map is built
+ * and fed straight into its style — so the map is never built once at the
+ * shipped default and then redrawn a moment later at the reader's own choice.
+ */
+function readStored(key, allowed, fallback) {
+  try {
+    const v = localStorage.getItem(key);
+    return allowed.includes(v) ? v : fallback;
+  } catch {
+    return fallback; // private browsing: no storage, so the shipped default
+  }
+}
+let gsiShade = readStored('gsi-shade', GSI_SHADE_LEVELS, DEFAULT_SHADE);
+
 const map = new maplibregl.Map({
   container: 'map',
   attributionControl: false,
@@ -103,7 +122,7 @@ const map = new maplibregl.Map({
   // buys a separator that changes shape from machine to machine and vanishes
   // where no CJK font is installed.
   localIdeographFontFamily: false,
-  style: baseStyle(),
+  style: baseStyle(gsiShade),
   center: [138.0, 36.2],
   zoom: 7.6,
 });
@@ -207,6 +226,54 @@ class HideRoutesControl {
   }
 }
 
+/* -------------------------------------------------------------- gsi shade --- */
+/**
+ * How dark the base map sits under the routes: 薄い・通常・濃い, cycled by one
+ * button. This is a display preference, not filter state — like the
+ * hide-routes button, it never touches `state` or the URL — but unlike that
+ * button it is worth remembering, so it is kept in localStorage instead of
+ * resetting on every reload.
+ */
+function applyGsiShade(level) {
+  gsiShade = level;
+  map.setPaintProperty('gsi', 'raster-opacity', GSI_SHADE_OPACITY[level]);
+  try {
+    localStorage.setItem('gsi-shade', level);
+  } catch {
+    /* private browsing: the choice simply does not outlive the tab */
+  }
+}
+
+class GsiShadeControl {
+  onAdd() {
+    const container = document.createElement('div');
+    container.className = 'maplibregl-ctrl maplibregl-ctrl-group gsi-shade-ctrl';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'gsi-shade-btn';
+    const render = () => {
+      // 「薄い」「通常」「濃い」の頭文字だけを乗せる。読み方は title と
+      // aria-label が言う。
+      btn.textContent = GSI_SHADE_LABELS[gsiShade][0];
+      const label = `地図の濃さ: ${GSI_SHADE_LABELS[gsiShade]}（クリックで切り替え）`;
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    };
+    btn.addEventListener('click', () => {
+      const i = GSI_SHADE_LEVELS.indexOf(gsiShade);
+      applyGsiShade(GSI_SHADE_LEVELS[(i + 1) % GSI_SHADE_LEVELS.length]);
+      render();
+    });
+    render();
+    container.appendChild(btn);
+    this._container = container;
+    return container;
+  }
+  onRemove() {
+    this._container.remove();
+  }
+}
+
 /* ----------------------------------------------------------------- panel --- */
 /**
  * Fold the sidebar away to give the map the whole window.
@@ -269,6 +336,7 @@ async function boot() {
   for (const [id, src] of Object.entries(sources)) map.addSource(id, src);
   for (const layer of routeLayers()) map.addLayer(layer);
   map.addControl(new HideRoutesControl(), 'top-right');
+  map.addControl(new GsiShadeControl(), 'top-right');
 
   wirePopups();
   wireControls();

@@ -39,6 +39,17 @@ export const COLOR_FERRY = '#0E7490';
 
 export const GSI_TILES =
   'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png';
+
+/* How dark the base map sits under the routes. Plain `raster-opacity` on the
+ * `gsi` layer — there is no separate dimming layer, just this one paint
+ * property. The site shipped for a while at a flat 0.82 with no control over
+ * it; that is kept as `light` so existing impressions of the map do not
+ * shift under anyone. */
+export const GSI_SHADE_LEVELS = ['light', 'normal', 'dark'];
+export const GSI_SHADE_OPACITY = { light: 0.82, normal: 0.91, dark: 1 };
+export const GSI_SHADE_LABELS = { light: '薄い', normal: '通常', dark: '濃い' };
+export const DEFAULT_SHADE = 'light';
+
 /* Served from this site. The labels are route numbers joined with `・`, so the
  * whole alphabet is ten digits and one separator — eleven glyphs in two range
  * files, about 5 kB. scripts/make_glyphs.mjs bakes them from Noto Sans JP.
@@ -159,7 +170,7 @@ function lineWidth({ add = 0, scaleByN = true } = {}) {
 
 /* ----------------------------------------------------------------- style --- */
 
-export function baseStyle() {
+export function baseStyle(shade = DEFAULT_SHADE) {
   return {
     version: 8,
     // Glyphs are required for any symbol layer.
@@ -179,7 +190,7 @@ export function baseStyle() {
         id: 'gsi',
         type: 'raster',
         source: 'gsi',
-        paint: { 'raster-opacity': 0.82 },
+        paint: { 'raster-opacity': GSI_SHADE_OPACITY[shade] },
       },
     ],
   };
