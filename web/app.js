@@ -234,6 +234,31 @@ class HideRoutesControl {
 
 /* -------------------------------------------------------------- gsi shade --- */
 /**
+ * Three vertical bars, filled left-to-right by how many steps deep the
+ * current shade sits — 薄い fills one, 濃い fills all three. An intensity
+ * gauge reads the same way regardless of the word for "dark" the reader
+ * knows, which a kanji glyph does not.
+ */
+function shadeIcon(level) {
+  const filled = GSI_SHADE_LEVELS.indexOf(level) + 1;
+  const bars = [
+    { x: 4, h: 7 },
+    { x: 10.5, h: 12 },
+    { x: 17, h: 17 },
+  ];
+  const rects = bars
+    .map(({ x, h }, i) => {
+      const y = 20 - h;
+      return i < filled
+        ? `<rect x="${x}" y="${y}" width="4.5" height="${h}" rx="1" fill="currentColor"/>`
+        : `<rect x="${x}" y="${y}" width="4.5" height="${h}" rx="1" fill="none" ` +
+            'stroke="currentColor" stroke-width="1.6"/>';
+    })
+    .join('');
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${rects}</svg>`;
+}
+
+/**
  * How dark the base map sits under the routes: 薄い・通常・濃い, cycled by one
  * button. This is a display preference, not filter state — like the
  * hide-routes button, it never touches `state` or the URL — but unlike that
@@ -262,10 +287,8 @@ class GsiShadeControl {
     btn.type = 'button';
     btn.id = 'gsi-shade-btn';
     const render = () => {
-      // 「薄い」「通常」「濃い」の頭文字だけを乗せる。読み方は title と
-      // aria-label が言う。
-      btn.textContent = GSI_SHADE_LABELS[gsiShade][0];
-      const label = `地図の濃さ: ${GSI_SHADE_LABELS[gsiShade]}（クリックで切り替え）`;
+      btn.innerHTML = shadeIcon(gsiShade);
+      const label = `地図の濃さ: ${GSI_SHADE_LABELS[gsiShade]}`;
       btn.title = label;
       btn.setAttribute('aria-label', label);
     };
@@ -285,6 +308,40 @@ class GsiShadeControl {
 }
 
 /* --------------------------------------------------------------- basemap --- */
+/**
+ * One icon per basemap, each reaching for a different, unambiguous metaphor
+ * rather than a shared shape varied by fill: a folded paper map for the
+ * plain 淡色地図, a stack of layers for the more detailed 標準地図, and a
+ * photo frame for 写真 (航空写真) — nothing here needs the label text to be
+ * told apart.
+ */
+const BASEMAP_ICONS = {
+  pale:
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2Z" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linejoin="round" ' +
+    'stroke-linecap="round"/>' +
+    '<path d="M9 3v16M15 5v16" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round"/>' +
+    '</svg>',
+  std:
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<path d="M12 2 2 7l10 5 10-5-10-5Z" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<path d="M2 17l10 5 10-5M2 12l10 5 10-5" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linejoin="round" ' +
+    'stroke-linecap="round"/>' +
+    '</svg>',
+  photo:
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<rect x="3" y="3" width="18" height="18" rx="2" fill="none" ' +
+    'stroke="currentColor" stroke-width="2"/>' +
+    '<circle cx="8.5" cy="8.5" r="1.6" fill="currentColor"/>' +
+    '<path d="M21 15l-5-5-9 9" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>',
+};
+
 /**
  * Which 地理院タイル draws under the routes: 淡色地図・標準地図・写真
  * (航空写真). All three are always in the style (see baseStyle), so switching
@@ -311,9 +368,8 @@ class BasemapControl {
     btn.type = 'button';
     btn.id = 'basemap-btn';
     const render = () => {
-      // 「淡色地図」「標準地図」「写真」の頭文字だけを乗せる。
-      btn.textContent = GSI_BASEMAPS[basemap].label[0];
-      const label = `地図の種類: ${GSI_BASEMAPS[basemap].label}（クリックで切り替え）`;
+      btn.innerHTML = BASEMAP_ICONS[basemap];
+      const label = `地図の種類: ${GSI_BASEMAPS[basemap].label}`;
       btn.title = label;
       btn.setAttribute('aria-label', label);
     };
