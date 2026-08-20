@@ -141,6 +141,72 @@ map.addControl(
   'bottom-right',
 );
 
+/* ------------------------------------------------------------ hide-routes --- */
+/**
+ * A temporary "basemap only" view, for reading the terrain under the routes.
+ * It is layout visibility, not filter state: turning it back on has to show
+ * exactly what the checkboxes already say, so this never touches `state` or
+ * the URL — sharing this view is not a thing a link should do.
+ */
+const EYE_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" fill="none" ' +
+  'stroke="currentColor" stroke-width="2.1" stroke-linecap="round" ' +
+  'stroke-linejoin="round"/>' +
+  '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2.1"/>' +
+  '</svg>';
+const EYE_OFF_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<path d="M9.9 5.2A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a15.6 15.6 0 0 1-3.4 4.3M6.5 ' +
+  '6.5A15.7 15.7 0 0 0 2 12s3.5 7 10 7c1.4 0 2.7-.3 3.9-.8" fill="none" ' +
+  'stroke="currentColor" stroke-width="2.1" stroke-linecap="round" ' +
+  'stroke-linejoin="round"/>' +
+  '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" fill="none" stroke="currentColor" ' +
+  'stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M3 3l18 18" fill="none" stroke="currentColor" stroke-width="2.1" ' +
+  'stroke-linecap="round"/>' +
+  '</svg>';
+
+let routesHidden = false;
+
+function setHideBtnState(btn, hidden) {
+  btn.innerHTML = hidden ? EYE_OFF_ICON : EYE_ICON;
+  btn.classList.toggle('active', hidden);
+  btn.setAttribute('aria-pressed', String(hidden));
+  const label = hidden ? '国道の表示に戻す' : '国道を一時的に隠す';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+}
+
+function setRoutesHidden(hidden) {
+  routesHidden = hidden;
+  for (const { id } of routeLayers()) {
+    map.setLayoutProperty(id, 'visibility', hidden ? 'none' : 'visible');
+  }
+  setHideBtnState($('#hide-routes-btn'), hidden);
+}
+
+// A MapLibre IControl, so `addControl(…, 'top-right')` stacks it in its own
+// rounded group directly under the zoom buttons for free.
+class HideRoutesControl {
+  onAdd() {
+    const container = document.createElement('div');
+    container.className =
+      'maplibregl-ctrl maplibregl-ctrl-group hide-routes-ctrl';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'hide-routes-btn';
+    setHideBtnState(btn, false);
+    btn.addEventListener('click', () => setRoutesHidden(!routesHidden));
+    container.appendChild(btn);
+    this._container = container;
+    return container;
+  }
+  onRemove() {
+    this._container.remove();
+  }
+}
+
 /* ----------------------------------------------------------------- panel --- */
 /**
  * Fold the sidebar away to give the map the whole window.
@@ -202,6 +268,7 @@ async function boot() {
   const sources = routeSources(new URL(PMTILES_URL, location.href).href);
   for (const [id, src] of Object.entries(sources)) map.addSource(id, src);
   for (const layer of routeLayers()) map.addLayer(layer);
+  map.addControl(new HideRoutesControl(), 'top-right');
 
   wirePopups();
   wireControls();

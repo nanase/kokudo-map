@@ -31,6 +31,12 @@
      には混ぜない。 */
   --success: #1E8E3E;
 
+  /* 国道を一時的に隠すボタンが、隠している間だけ使う。載る台はズームボタンと
+     同じ MapLibre 標準の白いコントロールで、パネルの明暗に関わらず白いまま
+     なので、こちらも明暗で変える理由がない。 */
+  --danger: #B3261E;
+  --danger-hover: #8C1F19;
+
   /* 国道番号標識の配色。地の青、白の縁、白抜きの番号である。
      標識は明るい配色でも暗い配色でも同じ色なので、下の切り替えには入れない。 */
   --shield-face: #00449E;
@@ -321,6 +327,22 @@ input[type="search"]::placeholder { font-size: .82em; }
   font-size: .85rem; z-index: 5;
 }
 #loading.done { display: none; }
+
+/* 国道を隠すボタン -------------------------------------------------------
+   MapLibre のズームボタンと同じグループの体裁（白い台、角丸）に乗せ、続けて
+   addControl するだけで自然にその下へ積む。台が常に白いので、アイコンの色は
+   MapLibre 自身のズームアイコンに合わせた固定の濃い灰色にする。 */
+.hide-routes-ctrl button {
+  display: grid; place-items: center; color: #333;
+}
+.hide-routes-ctrl button svg { width: 17px; height: 17px; display: block; }
+.hide-routes-ctrl button.active { background: var(--danger); color: #fff; }
+/* MapLibre's own `.maplibregl-ctrl button:not(:disabled):hover` rule matches
+   three classes too and loses only because this file loads after it — drop
+   that ordering and its 5%-black tint replaces the red outright, leaving a
+   near-white button with a white icon on it. Matching the selector's shape
+   keeps the win explicit instead of resting on load order. */
+.hide-routes-ctrl button.active:hover { background: var(--danger-hover); }
 
 /* popup ----------------------------------------------------------------- */
 .maplibregl-popup-content {
