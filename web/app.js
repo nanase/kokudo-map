@@ -240,7 +240,8 @@ const SHADE_FILL = { light: 0.32, normal: 0.66, dark: 1 };
  * gauge, and does not depend on already knowing the kanji for 濃い/薄い.
  */
 function shadeIcon(level) {
-  const drop = 'M12 2.4C12 2.4 5 11.2 5 15.6a7 7 0 0 0 14 0C19 11.2 12 2.4 12 2.4Z';
+  const drop =
+    'M12 2.4C12 2.4 5 11.2 5 15.6a7 7 0 0 0 14 0C19 11.2 12 2.4 12 2.4Z';
   const top = 2.4;
   const bottom = 22.6; // 15.6 + 7 の半径ぶん下
   const fillH = (bottom - top) * SHADE_FILL[level];
@@ -268,7 +269,11 @@ function applyGsiShade(level) {
   const { opacity, brightnessMax } = GSI_SHADE_PAINT[level];
   for (const id of GSI_BASEMAP_ORDER) {
     map.setPaintProperty(gsiLayerId(id), 'raster-opacity', opacity);
-    map.setPaintProperty(gsiLayerId(id), 'raster-brightness-max', brightnessMax);
+    map.setPaintProperty(
+      gsiLayerId(id),
+      'raster-brightness-max',
+      brightnessMax,
+    );
   }
   try {
     localStorage.setItem('gsi-shade', level);
@@ -280,7 +285,8 @@ function applyGsiShade(level) {
 class GsiShadeControl {
   onAdd() {
     const container = document.createElement('div');
-    container.className = 'maplibregl-ctrl maplibregl-ctrl-group gsi-shade-ctrl';
+    container.className =
+      'maplibregl-ctrl maplibregl-ctrl-group gsi-shade-ctrl';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.id = 'gsi-shade-btn';

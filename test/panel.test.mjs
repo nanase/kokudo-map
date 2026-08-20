@@ -1,6 +1,7 @@
 /* The sidebar's markup, as a function of the data behind it. */
-import { readFileSync } from 'node:fs';
+
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 
 import {
   clearLabel,
