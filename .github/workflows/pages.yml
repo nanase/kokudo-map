@@ -92,6 +92,11 @@ jobs:
       # 明示的にパージしないと最大48時間古いファイルが配られ続ける。HTML は
       # Cloudflare が基本キャッシュしないので対象に含めていない。
       #
+      # base_url は「公開 URL を埋める」と同じ steps.pages.outputs.base_url を使う。
+      # nanase.cc はユーザーページの独自ドメインで、このリポジトリはプロジェクト
+      # サイトとして nanase.cc/kokudo-map/ に乗る。ドメイン直下を決め打ちすると、
+      # 実際にキャッシュされている URL と一致せず何もパージできない。
+      #
       # トークンは Cache Purge 権限のみ・nanase.cc ゾーンのみに絞ってある
       # (CLOUDFLARE_CACHE_PURGE_TOKEN、github-pages environment の Secret)。
       # ファイル名にハッシュを付けていないため URL 単位でしか指定できない。
@@ -101,30 +106,20 @@ jobs:
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
           CF_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
         run: |
           set -euo pipefail
+          paths=(
+            "" "index.html" "app.js" "mapspec.mjs" "termini.mjs" "aggregate.mjs"
+            "shield.mjs" "html.mjs" "panel.mjs" "popup.mjs" "style.css"
+            "favicon.svg" "og.png" "vendor/maplibre-gl.js" "vendor/maplibre-gl.css"
+            "vendor/pmtiles.js"
+          )
+          payload=$(printf '%s\n' "${paths[@]}" \
+            | jq -R --arg base "$SITE_URL" '$base + "/" + .' \
+            | jq -s '{files: .}')
           response=$(curl -sSf -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
             -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json" \
-            --data @- <<'JSON'
-          {"files": [
-            "https://nanase.cc/",
-            "https://nanase.cc/index.html",
-            "https://nanase.cc/app.js",
-            "https://nanase.cc/mapspec.mjs",
-            "https://nanase.cc/termini.mjs",
-            "https://nanase.cc/aggregate.mjs",
-            "https://nanase.cc/shield.mjs",
-            "https://nanase.cc/html.mjs",
-            "https://nanase.cc/panel.mjs",
-            "https://nanase.cc/popup.mjs",
-            "https://nanase.cc/style.css",
-            "https://nanase.cc/favicon.svg",
-            "https://nanase.cc/og.png",
-            "https://nanase.cc/vendor/maplibre-gl.js",
-            "https://nanase.cc/vendor/maplibre-gl.css",
-            "https://nanase.cc/vendor/pmtiles.js"
-          ]}
-          JSON
-          )
+            --data "$payload")
           echo "$response" | grep -q '"success":true'
