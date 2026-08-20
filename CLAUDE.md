@@ -18,7 +18,7 @@
 
 ## 変えてはいけない判断
 
-理由まで含めた記録は skill の CASES.md にあります。
+理由まで含めた記録は skill の CASES.md、配信の設計は [docs/architecture.md](docs/architecture.md) にあります。
 
 - 取得は全国、判定は都道府県ごと
   - 裏取りが効くのは、保証集合が県ぶんしかないため
@@ -50,6 +50,7 @@
 | `web/mapspec.mjs` | スタイルと絞り込み式。検証スクリプトも同じ物を読む |
 | `scripts/` | 地図の資材を作る道具。グリフ、favicon、ライブラリの複製 |
 | `test/` | データを持たずに答えられることの単体テスト |
+| `docs/` | README から辿る詳細文書 |
 | `.claude/skills/national-route-data/` | 手順、判定ルール、スクリプト |
 | `.github/workflows/` | 検査と GitHub Pages への配信 |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |
