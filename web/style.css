@@ -125,7 +125,8 @@ body {
   text-transform: uppercase; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace;
 }
-.hd-actions { display: flex; gap: 6px; }
+.filter-row { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.filter-row input[type="search"] { flex: 1; min-width: 0; margin-bottom: 0; }
 
 /* folded block ----------------------------------------------------------
    Reference material that is worth having but not worth the sidebar height
@@ -163,6 +164,7 @@ input[type="search"] {
   background: var(--panel-2); color: var(--ink);
   border: 1px solid var(--line); border-radius: 3px;
 }
+input[type="search"]::placeholder { font-size: .82em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
 /* route checkbox grid --------------------------------------------------- */
