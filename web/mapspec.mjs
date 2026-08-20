@@ -58,13 +58,25 @@ export const GSI_BASEMAPS = {
 export const GSI_BASEMAP_ORDER = ['pale', 'std', 'photo'];
 export const DEFAULT_BASEMAP = 'pale';
 
-/* How dark the base map sits under the routes. Plain `raster-opacity`,
- * shared by all three basemap layers so a basemap switch keeps whatever
- * shade was chosen — there is no separate dimming layer. The site shipped
- * for a while at a flat 0.82 with no control over it; that is kept as
- * `light` so existing impressions of the map do not shift under anyone. */
+/* How dark the base map sits under the routes, shared by all three basemap
+ * layers so a basemap switch keeps whatever shade was chosen — there is no
+ * separate dimming layer.
+ *
+ * `raster-opacity` alone cannot do this reliably: it blends the tile with
+ * whatever is behind the map canvas, which is the page background — near-
+ * white in the light theme but near-black in the dark one — so raising
+ * opacity made the map lighter for one reader and darker for another,
+ * exactly backwards for half of them. `raster-brightness-max` instead scales
+ * the tile's own pixels before that blend, so lowering it darkens the tile
+ * on any backdrop. Opacity is left at the flat 0.82 the site always shipped
+ * with — `light` keeps it exactly, so existing impressions of the map do not
+ * shift under anyone — and only brightness moves for the two darker steps. */
 export const GSI_SHADE_LEVELS = ['light', 'normal', 'dark'];
-export const GSI_SHADE_OPACITY = { light: 0.82, normal: 0.91, dark: 1 };
+export const GSI_SHADE_PAINT = {
+  light: { opacity: 0.82, brightnessMax: 1 },
+  normal: { opacity: 0.82, brightnessMax: 0.82 },
+  dark: { opacity: 0.82, brightnessMax: 0.62 },
+};
 export const GSI_SHADE_LABELS = { light: '薄い', normal: '通常', dark: '濃い' };
 export const DEFAULT_SHADE = 'light';
 
@@ -194,7 +206,7 @@ export const gsiLayerId = (basemap) => `gsi-${basemap}`;
 export function baseStyle(basemap = DEFAULT_BASEMAP, shade = DEFAULT_SHADE) {
   const attribution =
     '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>';
-  const opacity = GSI_SHADE_OPACITY[shade];
+  const { opacity, brightnessMax } = GSI_SHADE_PAINT[shade];
 
   const sources = {};
   const layers = [];
@@ -215,7 +227,10 @@ export function baseStyle(basemap = DEFAULT_BASEMAP, shade = DEFAULT_SHADE) {
       type: 'raster',
       source: id,
       layout: { visibility: id === basemap ? 'visible' : 'none' },
-      paint: { 'raster-opacity': opacity },
+      paint: {
+        'raster-opacity': opacity,
+        'raster-brightness-max': brightnessMax,
+      },
     });
   }
 

@@ -47,7 +47,7 @@ import {
   GSI_BASEMAPS,
   GSI_SHADE_LABELS,
   GSI_SHADE_LEVELS,
-  GSI_SHADE_OPACITY,
+  GSI_SHADE_PAINT,
   gsiLayerId,
   hasRef,
   NOTHING,
@@ -242,9 +242,10 @@ class HideRoutesControl {
  */
 function applyGsiShade(level) {
   gsiShade = level;
-  const opacity = GSI_SHADE_OPACITY[level];
+  const { opacity, brightnessMax } = GSI_SHADE_PAINT[level];
   for (const id of GSI_BASEMAP_ORDER) {
     map.setPaintProperty(gsiLayerId(id), 'raster-opacity', opacity);
+    map.setPaintProperty(gsiLayerId(id), 'raster-brightness-max', brightnessMax);
   }
   try {
     localStorage.setItem('gsi-shade', level);
