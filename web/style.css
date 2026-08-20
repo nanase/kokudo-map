@@ -27,6 +27,10 @@
   --scroll-thumb: #C2CDDC;
   --scroll-thumb-hover: #9FB0C5;
 
+  /* コピー成功のチェックマークだけが使う。他の状態を持たないので上の配色群
+     には混ぜない。 */
+  --success: #1E8E3E;
+
   /* 国道番号標識の配色。地の青、白の縁、白抜きの番号である。
      標識は明るい配色でも暗い配色でも同じ色なので、下の切り替えには入れない。 */
   --shield-face: #00449E;
@@ -57,6 +61,7 @@
     --n4: #B183D6;
     --sign-blue: #79AEF7;
     --focus: #79AEF7;
+    --success: #4ADE80;
   }
 }
 
@@ -115,6 +120,16 @@ body {
 #panel h1 {
   margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em;
 }
+/* アイコン一つだけのボタン。#panel-toggle と同じ見た目の言葉を、パネルの中
+   でも使う。 */
+button.icon-btn {
+  display: grid; place-items: center; padding: 0; width: 28px; height: 28px;
+  background: var(--panel-2); color: var(--ink-2); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 4px;
+}
+button.icon-btn:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
+button.icon-btn svg { width: 15px; height: 15px; }
+.share-btn { margin-left: auto; flex: 0 0 auto; }
 .block { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
 .block-hd {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -329,6 +344,60 @@ input[type="search"]::placeholder { font-size: .82em; }
    near-black blue that all but disappears on the dark panel, so it takes the
    theme-aware sign blue like everything else. */
 .maplibregl-popup-content a { color: var(--sign-blue); }
+
+/* share dialog ------------------------------------------------------------
+   ネイティブの <dialog> を使う。表示状態を変更する口は無いので、独自の
+   フォーカストラップやキー処理を書く理由が無い — showModal() 自身が Esc と
+   フォーカスの往復を面倒みる。 */
+#share-dialog {
+  border: 1px solid var(--line); border-radius: 6px; padding: 0;
+  background: var(--panel); color: var(--ink);
+  width: min(420px, 92vw);
+  box-shadow: 0 8px 32px rgba(0,0,0,.28);
+}
+#share-dialog::backdrop { background: rgba(10,14,20,.45); }
+#share-dialog form {
+  padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px;
+}
+#share-dialog form > header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+#share-dialog h2 { margin: 0; font-size: 1rem; font-weight: 800; }
+.dialog-close {
+  border: 0; background: none; cursor: pointer; font-size: 1.2rem; line-height: 1;
+  color: var(--ink-3); padding: 2px 6px; border-radius: 3px;
+}
+.dialog-close:hover { color: var(--ink); background: var(--panel-2); }
+
+.share-url-row { display: flex; gap: 6px; }
+.share-url-row input {
+  flex: 1; min-width: 0; font: inherit; font-family: ui-monospace, Consolas, monospace;
+  font-size: .76rem; padding: 6px 8px; background: var(--panel-2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 3px;
+}
+/* コピー成功時は文言をチェックの印に差し替える。幅を固定しておかないと、
+   文字列よりアイコンのほうが短いぶんボタンが縮んで隣の欄がずれる。 */
+#share-copy {
+  min-width: 58px; display: inline-flex; align-items: center; justify-content: center;
+}
+#share-copy svg { width: 14px; height: 14px; display: block; }
+#share-copy.copied { color: var(--success); border-color: var(--success); }
+
+.share-summary { display: flex; flex-direction: column; gap: 9px; font-size: .8rem; }
+.share-row { display: flex; gap: 10px; align-items: baseline; }
+.share-row .lbl {
+  flex: 0 0 72px; color: var(--ink-3); font-size: .68rem; font-weight: 700;
+  letter-spacing: .06em; font-family: ui-monospace, Consolas, monospace;
+}
+.share-row .shields { display: flex; flex-wrap: wrap; gap: 3px; }
+.share-row .all { color: var(--ink-2); }
+.share-toggles {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
+  gap: 3px; color: var(--ink-2);
+}
+.share-toggles li::before { content: "✓ "; color: var(--sign-blue); }
+.share-toggles li.off { color: var(--ink-3); }
+.share-toggles li.off::before { content: "– "; color: var(--ink-3); }
 
 @media (max-width: 860px) {
   #app { flex-direction: column; }

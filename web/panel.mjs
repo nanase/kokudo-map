@@ -108,6 +108,36 @@ export const sharedHTML = (rows) =>
         .join('')
     : '<p class="empty">該当地点はありません。</p>';
 
+/* ------------------------------------------------------------------ 共有 --- */
+/**
+ * 共有ダイアログが出す、いまの表示状態の要約。
+ *
+ * ダイアログの中でこの状態は変更できないので、ここは読み取り専用の説明で
+ * よい。`toggles` と `concLabel` はラベル文字列を own しない — index.html の
+ * チェックボックス・ラジオボタンの表示文言をそのまま渡してもらう形にして
+ * ある。ここで文言を書き直すと、表示側を直したときにこちらが黙って古くなる。
+ */
+export const shareSummaryHTML = ({
+  selectedRefs,
+  totalRoutes,
+  concLabel,
+  toggles,
+}) =>
+  '<div class="share-row"><span class="lbl">選択路線</span>' +
+  `<span class="shields">${
+    selectedRefs.length
+      ? shieldRow(selectedRefs, true)
+      : `<span class="all">すべて（${totalRoutes} 路線）</span>`
+  }</span></div>` +
+  '<div class="share-row"><span class="lbl">重用区間</span>' +
+  `<span>${esc(concLabel)}</span></div>` +
+  '<div class="share-row"><span class="lbl">表示</span>' +
+  '<ul class="share-toggles">' +
+  toggles
+    .map((t) => `<li class="${t.checked ? 'on' : 'off'}">${esc(t.label)}</li>`)
+    .join('') +
+  '</ul></div>';
+
 /* ------------------------------------------------------------------ 凡例 --- */
 const swatch = (color, text, dashed) =>
   `<span class="item"><span class="swatch" style="border-top-color:${color}` +

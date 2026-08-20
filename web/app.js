@@ -61,6 +61,7 @@ import {
   routeListHTML,
   SHARED_ROWS,
   sharedHTML,
+  shareSummaryHTML,
   statsHTML,
 } from './panel.mjs';
 import { deepest, popupHTML } from './popup.mjs';
@@ -204,6 +205,7 @@ async function boot() {
 
   wirePopups();
   wireControls();
+  wireShare();
 
   map.getSource('termini').setData(terminiFeatures(state.meta));
 
@@ -370,6 +372,77 @@ function wireControls() {
   toggle('#t-expressway', 'expressway');
   toggle('#t-special', 'special');
   toggle('#t-ferry', 'ferry');
+}
+
+/* ------------------------------------------------------------------ share --- */
+/**
+ * The dialog only ever shows what is on screen right now — no controls of its
+ * own to drift out of step with the map. `location.href` already carries the
+ * filter/display state (syncURL keeps the query string current) and the map's
+ * own hash, so it needs no assembly here.
+ */
+function wireShare() {
+  const dialog = $('#share-dialog');
+
+  $('#share-btn').addEventListener('click', () => {
+    $('#share-url').value = location.href;
+    $('#share-body').innerHTML = shareSummaryHTML(shareState());
+    dialog.showModal();
+    $('#share-url').select();
+  });
+
+  $('#share-copy').addEventListener('click', async () => {
+    const input = $('#share-url');
+    input.select();
+    try {
+      await navigator.clipboard.writeText(input.value);
+    } catch {
+      // Clipboard permission denied or unavailable (e.g. non-HTTPS origin):
+      // the field is already selected, so the reader can still copy by hand.
+      return;
+    }
+    const btn = $('#share-copy');
+    const original = btn.innerHTML;
+    btn.innerHTML = CHECK_ICON;
+    btn.classList.add('copied');
+    btn.setAttribute('aria-label', 'コピーしました');
+    btn.disabled = true;
+    setTimeout(() => {
+      btn.innerHTML = original;
+      btn.classList.remove('copied');
+      btn.removeAttribute('aria-label');
+      btn.disabled = false;
+    }, 1500);
+  });
+}
+
+const CHECK_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" ' +
+  'fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" ' +
+  'stroke-linejoin="round"/></svg>';
+
+/**
+ * Read the display state straight off the controls rather than restating
+ * their labels here — index.html is the one place those strings live, and a
+ * second copy would be free to go stale when they change.
+ */
+function shareState() {
+  const toggles = [...document.querySelectorAll('#panel .checks label')].map(
+    (label) => ({
+      label: label.textContent.trim(),
+      checked: label.querySelector('input').checked,
+    }),
+  );
+  const concLabel = document
+    .querySelector('input[name=conc]:checked')
+    .closest('label')
+    .textContent.trim();
+  return {
+    selectedRefs: [...state.selected].sort((a, b) => a - b),
+    totalRoutes: state.routes.length,
+    concLabel,
+    toggles,
+  };
 }
 
 function setSelection(refs) {

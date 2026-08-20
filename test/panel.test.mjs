@@ -12,6 +12,7 @@ import {
   routeListHTML,
   STALE_DAYS,
   sharedHTML,
+  shareSummaryHTML,
   statsHTML,
 } from '../web/panel.mjs';
 
@@ -167,6 +168,48 @@ describe('sharedHTML', () => {
 
   test('該当が無ければそう言う', () => {
     expect(sharedHTML([])).toContain('該当地点はありません');
+  });
+});
+
+describe('shareSummaryHTML', () => {
+  const base = {
+    selectedRefs: [],
+    totalRoutes: 459,
+    concLabel: '強調しない',
+    toggles: [
+      { label: '路線番号', checked: true },
+      { label: '海上国道', checked: false },
+    ],
+  };
+
+  test('選択が無ければ全路線であることを言う', () => {
+    expect(shareSummaryHTML(base)).toContain('すべて（459 路線）');
+  });
+
+  test('選択があれば標識で出す', () => {
+    const html = shareSummaryHTML({ ...base, selectedRefs: [7, 8] });
+    expect(html.match(/<svg/g)).toHaveLength(2);
+    expect(html).not.toContain('すべて');
+  });
+
+  test('重用区間の状態はそのまま述べる', () => {
+    expect(shareSummaryHTML(base)).toContain('強調しない');
+  });
+
+  test('チェックボックスの状態をon/offで出す', () => {
+    const html = shareSummaryHTML(base);
+    expect(html).toContain('<li class="on">路線番号</li>');
+    expect(html).toContain('<li class="off">海上国道</li>');
+  });
+
+  test('文言はエスケープする', () => {
+    const html = shareSummaryHTML({
+      ...base,
+      concLabel: '<b>x</b>',
+      toggles: [{ label: '<i>y</i>', checked: true }],
+    });
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt;');
+    expect(html).toContain('&lt;i&gt;y&lt;/i&gt;');
   });
 });
 
