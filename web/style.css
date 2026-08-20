@@ -336,4 +336,9 @@ input[type="search"]::placeholder { font-size: .82em; }
   /* 横並びではないので、左へずらしても隠れない。高さが割合なので畳めもしない。 */
   #app.panel-off #panel { margin-left: 0; display: none; }
   #map-wrap { flex: 1; }
+  /* パネルが上下に積まれる幅では、開閉の向きも上下でなければ矢印が嘘をつく。
+     基準の矢印は左向きなので、開いた状態は 90deg で上向きに、畳んだ状態は
+     開閉時に足される 180deg と合わせて 270deg で下向きにする。 */
+  #panel-toggle svg { transform: rotate(90deg); }
+  #app.panel-off #panel-toggle svg { transform: rotate(270deg); }
 }
