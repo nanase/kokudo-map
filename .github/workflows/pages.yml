@@ -85,3 +85,46 @@ jobs:
 
       - id: deploy
         uses: actions/deploy-pages@v4
+
+      # Cloudflare は nanase.cc の手前でエッジキャッシュを持ち、Pages のデプロイとは
+      # 無関係に動いている。.js/.mjs/.css は GitHub Pages が返す
+      # cache-control: max-age=172800(48時間)をそのまま尊重するので、ここで
+      # 明示的にパージしないと最大48時間古いファイルが配られ続ける。HTML は
+      # Cloudflare が基本キャッシュしないので対象に含めていない。
+      #
+      # トークンは Cache Purge 権限のみ・nanase.cc ゾーンのみに絞ってある
+      # (CLOUDFLARE_CACHE_PURGE_TOKEN、github-pages environment の Secret)。
+      # ファイル名にハッシュを付けていないため URL 単位でしか指定できない。
+      # web/ 直下に新しい .mjs や静的資材を足したときは、ここにも追記が要る
+      # (追記を忘れても壊れはしないが、そのファイルだけ古いまま配られる)。
+      - name: Cloudflare のキャッシュをパージする
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+        run: |
+          set -euo pipefail
+          response=$(curl -sSf -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data @- <<'JSON'
+          {"files": [
+            "https://nanase.cc/",
+            "https://nanase.cc/index.html",
+            "https://nanase.cc/app.js",
+            "https://nanase.cc/mapspec.mjs",
+            "https://nanase.cc/termini.mjs",
+            "https://nanase.cc/aggregate.mjs",
+            "https://nanase.cc/shield.mjs",
+            "https://nanase.cc/html.mjs",
+            "https://nanase.cc/panel.mjs",
+            "https://nanase.cc/popup.mjs",
+            "https://nanase.cc/style.css",
+            "https://nanase.cc/favicon.svg",
+            "https://nanase.cc/og.png",
+            "https://nanase.cc/vendor/maplibre-gl.js",
+            "https://nanase.cc/vendor/maplibre-gl.css",
+            "https://nanase.cc/vendor/pmtiles.js"
+          ]}
+          JSON
+          )
+          echo "$response" | grep -q '"success":true'
