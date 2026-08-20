@@ -1,4 +1,5 @@
 /* The sidebar's markup, as a function of the data behind it. */
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 
 import {
@@ -224,6 +225,30 @@ describe('凡例', () => {
     // 地図でも破線なので、凡例も破線でなければ対応が読み取れません。
     const html = legendKindHTML();
     expect(html.match(/border-top-style:dashed/g)).toHaveLength(4);
+  });
+
+  /* index.html はこの二つの凡例だけ、生成を待たずに static な HTML として
+   * 埋め込んである — vendor/*.js が読み終わるまで app.js 自体が動けず、遅い
+   * 回線では凡例だけ空のまま出てから遅れて現れて見えていた。static にした
+   * 代わり、legendNHTML()/legendKindHTML() と食い違えば古いままになりうる
+   * ので、ここで一致を検査する。 */
+  const indexHtml = readFileSync(
+    new URL('../web/index.html', import.meta.url),
+    'utf8',
+  );
+  const staticMarkup = (id) => {
+    const m = indexHtml.match(
+      new RegExp(`<div id="${id}" class="legend">([\\s\\S]*?)</div>`),
+    );
+    return m?.[1] ?? null;
+  };
+
+  test('index.html の単独指定などの凡例は legendNHTML() の出力そのもの', () => {
+    expect(staticMarkup('legend-n')).toBe(legendNHTML());
+  });
+
+  test('index.html の種別の凡例は legendKindHTML() の出力そのもの', () => {
+    expect(staticMarkup('legend-kind')).toBe(legendKindHTML());
   });
 });
 
