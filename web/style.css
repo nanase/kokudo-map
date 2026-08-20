@@ -127,14 +127,14 @@ body {
   margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em;
 }
 /* アイコン一つだけのボタン。#panel-toggle と同じ見た目の言葉を、パネルの中
-   でも使う。 */
-button.icon-btn {
+   でも使う。GitHub リンクのように <a> で使う箇所もあるので、要素は問わない。 */
+.icon-btn {
   display: grid; place-items: center; padding: 0; width: 28px; height: 28px;
   background: var(--panel-2); color: var(--ink-2); cursor: pointer;
   border: 1px solid var(--line); border-radius: 4px;
 }
-button.icon-btn:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
-button.icon-btn svg { width: 15px; height: 15px; }
+.icon-btn:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
+.icon-btn svg { width: 15px; height: 15px; }
 .share-btn { margin-left: auto; flex: 0 0 auto; }
 .block { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
 .block-hd {
@@ -293,6 +293,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .freshness dd.warn { color: #B4690E; font-weight: 700; }
 @media (prefers-color-scheme: dark) { .freshness dd.warn { color: #E7B457; } }
+.repo-link { margin-top: 10px; }
 
 /* ----------------------------------------------------------------- map --- */
 /* 出典表示は地図の上、MapLibre の白い下敷きの上にある。本文の色を継がせない。 */
