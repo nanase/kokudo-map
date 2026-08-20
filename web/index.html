@@ -44,7 +44,11 @@
         <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 15）" autocomplete="off">
         <button type="button" id="sel-none" class="mini" disabled>選択解除</button>
       </div>
-      <div id="route-list" class="route-list" role="group" aria-label="国道の選択"></div>
+      <div id="route-list" class="route-list" role="group" aria-label="国道の選択">
+        <!-- buildUI() が innerHTML を丸ごと差し替えるので、データが届けば
+             このまま消える。表示・非表示を別に持つ必要が無い。 -->
+        <div class="route-list-spinner" aria-hidden="true"></div>
+      </div>
     </section>
 
     <section class="block">

@@ -193,13 +193,26 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* route checkbox grid --------------------------------------------------- */
 .route-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-  gap: 3px;
+  gap: 3px; position: relative;
   /* 高さは固定する。459 路線は常にこれより多く、絞り込み一覧は読み込み前も
      読み込み後もこの高さで埋まるので、`max-height` だと読み込み前の空の
      状態だけ小さく潰れ、データが届いた瞬間に膨らんで見えていた。 */
   height: 260px; overflow-y: auto;
   border: 1px solid var(--line-2); border-radius: 3px; padding: 5px;
   background: var(--panel-2);
+}
+/* データが届く前、この場所に何も無いのは「壊れている」と読めてしまう。
+   buildUI() が innerHTML を丸ごと差し替えると一緒に消えるので、消す側の
+   コードは要らない。 */
+.route-list-spinner {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 3px solid var(--line); border-top-color: var(--sign-blue);
+  animation: route-list-spin .8s linear infinite;
+}
+@keyframes route-list-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .route-list-spinner { animation-duration: 2.4s; }
 }
 .route-list label {
   display: flex; align-items: center; gap: 4px; cursor: pointer;
