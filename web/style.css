@@ -189,7 +189,8 @@ input[type="search"]::placeholder { font-size: .82em; }
 .route-list input { margin: 0; accent-color: var(--sign-blue); }
 .route-list .mn { font-size: .62rem; color: var(--ink-3); font-weight: 400; }
 
-.radios, .checks { display: flex; flex-direction: column; gap: 5px; }
+.radios { display: flex; flex-flow: row wrap; gap: 6px 16px; }
+.checks { display: flex; flex-direction: column; gap: 5px; }
 .radios label, .checks label {
   display: flex; align-items: center; gap: 7px; cursor: pointer;
   color: var(--ink-2); font-size: .82rem;
