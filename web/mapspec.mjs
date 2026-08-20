@@ -348,7 +348,7 @@ export function routeLayers() {
         'symbol-placement': 'line',
         'text-field': ['get', 'label'],
         'text-font': FONT,
-        'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 13, 13],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12, 13, 16],
         'symbol-spacing': 220,
         // Labels are placed in sort-key order and a label that collides with an
         // already-placed one is dropped. Negating `n` places the deepest stack
