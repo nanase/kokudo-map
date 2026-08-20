@@ -193,7 +193,11 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* route checkbox grid --------------------------------------------------- */
 .route-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-  gap: 3px; max-height: 260px; overflow-y: auto;
+  gap: 3px;
+  /* 高さは固定する。459 路線は常にこれより多く、絞り込み一覧は読み込み前も
+     読み込み後もこの高さで埋まるので、`max-height` だと読み込み前の空の
+     状態だけ小さく潰れ、データが届いた瞬間に膨らんで見えていた。 */
+  height: 260px; overflow-y: auto;
   border: 1px solid var(--line-2); border-radius: 3px; padding: 5px;
   background: var(--panel-2);
 }
