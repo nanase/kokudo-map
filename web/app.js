@@ -65,6 +65,7 @@ import {
 } from './panel.mjs';
 import { deepest, popupHTML } from './popup.mjs';
 import { terminiFeatures } from './termini.mjs';
+import { decodeURLState, encodeState, MANAGED_KEYS } from './urlstate.mjs';
 
 const state = {
   meta: null,
@@ -191,6 +192,7 @@ async function boot() {
   if (!index.length) throw new Error('data/regions.json is empty');
   state.meta = meta;
   state.routes = routesOf(meta.combinations);
+  applyURLState();
 
   await mapLoaded;
 
@@ -206,6 +208,7 @@ async function boot() {
   map.getSource('termini').setData(terminiFeatures(state.meta));
 
   buildUI();
+  syncControls();
   applyFilters();
 
   // A shared link's hash wins. Otherwise open on everything that is built, or
@@ -213,6 +216,42 @@ async function boot() {
   if (!location.hash) fitInitialView(index);
 
   $('#loading').classList.add('done');
+}
+
+/**
+ * Read the filter and display state a shared link carries, before the first
+ * render. Only overwrites what the URL actually names — decodeURLState hands
+ * back a diff, not a full state — and drops any selected route the data does
+ * not have, since routes.length only grows with the build and an old link
+ * naming a number since renumbered should not point at nothing.
+ */
+function applyURLState() {
+  const diff = decodeURLState(location.search);
+  if (diff.selected) {
+    const known = new Set(state.routes.map((r) => r.ref));
+    diff.selected = new Set([...diff.selected].filter((r) => known.has(r)));
+  }
+  Object.assign(state, diff);
+}
+
+/**
+ * Push `state` onto every control that does not already own its value —
+ * called once at boot, after applyURLState may have moved state away from
+ * the markup's hard-coded defaults. Later changes flow the other way, from a
+ * listener into `state`, so this never runs again.
+ */
+function syncControls() {
+  for (const cb of document.querySelectorAll('#route-list input')) {
+    const checked = state.selected.has(Number(cb.value));
+    cb.checked = checked;
+    cb.closest('label').classList.toggle('on', checked);
+  }
+  $(`input[name=conc][value="${state.conc}"]`).checked = true;
+  $('#t-labels').checked = state.labels;
+  $('#t-termini').checked = state.termini;
+  $('#t-expressway').checked = state.expressway;
+  $('#t-special').checked = state.special;
+  $('#t-ferry').checked = state.ferry;
 }
 
 /**
@@ -258,6 +297,24 @@ function applyFilters() {
 
   updateStats();
   renderRanking();
+  syncURL();
+}
+
+/**
+ * Keep the query string in step with `state`, leaving everything else in the
+ * URL alone: MapLibre's own hash, which it writes to independently, and any
+ * query param this module does not manage — `?region=` is read once at boot
+ * and would otherwise be wiped by the first filter change.
+ */
+function syncURL() {
+  const params = new URLSearchParams(location.search);
+  for (const key of MANAGED_KEYS) params.delete(key);
+  for (const [key, value] of new URLSearchParams(encodeState(state))) {
+    params.set(key, value);
+  }
+  const q = params.toString();
+  const url = `${location.pathname}${q ? `?${q}` : ''}${location.hash}`;
+  history.replaceState(null, '', url);
 }
 
 /* -------------------------------------------------------------------- ui --- */

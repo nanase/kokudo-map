@@ -1,0 +1,103 @@
+/* 絞り込みと表示状態をURLのクエリ文字列に載せる。
+ *
+ * 地図の位置・角度はMapLibre自身がハッシュ(#zoom/lat/lng/...)に書いているので、
+ * ここはそれと衝突しないようクエリ文字列(?...)側だけを扱う。
+ *
+ * 既定値と同じ項目はURLに出さない。典型的な共有——「この1路線だけ見せたい」
+ * ——では選択路線が少なく、他の項目はほぼ既定値のままなので、これだけで
+ * URLは短く保たれる。選択が多いときは encodeRoutes の範囲表記が効く。
+ */
+
+export const DEFAULTS = {
+  conc: 'off',
+  labels: true,
+  termini: true,
+  expressway: true,
+  special: true,
+  ferry: true,
+};
+
+const TOGGLE_KEYS = ['labels', 'termini', 'expressway', 'special', 'ferry'];
+
+// Every query key this module reads or writes. `?region=` is a separate
+// concern (app.js's initial-view hint) and deliberately not here, so a sync
+// that rewrites the query string can tell "ours" from "someone else's" and
+// leave the latter alone.
+export const MANAGED_KEYS = ['routes', 'conc', ...TOGGLE_KEYS];
+
+/**
+ * 路線番号の集合を範囲表記へまとめる。[1,2,3,5,7,8,9] -> "1-3,5,7-9"
+ *
+ * 国道番号は洗い替えのたびに近い番号がまとまって選ばれやすい(路線一覧の連番
+ * チェック、隣接県のひとまとまり、など)ので、範囲表記はでたらめな順序の羅列
+ * より短くなることが多い。単発の番号でも "-" が付かないぶん損はしない。
+ */
+export function encodeRoutes(refs) {
+  const sorted = [...refs].sort((a, b) => a - b);
+  const parts = [];
+  let start = null;
+  let prev = null;
+  for (const n of sorted) {
+    if (start === null) {
+      start = prev = n;
+    } else if (n === prev + 1) {
+      prev = n;
+    } else {
+      parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+      start = prev = n;
+    }
+  }
+  if (start !== null) {
+    parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+  }
+  return parts.join(',');
+}
+
+/**
+ * encodeRoutes の逆。壊れた項目(数字でない、範囲が逆順)は読み飛ばす —
+ * 手で書き換えられたURLでも、有効な項目だけは復元したい。
+ */
+export function decodeRoutes(text) {
+  if (!text) return [];
+  const out = [];
+  for (const part of text.split(',')) {
+    const m = part.match(/^(\d+)(?:-(\d+))?$/);
+    if (!m) continue;
+    const a = Number(m[1]);
+    const b = m[2] === undefined ? a : Number(m[2]);
+    if (b < a) continue;
+    for (let n = a; n <= b; n++) out.push(n);
+  }
+  return out;
+}
+
+/** state から、既定値と違う項目だけを持つクエリ文字列を作る。 */
+export function encodeState(state) {
+  const p = new URLSearchParams();
+  if (state.selected.size) p.set('routes', encodeRoutes(state.selected));
+  if (state.conc !== DEFAULTS.conc) p.set('conc', state.conc);
+  for (const key of TOGGLE_KEYS) {
+    if (state[key] !== DEFAULTS[key]) p.set(key, state[key] ? '1' : '0');
+  }
+  return p.toString();
+}
+
+/**
+ * クエリ文字列から、既定値との差分だけを返す。書かれていない項目は結果に
+ * 出ない — 呼び出し側が state に直接上書きできる形で、触れなかった項目を
+ * 誤って既定値へ戻すことがない。
+ */
+export function decodeURLState(search) {
+  const p = new URLSearchParams(search);
+  const out = {};
+
+  const routes = p.get('routes');
+  if (routes) out.selected = new Set(decodeRoutes(routes));
+
+  if (p.get('conc') === 'all') out.conc = 'all';
+
+  for (const key of TOGGLE_KEYS) {
+    if (p.has(key)) out[key] = p.get(key) !== '0';
+  }
+  return out;
+}
