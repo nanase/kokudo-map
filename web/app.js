@@ -93,6 +93,14 @@ const state = {
 
 const $ = (sel) => document.querySelector(sel);
 
+// The legends are plain functions of mapspec.mjs's colour constants — they
+// carry no fetched data — so they are filled in the moment the module runs
+// rather than waiting on boot()'s fetch and map `load`. Waiting would leave
+// them blank for however long that takes, then have them pop in alongside
+// everything else that genuinely depends on the data.
+$('#legend-n').innerHTML = legendNHTML();
+$('#legend-kind').innerHTML = legendKindHTML();
+
 /* ------------------------------------------------------------------- map --- */
 // PMTiles is one archive read by byte range, so a static host serves the whole
 // country without a tile server. Any host will do — but it must answer Range
@@ -573,8 +581,6 @@ function syncURL() {
 function buildUI() {
   $('#route-list').innerHTML = routeListHTML(state.routes);
   $('#route-filter').value = '';
-  $('#legend-n').innerHTML = legendNHTML();
-  $('#legend-kind').innerHTML = legendKindHTML();
   $('#freshness').innerHTML = freshnessHTML(state.meta);
   renderShared();
 }
