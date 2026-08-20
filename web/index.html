@@ -69,7 +69,7 @@
     </section>
 
     <section class="block">
-      <details id="ranking-block">
+      <details id="ranking-block" class="fold">
         <summary>
           <h2>重用ランキング</h2>
           <span class="count" id="ranking-count"></span>
@@ -80,7 +80,7 @@
     </section>
 
     <section class="block">
-      <details id="shared-block">
+      <details id="shared-block" class="fold">
         <summary>
           <h2>起終点を共有する地点</h2>
           <span class="count" id="shared-count"></span>
@@ -92,7 +92,10 @@
 
     <footer>
       <div id="stats" class="stats"></div>
-      <dl id="freshness" class="freshness"></dl>
+      <details id="freshness-block" class="fold">
+        <summary><h2>データ情報</h2></summary>
+        <dl id="freshness" class="freshness"></dl>
+      </details>
       <!-- 出典は地図の上の表示だけが述べる。ここにも書くと二箇所になる。 -->
       <a href="https://github.com/nanase/kokudo-map" target="_blank" rel="noopener"
          class="icon-btn repo-link" title="GitHub リポジトリ" aria-label="GitHub リポジトリ">

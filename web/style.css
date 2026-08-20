@@ -141,7 +141,7 @@ body {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 10px; margin-bottom: 10px;
 }
-.block h2 {
+.block h2, #panel footer h2 {
   margin: 0; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace;
@@ -151,21 +151,23 @@ body {
 
 /* folded block ----------------------------------------------------------
    Reference material that is worth having but not worth the sidebar height
-   it costs. Folded shut, the summary still states how much is inside. */
-.block > details > summary {
+   it costs. Folded shut, the summary still states how much is inside.
+   `.fold` rather than `.block > details`, so the same look also works in
+   `footer`, which is not a `.block`. */
+.fold > summary {
   display: flex; align-items: baseline; gap: 10px; cursor: pointer;
   list-style: none;
 }
-.block > details > summary::-webkit-details-marker { display: none; }
-.block > details > summary::after {
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after {
   content: ""; margin-left: auto; align-self: center;
   border-left: 4px solid transparent; border-right: 4px solid transparent;
   border-top: 5px solid var(--ink-3);
 }
-.block > details[open] > summary::after { transform: rotate(180deg); }
-.block > details[open] > summary { margin-bottom: 10px; }
-.block > details > summary:hover h2 { color: var(--sign-blue); }
-.block > details > summary .count {
+.fold[open] > summary::after { transform: rotate(180deg); }
+.fold[open] > summary { margin-bottom: 10px; }
+.fold > summary:hover h2 { color: var(--sign-blue); }
+.fold > summary .count {
   font-family: ui-monospace, Consolas, monospace; font-size: .68rem;
   color: var(--ink-3); font-variant-numeric: tabular-nums;
 }
@@ -275,7 +277,11 @@ input[type="search"]::placeholder { font-size: .82em; }
 .shield-btn:hover { background: var(--line-2); }
 
 /* footer ---------------------------------------------------------------- */
-#panel footer { padding: 14px 18px 4px; margin-top: auto; }
+#panel footer {
+  padding: 14px 18px 4px; margin-top: auto;
+  display: flex; flex-direction: column; gap: 10px;
+}
+#freshness-block { margin: 0; }
 .stats {
   font-family: ui-monospace, Consolas, monospace; font-size: .72rem;
   color: var(--ink-2); background: var(--panel-2);
@@ -293,7 +299,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .freshness dd.warn { color: #B4690E; font-weight: 700; }
 @media (prefers-color-scheme: dark) { .freshness dd.warn { color: #E7B457; } }
-.repo-link { margin-top: 10px; }
+.repo-link { align-self: flex-start; }
 
 /* ----------------------------------------------------------------- map --- */
 /* 出典表示は地図の上、MapLibre の白い下敷きの上にある。本文の色を継がせない。 */
