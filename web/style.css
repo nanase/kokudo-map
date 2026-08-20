@@ -355,11 +355,12 @@ input[type="search"]::placeholder { font-size: .82em; }
    keeps the win explicit instead of resting on load order. */
 .hide-routes-ctrl button.active:hover { background: var(--danger-hover); }
 
-/* 地図の濃さボタン ---------------------------------------------------------
+/* 地図の濃さ・種類ボタン ---------------------------------------------------
    国道を隠すボタンと同じ台に乗せる。アイコンではなく頭文字 1 字を出す —
-   「薄」「通」「濃」の 3 通りだけなので、アイコンを 3 種描くよりこちらの
-   ほうが読める。 */
-.gsi-shade-ctrl button {
+   「薄」「通」「濃」「淡」「標」「写」の 6 通りだけなので、アイコンを 6 種
+   描くよりこちらのほうが読める。 */
+.gsi-shade-ctrl button,
+.basemap-ctrl button {
   display: grid; place-items: center; color: #333;
   font: inherit; font-weight: 700; font-size: .84rem;
   font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI",

@@ -40,11 +40,29 @@ export const COLOR_FERRY = '#0E7490';
 export const GSI_TILES =
   'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png';
 
-/* How dark the base map sits under the routes. Plain `raster-opacity` on the
- * `gsi` layer — there is no separate dimming layer, just this one paint
- * property. The site shipped for a while at a flat 0.82 with no control over
- * it; that is kept as `light` so existing impressions of the map do not
- * shift under anyone. */
+/* The base map's tile source can be swapped for another 地理院タイル without
+ * touching the routes above it — same tiling scheme, same attribution holder,
+ * only the imagery differs. All three are drawn as their own raster layer
+ * (see baseStyle) so switching is a visibility flip, not a source rebuild. */
+export const GSI_BASEMAPS = {
+  pale: { label: '淡色地図', tiles: GSI_TILES },
+  std: {
+    label: '標準地図',
+    tiles: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
+  },
+  photo: {
+    label: '写真（航空写真）',
+    tiles: 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg',
+  },
+};
+export const GSI_BASEMAP_ORDER = ['pale', 'std', 'photo'];
+export const DEFAULT_BASEMAP = 'pale';
+
+/* How dark the base map sits under the routes. Plain `raster-opacity`,
+ * shared by all three basemap layers so a basemap switch keeps whatever
+ * shade was chosen — there is no separate dimming layer. The site shipped
+ * for a while at a flat 0.82 with no control over it; that is kept as
+ * `light` so existing impressions of the map do not shift under anyone. */
 export const GSI_SHADE_LEVELS = ['light', 'normal', 'dark'];
 export const GSI_SHADE_OPACITY = { light: 0.82, normal: 0.91, dark: 1 };
 export const GSI_SHADE_LABELS = { light: '薄い', normal: '通常', dark: '濃い' };
@@ -170,30 +188,38 @@ function lineWidth({ add = 0, scaleByN = true } = {}) {
 
 /* ----------------------------------------------------------------- style --- */
 
-export function baseStyle(shade = DEFAULT_SHADE) {
-  return {
-    version: 8,
-    // Glyphs are required for any symbol layer.
-    glyphs: GLYPHS,
-    sources: {
-      gsi: {
-        type: 'raster',
-        tiles: [GSI_TILES],
-        tileSize: 256,
-        maxzoom: 18,
-        attribution:
-          '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>',
-      },
-    },
-    layers: [
-      {
-        id: 'gsi',
-        type: 'raster',
-        source: 'gsi',
-        paint: { 'raster-opacity': GSI_SHADE_OPACITY[shade] },
-      },
-    ],
-  };
+/** A basemap layer's id, e.g. `gsi-pale`. Also used to pick which one is on. */
+export const gsiLayerId = (basemap) => `gsi-${basemap}`;
+
+export function baseStyle(basemap = DEFAULT_BASEMAP, shade = DEFAULT_SHADE) {
+  const attribution =
+    '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>';
+  const opacity = GSI_SHADE_OPACITY[shade];
+
+  const sources = {};
+  const layers = [];
+  // All three basemaps are always in the style, one visible at a time, so
+  // switching is `setLayoutProperty('visibility', …)` rather than tearing
+  // down and rebuilding a source — the source of a raster layer already on
+  // screen cannot be swapped in place.
+  for (const id of GSI_BASEMAP_ORDER) {
+    sources[id] = {
+      type: 'raster',
+      tiles: [GSI_BASEMAPS[id].tiles],
+      tileSize: 256,
+      maxzoom: 18,
+      attribution,
+    };
+    layers.push({
+      id: gsiLayerId(id),
+      type: 'raster',
+      source: id,
+      layout: { visibility: id === basemap ? 'visible' : 'none' },
+      paint: { 'raster-opacity': opacity },
+    });
+  }
+
+  return { version: 8, glyphs: GLYPHS, sources, layers };
 }
 
 /**

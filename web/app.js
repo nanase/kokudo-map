@@ -40,11 +40,15 @@ import {
   baseStyle,
   buildFilter,
   CLICKABLE_LAYERS,
+  DEFAULT_BASEMAP,
   DEFAULT_SHADE,
   FILTERED_LAYERS,
+  GSI_BASEMAP_ORDER,
+  GSI_BASEMAPS,
   GSI_SHADE_LABELS,
   GSI_SHADE_LEVELS,
   GSI_SHADE_OPACITY,
+  gsiLayerId,
   hasRef,
   NOTHING,
   PMTILES_URL,
@@ -97,9 +101,10 @@ const $ = (sel) => document.querySelector(sel);
 maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
 
 /**
- * How dark the base map sits under the routes, read before the map is built
- * and fed straight into its style — so the map is never built once at the
- * shipped default and then redrawn a moment later at the reader's own choice.
+ * Base map appearance the reader picked last time: which 地理院タイル and how
+ * dark it sits under the routes. Read before the map is built, and fed
+ * straight into its style, so the map is never built once at the shipped
+ * default and then redrawn a moment later at the reader's own choice.
  */
 function readStored(key, allowed, fallback) {
   try {
@@ -109,6 +114,7 @@ function readStored(key, allowed, fallback) {
     return fallback; // private browsing: no storage, so the shipped default
   }
 }
+let basemap = readStored('gsi-basemap', GSI_BASEMAP_ORDER, DEFAULT_BASEMAP);
 let gsiShade = readStored('gsi-shade', GSI_SHADE_LEVELS, DEFAULT_SHADE);
 
 const map = new maplibregl.Map({
@@ -122,7 +128,7 @@ const map = new maplibregl.Map({
   // buys a separator that changes shape from machine to machine and vanishes
   // where no CJK font is installed.
   localIdeographFontFamily: false,
-  style: baseStyle(gsiShade),
+  style: baseStyle(basemap, gsiShade),
   center: [138.0, 36.2],
   zoom: 7.6,
 });
@@ -236,7 +242,10 @@ class HideRoutesControl {
  */
 function applyGsiShade(level) {
   gsiShade = level;
-  map.setPaintProperty('gsi', 'raster-opacity', GSI_SHADE_OPACITY[level]);
+  const opacity = GSI_SHADE_OPACITY[level];
+  for (const id of GSI_BASEMAP_ORDER) {
+    map.setPaintProperty(gsiLayerId(id), 'raster-opacity', opacity);
+  }
   try {
     localStorage.setItem('gsi-shade', level);
   } catch {
@@ -262,6 +271,54 @@ class GsiShadeControl {
     btn.addEventListener('click', () => {
       const i = GSI_SHADE_LEVELS.indexOf(gsiShade);
       applyGsiShade(GSI_SHADE_LEVELS[(i + 1) % GSI_SHADE_LEVELS.length]);
+      render();
+    });
+    render();
+    container.appendChild(btn);
+    this._container = container;
+    return container;
+  }
+  onRemove() {
+    this._container.remove();
+  }
+}
+
+/* --------------------------------------------------------------- basemap --- */
+/**
+ * Which 地理院タイル draws under the routes: 淡色地図・標準地図・写真
+ * (航空写真). All three are always in the style (see baseStyle), so switching
+ * is a layout-visibility flip between two layers, never a source rebuild —
+ * and it carries whatever shade level is current, since the shade paint
+ * property lives on every basemap layer, not just the one drawn today.
+ */
+function applyBasemap(id) {
+  map.setLayoutProperty(gsiLayerId(basemap), 'visibility', 'none');
+  basemap = id;
+  map.setLayoutProperty(gsiLayerId(basemap), 'visibility', 'visible');
+  try {
+    localStorage.setItem('gsi-basemap', basemap);
+  } catch {
+    /* private browsing: the choice simply does not outlive the tab */
+  }
+}
+
+class BasemapControl {
+  onAdd() {
+    const container = document.createElement('div');
+    container.className = 'maplibregl-ctrl maplibregl-ctrl-group basemap-ctrl';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'basemap-btn';
+    const render = () => {
+      // 「淡色地図」「標準地図」「写真」の頭文字だけを乗せる。
+      btn.textContent = GSI_BASEMAPS[basemap].label[0];
+      const label = `地図の種類: ${GSI_BASEMAPS[basemap].label}（クリックで切り替え）`;
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+    };
+    btn.addEventListener('click', () => {
+      const i = GSI_BASEMAP_ORDER.indexOf(basemap);
+      applyBasemap(GSI_BASEMAP_ORDER[(i + 1) % GSI_BASEMAP_ORDER.length]);
       render();
     });
     render();
@@ -337,6 +394,7 @@ async function boot() {
   for (const layer of routeLayers()) map.addLayer(layer);
   map.addControl(new HideRoutesControl(), 'top-right');
   map.addControl(new GsiShadeControl(), 'top-right');
+  map.addControl(new BasemapControl(), 'top-right');
 
   wirePopups();
   wireControls();
