@@ -132,7 +132,13 @@ const report = await page.evaluate(() => {
   out.routeCount = document.querySelectorAll('#route-list label').length;
   out.rankingRows = document.querySelectorAll('#ranking .row').length;
   out.sharedRows = document.querySelectorAll('#shared .row').length;
-  out.stats = document.querySelector('#stats').innerText.replace(/\n/g, ' | ');
+  // #stats now lives inside the folded データ情報 block (closed by default),
+  // and a closed <details> renders no box for its non-summary children —
+  // `innerText` reports empty for anything unrendered. `textContent` does not
+  // care about layout, so the four numbers are read straight off their spans.
+  out.stats = [...document.querySelectorAll('#stats span')]
+    .map((s) => s.textContent)
+    .join(' | ');
   // The three UI decisions this page is built around.
   out.regionPickers = document.querySelectorAll('select#region').length;
   out.concOptions = [...document.querySelectorAll('input[name=conc]')].map(
@@ -271,7 +277,9 @@ await page.click('input[name=conc][value=all]');
 await page.waitForTimeout(3500);
 const concStats = await page.evaluate(() => ({
   roads: window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
-  stats: document.querySelector('#stats').innerText.replace(/\n/g, ' | '),
+  stats: [...document.querySelectorAll('#stats span')]
+    .map((s) => s.textContent)
+    .join(' | '),
 }));
 console.log(`\nafter "重用区間のみ": renderedRoads=${concStats.roads}`);
 await page.screenshot({ path: shot('2-concurrent') });
