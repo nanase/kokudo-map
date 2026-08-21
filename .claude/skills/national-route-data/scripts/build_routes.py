@@ -12,9 +12,12 @@ Deciding that has two halves, and they need different evidence:
 
   is it a national route at all?   Any of:
       (a) a national route relation contains it;
-      (b) its name is 国道N号;
+      (b) its name is 国道N号 — unless it is also graded and gated like an
+          ordinary closed residential street with no relation backing it up
+          (see names_a_closed_residential_road);
       (c) it is mapped at national grade (trunk / motorway / construction of
-          one) and no *prefectural* route relation claims it.
+          one) and no *prefectural* route relation claims the same number
+          for it.
     (c) exists because route relations lag badly behind the ways: 長野南バイパス
     (国道19号, open for decades) is 22 trunk ways that no relation contains.
     A bare numeric `ref` alone proves nothing — 都道府県道 use the same format.
@@ -23,7 +26,8 @@ Deciding that has two halves, and they need different evidence:
       - the numbers of every relation containing it (inherited through parents);
       - 国道N号 parsed from its name;
       - the semicolon-separated tokens of its own `ref`, but only for numbers
-        some national relation in the region independently vouches for.
+        some national relation in the region independently vouches for, and
+        that no prefectural relation claims under the same number for this way.
 
 Usage:  uv run build/build_routes.py [region]
 """
@@ -109,7 +113,9 @@ SEA_FIELDS = (*NAME_FIELDS, "description", "note")
 # nationwide extract has to carry. extract_pbf.py imports this rather than
 # restating it: a rule that starts reading a new tag must widen the set here, or
 # the tag will silently be absent from the cache it builds from.
-TAGS_USED = frozenset({*SEA_FIELDS, "ref", "highway", "construction", "route"})
+TAGS_USED = frozenset({
+    *SEA_FIELDS, "ref", "highway", "construction", "route", "access", "motor_vehicle",
+})
 
 # Sections bypassed by a newer alignment. These are deliberately *kept*: a
 # 旧道 stays legally designated until 指定解除, which lags the bypass opening by
@@ -162,6 +168,26 @@ def resolve_relation_routes(rels: dict[int, dict]) -> dict[int, set[int]]:
         if not changed:
             break
     return own
+
+
+def resolve_prefectural_claims(pref_relations: list[dict]) -> dict[int, set[int]]:
+    """Which 都道府県道 numbers each member way is claimed under.
+
+    A way can sit on a 県道 relation for reasons that have nothing to do with
+    its own designation — 広島南道路 (国道2号) is still, incidentally, a member
+    of 広島県道243号広島港線. Recording *which number* the relation claims,
+    per way, lets the guard below compare that number against what the way
+    claims for itself instead of treating any prefectural membership at all
+    as disqualifying.
+    """
+    claims: dict[int, set[int]] = defaultdict(set)
+    for rel in pref_relations:
+        nums = tokens(rel["tags"].get("ref")) or name_numbers(rel["tags"])
+        if not nums:
+            continue
+        for wid in rel["members"]:
+            claims[wid] |= nums
+    return claims
 
 
 # A sea section of a national route: the designation continues across water with
@@ -258,6 +284,40 @@ def is_national_grade(tags: dict[str, str]) -> bool:
     return False
 
 
+# A route relation is only supposed to hold road ways, but mapping mistakes
+# put other things on it too: レッドバロン川口南 (a retailer's building outline)
+# sat on 国道122号's relation as a plain member, with no `highway` tag at all,
+# and got drawn as a designated arc. Measured nationwide, 124 relation members
+# carry no `highway` tag; of those, only a handful are closed rings (building
+# footprints, or a tunnel/bridge's outline recorded as a separate feature) —
+# the rest are `国道352号`-named ways with a real road shape that just happens
+# to be missing the tag, and stay in. `route=ferry` is excluded from this
+# check on purpose: a sea-section way legitimately carries no `highway`.
+def is_building_like(tags: dict[str, str], geometry: list[dict]) -> bool:
+    if "highway" in tags or tags.get("route") == "ferry":
+        return False
+    return len(geometry) >= 2 and geometry[0] == geometry[-1]
+
+
+# A way whose only claim is its name (国道6号) but whose grade and access tags
+# describe an ordinary, closed-to-traffic residential street, not a road
+# anyone would call a national route. way/497559205 (highway=residential,
+# access=no, motor_vehicle=no) sits deep inland in 福島県, nowhere near 国道6号's
+# actual Pacific-coast alignment, and 地理院地図 draws it as a city street.
+#
+# This can't be `highway` grade alone: nationwide, rule (b) admits 10,810 ways
+# on name alone, 33 of them `residential`, and every other one of those 33 is
+# either a legitimately-designated 旧道/側道 or a real `ref`-bearing 国道
+# carrying ordinary traffic. Narrowed to residential *and* closed to motor
+# vehicles, exactly one way nationwide matches — this one.
+def names_a_closed_residential_road(tags: dict[str, str]) -> bool:
+    return (
+        tags.get("highway") == "residential"
+        and tags.get("access") == "no"
+        and tags.get("motor_vehicle") == "no"
+    )
+
+
 # -------------------------------------------------------------------- main ---
 def main() -> None:
     region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
@@ -268,6 +328,9 @@ def main() -> None:
     raw = json.loads(raw_path.read_text(encoding="utf-8"))
     if "core" not in raw:
         raise SystemExit("cache is in the old single-query format; re-run build/fetch_osm.py")
+    if "prefectural_relations" not in raw:
+        raise SystemExit(
+            "cache predates per-number prefectural claims; re-run build/fetch_osm.py")
 
     base_ts = raw["timestamp_osm_base"]
     bbox = raw["bbox"]
@@ -277,9 +340,11 @@ def main() -> None:
     ways: dict[int, dict] = {}
     for src in ("core", "candidates"):
         for e in raw[src]:
-            if e["type"] == "way" and e.get("geometry"):
+            if e["type"] == "way" and e.get("geometry") and not is_building_like(
+                    e.get("tags", {}), e["geometry"]):
                 ways.setdefault(e["id"], e)
-    pref_ids = set(raw["prefectural_way_ids"])
+    pref_claims = resolve_prefectural_claims(raw["prefectural_relations"])
+    pref_ids = set(pref_claims)
     print(f"loaded {len(rels)} relations, {len(ways)} distinct ways, "
           f"{len(pref_ids)} prefectural-claimed ways")
 
@@ -326,17 +391,33 @@ def main() -> None:
         raw_name = name_numbers(tags)
         raw_tag = tokens(tags.get("ref"))
         from_name = raw_name & corroborated
-        from_tag = raw_tag & corroborated
+        # A number this way's `ref` claims is not believed when some
+        # prefectural relation claims that same number for it — the
+        # 372号-in-長野 collision rule (b) exists to stop. It stays believed
+        # when the way merely sits on an unrelated 県道 relation for some
+        # other number: 広島南道路 (国道2号) is incidentally still a member of
+        # 広島県道243号広島港線, and 巴橋 (国道375号;433号;434号) of 広島県道39号
+        # — neither collision is with the number the way itself claims.
+        from_tag = (raw_tag & corroborated) - pref_claims.get(wid, set())
         for n in (raw_tag | raw_name) - corroborated:
             rejected[n] += 1
 
         # --- is it a national route? -------------------------------------
         if from_rel or from_name:
-            source = "relation" if from_rel else "name"
-        elif (from_tag and wid not in pref_ids and not names_an_expressway_route(tags)
+            if from_rel:
+                source = "relation"
+            elif names_a_closed_residential_road(tags):
+                # Named 国道N号 but graded and gated like an ordinary closed
+                # residential street, with no relation to back it up: see
+                # names_a_closed_residential_road.
+                dropped.append(wid)
+                continue
+            else:
+                source = "name"
+        elif (from_tag and not names_an_expressway_route(tags)
               and (wid in vouched or is_national_grade(tags))):
             # Relation-less but mapped as a national road and unclaimed by any
-            # prefectural route: this is the bypass case.
+            # prefectural route under this number: this is the bypass case.
             source = "tag"
         else:
             dropped.append(wid)

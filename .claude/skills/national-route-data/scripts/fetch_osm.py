@@ -15,8 +15,11 @@ indistinguishable from the copy with geometry):
      not any relation contains them — route relations are maintained far less
      diligently than the ways themselves, so bypasses that have been open for
      years are routinely absent from them;
-  3. the ways held by *prefectural* route relations — a negative signal, since
-     都道府県道 use the same bare numeric `ref` format as national routes.
+  3. *prefectural* route relations, tags and members — a negative signal,
+     since 都道府県道 use the same bare numeric `ref` format as national
+     routes. Kept as whole relations (not a flat way-id set) so a way's own
+     claim can be checked against the specific number a 県道 relation makes
+     for it, rather than being disqualified by mere membership in one.
 
 Freshness matters and is not automatic: public Overpass mirrors can fall
 badly behind. We probe every endpoint, pick the freshest, and record its
@@ -156,13 +159,22 @@ out meta geom;
 out meta geom;
 """, "candidate ways")
 
-    # 3. negative signal: ways that prefectural routes claim
+    # 3. negative signal: which routes prefectural relations claim, and which
+    # ways they hold. `out body` (tags + member list, no geometry — the ways'
+    # own coordinates are irrelevant here) instead of the old ids-only member
+    # dump: a bare way-id set couldn't distinguish 広島県道243号broadcast port
+    # line claiming way X from 国道2号 also holding way X for its own reasons,
+    # so build_routes.py had to treat "any prefectural relation touches this
+    # way" as disqualifying — which throws out 広島南道路 (real 国道2号, only
+    # incidentally still listed on an unrelated old 県道 relation) exactly
+    # like it throws out a genuine 都道府県道 number collision. Keeping the
+    # claimed *number* per relation lets the guard compare numbers instead of
+    # just presence.
     pref = run(ep, f"""
 [out:json][timeout:900];
 relation["type"="route"]["route"="road"]["network"~"^JP:prefectural"]({bb})->.pr;
-way(r.pr)({bb});
-out ids;
-""", "prefectural member ways")
+.pr out body;
+""", "prefectural relations")
 
     doc = {
         "region": region,
@@ -173,15 +185,24 @@ out ids;
         "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "core": core["elements"],
         "candidates": cand["elements"],
-        "prefectural_way_ids": [e["id"] for e in pref["elements"] if e["type"] == "way"],
+        "prefectural_relations": [
+            {
+                "id": e["id"],
+                "tags": e.get("tags", {}),
+                "members": [m["ref"] for m in e.get("members", []) if m["type"] == "way"],
+            }
+            for e in pref["elements"] if e["type"] == "relation"
+        ],
     }
 
     rels = sum(1 for e in doc["core"] if e["type"] == "relation")
     ways = sum(1 for e in doc["core"] if e["type"] == "way")
+    pref_ways = {w for r in doc["prefectural_relations"] for w in r["members"]}
     print(f"\n  national relations: {rels}")
     print(f"  member ways:        {ways}")
     print(f"  candidate ways:     {sum(1 for e in doc['candidates'] if e['type'] == 'way')}")
-    print(f"  prefectural ways:   {len(doc['prefectural_way_ids'])}")
+    print(f"  prefectural relations: {len(doc['prefectural_relations'])}")
+    print(f"  prefectural ways:   {len(pref_ways)}")
 
     CACHE.mkdir(parents=True, exist_ok=True)
     out = CACHE / f"{region}.raw.json"
