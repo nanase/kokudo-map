@@ -129,8 +129,12 @@ def load_kokudo(mesh: str, bbox: list[float], refresh: bool) -> list[list[tuple[
         if rec[RDCTG_FIELD] != RDCTG_KOKUDO:
             continue
         pts = sf.shape(i).points
-        mid = pts[len(pts) // 2]
-        if not (west <= mid[0] <= east and south <= mid[1] <= north):
+        # A record with any point inside the bbox is kept whole (not clipped)
+        # — a midpoint-only test would drop a record that straddles the
+        # boundary even though part of it is inside. Records are 2-3 points
+        # (see module docstring), so the sliver a kept-whole record adds
+        # outside the bbox is a few tens of metres at most.
+        if not any(west <= lon <= east and south <= lat <= north for lon, lat in pts):
             continue
         out.append([(lat, lon) for lon, lat in pts])
     N13.mkdir(parents=True, exist_ok=True)
@@ -169,13 +173,32 @@ def cell_of(pt: tuple[float, float]) -> tuple[float, float]:
     return (round(pt[0], 2), round(pt[1], 2))
 
 
+def cells_for_segment(a: tuple[float, float], b: tuple[float, float]) -> set:
+    """Every grid cell a-b passes through, not just its midpoint's.
+
+    N13 records are short enough that midpoint-only registration would have
+    been fine for them, but our own arcs are plain OSM ways — a mountain-pass
+    stretch between two sparse nodes can run several km, well past one
+    CELL. A query point near the far end of such a segment would then search
+    around a midpoint cell it was never registered in and come back empty.
+    Sampling roughly every CELL along the segment is enough to catch every
+    cell it crosses; anything finer buys nothing since `nearest_segment`
+    already re-checks the true distance for every candidate it finds.
+    """
+    steps = max(1, math.ceil(max(abs(b[0] - a[0]), abs(b[1] - a[1])) / CELL))
+    return {
+        cell_of((a[0] + (b[0] - a[0]) * i / steps, a[1] + (b[1] - a[1]) * i / steps))
+        for i in range(steps + 1)
+    }
+
+
 def build_segment_grid(lines: list[list[tuple[float, float]]]) -> dict:
     grid: dict = {}
     for line in lines:
         for i in range(len(line) - 1):
             a, b = line[i], line[i + 1]
-            mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
-            grid.setdefault(cell_of(mid), []).append((a, b))
+            for cell in cells_for_segment(a, b):
+                grid.setdefault(cell, []).append((a, b))
     return grid
 
 
@@ -235,10 +258,18 @@ def nearby_osm_ways(cache, out_ids, point, radius_m):
         t = w.get("tags", {})
         if not claims(t):
             continue
-        for p in w["geometry"]:
-            if haversine(point, (p["lat"], p["lon"])) <= radius_m:
-                hits.append((wid, t))
-                break
+        # Distance to the way's segments, not just its vertices — a way with
+        # widely-spaced nodes could otherwise pass right by `point` without
+        # any single vertex landing inside radius_m, and get reported as
+        # "absent from OSM" when it is really just excluded.
+        geometry = [(p["lat"], p["lon"]) for p in w["geometry"]]
+        if len(geometry) < 2:
+            hit = geometry and haversine(point, geometry[0]) <= radius_m
+        else:
+            hit = any(point_segment_distance_m(point, a, b) <= radius_m
+                      for a, b in zip(geometry, geometry[1:]))
+        if hit:
+            hits.append((wid, t))
     return hits
 
 
