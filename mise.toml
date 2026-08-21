@@ -68,6 +68,10 @@ run = "uv run {{env.SKILL}}/audit.py {{arg(name='region', default='nagano')}}"
 description = "Overpass 由来の基準と pbf 由来の生成物を突き合わせる"
 run = "uv run {{env.SKILL}}/compare_sources.py {{arg(name='region', default='nagano')}}"
 
+[tasks.compare-n13]
+description = "国土数値情報 N13(道路)と突き合わせ、OSM に無い国道の候補を探す"
+run = "uv run {{env.SKILL}}/compare_n13.py {{arg(name='region', default='nagano')}}"
+
 [tasks.serve]
 description = "ローカルサーバを起動する (http://localhost:8000/)"
 # PMTiles は Range 要求で読むので、http.server では配れません。

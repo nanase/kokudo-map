@@ -50,6 +50,7 @@ mise run serve        # http://localhost:8000/
 | `mise run publish-data` | 配信データを R2(data.nanase.cc)に上げる |
 | `mise run audit <地域>` | 鎖が切れている路線を機械的に探す |
 | `mise run compare <地域>` | Overpass 由来の基準と突き合わせる |
+| `mise run compare-n13 <地域>` | 国土数値情報 N13(道路)と突き合わせ、OSM に無い国道の候補を探す |
 | `mise run serve` | ローカルサーバを起動する |
 | `mise run render-check` | Chromium で実描画を確認する |
 
