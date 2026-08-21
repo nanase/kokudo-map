@@ -12,8 +12,11 @@ build_routes.py, verify.py and audit.py do not know the difference:
                    relations, and the member ways inside the box;
   2. candidates  — national-grade ways with a numeric `ref`, and any way named
                    国道N号, inside the box;
-  3. prefectural — prefectural route relations touching the box, with their
-                   tags and members, as a negative signal.
+  3. competing   — non-national route=road relations touching the box, with
+                   their tags and members, as a negative signal. 都道府県道
+                   relations are the bulk of these; operator-branded ones
+                   (network=首都高速道路 etc.) are the same signal for the
+                   same reason — see CASES.md 20.
 
 Why not keep using Overpass: 47 prefectures is ~140 queries and about a
 gigabyte of response off public mirrors, for hours. One 2.5 GB file downloaded
@@ -249,7 +252,7 @@ def pass_ways(path: str, member_ways: set[int], member_nodes: set[int], idx: str
 
 
 # ---------------------------------------------------------------- per region ---
-def write_region(region: str, box, rels, national, prefectural, ways, nodes, base_ts, fetched):
+def write_region(region: str, box, rels, national, competing, ways, nodes, base_ts, fetched):
     """Reproduce the three Overpass queries over the in-memory country."""
     # Query 1: national relations touching the box, then their children.
     parents = [
@@ -271,7 +274,7 @@ def write_region(region: str, box, rels, national, prefectural, ways, nodes, bas
     # Query 2: candidates, whether or not a relation holds them. The Overpass
     # query has no such exclusion, but a way returned by both `out` statements
     # is deduplicated by build_routes.py anyway, and skipping it here halves the
-    # cache. Ways held only by a *prefectural* relation are still candidates.
+    # cache. Ways held only by a *competing* relation are still candidates.
     core_set = set(core_way_ids)
     cand_ids = sorted(
         wid for wid in ways.start
@@ -279,9 +282,9 @@ def write_region(region: str, box, rels, national, prefectural, ways, nodes, bas
     )
 
     # Query 3: the negative signal, kept as whole relations (tags + members)
-    # rather than a flat way-id set — see build_routes.resolve_prefectural_claims
+    # rather than a flat way-id set — see build_routes.resolve_competing_claims
     # for why mere membership cannot be the disqualifying signal.
-    pref_relations = [
+    competing_relations = [
         {
             "id": rid,
             "tags": rels[rid]["tags"],
@@ -290,7 +293,7 @@ def write_region(region: str, box, rels, national, prefectural, ways, nodes, bas
                 if m["type"] == "way" and m["ref"] in ways.start and ways.in_box(m["ref"], box)
             ],
         }
-        for rid in prefectural
+        for rid in competing
         if any(m["type"] == "way" and m["ref"] in ways.start and ways.in_box(m["ref"], box)
                for m in rels[rid]["members"])
     ]
@@ -313,15 +316,15 @@ def write_region(region: str, box, rels, national, prefectural, ways, nodes, bas
         "fetched_at": fetched,
         "core": [rels[rid] for rid in rel_ids] + [way_doc(w) for w in core_way_ids],
         "candidates": [way_doc(w) for w in cand_ids],
-        "prefectural_relations": pref_relations,
+        "competing_relations": competing_relations,
     }
     CACHE.mkdir(parents=True, exist_ok=True)
     out = CACHE / f"{region}.raw.json"
     out.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
-    pref_way_count = len({w for r in pref_relations for w in r["members"]})
+    competing_way_count = len({w for r in competing_relations for w in r["members"]})
     print(f"  {region:12} {REGIONS[region]['label']:6} rel {len(rel_ids):5}  "
           f"core ways {len(core_way_ids):6}  cand {len(cand_ids):6}  "
-          f"pref {pref_way_count:6}  {out.stat().st_size / 1e6:6.1f} MB", flush=True)
+          f"competing {competing_way_count:6}  {out.stat().st_size / 1e6:6.1f} MB", flush=True)
 
 
 def is_national_relation(tags: dict[str, str]) -> bool:
@@ -348,6 +351,29 @@ def is_national_relation(tags: dict[str, str]) -> bool:
     return any(
         REL_KOKUDO.match((tags.get(k) or "").strip()) for k in ("name", "name:ja")
     )
+
+
+# A route=road relation that can make a *competing* number claim under a way
+# it shares with a real national route — 都道府県道 relations are the bulk of
+# these, but they are not the only kind. way/560259106 (首都高速都心環状線,
+# `ref=1`) sits on relation/4256244, `network=首都高速道路`, `ref=1`; nothing in
+# its own name says 高速N号 (CASES.md 9's guard needs that string, and
+# 都心環状線 does not have it), so the collision with 国道1号 went through
+# uncaught. `network` present but not `JP:`-prefixed is the same shape as
+# 県道's `JP:prefectural` — an authority naming its own route numbering
+# scheme, just not Japan's admin-boundary one.
+#
+# Measured nationwide: 34 route=road relations carry a `network` tag that is
+# non-empty and not `JP:`-prefixed (首都高速道路, 阪神高速道路, 名古屋高速道路
+# and similar). 33 of them claim a `ref` that collides with a real
+# JP:national route number somewhere in Japan, covering 1,009 member ways —
+# almost all of them 都市高速 route families (1〜11 for 首都高速, 33〜46 for
+# 阪神高速, and so on). See CASES.md 20.
+def is_competing_relation(tags: dict[str, str]) -> bool:
+    net = tags.get("network") or ""
+    if net.startswith(PREFECTURAL):
+        return True
+    return bool(net) and not net.startswith("JP:")
 
 
 def inside(pt, box) -> bool:
@@ -392,12 +418,11 @@ def main() -> None:
 
     rels, _ = pass_relations(path)
     national = [rid for rid, r in rels.items() if is_national_relation(r["tags"])]
-    prefectural = [rid for rid, r in rels.items()
-                   if (r["tags"].get("network") or "").startswith(PREFECTURAL)]
+    competing = [rid for rid, r in rels.items() if is_competing_relation(r["tags"])]
     by_name = sum(1 for rid in national
                   if not (rels[rid]["tags"].get("network") or "").startswith(NATIONAL))
     print(f"  road route relations: {len(rels):,}  "
-          f"national {len(national):,}  prefectural {len(prefectural):,}")
+          f"national {len(national):,}  competing {len(competing):,}")
     print(f"  national admitted on their name alone (no network tag): {by_name}")
 
     member_ways = {m["ref"] for r in rels.values() for m in r["members"] if m["type"] == "way"}
@@ -415,7 +440,7 @@ def main() -> None:
     fetched = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"\nwriting {len(wanted)} region cache file(s)")
     for region in wanted:
-        write_region(region, REGIONS[region]["bbox"], rels, national, prefectural,
+        write_region(region, REGIONS[region]["bbox"], rels, national, competing,
                      ways, nodes, base_ts, fetched)
 
     # Completeness: a way no region's box covers is a way the map cannot show.

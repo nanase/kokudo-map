@@ -16,7 +16,7 @@ Deciding that has two halves, and they need different evidence:
           ordinary closed residential street with no relation backing it up
           (see names_a_closed_residential_road);
       (c) it is mapped at national grade (trunk / motorway / construction of
-          one) and no *prefectural* route relation claims the same number
+          one) and no *competing* route relation claims the same number
           for it.
     (c) exists because route relations lag badly behind the ways: 長野南バイパス
     (国道19号, open for decades) is 22 trunk ways that no relation contains.
@@ -27,7 +27,10 @@ Deciding that has two halves, and they need different evidence:
       - 国道N号 parsed from its name;
       - the semicolon-separated tokens of its own `ref`, but only for numbers
         some national relation in the region independently vouches for, and
-        that no prefectural relation claims under the same number for this way.
+        that no competing relation claims under the same number for this way.
+        競合 relations are mostly 都道府県道, but an operator-branded route
+        numbering scheme (首都高速道路 etc.) makes the identical kind of claim
+        — see resolve_competing_claims and CASES.md 20.
 
 Usage:  uv run build/build_routes.py [region]
 """
@@ -186,18 +189,24 @@ def resolve_relation_routes(rels: dict[int, dict]) -> dict[int, set[int]]:
     return own
 
 
-def resolve_prefectural_claims(pref_relations: list[dict]) -> dict[int, set[int]]:
-    """Which 都道府県道 numbers each member way is claimed under.
+def resolve_competing_claims(competing_relations: list[dict]) -> dict[int, set[int]]:
+    """Which non-national numbers each member way is claimed under.
 
     A way can sit on a 県道 relation for reasons that have nothing to do with
     its own designation — 広島南道路 (国道2号) is still, incidentally, a member
     of 広島県道243号広島港線. Recording *which number* the relation claims,
     per way, lets the guard below compare that number against what the way
-    claims for itself instead of treating any prefectural membership at all
+    claims for itself instead of treating any competing membership at all
     as disqualifying.
+
+    都道府県道 relations are most of `competing_relations`, but not all of it:
+    an operator-branded route numbering scheme makes the same kind of claim.
+    way/560259106 (首都高速都心環状線, `ref=1`) sits on a relation with
+    `network=首都高速道路`, `ref=1` — the same shape as a 県道 collision, just a
+    different authority naming its own numbers. See CASES.md 20.
     """
     claims: dict[int, set[int]] = defaultdict(set)
-    for rel in pref_relations:
+    for rel in competing_relations:
         nums = tokens(rel["tags"].get("ref")) or name_numbers(rel["tags"])
         if not nums:
             continue
@@ -356,9 +365,9 @@ def main() -> None:
     raw = json.loads(raw_path.read_text(encoding="utf-8"))
     if "core" not in raw:
         raise SystemExit("cache is in the old single-query format; re-run build/fetch_osm.py")
-    if "prefectural_relations" not in raw:
+    if "competing_relations" not in raw:
         raise SystemExit(
-            "cache predates per-number prefectural claims; re-run build/fetch_osm.py")
+            "cache predates per-number competing claims; re-run build/fetch_osm.py")
 
     base_ts = raw["timestamp_osm_base"]
     bbox = raw["bbox"]
@@ -371,10 +380,10 @@ def main() -> None:
             if e["type"] == "way" and e.get("geometry") and not is_building_like(
                     e.get("tags", {}), e["geometry"]):
                 ways.setdefault(e["id"], e)
-    pref_claims = resolve_prefectural_claims(raw["prefectural_relations"])
-    pref_ids = set(pref_claims)
+    competing_claims = resolve_competing_claims(raw["competing_relations"])
+    competing_ids = set(competing_claims)
     print(f"loaded {len(rels)} relations, {len(ways)} distinct ways, "
-          f"{len(pref_ids)} prefectural-claimed ways")
+          f"{len(competing_ids)} competing-claimed ways")
 
     rel_routes = resolve_relation_routes(rels)
     unresolved = [r for r, v in rel_routes.items() if not v]
@@ -420,13 +429,15 @@ def main() -> None:
         raw_tag = tokens(tags.get("ref"))
         from_name = raw_name & corroborated
         # A number this way's `ref` claims is not believed when some
-        # prefectural relation claims that same number for it — the
-        # 372号-in-長野 collision rule (b) exists to stop. It stays believed
-        # when the way merely sits on an unrelated 県道 relation for some
-        # other number: 広島南道路 (国道2号) is incidentally still a member of
-        # 広島県道243号広島港線, and 巴橋 (国道375号;433号;434号) of 広島県道39号
-        # — neither collision is with the number the way itself claims.
-        from_tag = (raw_tag & corroborated) - pref_claims.get(wid, set())
+        # competing relation claims that same number for it — the
+        # 372号-in-長野 collision rule (b) exists to stop, and 首都高速都心環状線
+        # (`ref=1` under an operator-branded relation, CASES.md 20) is the same
+        # shape. It stays believed when the way merely sits on an unrelated
+        # relation for some other number: 広島南道路 (国道2号) is incidentally
+        # still a member of 広島県道243号広島港線, and 巴橋 (国道375号;433号;434号)
+        # of 広島県道39号 — neither collision is with the number the way itself
+        # claims.
+        from_tag = (raw_tag & corroborated) - competing_claims.get(wid, set())
         for n in (raw_tag | raw_name) - corroborated:
             rejected[n] += 1
 
@@ -445,7 +456,7 @@ def main() -> None:
         elif (from_tag and not names_an_expressway_route(tags)
               and (wid in vouched or is_national_grade(tags))):
             # Relation-less but mapped as a national road and unclaimed by any
-            # prefectural route under this number: this is the bypass case.
+            # competing route under this number: this is the bypass case.
             source = "tag"
         else:
             dropped.append(wid)
