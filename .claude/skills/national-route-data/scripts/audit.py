@@ -167,6 +167,10 @@ def load_cache(region):
     if not p.exists():
         return None
     raw = json.loads(p.read_text(encoding="utf-8"))
+    if "prefectural_relations" not in raw:
+        raise SystemExit(
+            f"{region}: cache predates per-number prefectural claims; "
+            "re-run build/fetch_osm.py")
     ways = {}
     for src in ("core", "candidates"):
         for e in raw[src]:
