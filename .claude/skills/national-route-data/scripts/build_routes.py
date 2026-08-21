@@ -115,6 +115,7 @@ SEA_FIELDS = (*NAME_FIELDS, "description", "note")
 # the tag will silently be absent from the cache it builds from.
 TAGS_USED = frozenset({
     *SEA_FIELDS, "ref", "highway", "construction", "route", "access", "motor_vehicle",
+    "proposed", "planned",
 })
 
 # Sections bypassed by a newer alignment. These are deliberately *kept*: a
@@ -219,6 +220,16 @@ SEA_SECTION = re.compile(r"海上区間")
 # solid road, undoing that fix.
 UNOPENED_HIGHWAYS = {"planned", "proposed"}
 
+# The same idea, tagged the other way round: a way with no `highway` key at
+# all, only `proposed=trunk` or `planned=*` — "if this gets built, it will be
+# a trunk road", not "this is a road". way/743758644 (岐阜県, layer=-5) is a
+# relation member of 国道257号 with no road under it: no tunnel, nothing in
+# aerial imagery, just a straight line through a mountain pass. `hw` is `None`
+# here, so it falls through UNOPENED_HIGHWAYS above and reads as ordinary
+# `road`. Measured nationwide against every way a national relation vouches
+# for: exactly this one way. See CASES.md 22.
+UNOPENED_TAGS = {"proposed", "planned"}
+
 # 高速道路として指定された国道: grade-separated, no at-grade access, mapped
 # `highway=motorway`. These carry an expressway route number of their own
 # (第二神明道路 is `ref=E93;2`, 東海環状自動車道 is `ref=C3;475`) on top of the
@@ -248,6 +259,8 @@ def classify(tags: dict[str, str]) -> str:
     if hw == "construction" or "construction" in tags:
         return "construction"
     if hw in UNOPENED_HIGHWAYS:
+        return "unopened"
+    if hw is None and UNOPENED_TAGS & tags.keys():
         return "unopened"
     if hw == "steps":
         return "steps"
