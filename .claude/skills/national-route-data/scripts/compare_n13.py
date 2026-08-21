@@ -89,8 +89,15 @@ def mesh_codes_for_bbox(bbox: list[float]) -> list[str]:
     return [f"{p}{q:02d}" for p in range(p_lo, p_hi + 1) for q in range(q_lo, q_hi + 1)]
 
 
-def ensure_mesh(mesh: str, refresh: bool) -> Path:
-    """Download and unzip one mesh's SHP bundle if not already cached."""
+def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
+    """Download and unzip one mesh's SHP bundle if not already cached.
+
+    Returns None if KSJ publishes no shapefile at all for this mesh — 404, not
+    a transient error. Confirmed against 千葉県's bbox: 3 of its 6 southeast
+    meshes 404 (they sit entirely over the Pacific, no land). N13 covers roads
+    only, so a mesh with no land has nothing to publish; the caller treats
+    this the same as a shapefile with zero 国道 records.
+    """
     out_dir = N13 / mesh
     shp = out_dir / f"N13-24_{mesh}_SHP" / f"N13-24_{mesh}.shp"
     if shp.exists() and not refresh:
@@ -99,6 +106,9 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path:
     url = f"{BASE_URL}/N13-24_{mesh}_SHP.zip"
     print(f"  downloading {url}", flush=True)
     r = requests.get(url, headers=UA, timeout=120)
+    if r.status_code == 404:
+        print(f"  {mesh}: no shapefile published (all-ocean mesh) - treating as 0 records")
+        return None
     r.raise_for_status()
     zip_path = out_dir / "shp.zip"
     zip_path.write_bytes(r.content)
@@ -171,13 +181,14 @@ def load_kokudo(mesh: str, bbox: list[float], refresh: bool) -> list[list[tuple[
         lines = json.loads(cache_path.read_text(encoding="utf-8"))
     else:
         shp_path = ensure_mesh(mesh, refresh)
-        sf = shapefile.Reader(str(shp_path), encoding="utf-8")
         lines = []
-        for i, rec in enumerate(sf.iterRecords()):
-            if rec[RDCTG_FIELD] != RDCTG_KOKUDO:
-                continue
-            pts = sf.shape(i).points
-            lines.append([(lat, lon) for lon, lat in pts])
+        if shp_path is not None:
+            sf = shapefile.Reader(str(shp_path), encoding="utf-8")
+            for i, rec in enumerate(sf.iterRecords()):
+                if rec[RDCTG_FIELD] != RDCTG_KOKUDO:
+                    continue
+                pts = sf.shape(i).points
+                lines.append([(lat, lon) for lon, lat in pts])
         N13.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(lines), encoding="utf-8")
 
