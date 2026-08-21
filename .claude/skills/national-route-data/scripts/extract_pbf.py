@@ -12,8 +12,8 @@ build_routes.py, verify.py and audit.py do not know the difference:
                    relations, and the member ways inside the box;
   2. candidates  — national-grade ways with a numeric `ref`, and any way named
                    国道N号, inside the box;
-  3. prefectural — the ways prefectural route relations claim, as a negative
-                   signal.
+  3. prefectural — prefectural route relations touching the box, with their
+                   tags and members, as a negative signal.
 
 Why not keep using Overpass: 47 prefectures is ~140 queries and about a
 gigabyte of response off public mirrors, for hours. One 2.5 GB file downloaded
@@ -278,11 +278,22 @@ def write_region(region: str, box, rels, national, prefectural, ways, nodes, bas
         if wid not in core_set and is_candidate(ways.tags[wid]) and ways.in_box(wid, box)
     )
 
-    # Query 3: the negative signal.
-    pref_ids = sorted({
-        m["ref"] for rid in prefectural for m in rels[rid]["members"]
-        if m["type"] == "way" and m["ref"] in ways.start and ways.in_box(m["ref"], box)
-    })
+    # Query 3: the negative signal, kept as whole relations (tags + members)
+    # rather than a flat way-id set — see build_routes.resolve_prefectural_claims
+    # for why mere membership cannot be the disqualifying signal.
+    pref_relations = [
+        {
+            "id": rid,
+            "tags": rels[rid]["tags"],
+            "members": [
+                m["ref"] for m in rels[rid]["members"]
+                if m["type"] == "way" and m["ref"] in ways.start and ways.in_box(m["ref"], box)
+            ],
+        }
+        for rid in prefectural
+        if any(m["type"] == "way" and m["ref"] in ways.start and ways.in_box(m["ref"], box)
+               for m in rels[rid]["members"])
+    ]
 
     def way_doc(wid: int) -> dict:
         return {
@@ -302,14 +313,15 @@ def write_region(region: str, box, rels, national, prefectural, ways, nodes, bas
         "fetched_at": fetched,
         "core": [rels[rid] for rid in rel_ids] + [way_doc(w) for w in core_way_ids],
         "candidates": [way_doc(w) for w in cand_ids],
-        "prefectural_way_ids": pref_ids,
+        "prefectural_relations": pref_relations,
     }
     CACHE.mkdir(parents=True, exist_ok=True)
     out = CACHE / f"{region}.raw.json"
     out.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+    pref_way_count = len({w for r in pref_relations for w in r["members"]})
     print(f"  {region:12} {REGIONS[region]['label']:6} rel {len(rel_ids):5}  "
           f"core ways {len(core_way_ids):6}  cand {len(cand_ids):6}  "
-          f"pref {len(pref_ids):6}  {out.stat().st_size / 1e6:6.1f} MB", flush=True)
+          f"pref {pref_way_count:6}  {out.stat().st_size / 1e6:6.1f} MB", flush=True)
 
 
 def is_national_relation(tags: dict[str, str]) -> bool:

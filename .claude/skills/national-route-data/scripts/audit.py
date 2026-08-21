@@ -37,6 +37,7 @@ import sys
 from collections import Counter, defaultdict
 
 from _paths import CACHE, REGIONS as DATA
+from build_routes import resolve_prefectural_claims
 
 NODE_GAP_M = 50
 LINK_GAP_M = 2000
@@ -171,7 +172,7 @@ def load_cache(region):
         for e in raw[src]:
             if e["type"] == "way" and e.get("geometry"):
                 ways.setdefault(e["id"], e)
-    return {"ways": ways, "pref": set(raw["prefectural_way_ids"])}
+    return {"ways": ways, "pref": resolve_prefectural_claims(raw["prefectural_relations"])}
 
 
 def claims(tags):
@@ -187,8 +188,9 @@ def why_excluded(wid, tags, cache, corroborated):
     c = claims(tags)
     if not (c & corroborated):
         reasons.append(f"claims {sorted(c)}, none corroborated by a relation here")
-    if wid in cache["pref"]:
-        reasons.append("a prefectural route relation claims this way")
+    pref_hit = c & cache["pref"].get(wid, set())
+    if pref_hit:
+        reasons.append(f"a prefectural route relation claims the same number(s) {sorted(pref_hit)}")
     hw = tags.get("highway")
     if hw not in NATIONAL_GRADE:
         reasons.append(f"highway={hw} is below national grade")
