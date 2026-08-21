@@ -113,33 +113,76 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path:
     return shp
 
 
-def load_kokudo(mesh: str, bbox: list[float], refresh: bool) -> list[list[tuple[float, float]]]:
-    """This mesh's 国道-classified records as (lat, lon) point lists, kept
-    only if inside the region's bbox (meshes routinely spill past it — see
-    regions.py on rectangles spilling into neighbours)."""
-    cache_path = N13 / f"{mesh}.kokudo.json"
-    if cache_path.exists() and not refresh:
-        return json.loads(cache_path.read_text(encoding="utf-8"))
+def segment_intersects_bbox(p0, p1, west: float, south: float, east: float,
+                             north: float) -> bool:
+    """Liang-Barsky test: true if segment p0-p1 (lon, lat) touches the
+    rectangle at all, including a chord that crosses it with both endpoints
+    outside — the case a per-vertex "is either endpoint inside" test misses.
+    """
+    x0, y0 = p0
+    x1, y1 = p1
+    dx, dy = x1 - x0, y1 - y0
+    t0, t1 = 0.0, 1.0
+    for p, q in ((-dx, x0 - west), (dx, east - x0),
+                 (-dy, y0 - south), (dy, north - y0)):
+        if p == 0:
+            if q < 0:
+                return False
+            continue
+        r = q / p
+        if p < 0:
+            if r > t1:
+                return False
+            t0 = max(t0, r)
+        else:
+            if r < t0:
+                return False
+            t1 = min(t1, r)
+    return t0 <= t1
 
-    shp_path = ensure_mesh(mesh, refresh)
+
+def line_touches_bbox(line: list[tuple[float, float]], west: float, south: float,
+                       east: float, north: float) -> bool:
+    """line is (lat, lon) points, kept whole (not clipped) if any of its
+    segments touches the bbox — a per-vertex test would still drop a short
+    chord that crosses a bbox edge with both endpoints outside. Records are
+    2-3 points (see module docstring), so the sliver a kept-whole record adds
+    outside the bbox is a few tens of metres at most."""
+    pts = [(lon, lat) for lat, lon in line]
+    if not pts:
+        return False
+    pairs = list(zip(pts, pts[1:])) or [(pts[0], pts[0])]
+    return any(segment_intersects_bbox(a, b, west, south, east, north) for a, b in pairs)
+
+
+def load_kokudo(mesh: str, bbox: list[float], refresh: bool) -> list[list[tuple[float, float]]]:
+    """This mesh's full 国道-classified record set, filtered to the region's
+    bbox on every call.
+
+    The cache holds the mesh's raw, unfiltered records and is keyed by mesh
+    alone — a 1次メッシュ regularly spans a border between two regions (see
+    regions.py on rectangles spilling into neighbours), and keying by mesh
+    only while filtering at write time meant the *second* region to touch a
+    shared mesh would silently reuse the *first* region's bbox-filtered
+    subset instead of its own.
+    """
+    cache_path = N13 / f"{mesh}.kokudo.raw.json"
+    if cache_path.exists() and not refresh:
+        lines = json.loads(cache_path.read_text(encoding="utf-8"))
+    else:
+        shp_path = ensure_mesh(mesh, refresh)
+        sf = shapefile.Reader(str(shp_path), encoding="utf-8")
+        lines = []
+        for i, rec in enumerate(sf.iterRecords()):
+            if rec[RDCTG_FIELD] != RDCTG_KOKUDO:
+                continue
+            pts = sf.shape(i).points
+            lines.append([(lat, lon) for lon, lat in pts])
+        N13.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(json.dumps(lines), encoding="utf-8")
+
     west, south, east, north = bbox
-    sf = shapefile.Reader(str(shp_path), encoding="utf-8")
-    out: list[list[tuple[float, float]]] = []
-    for i, rec in enumerate(sf.iterRecords()):
-        if rec[RDCTG_FIELD] != RDCTG_KOKUDO:
-            continue
-        pts = sf.shape(i).points
-        # A record with any point inside the bbox is kept whole (not clipped)
-        # — a midpoint-only test would drop a record that straddles the
-        # boundary even though part of it is inside. Records are 2-3 points
-        # (see module docstring), so the sliver a kept-whole record adds
-        # outside the bbox is a few tens of metres at most.
-        if not any(west <= lon <= east and south <= lat <= north for lon, lat in pts):
-            continue
-        out.append([(lat, lon) for lon, lat in pts])
-    N13.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps(out), encoding="utf-8")
-    return out
+    return [line for line in lines if line_touches_bbox(line, west, south, east, north)]
 
 
 # ---------------------------------------------------------------- geometry ---
