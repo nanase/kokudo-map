@@ -35,7 +35,10 @@ CodeRabbit が付く PR は [CODERABBIT.md](CODERABBIT.md) に従う。
 
 ## 指摘への対応
 
-各指摘を中身で評価し、`scripts/reply.sh <comment_id> <本文>` で当該スレッドに返す。採否どちらも別の場所にまとめない。
+各指摘を中身で評価する。採否どちらも別の場所にまとめない。
+
+- インラインコメントには `scripts/reply.sh <comment_id> <本文>` を使う
+- review 本文・PR コメントは種類が異なり同じ endpoint に返信できないため、`gh api` で対応する種類のコメント作成 endpoint を使う
 
 - 妥当な指摘
   - 対応
