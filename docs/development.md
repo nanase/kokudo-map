@@ -10,7 +10,15 @@
 
 `mise.toml` は入れた道具を PATH の先頭に置く設定にしてあります。既定では末尾に足すので、システムに別途入っている node や python が先に見つかり、宣言した版が使われないまま気付けません。効くのはこのディレクトリの下だけです。
 
-ただしこれは `mise activate` でシェル統合を済ませた場合の話です。済ませていないシェルでは、`mise install` の後も `bun` や `python` が PATH に現れません。シェルの設定ファイルに `mise activate <shell>` を足してください（fish なら `mise activate fish | source`）。済ませないまま進めるなら、各コマンドの前に `mise exec --` を置いてください。
+ただしこれは `mise activate` でシェル統合を済ませた場合の話です。済ませていないシェルでは、`mise install` の後も `bun` や `python` が PATH に現れません。シェルの設定ファイルに次を足してください。
+
+```sh
+eval "$(mise activate bash)"   # bash
+eval "$(mise activate zsh)"    # zsh
+mise activate fish | source    # fish
+```
+
+済ませないまま進めるなら、各コマンドの前に `mise exec --` を置いてください。
 
 ```sh
 bun x playwright install chromium   # 実描画チェックにのみ必要
