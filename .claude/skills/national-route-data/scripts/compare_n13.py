@@ -92,11 +92,15 @@ def mesh_codes_for_bbox(bbox: list[float]) -> list[str]:
 def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
     """Download and unzip one mesh's SHP bundle if not already cached.
 
-    Returns None if KSJ publishes no shapefile at all for this mesh — 404, not
-    a transient error. Confirmed against 千葉県's bbox: 3 of its 6 southeast
-    meshes 404 (they sit entirely over the Pacific, no land). N13 covers roads
-    only, so a mesh with no land has nothing to publish; the caller treats
-    this the same as a shapefile with zero 国道 records.
+    Returns None on a 404 — read as "KSJ publishes no shapefile for this
+    mesh", not a transient failure. Confirmed against 千葉県's bbox: 3 of its 6
+    southeast meshes 404, all entirely over the Pacific with no land. N13
+    covers roads only, so a mesh with no land has nothing to publish; the
+    caller treats this the same as a shapefile with zero 国道 records, and the
+    print below keeps it visible per mesh rather than swallowing it. This
+    reading is unverified for a 404 from any other cause (KSJ outage, a
+    renamed mesh); it stands until a region turns up a 404 that isn't
+    ocean.
     """
     out_dir = N13 / mesh
     shp = out_dir / f"N13-24_{mesh}_SHP" / f"N13-24_{mesh}.shp"
