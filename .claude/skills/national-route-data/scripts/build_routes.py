@@ -116,6 +116,7 @@ SEA_FIELDS = (*NAME_FIELDS, "description", "note")
 TAGS_USED = frozenset({
     *SEA_FIELDS, "ref", "highway", "construction", "route", "access", "motor_vehicle",
     "proposed", "planned",
+    "historic:highway",
 })
 
 # Sections bypassed by a newer alignment. These are deliberately *kept*: a
@@ -133,9 +134,23 @@ def name_numbers(tags: dict[str, str], fields: tuple[str, ...] = NAME_FIELDS) ->
     return {int(m) for m in NAME_NUM.findall(blob) if int(m) in VALID}
 
 
+# way/152895667 (長野・静岡県境, a 19 m bridge) never says 旧道 in its name — it
+# has no `name` at all, only `old_name=国道152号`, `highway=residential` and
+# `route=hiking`/`tourism=yes`: OSM's real-world state is "this is a hiking
+# trail now", recorded the way OSM records that, not with the 旧道/廃道 words
+# this function used to require. It still sits on the *current* 国道152号
+# relation (regel a doesn't distinguish a stale membership from a live one),
+# so without this it drew as an ordinary, non-`former` national route.
+# `historic:highway` is the OSM convention for exactly this claim — "this used
+# to be a road of this grade, not any more" — independent of what the name
+# field says. Measured nationwide against every way a national relation
+# vouches for: one way carries it without already saying 旧道 in its name.
+# See CASES.md 21.
 def is_former(tags: dict[str, str]) -> bool:
     blob = " ".join(tags.get(k, "") for k in NAME_FIELDS)
-    return bool(FORMER_ALIGNMENT.search(blob))
+    if FORMER_ALIGNMENT.search(blob):
+        return True
+    return "historic:highway" in tags
 
 
 def resolve_relation_routes(rels: dict[int, dict]) -> dict[int, set[int]]:

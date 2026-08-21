@@ -124,10 +124,16 @@ print(f"NOTE  rule (c) recovered {srcs.get('tag', 0)} relation-less arcs, "
 
 # 旧道 sections stay in — 地理院地図 shows them as 国道 until 指定解除 — but they
 # must be flagged so they can be told apart. A region may legitimately have none.
+#
+# is_former() also fires on `historic:highway` (RULES.md 旧道), a tag the
+# output geometry does not carry, so a 旧道-named arc must be a *subset* of
+# `former`, not equal to it — equality broke the day way/152895667 started
+# passing on `historic:highway` alone (CASES.md 21).
 former = [f for f in feats if f["properties"].get("former")]
+former_ids = {f["properties"]["id"] for f in former}
 named_former = [f for f in feats if re.search(r"旧道|廃道|旧国道", f["properties"]["name"] or "")]
-check(len(former) == len(named_former),
-      f"every 旧道-named arc carries the former flag ({len(former)} vs {len(named_former)})")
+missing = [f["properties"]["id"] for f in named_former if f["properties"]["id"] not in former_ids]
+check(not missing, f"every 旧道-named arc carries the former flag ({len(missing)} missing)")
 check(all(f["properties"]["refs_list"] for f in former),
       f"former arcs still carry their designation ({len(former)} arcs)")
 
