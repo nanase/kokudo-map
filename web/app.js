@@ -189,6 +189,10 @@ function attachHoldToZoom(button, zoomOnce, sign) {
   let holdTimer = null;
   let rafId = null;
   let prevTime = 0;
+  // 2 本指の同時タップなど、2 つ目の pointerdown が乗ると holdTimer を
+  // 上書きしてしまい、片方だけ離してももう片方のタイマー/rAF が残り続ける。
+  // 押下中は先着のポインターだけを追い、他は無視する。
+  let activePointerId = null;
 
   function frame(now) {
     const dt = (now - prevTime) / 1000;
@@ -197,18 +201,21 @@ function attachHoldToZoom(button, zoomOnce, sign) {
     rafId = requestAnimationFrame(frame);
   }
 
-  function stopContinuous() {
+  function stopContinuous(e) {
+    if (e.pointerId !== activePointerId) return;
     clearTimeout(holdTimer);
     holdTimer = null;
     if (rafId !== null) {
       cancelAnimationFrame(rafId);
       rafId = null;
     }
+    activePointerId = null;
   }
 
   button.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return; // 左ボタン・タッチ・ペンのみ
+    if (e.button !== 0 || activePointerId !== null) return; // 左ボタン・タッチ・ペンのみ
     button.setPointerCapture(e.pointerId);
+    activePointerId = e.pointerId;
     suppressClickFor.add(button);
     zoomOnce(e);
     holdTimer = setTimeout(() => {
@@ -217,11 +224,12 @@ function attachHoldToZoom(button, zoomOnce, sign) {
     }, HOLD_DELAY_MS);
   });
   button.addEventListener('pointerup', stopContinuous);
-  button.addEventListener('pointercancel', () => {
-    stopContinuous();
+  button.addEventListener('pointercancel', (e) => {
+    const wasActive = e.pointerId === activePointerId;
+    stopContinuous(e);
     // pointercancel の後に click は来ないので、届かないまま残り続けないよう
     // ここで畳んでおく。
-    suppressClickFor.delete(button);
+    if (wasActive) suppressClickFor.delete(button);
   });
   button.addEventListener('lostpointercapture', stopContinuous);
 }
