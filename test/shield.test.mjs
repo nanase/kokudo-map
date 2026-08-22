@@ -1,16 +1,17 @@
 /* The 国道番号標識 the map draws wherever it names a route.
  *
- * The outline is a construction rather than a path string, because the tangent
- * points a corner radius implies are not numbers anyone should check by hand.
- * That is exactly why they are worth checking here: the geometry has
- * properties that hold for any convex polygon, and a mistake in the
- * trigonometry breaks them without breaking anything that would throw.
+ * SHIELD_PATH is traced from a real sign's proportions, not computed, so
+ * there is no formula to re-derive here. What's worth checking instead is
+ * that the string stays a well-formed closed path whose points sit inside
+ * its own viewBox — a corrupted edit (a dropped digit, a wrong sign) would
+ * otherwise only show up as a visibly broken shape in the browser.
  */
 import { describe, expect, test } from 'bun:test';
 
 import {
-  roundedPolygon,
   SHIELD_PATH,
+  SHIELD_STROKE_WIDTH,
+  SHIELD_VIEWBOX,
   shield,
   shieldRow,
 } from '../web/shield.mjs';
@@ -19,89 +20,51 @@ import {
 const nums = (d) =>
   [...d.matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => Number(m[0]));
 
-describe('roundedPolygon', () => {
-  // 一辺 100 の正方形です。直角なので、どの角も半径ぶんちょうど手前で折れます。
-  const SQUARE = [
-    [0, 0],
-    [100, 0],
-    [100, 100],
-    [0, 100],
-  ];
-
-  test('閉じた path を返す', () => {
-    const d = roundedPolygon(SQUARE, 10);
-    expect(d.startsWith('M')).toBe(true);
-    expect(d.endsWith('Z')).toBe(true);
-  });
-
-  test('頂点の数だけ円弧が要る', () => {
-    for (const n of [3, 4, 5]) {
-      const pts = Array.from({ length: n }, (_, i) => {
-        const a = (2 * Math.PI * i) / n;
-        return [50 + 40 * Math.cos(a), 50 + 40 * Math.sin(a)];
-      });
-      expect(roundedPolygon(pts, 5).match(/A/g)).toHaveLength(n);
+/**
+ * Every point a `M`/`c` segment names — endpoints and the two control points
+ * each `c` carries — resolving the relative `c` deltas by walking the path
+ * from its `M` start. A cubic curve never leaves the convex hull of these
+ * points, so checking them bounds the curve itself, not just its endpoints.
+ */
+function anchors(d) {
+  const points = [];
+  let [x, y] = [0, 0];
+  for (const seg of d.matchAll(/([Mc])([^Mc]*)/g)) {
+    const [, cmd, body] = seg;
+    const n = nums(body);
+    if (cmd === 'M') {
+      [x, y] = n;
+      points.push([x, y]);
+      continue;
     }
-  });
-
-  test('直角では半径ぶんちょうど手前で折れる', () => {
-    // tan(90°/2) = 1 なので後退量は半径そのものになります。手計算できる唯一の角です。
-    const d = roundedPolygon(SQUARE, 10);
-    expect(d).toContain('10 0');
-    expect(d).toContain('90 0');
-    expect(d).toContain('100 10');
-  });
-
-  test('鋭い角ほど深く手前で折れる', () => {
-    // 同じ半径でも、角が尖っているほど円弧は辺の奥から始まります。
-    const sharp = [
-      [0, 0],
-      [100, 0],
-      [50, 8],
-    ];
-    const blunt = [
-      [0, 0],
-      [100, 0],
-      [50, 90],
-    ];
-    const backoff = (pts) => nums(roundedPolygon(pts, 5))[0];
-    expect(backoff(sharp)).toBeGreaterThan(backoff(blunt));
-  });
-
-  test('座標は小数第 2 位までに丸める', () => {
-    for (const v of nums(roundedPolygon(SQUARE, 7))) {
-      expect(Math.round(v * 100) / 100).toBe(v);
+    for (let i = 0; i < n.length; i += 6) {
+      points.push([x + n[i], y + n[i + 1]], [x + n[i + 2], y + n[i + 3]]);
+      x += n[i + 4];
+      y += n[i + 5];
+      points.push([x, y]);
     }
-  });
-
-  test('数値はすべて有限である', () => {
-    for (const v of nums(roundedPolygon(SQUARE, 10))) {
-      expect(Number.isFinite(v)).toBe(true);
-    }
-  });
-
-  test('円弧の掃引方向は常に 1 である', () => {
-    // 画面座標（y は下向き）で頂点を時計回りに並べることが前提になっています。
-    // ここが 0 になると角が外側に膨らみます。
-    for (const m of roundedPolygon(SQUARE, 10).matchAll(
-      /A(\S+) (\S+) 0 0 (\d)/g,
-    )) {
-      expect(m[3]).toBe('1');
-    }
-  });
-});
+  }
+  return points;
+}
 
 describe('SHIELD_PATH', () => {
-  test('逆三角形なので円弧は 3 つである', () => {
-    expect(SHIELD_PATH.match(/A/g)).toHaveLength(3);
+  test('閉じた path である', () => {
+    expect(SHIELD_PATH.startsWith('M')).toBe(true);
+    expect(SHIELD_PATH.endsWith('Z')).toBe(true);
   });
 
-  test('48x42 の viewBox に収まる', () => {
-    // 標識は 0 0 48 42 の中に描かれます。はみ出せば縁が切られます。
-    const v = nums(SHIELD_PATH);
-    for (const n of v) {
-      expect(n).toBeGreaterThanOrEqual(0);
-      expect(n).toBeLessThanOrEqual(48);
+  test('M と c 以外のコマンドを含まない', () => {
+    expect(SHIELD_PATH.replace(/[Mc0-9.,\s-]/g, '')).toBe('Z');
+  });
+
+  test('曲線は viewBox の内側、縁の太さぶんの余白を残す', () => {
+    const [, , vw, vh] = nums(SHIELD_VIEWBOX);
+    const margin = SHIELD_STROKE_WIDTH / 2;
+    for (const [x, y] of anchors(SHIELD_PATH)) {
+      expect(x).toBeGreaterThanOrEqual(margin);
+      expect(x).toBeLessThanOrEqual(vw - margin);
+      expect(y).toBeGreaterThanOrEqual(margin);
+      expect(y).toBeLessThanOrEqual(vh - margin);
     }
   });
 });
@@ -114,7 +77,7 @@ describe('shield', () => {
   });
 
   test('桁が増えるほど文字幅を詰める', () => {
-    // 3 桁は三角形より広くなるので、textLength で押し込みます。放っておくと
+    // 3 桁は標識より広くなるので、textLength で押し込みます。放っておくと
     // 白い数字が背後の面へはみ出して読めなくなります。
     const width = (ref) => Number(shield(ref).match(/textLength="(\d+)"/)[1]);
     expect(width(1)).toBeLessThan(width(18));

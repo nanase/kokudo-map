@@ -27,7 +27,7 @@ import { chromium } from 'playwright';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const WEB = join(ROOT, 'web');
 
-const { SHIELD_PATH } = await import(
+const { SHIELD_PATH, SHIELD_VIEWBOX, SHIELD_STROKE_WIDTH } = await import(
   new URL('../web/shield.mjs', import.meta.url).href
 );
 
@@ -42,13 +42,15 @@ const TAGLINE = '重用区間で番号を丸めない。縮尺で番号を省略
 const SUB = '全国 47 都道府県・一般国道 459 路線';
 
 /* ---------------------------------------------------------------- favicon --- */
-/* The sign sits on its own; there is no page behind it to blend into, so the
- * white edge is drawn as a shape rather than left to a stroke that would be
- * clipped by the viewBox at this size. */
+/* The sign sits on its own; there is no page behind it to blend into, so
+ * `paint-order="stroke"` paints the fill over the stroke's inward half.
+ * Without it the default paint order (stroke over fill) eats the border's
+ * full width into the face, and the face reads as visibly smaller. */
 const favicon = [
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 42">',
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${SHIELD_VIEWBOX}">`,
   `<path d="${SHIELD_PATH}" fill="${FACE}" stroke="${EDGE}"`,
-  ' stroke-width="4" stroke-linejoin="round" paint-order="stroke"/>',
+  ` stroke-width="${SHIELD_STROKE_WIDTH}" stroke-linejoin="round"`,
+  ' paint-order="stroke"/>',
   '</svg>',
 ].join('');
 writeFileSync(join(WEB, 'favicon.svg'), `${favicon}\n`, 'utf8');
@@ -69,15 +71,16 @@ const card = `<!doctype html><meta charset="utf-8">
   .stack i { flex: 1; }
   h1 { font-size: 82px; font-weight: 700; letter-spacing: 0.02em; }
   .row { display: flex; align-items: center; gap: 30px; }
-  svg { width: 118px; height: 103px; flex: 0 0 auto; }
+  svg { height: 103px; width: auto; flex: 0 0 auto; }
   p { font-size: 33px; line-height: 1.5; color: #46566A; }
   .sub { font-size: 26px; color: #6C7E93; }
 </style>
 <div class="stack">${N_COLORS.map((c) => `<i style="background:${c}"></i>`).join('')}</div>
 <div class="row">
-  <svg viewBox="0 0 48 42">
+  <svg viewBox="${SHIELD_VIEWBOX}">
     <path d="${SHIELD_PATH}" fill="${FACE}" stroke="${EDGE}"
-          stroke-width="4" stroke-linejoin="round" paint-order="stroke"/>
+          stroke-width="${SHIELD_STROKE_WIDTH}" stroke-linejoin="round"
+          paint-order="stroke"/>
   </svg>
   <h1>${TITLE}</h1>
 </div>

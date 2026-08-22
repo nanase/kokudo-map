@@ -71,6 +71,17 @@
   }
 }
 
+/* 標識の番号だけに使う。実物の書体はヒゲ（セリフ）が無く字面が立っており、
+   等幅の代替書体は "1" などに細いヒゲが残って実物と字形が違って見える。
+   scripts/vendor_web.mjs が node_modules から複製する。 */
+@font-face {
+  font-family: Roboto;
+  src: url('vendor/roboto-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 * { box-sizing: border-box; }
 
 /* スクロールバー ----------------------------------------------------------
@@ -276,14 +287,18 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* おにぎり（国道番号標識）-------------------------------------------------
    実物と同じ配色にしてある。白い縁は明るい配色の面では見えないが、暗い面では
    標識と地の境目になる。実物が縁を持っているのも同じ理由である。 */
-.shield { width: 34px; height: 30px; flex: 0 0 auto; display: block; }
-.shield svg { display: block; width: 100%; height: 100%; }
+/* 幅は決め打ちにしない。SHIELD_VIEWBOX の縦横比が変わっても、svg 自身の
+   実寸（height だけ決めて width を auto にする）が追随する。 */
+.shield { height: 30px; flex: 0 0 auto; display: block; }
+.shield svg { display: block; height: 100%; width: auto; }
 .shield path { fill: var(--shield-face); stroke: var(--shield-edge); }
 .shield text {
-  fill: var(--shield-ink); font-family: ui-monospace, Consolas, monospace;
-  font-size: 14px; font-weight: 700;
+  /* x/y/textLength in shield.mjs はここと合わせて目で調整してある。
+     viewBox を変えるときは三つとも一緒に見直す。 */
+  fill: var(--shield-ink); font-family: Roboto, ui-monospace, Consolas, monospace;
+  font-size: 212.5px; font-weight: 700;
 }
-.shield.sm { width: 25px; height: 22px; }
+.shield.sm { height: 22px; }
 
 /* ポップアップの標識は押せる。標識そのものが路線の名前なので、脇に別の
    ボタンを足すより標識自体を的にするほうが短い。 */
