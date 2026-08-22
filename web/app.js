@@ -421,9 +421,9 @@ class BasemapControl {
     }
   };
 
-  // The canvas follows on its own: MapLibre watches its container with a
-  // ResizeObserver, and the panel changes width in one step (see style.css on
-  // why it does not slide), so one observation is all it takes.
+  // The canvas follows a click on its own: MapLibre watches its container
+  // with a ResizeObserver, and the panel changes width in one step (see
+  // style.css on why it does not slide), so one observation is all it takes.
   btn.addEventListener('click', () => set(app.classList.contains('panel-off')));
 
   let open = true;
@@ -433,6 +433,12 @@ class BasemapControl {
     /* ditto */
   }
   set(open);
+  // Applying the stored panel state above is a synchronous DOM mutation
+  // that lands before the first paint, which the ResizeObserver comment
+  // above does not cover — it only catches changes after the page has
+  // settled. `map` (above) was still built against the panel-open layout,
+  // so the canvas needs one explicit resize to pick up the collapsed one.
+  map.resize();
 })();
 
 /* ----------------------------------------------------------------- boot --- */
