@@ -21,8 +21,10 @@ const nums = (d) =>
   [...d.matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => Number(m[0]));
 
 /**
- * The absolute point each `M`/`c` segment ends at, resolving the relative
- * `c` deltas by walking the path from its `M` start.
+ * Every point a `M`/`c` segment names — endpoints and the two control points
+ * each `c` carries — resolving the relative `c` deltas by walking the path
+ * from its `M` start. A cubic curve never leaves the convex hull of these
+ * points, so checking them bounds the curve itself, not just its endpoints.
  */
 function anchors(d) {
   const points = [];
@@ -36,6 +38,7 @@ function anchors(d) {
       continue;
     }
     for (let i = 0; i < n.length; i += 6) {
+      points.push([x + n[i], y + n[i + 1]], [x + n[i + 2], y + n[i + 3]]);
       x += n[i + 4];
       y += n[i + 5];
       points.push([x, y]);
@@ -54,7 +57,7 @@ describe('SHIELD_PATH', () => {
     expect(SHIELD_PATH.replace(/[Mc0-9.,\s-]/g, '')).toBe('Z');
   });
 
-  test('端点は viewBox の内側、縁の太さぶんの余白を残す', () => {
+  test('曲線は viewBox の内側、縁の太さぶんの余白を残す', () => {
     const [, , vw, vh] = nums(SHIELD_VIEWBOX);
     const margin = SHIELD_STROKE_WIDTH / 2;
     for (const [x, y] of anchors(SHIELD_PATH)) {

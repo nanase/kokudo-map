@@ -75,7 +75,7 @@
    等幅の代替書体は "1" などに細いヒゲが残って実物と字形が違って見える。
    scripts/vendor_web.mjs が node_modules から複製する。 */
 @font-face {
-  font-family: 'Roboto';
+  font-family: Roboto;
   src: url('vendor/roboto-latin-700-normal.woff2') format('woff2');
   font-weight: 700;
   font-style: normal;
@@ -295,7 +295,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 .shield text {
   /* x/y/textLength in shield.mjs はここと合わせて目で調整してある。
      viewBox を変えるときは三つとも一緒に見直す。 */
-  fill: var(--shield-ink); font-family: 'Roboto', ui-monospace, Consolas, monospace;
+  fill: var(--shield-ink); font-family: Roboto, ui-monospace, Consolas, monospace;
   font-size: 212.5px; font-weight: 700;
 }
 .shield.sm { height: 22px; }
