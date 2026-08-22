@@ -151,6 +151,92 @@ map.addControl(
   new maplibregl.ScaleControl({ maxWidth: 110, unit: 'metric' }),
   'bottom-right',
 );
+
+/* ------------------------------------------------------------ hold-to-zoom --- */
+/**
+ * NavigationControl の拡大・縮小ボタンは、素のままではクリックのたびに 1 段階
+ * ズームするだけ。ここでは押した瞬間に同じ 1 段階ズームをしたうえで、
+ * HOLD_DELAY_MS を過ぎてもまだ押されていればゆっくり連続ズームへ移す。
+ *
+ * 単発の 1 段階も pointerdown 側で行うため、離したときに本来の click も
+ * 発火すると 1 段階よけいにズームしてしまう。pointerdown が起きた押下は
+ * 必ずその click を飲み込む——document の capture 段で止める。button 自身に
+ * capture:true で listener を足しても、同じ要素上では登録順で呼ばれるため
+ * NavigationControl 自身の click listener（bubble）より後に回り、間に合わない。
+ * キーボード操作（Enter/Space）は pointerdown を経ないので、そちらは今まで
+ * 通り click がそのまま届く。
+ */
+const HOLD_DELAY_MS = 500;
+const HOLD_ZOOM_RATE = 0.8; // ズームレベル/秒
+
+const suppressClickFor = new Set();
+document.addEventListener(
+  'click',
+  (e) => {
+    for (const button of suppressClickFor) {
+      if (button.contains(e.target)) {
+        suppressClickFor.delete(button);
+        e.stopPropagation();
+        e.preventDefault();
+        return;
+      }
+    }
+  },
+  true,
+);
+
+function attachHoldToZoom(button, zoomOnce, sign) {
+  let holdTimer = null;
+  let rafId = null;
+  let prevTime = 0;
+
+  function frame(now) {
+    const dt = (now - prevTime) / 1000;
+    prevTime = now;
+    map.setZoom(map.getZoom() + sign * HOLD_ZOOM_RATE * dt);
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function stopContinuous() {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+  }
+
+  button.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return; // 左ボタン・タッチ・ペンのみ
+    button.setPointerCapture(e.pointerId);
+    suppressClickFor.add(button);
+    zoomOnce(e);
+    holdTimer = setTimeout(() => {
+      prevTime = performance.now();
+      rafId = requestAnimationFrame(frame);
+    }, HOLD_DELAY_MS);
+  });
+  button.addEventListener('pointerup', stopContinuous);
+  button.addEventListener('pointercancel', () => {
+    stopContinuous();
+    // pointercancel の後に click は来ないので、届かないまま残り続けないよう
+    // ここで畳んでおく。
+    suppressClickFor.delete(button);
+  });
+  button.addEventListener('lostpointercapture', stopContinuous);
+}
+
+for (const [selector, zoomOnce, sign] of [
+  ['.maplibregl-ctrl-zoom-in', (e) => map.zoomIn({}, { originalEvent: e }), 1],
+  [
+    '.maplibregl-ctrl-zoom-out',
+    (e) => map.zoomOut({}, { originalEvent: e }),
+    -1,
+  ],
+]) {
+  const btn = document.querySelector(selector);
+  if (btn) attachHoldToZoom(btn, zoomOnce, sign);
+}
 // The one place the sources are credited. The panel used to say the same thing
 // in its footer, which is two answers to one question and one of them free to
 // go stale; the map's own control is the copy that has to be there.
