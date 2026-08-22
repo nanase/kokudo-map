@@ -89,18 +89,45 @@ def mesh_codes_for_bbox(bbox: list[float]) -> list[str]:
     return [f"{p}{q:02d}" for p in range(p_lo, p_hi + 1) for q in range(q_lo, q_hi + 1)]
 
 
+# Mesh codes confirmed by hand to 404 — KSJ publishes no N13 shapefile for
+# them at all, because they hold no land and N13 covers roads only. This is
+# every 404 that turned up touching all 47 regions.py prefectures on
+# 2026-08-22 (272 unique meshes; 125 of them here) — cross-checked against
+# build/n13/ on disk (a mesh with a cached kokudo.raw.json but no extracted
+# .shp directory only ever got there via the 404 branch below), not just
+# grepped from run logs, after an initial hand-collected list missed 5 meshes
+# whose confirming run never got redirected to a file. A 404 for a mesh NOT in
+# this set is not assumed to be more of the same — see ensure_mesh. Confirming
+# a new one belongs here means checking it by hand (the KSJ URL 404s, and the
+# mesh is open ocean on a map), the same way these were confirmed, then adding
+# it — not extending the reasoning to every future 404 unseen.
+KNOWN_OCEAN_MESHES = frozenset({
+    "3522", "3523", "3524", "3525", "3526", "3527", "3528", "3529", "3530", "3531",
+    "3625", "3626", "3627", "3628", "3629", "3630", "3722", "3723", "3726", "3727",
+    "3728", "3729", "3730", "3731", "3822", "3823", "3824", "3825", "3826", "3827",
+    "3828", "3829", "3830", "3922", "3923", "3924", "3925", "3929", "3930", "3931",
+    "4022", "4023", "4024", "4025", "4026", "4029", "4030", "4031", "4122", "4123",
+    "4124", "4125", "4126", "4127", "4130", "4131", "4222", "4223", "4224", "4225",
+    "4226", "4227", "4228", "4231", "4328", "4330", "4331", "4428", "4430", "4431",
+    "4528", "4628", "4632", "4727", "4732", "4827", "4832", "4833", "4834", "4927",
+    "4935", "4936", "5027", "5028", "5037", "5127", "5128", "5140", "5141", "5227",
+    "5228", "5230", "5241", "5331", "5341", "5431", "5434", "5441", "5642", "5736",
+    "5737", "5742", "5842", "6042", "6142", "6143", "6144", "6145", "6242", "6244",
+    "6245", "6344", "6345", "6539", "6639", "6640", "6739", "6740", "6743", "6744",
+    "6745", "6839", "6843", "6844", "6845",
+})
+
+
 def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
     """Download and unzip one mesh's SHP bundle if not already cached.
 
-    Returns None on a 404 — read as "KSJ publishes no shapefile for this
-    mesh", not a transient failure. Confirmed against 千葉県's bbox: 3 of its 6
-    southeast meshes 404, all entirely over the Pacific with no land. N13
-    covers roads only, so a mesh with no land has nothing to publish; the
-    caller treats this the same as a shapefile with zero 国道 records, and the
-    print below keeps it visible per mesh rather than swallowing it. This
-    reading is unverified for a 404 from any other cause (KSJ outage, a
-    renamed mesh); it stands until a region turns up a 404 that isn't
-    ocean.
+    Returns None for a mesh in KNOWN_OCEAN_MESHES that 404s — confirmed
+    no-shapefile-published, not a transient failure; the caller treats it the
+    same as a shapefile with zero 国道 records, and the print below keeps it
+    visible per mesh rather than swallowing it. A 404 for any other mesh
+    raises instead of guessing: nothing here can tell an all-ocean mesh apart
+    from a KSJ outage or a renamed URL, so an unrecognised 404 is a reason to
+    stop and check by hand, not a reason to cache an empty result.
     """
     out_dir = N13 / mesh
     shp = out_dir / f"N13-24_{mesh}_SHP" / f"N13-24_{mesh}.shp"
@@ -111,8 +138,15 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
     print(f"  downloading {url}", flush=True)
     r = requests.get(url, headers=UA, timeout=120)
     if r.status_code == 404:
-        print(f"  {mesh}: no shapefile published (all-ocean mesh) - treating as 0 records")
-        return None
+        if mesh in KNOWN_OCEAN_MESHES:
+            print(f"  {mesh}: no shapefile published (known all-ocean mesh) - treating as 0 records")
+            return None
+        raise SystemExit(
+            f"{mesh}: 404 from KSJ and this mesh is not in KNOWN_OCEAN_MESHES. "
+            "Confirm by hand whether it is genuinely an all-ocean mesh (check "
+            "the URL and look the mesh up on a map) before adding it to the "
+            "set — do not assume."
+        )
     r.raise_for_status()
     zip_path = out_dir / "shp.zip"
     zip_path.write_bytes(r.content)
