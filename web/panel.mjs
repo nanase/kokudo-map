@@ -77,34 +77,52 @@ export const concurrencies = (combos, selected) =>
 export const countLabel = (shown, total, unit) =>
   total ? `${shown} / ${total} ${unit}` : '';
 
+/* aria-label が無いと、行が押せることも押した結果(地図上のその範囲へ
+   移動すること)もスクリーンリーダー利用者には伝わらない。この文字列が
+   ボタンの内容の代わりに読み上げられるので、標識・距離・名称の情報も
+   ここに畳み込む。 */
+const routeLabel = (refs) => `国道${refs.join('・')}号`;
+
 export const rankingHTML = (rows) =>
   rows.length
     ? rows
-        .map(
-          (e) =>
+        .map((e) => {
+          const label =
+            `${routeLabel(e.refs)}の重用区間 ${e.km.toFixed(1)}km` +
+            (e.names.length ? `、${esc(e.names.join(' / '))}` : '') +
+            'を地図で表示';
+          return (
             `<button type="button" class="row" data-refs="${e.refs.join(',')}" ` +
-            `data-bbox="${e.bbox.join(',')}">` +
+            `data-bbox="${e.bbox.join(',')}" aria-label="${label}">` +
             `<span class="shields">${shieldRow(e.refs, true)}</span>` +
             `<span class="km">${e.km.toFixed(1)} km</span>` +
             (e.names.length
               ? `<span class="nm">${esc(e.names.join(' / '))}</span>`
               : '') +
-            '</button>',
-        )
+            '</button>'
+          );
+        })
         .join('')
     : '<p class="empty">該当する重用区間はありません。</p>';
 
 export const sharedHTML = (rows) =>
   rows.length
     ? rows
-        .map(
-          (t) =>
+        .map((t) => {
+          // 同じ路線の組が離れた土地で複数回起終点を共有することがあり
+          // (全国データで 32 組)、refs だけでは行を跨いで aria-label が
+          // 重複する。座標を足して行ごとに一意にする。
+          const label =
+            `${routeLabel(t.refs)}が起終点を共有する地点` +
+            `(北緯${t.lat.toFixed(4)}・東経${t.lon.toFixed(4)})を地図で表示`;
+          return (
             `<button type="button" class="row" data-refs="${t.refs.join(',')}" ` +
-            `data-at="${t.lon},${t.lat}">` +
+            `data-at="${t.lon},${t.lat}" aria-label="${label}">` +
             `<span class="shields">${shieldRow(t.refs, true)}</span>` +
             `<span class="km">${t.refs.length} 路線</span>` +
-            '</button>',
-        )
+            '</button>'
+          );
+        })
         .join('')
     : '<p class="empty">該当地点はありません。</p>';
 

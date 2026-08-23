@@ -160,6 +160,27 @@ describe('rankingHTML', () => {
   test('該当が無ければそう言う', () => {
     expect(rankingHTML([])).toContain('該当する重用区間はありません');
   });
+
+  test('押すと何が起きるかを aria-label で伝える', () => {
+    const html = rankingHTML([combo([7, 8], 4.21, 18)]);
+    expect(html).toContain(
+      'aria-label="国道7・8号の重用区間 4.2kmを地図で表示"',
+    );
+  });
+
+  test('aria-label は名称も含める', () => {
+    const row = { ...combo([7, 8], 4.21, 18), names: ['栗ノ木'] };
+    expect(rankingHTML([row])).toContain(
+      'aria-label="国道7・8号の重用区間 4.2km、栗ノ木を地図で表示"',
+    );
+  });
+
+  test('aria-label の名称もエスケープする', () => {
+    const row = { ...combo([7, 8], 4.21, 18), names: ['<b>栗ノ木</b>'] };
+    expect(rankingHTML([row])).toContain(
+      '&lt;b&gt;栗ノ木&lt;/b&gt;を地図で表示',
+    );
+  });
 });
 
 describe('sharedHTML', () => {
@@ -175,6 +196,23 @@ describe('sharedHTML', () => {
 
   test('該当が無ければそう言う', () => {
     expect(sharedHTML([])).toContain('該当地点はありません');
+  });
+
+  test('押すと何が起きるかを aria-label で伝える', () => {
+    expect(sharedHTML([point])).toContain(
+      'aria-label="国道7・8・17号が起終点を共有する地点(北緯37.9100・東経139.0500)を地図で表示"',
+    );
+  });
+
+  test('同じ路線の組が離れた地点にあっても aria-label が重複しない', () => {
+    // 全国データには refs が同じで座標が違う組が 32 件ある。座標が入って
+    // いないと、2 行とも同じ aria-label になってしまう。
+    const other = { refs: [7, 8, 17], lon: 130.4, lat: 33.6 };
+    const html = sharedHTML([point, other]);
+    const labels = [...html.matchAll(/<button[^>]*aria-label="([^"]*)"/g)].map(
+      ([, label]) => label,
+    );
+    expect(new Set(labels).size).toBe(2);
   });
 });
 
