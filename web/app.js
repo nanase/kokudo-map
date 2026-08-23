@@ -795,6 +795,9 @@ function wireShare() {
   const dialog = $('#share-dialog');
 
   $('#share-btn').addEventListener('click', () => {
+    // ダイアログを開き直すタイミングでは #share-text の文章表示は不要な
+    // ので、前回 blur が発火せず残っていた場合に備えて明示的に戻す。
+    restoreManualCopy();
     $('#share-url').value = location.href;
     $('#share-body').innerHTML = shareSummaryHTML(shareState());
     dialog.showModal();
@@ -802,6 +805,10 @@ function wireShare() {
   });
 
   $('#share-copy').addEventListener('click', async () => {
+    // iOS Safari は <button> のタップでフォーカスが移らず、
+    // revealForManualCopy() が待つ blur が発火しないことがある。
+    // その場合に備え、コピー前に必ず真の URL へ戻してから読む。
+    restoreManualCopy();
     const input = $('#share-url');
     input.select();
     try {
@@ -818,6 +825,16 @@ function wireShare() {
   // OS 自体の共有シートに渡し、無ければ (デスクトップ Firefox など)
   // クリップボードへコピーして #share-copy と同じ形で成功を伝える。
   $('#share-text').addEventListener('click', async () => {
+    // 共有シートが開いている間の連打は navigator.share() 側が
+    // InvalidStateError で reject するだけで、AbortError と違って
+    // 「閉じただけ」ではないため、そのまま通すとフォールバック表示が
+    // 誤って出てしまう。進行中は追加のクリックごと無視する。
+    if (sharingText) return;
+    sharingText = true;
+    // 前回の失敗で #share-url が文章表示のまま残っていることがある
+    // (iOS Safari では blur が発火しないため)。今回の結果に関わらず、
+    // ここで一度まっさらな状態から始める。
+    restoreManualCopy();
     const text = shareText(location.href, shareState());
     if (navigator.share) {
       try {
@@ -826,6 +843,8 @@ function wireShare() {
         // AbortError はユーザーが共有シートを閉じただけなので何もしない。
         // それ以外 (権限や埋め込み文脈による失敗) は手でコピーできるようにする。
         if (err.name !== 'AbortError') revealForManualCopy(text);
+      } finally {
+        sharingText = false;
       }
       return;
     }
@@ -833,11 +852,22 @@ function wireShare() {
       await navigator.clipboard.writeText(text);
     } catch {
       revealForManualCopy(text);
+      sharingText = false;
       return;
     }
     flashCopied($('#share-text'));
+    sharingText = false;
   });
 }
+
+// #share-text の共有シートが開いている間、連打による navigator.share() の
+// 多重呼び出しを防ぐガード。wireShare() と revealForManualCopy() 双方から
+// 参照するのでモジュールスコープに置く。
+let sharingText = false;
+
+// revealForManualCopy() が #share-url を一時的な表示欄にしている間、元の
+// URL を覚えておく変数。null は「今は表示欄にしていない」を表す。
+let manualCopyOriginal = null;
 
 /**
  * Web Share にもクリップボードにも失敗したときの最後の手段。#share-copy は
@@ -847,19 +877,27 @@ function wireShare() {
  *
  * text の改行はそのまま渡すと input が黙って捨て、タイトルと URL が区切りなく
  * くっついてしまうので、見える形に保つスペースへ置き換える。
+ *
+ * blur が発火する前にもう一度呼ばれても、真の URL は manualCopyOriginal に
+ * 保持したまま取り直さない (このとき input.value は既に文章側のため)。
+ * addEventListener は同じ関数参照を渡す限り二重登録されないので、
+ * blur リスナーは毎回渡してよい。iOS Safari は <button> のタップで
+ * フォーカスが移らず blur 自体が発火しないことがあるため、#share-copy と
+ * #share-text 側でも restoreManualCopy() を呼んで確実に真の URL へ戻す。
  */
 function revealForManualCopy(text) {
   const input = $('#share-url');
-  const original = input.value;
+  if (manualCopyOriginal === null) manualCopyOriginal = input.value;
   input.value = text.replace(/\n/g, ' ');
   input.select();
-  input.addEventListener(
-    'blur',
-    () => {
-      input.value = original;
-    },
-    { once: true },
-  );
+  input.addEventListener('blur', restoreManualCopy, { once: true });
+}
+
+/** #share-url を revealForManualCopy() 呼び出し前の URL に戻す。 */
+function restoreManualCopy() {
+  if (manualCopyOriginal === null) return;
+  $('#share-url').value = manualCopyOriginal;
+  manualCopyOriginal = null;
 }
 
 const CHECK_ICON =
