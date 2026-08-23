@@ -247,8 +247,6 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .radios input, .checks input { accent-color: var(--sign-blue); margin: 0; }
 
-.hint { margin: 8px 0 0; font-size: .72rem; color: var(--ink-3); line-height: 1.5; }
-
 /* legends --------------------------------------------------------------- */
 .legend { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 12px; }
 .legend .item {
