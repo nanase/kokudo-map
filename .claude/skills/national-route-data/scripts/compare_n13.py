@@ -380,8 +380,9 @@ def resample_line(coords: list[tuple[float, float]],
     return points
 
 
-def coverage_ratio(coords: list[tuple[float, float]], grid, threshold_m: float) -> tuple[int, int]:
-    """(matched, total) sample points within threshold_m of grid.
+def coverage_ratio(coords: list[tuple[float, float]], grid,
+                    threshold_m: float) -> tuple[int, int, float | None]:
+    """(matched, total, min_dist) for coords resampled every SAMPLE_INTERVAL_M.
 
     Not the arc's own vertices, and not one midpoint (the old rule): a
     former arc reconnects to the current road at both ends by construction,
@@ -389,17 +390,44 @@ def coverage_ratio(coords: list[tuple[float, float]], grid, threshold_m: float) 
     whether the road itself still does, and its midpoint alone can land
     anywhere along a road that is only partly still N13-backed. Sampling
     along the whole length is what makes the ratio mean "how much of this
-    road" rather than "does one arbitrary point on it"."""
+    road" rather than "does one arbitrary point on it".
+
+    min_dist is the closest any sample came to N13, even when that is past
+    threshold_m — a CodeRabbit review on issue #27's own PR caught that
+    ratio == 0 does not mean "no N13 nearby": an N13 line sitting just
+    outside threshold_m of every 50 m sample still reads as 0% coverage, but
+    it is not "N13 なし". Only min_dist being None — no sample found
+    anything within nearest_segment's own search radius — means that.
+    """
     points = resample_line(coords)
-    matched = sum(
-        1 for p in points
-        if (d := nearest_segment(p, grid)) is not None and d <= threshold_m
-    )
-    return matched, len(points)
+    matched = 0
+    min_dist = None
+    for p in points:
+        d = nearest_segment(p, grid)
+        if d is None:
+            continue
+        if min_dist is None or d < min_dist:
+            min_dist = d
+        if d <= threshold_m:
+            matched += 1
+    return matched, len(points), min_dist
 
 
 def ratio_of(arc: dict) -> float:
     return arc["matched"] / arc["total"] if arc["total"] else 0.0
+
+
+def coverage_label(cluster: dict) -> str:
+    """"N13 なし" only when min_dist is None — no sample found anything
+    within nearest_segment's own search radius. 0% coverage on its own does
+    not mean that: an N13 line just past ORPHAN_THRESHOLD_M of every sample
+    still reads as 0% covered but is not absent (see coverage_ratio)."""
+    if cluster["min_dist"] is None:
+        return "N13 なし"
+    label = f"被覆率 {cluster['ratio'] * 100:.0f}%"
+    if cluster["ratio"] == 0:
+        label += f"(最寄N13 {cluster['min_dist']:.0f}m)"
+    return label
 
 
 # --------------------------------------------------------------- clustering --
@@ -452,11 +480,13 @@ def cluster_former_arcs(arcs: list[dict]):
                   for m in members for j in range(len(m["coords"]) - 1)) / 1000
         matched = sum(m["matched"] for m in members)
         total = sum(m["total"] for m in members)
+        dists = [m["min_dist"] for m in members if m["min_dist"] is not None]
         mid = members[len(members) // 2]
         clusters.append({
             "members": members,
             "km": km,
             "ratio": matched / total if total else 0.0,
+            "min_dist": min(dists) if dists else None,
             "sample": mid["coords"][len(mid["coords"]) // 2],
             "ids": sorted({m["id"] for m in members}),
             "refs": sorted({r for m in members for r in m["feature"]["properties"]["refs_list"]}),
@@ -524,8 +554,9 @@ def national_orphan_report(refresh: bool) -> None:
     arcs = []
     for wid, f in per_way.items():
         coords = [(lat, lon) for lon, lat in f["geometry"]["coordinates"]]
-        matched, total = coverage_ratio(coords, grid, ORPHAN_THRESHOLD_M)
-        arcs.append({"id": wid, "feature": f, "coords": coords, "matched": matched, "total": total})
+        matched, total, min_dist = coverage_ratio(coords, grid, ORPHAN_THRESHOLD_M)
+        arcs.append({"id": wid, "feature": f, "coords": coords, "matched": matched,
+                      "total": total, "min_dist": min_dist})
 
     def bucket(ratio: float) -> str:
         pct = ratio * 100
@@ -556,7 +587,7 @@ def national_orphan_report(refresh: bool) -> None:
     print("=" * 80)
     for c in clusters:
         lat, lon = c["sample"]
-        label = "N13 なし" if c["ratio"] == 0 else f"被覆率 {c['ratio'] * 100:.0f}%"
+        label = coverage_label(c)
         id_list = ", ".join(f"way/{i}" for i in c["ids"][:5])
         if len(c["ids"]) > 5:
             id_list += f", 他{len(c['ids']) - 5}件"
@@ -655,9 +686,9 @@ def main() -> None:
     arcs = []
     for f in former_arcs:
         coords = [(lat, lon) for lon, lat in f["geometry"]["coordinates"]]
-        matched, total = coverage_ratio(coords, n13_grid_raw, ORPHAN_THRESHOLD_M)
+        matched, total, min_dist = coverage_ratio(coords, n13_grid_raw, ORPHAN_THRESHOLD_M)
         arcs.append({"id": f["properties"]["id"], "feature": f, "coords": coords,
-                      "matched": matched, "total": total})
+                      "matched": matched, "total": total, "min_dist": min_dist})
     candidates = [a for a in arcs if ratio_of(a) < ORPHAN_CANDIDATE_RATIO]
     clusters = cluster_former_arcs(candidates)
 
@@ -669,7 +700,7 @@ def main() -> None:
     print("=" * 80)
     for c in clusters:
         lat, lon = c["sample"]
-        label = "N13 なし" if c["ratio"] == 0 else f"被覆率 {c['ratio'] * 100:.0f}%"
+        label = coverage_label(c)
         print(f"  国道{'・'.join(map(str, c['refs']))}  {c['km']:.2f} km  "
               f"{len(c['members']):>3} arc(s)  {label}  sample {lat:.5f},{lon:.5f}")
     if not clusters:
