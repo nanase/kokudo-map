@@ -16,7 +16,7 @@
  *
  * Usage:  node scripts/check_docs.mjs
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -104,6 +104,24 @@ ok(
 const claude = read('CLAUDE.md');
 ok(!/^\| `mise run /m.test(claude), 'CLAUDE.md がタスクの表を持ち直していない');
 
+/* ---- 6. development.md の構成表が web/*.mjs と一致する ------------------- */
+// web/urlstate.mjs が両方の表から脱落していたのが issue #33。app.js は .mjs
+// ではないので対象に含めない。
+const webMjs = new Set(
+  readdirSync(join(ROOT, 'web')).filter((f) => f.endsWith('.mjs')),
+);
+const inStructureTable = new Set(all(devDoc, /^\| `web\/([\w-]+\.mjs)`/gm));
+const missingMjs = [...webMjs].filter((f) => !inStructureTable.has(f));
+const extraMjs = [...inStructureTable].filter((f) => !webMjs.has(f));
+ok(
+  missingMjs.length === 0,
+  `development.md の構成表に無い web/*.mjs: ${list(missingMjs)}`,
+);
+ok(
+  extraMjs.length === 0,
+  `実在しないのに development.md の構成表が挙げている web/*.mjs: ${list(extraMjs)}`,
+);
+
 console.log(fails.length ? `\n${fails.join('\n')}` : '');
-console.log(`\n${fails.length ? '失敗' : '合格'}: ${6 - fails.length}/6`);
+console.log(`\n${fails.length ? '失敗' : '合格'}: ${8 - fails.length}/8`);
 process.exit(fails.length ? 1 : 0);
