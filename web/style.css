@@ -398,6 +398,31 @@ input[type="search"]::placeholder { font-size: .82em; }
   width: 17px; height: 17px; display: block;
 }
 
+/* ボタンの状態を示す一瞬のラベル -----------------------------------------
+   タップには hover の title が出せないので、その代わりに一瞬だけ状態を
+   返す。ボタンと同じ台の中に置き、台の位置だけを頼りに左へ出す。
+   台の中にラベルを同居させる以上ボタンは :only-child でなくなり、
+   maplibre-gl.css 側のフォーカス時の角丸（:only-child だけ台と同じ丸みを
+   継ぐ）が外れて上下どちらかの角が直角になる。ここで丸みを台の値へ戻す。 */
+.hide-routes-ctrl, .gsi-shade-ctrl, .basemap-ctrl { position: relative; }
+#hide-routes-btn:focus,
+#gsi-shade-btn:focus,
+#basemap-btn:focus {
+  border-radius: inherit;
+}
+.state-tip {
+  position: absolute; top: 50%; right: calc(100% + 8px);
+  transform: translate(4px, -50%);
+  display: flex; align-items: center;
+  height: 29px; /* maplibre-gl.css の .maplibregl-ctrl-group button の高さに合わせる */
+  padding: 0 8px; box-sizing: border-box;
+  background: #fff; color: #333; box-shadow: 0 0 0 2px rgba(0,0,0,.1);
+  font-size: .72rem; border-radius: 4px;
+  white-space: nowrap; opacity: 0; pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+}
+.state-tip.show { opacity: 1; transform: translate(0, -50%); pointer-events: auto; cursor: pointer; }
+
 /* popup ----------------------------------------------------------------- */
 .maplibregl-popup-content {
   font-family: inherit; font-size: .8rem; padding: 12px 14px;
