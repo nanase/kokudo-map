@@ -48,6 +48,9 @@ jobs:
       - name: Python の構文
         run: uv run python -m compileall -q .claude/skills/national-route-data/scripts
 
+      - name: Python の静的検査
+        run: uvx ruff check .claude/skills/national-route-data/scripts
+
       # 配信時にライブラリを複製できることを、配信の前に確かめます。
       - name: 資材を組める
         run: |

@@ -118,7 +118,10 @@ check(set(routes) <= vouched,
       f"every route on the map is vouched for by some region ({sorted(set(routes) - vouched)})")
 
 # --- freshness ---------------------------------------------------------------
-check(bool(meta.get("osm_timestamp")), f"OSM data timestamp is recorded ({meta.get('osm_timestamp')})")
+check(
+    bool(meta.get("osm_timestamp")),
+    f"OSM data timestamp is recorded ({meta.get('osm_timestamp')})",
+)
 age = (datetime.now(timezone.utc)
        - datetime.fromisoformat(meta["osm_timestamp"].replace("Z", "+00:00"))).days
 check(age <= 7, f"OSM data is {age} days old (threshold 7)")

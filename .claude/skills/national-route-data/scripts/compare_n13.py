@@ -79,6 +79,7 @@ Usage:  uv run scripts/compare_n13.py [region|all] [--refresh]
 """
 from __future__ import annotations
 
+import itertools
 import json
 import math
 import os
@@ -202,7 +203,9 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
     r = requests.get(url, headers=UA, timeout=120)
     if r.status_code == 404:
         if mesh in KNOWN_OCEAN_MESHES:
-            print(f"  {mesh}: no shapefile published (known all-ocean mesh) - treating as 0 records")
+            print(
+                f"  {mesh}: no shapefile published (known all-ocean mesh) - treating as 0 records"
+            )
             return None
         raise SystemExit(
             f"{mesh}: 404 from KSJ and this mesh is not in KNOWN_OCEAN_MESHES. "
@@ -262,7 +265,7 @@ def line_touches_bbox(line: list[tuple[float, float]], west: float, south: float
     pts = [(lon, lat) for lat, lon in line]
     if not pts:
         return False
-    pairs = list(zip(pts, pts[1:])) or [(pts[0], pts[0])]
+    pairs = list(itertools.pairwise(pts)) or [(pts[0], pts[0])]
     return any(segment_intersects_bbox(a, b, west, south, east, north) for a, b in pairs)
 
 
@@ -544,14 +547,18 @@ def classify_clusters_beneath(clusters: list[dict], refresh: bool,
             if nearest_any is not None and (c["_nearest_any"] is None
                                              or nearest_any[0] < c["_nearest_any"][0]):
                 c["_nearest_any"] = nearest_any
-            if nearest_confirmable is not None and (c["_nearest_confirmable"] is None
-                                                      or nearest_confirmable[0] < c["_nearest_confirmable"][0]):
+            if nearest_confirmable is not None and (
+                c["_nearest_confirmable"] is None
+                or nearest_confirmable[0] < c["_nearest_confirmable"][0]
+            ):
                 c["_nearest_confirmable"] = nearest_confirmable
         # `records` is dropped here, before the next mesh's records are
         # loaded — this loop never holds two meshes' classified data at once.
 
     for c in clusters:
-        c["beneath"], c["confirmed"] = classify_beneath(c.pop("_nearest_any"), c.pop("_nearest_confirmable"))
+        c["beneath"], c["confirmed"] = classify_beneath(
+            c.pop("_nearest_any"), c.pop("_nearest_confirmable")
+        )
 
 
 # ----------------------------------------------------------------- coverage --
@@ -565,7 +572,7 @@ def resample_line(coords: list[tuple[float, float]],
     points = [coords[0]]
     dist_so_far = 0.0
     next_mark = interval_m
-    for a, b in zip(coords, coords[1:]):
+    for a, b in itertools.pairwise(coords):
         seg_len = haversine(a, b)
         if seg_len == 0:
             continue
@@ -655,7 +662,9 @@ def cluster_gaps(gap_lines: list[list[tuple[float, float]]]):
     clusters = []
     for idxs in cluster_by_endpoint(gap_lines):
         lines = [gap_lines[i] for i in idxs]
-        km = sum(haversine(l[i], l[i + 1]) for l in lines for i in range(len(l) - 1)) / 1000
+        km = sum(
+            haversine(ln[i], ln[i + 1]) for ln in lines for i in range(len(ln) - 1)
+        ) / 1000
         mid_line = lines[len(lines) // 2]
         clusters.append({"lines": lines, "km": km, "sample": mid_line[len(mid_line) // 2]})
     return sorted(clusters, key=lambda c: -c["km"])
@@ -711,7 +720,7 @@ def nearby_osm_ways(cache, out_ids, point, radius_m):
             hit = geometry and haversine(point, geometry[0]) <= radius_m
         else:
             hit = any(point_segment_distance_m(point, a, b) <= radius_m
-                      for a, b in zip(geometry, geometry[1:]))
+                      for a, b in itertools.pairwise(geometry))
         if hit:
             hits.append((wid, t))
     return hits
