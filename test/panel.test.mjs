@@ -15,6 +15,7 @@ import {
   STALE_DAYS,
   sharedHTML,
   shareSummaryHTML,
+  shareText,
   statsHTML,
 } from '../web/panel.mjs';
 
@@ -216,6 +217,26 @@ describe('shareSummaryHTML', () => {
     });
     expect(html).toContain('&lt;b&gt;x&lt;/b&gt;');
     expect(html).toContain('&lt;i&gt;y&lt;/i&gt;');
+  });
+});
+
+describe('shareText', () => {
+  const url = 'https://nanase.cc/kokudo-map/?routes=292#7.99/37.093/139.145';
+
+  test('選択が無ければ路線番号を言わない', () => {
+    expect(shareText(url, { selectedRefs: [] })).toBe(`国道マップ\n${url}`);
+  });
+
+  test('選択があれば号数をタイトルに入れる', () => {
+    expect(shareText(url, { selectedRefs: [292] })).toBe(
+      `国道マップ - 292号\n${url}`,
+    );
+  });
+
+  test('複数選択は・で並べる', () => {
+    expect(shareText(url, { selectedRefs: [15, 17] })).toBe(
+      `国道マップ - 15・17号\n${url}`,
+    );
   });
 });
 

@@ -68,6 +68,7 @@ import {
   SHARED_ROWS,
   sharedHTML,
   shareSummaryHTML,
+  shareText,
   statsHTML,
 } from './panel.mjs';
 import { deepest, popupHTML } from './popup.mjs';
@@ -753,18 +754,28 @@ function wireShare() {
       // the field is already selected, so the reader can still copy by hand.
       return;
     }
-    const btn = $('#share-copy');
-    const original = btn.innerHTML;
-    btn.innerHTML = CHECK_ICON;
-    btn.classList.add('copied');
-    btn.setAttribute('aria-label', 'コピーしました');
-    btn.disabled = true;
-    setTimeout(() => {
-      btn.innerHTML = original;
-      btn.classList.remove('copied');
-      btn.removeAttribute('aria-label');
-      btn.disabled = false;
-    }, 1500);
+    flashCopied($('#share-copy'));
+  });
+
+  // SNS への共有はタイトル付きの文章を渡したい。Web Share API があれば
+  // OS 自体の共有シートに渡し、無ければ (デスクトップ Firefox など)
+  // クリップボードへコピーして #share-copy と同じ形で成功を伝える。
+  $('#share-text').addEventListener('click', async () => {
+    const text = shareText(location.href, shareState());
+    if (navigator.share) {
+      try {
+        await navigator.share({ text });
+      } catch {
+        // User dismissed the share sheet — nothing to recover.
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      return;
+    }
+    flashCopied($('#share-text'));
   });
 }
 
@@ -772,6 +783,21 @@ const CHECK_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" ' +
   'fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" ' +
   'stroke-linejoin="round"/></svg>';
+
+/** The success flash `#share-copy` and `#share-text`'s clipboard fallback share. */
+function flashCopied(btn) {
+  const original = btn.innerHTML;
+  btn.innerHTML = CHECK_ICON;
+  btn.classList.add('copied');
+  btn.setAttribute('aria-label', 'コピーしました');
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.innerHTML = original;
+    btn.classList.remove('copied');
+    btn.removeAttribute('aria-label');
+    btn.disabled = false;
+  }, 1500);
+}
 
 /**
  * Read the display state straight off the controls rather than restating

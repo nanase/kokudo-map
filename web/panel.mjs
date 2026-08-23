@@ -138,6 +138,15 @@ export const shareSummaryHTML = ({
     .join('') +
   '</ul></div>';
 
+/**
+ * The one-line title + URL an SNS share sheet expects, e.g.
+ * "国道マップ - 292号\nhttps://…". `url` is a parameter rather than read from
+ * `location` here, keeping this a pure function of state like the rest of the
+ * panel.
+ */
+export const shareText = (url, { selectedRefs }) =>
+  `国道マップ${selectedRefs.length ? ` - ${selectedRefs.join('・')}号` : ''}\n${url}`;
+
 /* ------------------------------------------------------------------ 凡例 --- */
 /**
  * `tip` は補足であって名前の一部ではないので、表示上はカッコ書きにせず

@@ -440,8 +440,10 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 #share-dialog h2 { margin: 0; font-size: 1rem; font-weight: 800; }
 .dialog-close {
-  border: 0; background: none; cursor: pointer; font-size: 1.2rem; line-height: 1;
-  color: var(--ink-3); padding: 2px 6px; border-radius: 3px;
+  border: 0; background: none; cursor: pointer; line-height: 1;
+  color: var(--ink-3); border-radius: 4px;
+  display: grid; place-items: center; width: 32px; height: 32px;
+  font-size: 1.7rem;
 }
 .dialog-close:hover { color: var(--ink); background: var(--panel-2); }
 
@@ -458,6 +460,19 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 #share-copy svg { width: 14px; height: 14px; display: block; }
 #share-copy.copied { color: var(--success); border-color: var(--success); }
+
+/* URL だけのコピーとは別に、SNS などへそのまま渡せる「タイトル + URL」の
+   文章を渡す。対応環境では Web Share API の共有シートを開き、無ければ
+   #share-copy と同じ「コピーしました」の点滅で伝える。 */
+.share-text-btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  font: inherit; font-size: .78rem; padding: 7px 10px; cursor: pointer;
+  background: var(--panel-2); color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: 3px;
+}
+.share-text-btn:hover:not(:disabled) { border-color: var(--sign-blue); color: var(--sign-blue); }
+.share-text-btn svg { width: 14px; height: 14px; display: block; }
+.share-text-btn.copied { color: var(--success); border-color: var(--success); }
 
 .share-summary { display: flex; flex-direction: column; gap: 9px; font-size: .8rem; }
 .share-row { display: flex; gap: 10px; align-items: baseline; }

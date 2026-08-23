@@ -135,13 +135,24 @@
 <dialog id="share-dialog">
   <form method="dialog">
     <header>
-      <h2>共有</h2>
+      <h2>表示位置を共有</h2>
       <button type="submit" class="dialog-close" aria-label="閉じる">×</button>
     </header>
     <div class="share-url-row">
       <input type="text" id="share-url" readonly aria-label="共有用URL">
       <button type="button" id="share-copy" class="mini">コピー</button>
     </div>
+    <button type="button" id="share-text" class="share-text-btn">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M10 13a5 5 0 0 0 7.54.54l2.12-2.12a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+              fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-2.12 2.12a5 5 0 0 0 7.07 7.07l1.71-1.71"
+              fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      文章で共有
+    </button>
     <div id="share-body" class="share-summary"></div>
   </form>
 </dialog>
