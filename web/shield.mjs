@@ -44,6 +44,21 @@ export const SHIELD_PATH =
 export const SHIELD_STROKE_WIDTH = 15.94;
 
 /**
+ * Border thickness for the standalone brand mark — favicon, the panel's own
+ * title icon, the share card — drawn by scripts/make_brand.mjs.
+ *
+ * The mark carries no number, so unlike `SHIELD_STROKE_WIDTH` there is no
+ * text for a heavier border to crowd, and it can afford to read clearly at
+ * favicon size. `SHIELD_VIEWBOX`'s ~10-unit margin is too tight for a border
+ * this heavy on its own, so make_brand.mjs pads the viewBox by
+ * `SHIELD_ICON_PAD` before drawing it.
+ */
+export const SHIELD_ICON_STROKE_WIDTH = 56;
+
+/** viewBox padding paired with `SHIELD_ICON_STROKE_WIDTH` — see above. */
+export const SHIELD_ICON_PAD = 20;
+
+/**
  * A route marker ("おにぎり") with the number inside.
  *
  * Coloured like the real 国道番号標識 — a white number on the sign blue, inside
