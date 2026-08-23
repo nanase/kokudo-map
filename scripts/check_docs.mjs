@@ -110,7 +110,7 @@ ok(!/^\| `mise run /m.test(claude), 'CLAUDE.md がタスクの表を持ち直し
 const webMjs = new Set(
   readdirSync(join(ROOT, 'web')).filter((f) => f.endsWith('.mjs')),
 );
-const inStructureTable = new Set(all(devDoc, /^\| `web\/([\w-]+\.mjs)`/gm));
+const inStructureTable = new Set(all(devDoc, /^\| `web\/([^`/\r\n]+\.mjs)`/gm));
 const missingMjs = [...webMjs].filter((f) => !inStructureTable.has(f));
 const extraMjs = [...inStructureTable].filter((f) => !webMjs.has(f));
 ok(
