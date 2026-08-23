@@ -38,7 +38,7 @@ push ごとに自動で増分レビューが走る。push 後に `@coderabbitai 
 CodeRabbit の 1 時間あたりのレビュー回数制限に当たると、サマリ（PR 先頭コメント）が次のように上書きされ、レビューが始まらない。
 
 > ## Review limit reached
-> `@nanase`, you've reached your PR review limit, so we couldn't start this review.
+> `@[userid]`, you've reached your PR review limit, so we couldn't start this review.
 > **Next review available in:** **43 minutes**
 
 このメッセージが出ている間は待つしかない。分数は制限に当たるたびに変わり、複数の PR が同時に順番待ちしていれば再び当たることもあるので、固定の待ち時間を覚えず、その都度読み直す。
