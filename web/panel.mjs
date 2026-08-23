@@ -139,8 +139,14 @@ export const shareSummaryHTML = ({
   '</ul></div>';
 
 /* ------------------------------------------------------------------ 凡例 --- */
-const swatch = (color, text, dashed) =>
-  `<span class="item"><span class="swatch" style="border-top-color:${color}` +
+/**
+ * `tip` は補足であって名前の一部ではないので、表示上はカッコ書きにせず
+ * `title` 属性へ渡す — ホバーで読めれば足り、常に文字として並べておく理由が
+ * ない。`title` を持つ項目だけカーソルを help にし、補足があることを示す。
+ */
+const swatch = (color, text, dashed, tip) =>
+  `<span class="item"${tip ? ` title="${esc(tip)}"` : ''}>` +
+  `<span class="swatch" style="border-top-color:${color}` +
   `${dashed ? ';border-top-style:dashed' : ''}"></span>${text}</span>`;
 
 export const legendNHTML = () =>
@@ -148,12 +154,12 @@ export const legendNHTML = () =>
 
 export const legendKindHTML = () =>
   [
-    [COLOR_FOOT, '点線国道（徒歩道・階段）'],
-    [COLOR_CONSTRUCTION, '工事中・事業中'],
-    [COLOR_UNOPENED, '未開通区間（計画・未着工）'],
-    [COLOR_FERRY, '海上国道（航路）'],
+    [COLOR_FOOT, '点線国道', '徒歩道・階段'],
+    [COLOR_CONSTRUCTION, '工事中・事業中', null],
+    [COLOR_UNOPENED, '未開通区間', '計画・未着工'],
+    [COLOR_FERRY, '海上国道', '航路'],
   ]
-    .map(([c, t]) => swatch(c, t, true))
+    .map(([c, t, tip]) => swatch(c, t, true, tip))
     .join('');
 
 /* ------------------------------------------------------------ データ基準 --- */

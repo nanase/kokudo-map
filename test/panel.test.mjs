@@ -222,6 +222,22 @@ describe('凡例', () => {
     expect(legendNHTML()).toContain('四重用以上');
   });
 
+  test('補足はカッコ書きではなく title 属性に持たせる', () => {
+    // 表示上はカッコ書きを省き、ホバーのツールチップに回す。
+    const html = legendKindHTML();
+    expect(html).not.toContain('（');
+    expect(html).toContain('title="徒歩道・階段"');
+    expect(html).toContain('title="計画・未着工"');
+    expect(html).toContain('title="航路"');
+  });
+
+  test('補足の無い項目に title は付かない', () => {
+    const chunk = legendKindHTML()
+      .split('<span class="item"')
+      .find((s) => s.includes('工事中'));
+    expect(chunk.startsWith('>')).toBe(true);
+  });
+
   test('走れない種別は破線で示す', () => {
     // 地図でも破線なので、凡例も破線でなければ対応が読み取れません。
     const html = legendKindHTML();
