@@ -15,6 +15,7 @@ import {
   STALE_DAYS,
   sharedHTML,
   shareSummaryHTML,
+  shareText,
   statsHTML,
 } from '../web/panel.mjs';
 
@@ -59,11 +60,15 @@ describe('statsHTML', () => {
 
   test('選択が空なら全路線を分子にする', () => {
     // 何も選んでいない状態は「全部出ている」ことであって、0 本ではない。
-    expect(statsHTML(0, 459, totals)).toContain('選択路線　459 / 459');
+    expect(statsHTML(0, 459, totals)).toContain(
+      '<dt>選択路線</dt><dd>459 / 459</dd>',
+    );
   });
 
   test('選択があればその数を出す', () => {
-    expect(statsHTML(3, 459, totals)).toContain('選択路線　3 / 459');
+    expect(statsHTML(3, 459, totals)).toContain(
+      '<dt>選択路線</dt><dd>3 / 459</dd>',
+    );
   });
 
   test('大きな数は桁を区切る', () => {
@@ -215,11 +220,47 @@ describe('shareSummaryHTML', () => {
   });
 });
 
+describe('shareText', () => {
+  const url = 'https://nanase.cc/kokudo-map/?routes=292#7.99/37.093/139.145';
+
+  test('選択が無ければ路線番号を言わない', () => {
+    expect(shareText(url, { selectedRefs: [] })).toBe(`国道マップ\n${url}`);
+  });
+
+  test('選択があれば号数をタイトルに入れる', () => {
+    expect(shareText(url, { selectedRefs: [292] })).toBe(
+      `国道マップ - 292号\n${url}`,
+    );
+  });
+
+  test('複数選択は・で並べる', () => {
+    expect(shareText(url, { selectedRefs: [15, 17] })).toBe(
+      `国道マップ - 15・17号\n${url}`,
+    );
+  });
+});
+
 describe('凡例', () => {
   test('重用の深さは 4 段である', () => {
     expect(legendNHTML().match(/class="item"/g)).toHaveLength(4);
     expect(legendNHTML()).toContain('単独指定');
     expect(legendNHTML()).toContain('四重用以上');
+  });
+
+  test('補足はカッコ書きではなく title 属性に持たせる', () => {
+    // 表示上はカッコ書きを省き、ホバーのツールチップに回す。
+    const html = legendKindHTML();
+    expect(html).not.toContain('（');
+    expect(html).toContain('title="徒歩道・階段"');
+    expect(html).toContain('title="計画・未着工"');
+    expect(html).toContain('title="航路"');
+  });
+
+  test('補足の無い項目に title は付かない', () => {
+    const chunk = legendKindHTML()
+      .split('<span class="item"')
+      .find((s) => s.includes('工事中'));
+    expect(chunk.startsWith('>')).toBe(true);
   });
 
   test('走れない種別は破線で示す', () => {

@@ -27,9 +27,21 @@ import { chromium } from 'playwright';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const WEB = join(ROOT, 'web');
 
-const { SHIELD_PATH, SHIELD_VIEWBOX, SHIELD_STROKE_WIDTH } = await import(
-  new URL('../web/shield.mjs', import.meta.url).href
-);
+const {
+  SHIELD_PATH,
+  SHIELD_VIEWBOX,
+  SHIELD_STROKE_WIDTH,
+  SHIELD_ICON_STROKE_WIDTH,
+  SHIELD_ICON_PAD,
+} = await import(new URL('../web/shield.mjs', import.meta.url).href);
+
+/* favicon は他のどこよりも小さく描かれるので、白い縁をここだけ太くする
+ * (SHIELD_ICON_STROKE_WIDTH)。SHIELD_VIEWBOX の余白は約 10 単位しかなく
+ * その太さの縁を描くには足りないので、SHIELD_ICON_PAD ぶん足す。 */
+const [vx, vy, vw, vh] = SHIELD_VIEWBOX.split(' ').map(Number);
+const ICON_VIEWBOX =
+  `${vx - SHIELD_ICON_PAD} ${vy - SHIELD_ICON_PAD} ` +
+  `${vw + 2 * SHIELD_ICON_PAD} ${vh + 2 * SHIELD_ICON_PAD}`;
 
 /* 標識の配色。style.css の --shield-face / --shield-edge と同じ値である。 */
 const FACE = '#00449E';
@@ -47,9 +59,9 @@ const SUB = '全国 47 都道府県・一般国道 459 路線';
  * Without it the default paint order (stroke over fill) eats the border's
  * full width into the face, and the face reads as visibly smaller. */
 const favicon = [
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${SHIELD_VIEWBOX}">`,
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ICON_VIEWBOX}">`,
   `<path d="${SHIELD_PATH}" fill="${FACE}" stroke="${EDGE}"`,
-  ` stroke-width="${SHIELD_STROKE_WIDTH}" stroke-linejoin="round"`,
+  ` stroke-width="${SHIELD_ICON_STROKE_WIDTH}" stroke-linejoin="round"`,
   ' paint-order="stroke"/>',
   '</svg>',
 ].join('');

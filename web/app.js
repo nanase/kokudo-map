@@ -68,6 +68,7 @@ import {
   SHARED_ROWS,
   sharedHTML,
   shareSummaryHTML,
+  shareText,
   statsHTML,
 } from './panel.mjs';
 import { deepest, popupHTML } from './popup.mjs';
@@ -753,25 +754,76 @@ function wireShare() {
       // the field is already selected, so the reader can still copy by hand.
       return;
     }
-    const btn = $('#share-copy');
-    const original = btn.innerHTML;
-    btn.innerHTML = CHECK_ICON;
-    btn.classList.add('copied');
-    btn.setAttribute('aria-label', 'コピーしました');
-    btn.disabled = true;
-    setTimeout(() => {
-      btn.innerHTML = original;
-      btn.classList.remove('copied');
-      btn.removeAttribute('aria-label');
-      btn.disabled = false;
-    }, 1500);
+    flashCopied($('#share-copy'));
   });
+
+  // SNS への共有はタイトル付きの文章を渡したい。Web Share API があれば
+  // OS 自体の共有シートに渡し、無ければ (デスクトップ Firefox など)
+  // クリップボードへコピーして #share-copy と同じ形で成功を伝える。
+  $('#share-text').addEventListener('click', async () => {
+    const text = shareText(location.href, shareState());
+    if (navigator.share) {
+      try {
+        await navigator.share({ text });
+      } catch (err) {
+        // AbortError はユーザーが共有シートを閉じただけなので何もしない。
+        // それ以外 (権限や埋め込み文脈による失敗) は手でコピーできるようにする。
+        if (err.name !== 'AbortError') revealForManualCopy(text);
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      revealForManualCopy(text);
+      return;
+    }
+    flashCopied($('#share-text'));
+  });
+}
+
+/**
+ * Web Share にもクリップボードにも失敗したときの最後の手段。#share-copy は
+ * URL 欄が常に見えているので選択したまま手でコピーできるが、#share-text の
+ * 文章はどこにも表示されていないので、このまま失敗すると打つ手が無くなる。
+ * #share-url を一時的な表示欄として使い、フォーカスが外れたら元の URL に戻す。
+ *
+ * text の改行はそのまま渡すと input が黙って捨て、タイトルと URL が区切りなく
+ * くっついてしまうので、見える形に保つスペースへ置き換える。
+ */
+function revealForManualCopy(text) {
+  const input = $('#share-url');
+  const original = input.value;
+  input.value = text.replace(/\n/g, ' ');
+  input.select();
+  input.addEventListener(
+    'blur',
+    () => {
+      input.value = original;
+    },
+    { once: true },
+  );
 }
 
 const CHECK_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" ' +
   'fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" ' +
   'stroke-linejoin="round"/></svg>';
+
+/** The success flash `#share-copy` and `#share-text`'s clipboard fallback share. */
+function flashCopied(btn) {
+  const original = btn.innerHTML;
+  btn.innerHTML = CHECK_ICON;
+  btn.classList.add('copied');
+  btn.setAttribute('aria-label', 'コピーしました');
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.innerHTML = original;
+    btn.classList.remove('copied');
+    btn.removeAttribute('aria-label');
+    btn.disabled = false;
+  }, 1500);
+}
 
 /**
  * Read the display state straight off the controls rather than restating

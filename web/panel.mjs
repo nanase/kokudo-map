@@ -45,10 +45,10 @@ export const routeListHTML = (routes) =>
 /* ------------------------------------------------------------------ 集計 --- */
 /** The footer's four numbers. An empty selection means everything. */
 export const statsHTML = (selectedCount, totalRoutes, { arcs, km, conc }) =>
-  `<span>選択路線　${selectedCount || totalRoutes} / ${totalRoutes}</span>` +
-  `<span>対象アーク　${arcs.toLocaleString()}</span>` +
-  `<span>延長　${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</span>` +
-  `<span>重用アーク　${conc.toLocaleString()}</span>`;
+  `<dt>選択路線</dt><dd>${selectedCount || totalRoutes} / ${totalRoutes}</dd>` +
+  `<dt>対象アーク</dt><dd>${arcs.toLocaleString()}</dd>` +
+  `<dt>延長</dt><dd>${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</dd>` +
+  `<dt>重用アーク</dt><dd>${conc.toLocaleString()}</dd>`;
 
 /**
  * What the clear button says.
@@ -138,9 +138,24 @@ export const shareSummaryHTML = ({
     .join('') +
   '</ul></div>';
 
+/**
+ * The one-line title + URL an SNS share sheet expects, e.g.
+ * "国道マップ - 292号\nhttps://…". `url` is a parameter rather than read from
+ * `location` here, keeping this a pure function of state like the rest of the
+ * panel.
+ */
+export const shareText = (url, { selectedRefs }) =>
+  `国道マップ${selectedRefs.length ? ` - ${selectedRefs.join('・')}号` : ''}\n${url}`;
+
 /* ------------------------------------------------------------------ 凡例 --- */
-const swatch = (color, text, dashed) =>
-  `<span class="item"><span class="swatch" style="border-top-color:${color}` +
+/**
+ * `tip` は補足であって名前の一部ではないので、表示上はカッコ書きにせず
+ * `title` 属性へ渡す — ホバーで読めれば足り、常に文字として並べておく理由が
+ * ない。`title` を持つ項目だけカーソルを help にし、補足があることを示す。
+ */
+const swatch = (color, text, dashed, tip) =>
+  `<span class="item"${tip ? ` title="${esc(tip)}"` : ''}>` +
+  `<span class="swatch" style="border-top-color:${color}` +
   `${dashed ? ';border-top-style:dashed' : ''}"></span>${text}</span>`;
 
 export const legendNHTML = () =>
@@ -148,12 +163,12 @@ export const legendNHTML = () =>
 
 export const legendKindHTML = () =>
   [
-    [COLOR_FOOT, '点線国道（徒歩道・階段）'],
-    [COLOR_CONSTRUCTION, '工事中・事業中'],
-    [COLOR_UNOPENED, '未開通区間（計画・未着工）'],
-    [COLOR_FERRY, '海上国道（航路）'],
+    [COLOR_FOOT, '点線国道', '徒歩道・階段'],
+    [COLOR_CONSTRUCTION, '工事中・事業中', null],
+    [COLOR_UNOPENED, '未開通区間', '計画・未着工'],
+    [COLOR_FERRY, '海上国道', '航路'],
   ]
-    .map(([c, t]) => swatch(c, t, true))
+    .map(([c, t, tip]) => swatch(c, t, true, tip))
     .join('');
 
 /* ------------------------------------------------------------ データ基準 --- */
@@ -185,7 +200,7 @@ export function freshnessHTML(meta, now = Date.now()) {
     `<dd class="${stale ? 'warn' : ''}">${utc(base)}（${ageText}）</dd>` +
     '<dt>区間の更新</dt>' +
     `<dd>${esc(meta.oldest_edit)} 〜 ${esc(meta.newest_edit)}</dd>` +
-    '<dt>取得元</dt>' +
+    '<dt>OSM 取得元</dt>' +
     `<dd>${esc(meta.endpoints.join(' / '))}</dd>` +
     (stale
       ? '<dt></dt><dd class="warn">最近の開通は反映されていない可能性があります</dd>'

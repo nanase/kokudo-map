@@ -54,8 +54,8 @@
     <section class="block">
       <div class="block-hd"><h2>重用区間</h2></div>
       <div class="radios" role="radiogroup" aria-label="重用区間の表示">
-        <label><input type="radio" name="conc" value="off" checked> 強調しない</label>
-        <label><input type="radio" name="conc" value="all"> 重用区間のみ表示</label>
+        <label><input type="radio" name="conc" value="off" checked> 強調なし</label>
+        <label><input type="radio" name="conc" value="all"> 重用区間のみ</label>
       </div>
       <!-- panel.mjs の legendNHTML() の出力そのもの。static にしてあるのは
            vendor/*.js の読み込みを待たずに最初の描画から出したいため —
@@ -73,7 +73,7 @@
         <label><input type="checkbox" id="t-ferry" checked> 海上国道</label>
       </div>
       <!-- panel.mjs の legendKindHTML() の出力そのもの。理由は legend-n と同じ。 -->
-      <div id="legend-kind" class="legend"><span class="item"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道（徒歩道・階段）</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間（計画・未着工）</span><span class="item"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道（航路）</span></div>
+      <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
     </section>
 
     <section class="block">
@@ -82,7 +82,6 @@
           <h2>重用ランキング</h2>
           <span class="count" id="ranking-count"></span>
         </summary>
-        <p class="hint">通常の地図が番号の若いものだけを描いてしまう区間。行をクリックするとその区間へ移動します。</p>
         <div id="ranking" class="ranking"></div>
       </details>
     </section>
@@ -93,7 +92,6 @@
           <h2>起終点を共有する地点</h2>
           <span class="count" id="shared-count"></span>
         </summary>
-        <p class="hint">行をクリックするとその地点へ移動します。</p>
         <div id="shared" class="ranking"></div>
       </details>
     </section>
@@ -101,7 +99,7 @@
     <footer>
       <details id="freshness-block" class="fold">
         <summary><h2>データ情報</h2></summary>
-        <div id="stats" class="stats"></div>
+        <dl id="stats" class="stats"></dl>
         <dl id="freshness" class="freshness"></dl>
       </details>
       <!-- 出典は地図の上の表示だけが述べる。ここにも書くと二箇所になる。 -->
@@ -137,13 +135,24 @@
 <dialog id="share-dialog">
   <form method="dialog">
     <header>
-      <h2>共有</h2>
+      <h2>表示位置を共有</h2>
       <button type="submit" class="dialog-close" aria-label="閉じる">×</button>
     </header>
     <div class="share-url-row">
       <input type="text" id="share-url" readonly aria-label="共有用URL">
       <button type="button" id="share-copy" class="mini">コピー</button>
     </div>
+    <button type="button" id="share-text" class="share-text-btn">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M10 13a5 5 0 0 0 7.54.54l2.12-2.12a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+              fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-2.12 2.12a5 5 0 0 0 7.07 7.07l1.71-1.71"
+              fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      文章で共有
+    </button>
     <div id="share-body" class="share-summary"></div>
   </form>
 </dialog>

@@ -152,7 +152,11 @@ body {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 10px; margin-bottom: 10px;
 }
-.block h2, #panel footer h2 {
+/* #panel を付けると id を含む分だけ詳細度が上がり、.fold > summary:hover h2
+   の hover 色 (クラスのみ) に勝ってしまう — データ情報だけホバーで色が
+   変わらない不具合になる。footer は #panel の中に一つしかないので、
+   id が無くても他要素と衝突しない。 */
+.block h2, footer h2 {
   margin: 0; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace;
@@ -240,15 +244,12 @@ input[type="search"]::placeholder { font-size: .82em; }
 .route-list input { margin: 0; accent-color: var(--sign-blue); }
 .route-list .mn { font-size: .62rem; color: var(--ink-3); font-weight: 400; }
 
-.radios { display: flex; flex-flow: row wrap; gap: 6px 16px; }
-.checks { display: flex; flex-direction: column; gap: 5px; }
+.radios, .checks { display: flex; flex-flow: row wrap; gap: 6px 16px; }
 .radios label, .checks label {
   display: flex; align-items: center; gap: 7px; cursor: pointer;
   color: var(--ink-2); font-size: .82rem;
 }
 .radios input, .checks input { accent-color: var(--sign-blue); margin: 0; }
-
-.hint { margin: 8px 0 0; font-size: .72rem; color: var(--ink-3); line-height: 1.5; }
 
 /* legends --------------------------------------------------------------- */
 .legend { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 12px; }
@@ -258,6 +259,8 @@ input[type="search"]::placeholder { font-size: .82em; }
   font-family: ui-monospace, Consolas, monospace;
 }
 .legend .swatch { width: 20px; height: 0; border-top-width: 3px; border-top-style: solid; }
+/* title 属性を持つ項目だけ、補足があることをカーソルで示す。 */
+.legend .item[title] { cursor: help; }
 
 /* ranking --------------------------------------------------------------- */
 .ranking { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
@@ -308,30 +311,31 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .shield-btn:hover { background: var(--line-2); }
 
-/* footer ---------------------------------------------------------------- */
+/* footer ------------------------------------------------------------------
+   データ情報 (#freshness-block) は他の折りたたみブロックと同じく上に沿わせ、
+   GitHub リンクだけを下端に沿わせる。footer 自身に margin-top: auto を置くと
+   両方まとめて下端に押し出されてしまうので、footer を残り空間まで伸ばし
+   (flex: 1 0 auto)、その中で .repo-link だけを margin-top: auto で押し下げる。
+   中身がパネルの高さを超えて溢れるときは伸びる余地が無いので、これまで通り
+   自然に積み上がる。 */
 #panel footer {
-  padding: 14px 18px 4px; margin-top: auto;
+  padding: 14px 18px 4px; flex: 1 0 auto;
   display: flex; flex-direction: column; gap: 10px;
 }
 #freshness-block { margin: 0; }
-.stats {
-  font-family: ui-monospace, Consolas, monospace; font-size: .72rem;
-  color: var(--ink-2); background: var(--panel-2);
-  border: 1px solid var(--line-2); border-radius: 3px;
-  padding: 8px 10px; display: grid; gap: 2px;
-  font-variant-numeric: tabular-nums;
-}
 /* Data provenance: which day of OSM this map is showing. */
-.freshness {
-  margin: 8px 0 0; display: grid; grid-template-columns: max-content 1fr;
+.stats, .freshness {
+  display: grid; grid-template-columns: max-content 1fr;
   gap: 1px 10px; font-size: .68rem; line-height: 1.55;
   font-family: ui-monospace, Consolas, monospace;
 }
-.freshness dt { color: var(--ink-3); }
-.freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* データ基準以下との区切りとわかる程度の余白。 */
+.freshness { margin: 8px 0 0; }
+.stats dt, .freshness dt { color: var(--ink-3); }
+.stats dd, .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .freshness dd.warn { color: #B4690E; font-weight: 700; }
 @media (prefers-color-scheme: dark) { .freshness dd.warn { color: #E7B457; } }
-.repo-link { align-self: flex-start; }
+.repo-link { align-self: flex-start; margin-top: auto; }
 
 /* ----------------------------------------------------------------- map --- */
 /* 出典表示は地図の上、MapLibre の白い下敷きの上にある。本文の色を継がせない。 */
@@ -436,8 +440,10 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 #share-dialog h2 { margin: 0; font-size: 1rem; font-weight: 800; }
 .dialog-close {
-  border: 0; background: none; cursor: pointer; font-size: 1.2rem; line-height: 1;
-  color: var(--ink-3); padding: 2px 6px; border-radius: 3px;
+  border: 0; background: none; cursor: pointer; line-height: 1;
+  color: var(--ink-3); border-radius: 4px;
+  display: grid; place-items: center; width: 32px; height: 32px;
+  font-size: 1.7rem;
 }
 .dialog-close:hover { color: var(--ink); background: var(--panel-2); }
 
@@ -454,6 +460,19 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 #share-copy svg { width: 14px; height: 14px; display: block; }
 #share-copy.copied { color: var(--success); border-color: var(--success); }
+
+/* URL だけのコピーとは別に、SNS などへそのまま渡せる「タイトル + URL」の
+   文章を渡す。対応環境では Web Share API の共有シートを開き、無ければ
+   #share-copy と同じ「コピーしました」の点滅で伝える。 */
+.share-text-btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  font: inherit; font-size: .78rem; padding: 7px 10px; cursor: pointer;
+  background: var(--panel-2); color: var(--ink-2);
+  border: 1px solid var(--line); border-radius: 3px;
+}
+.share-text-btn:hover:not(:disabled) { border-color: var(--sign-blue); color: var(--sign-blue); }
+.share-text-btn svg { width: 14px; height: 14px; display: block; }
+.share-text-btn.copied { color: var(--success); border-color: var(--success); }
 
 .share-summary { display: flex; flex-direction: column; gap: 9px; font-size: .8rem; }
 .share-row { display: flex; gap: 10px; align-items: baseline; }

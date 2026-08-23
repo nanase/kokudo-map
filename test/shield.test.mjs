@@ -9,6 +9,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  SHIELD_ICON_PAD,
+  SHIELD_ICON_STROKE_WIDTH,
   SHIELD_PATH,
   SHIELD_STROKE_WIDTH,
   SHIELD_VIEWBOX,
@@ -60,6 +62,20 @@ describe('SHIELD_PATH', () => {
   test('曲線は viewBox の内側、縁の太さぶんの余白を残す', () => {
     const [, , vw, vh] = nums(SHIELD_VIEWBOX);
     const margin = SHIELD_STROKE_WIDTH / 2;
+    for (const [x, y] of anchors(SHIELD_PATH)) {
+      expect(x).toBeGreaterThanOrEqual(margin);
+      expect(x).toBeLessThanOrEqual(vw - margin);
+      expect(y).toBeGreaterThanOrEqual(margin);
+      expect(y).toBeLessThanOrEqual(vh - margin);
+    }
+  });
+
+  test('SHIELD_ICON_PAD は SHIELD_ICON_STROKE_WIDTH の縁を切らさない余白を持つ', () => {
+    // favicon 側 (scripts/make_brand.mjs) は SHIELD_VIEWBOX を SHIELD_ICON_PAD
+    // ぶん広げてから太い縁を描く。broadened 後の余白が縁の太さの半分を
+    // 下回ると、太くした縁がその viewBox の外へ切れて出る。
+    const [, , vw, vh] = nums(SHIELD_VIEWBOX);
+    const margin = SHIELD_ICON_STROKE_WIDTH / 2 - SHIELD_ICON_PAD;
     for (const [x, y] of anchors(SHIELD_PATH)) {
       expect(x).toBeGreaterThanOrEqual(margin);
       expect(x).toBeLessThanOrEqual(vw - margin);
