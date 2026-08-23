@@ -358,8 +358,8 @@ function shadeIcon(level) {
   return (
     '<svg viewBox="0 0 24 24" aria-hidden="true">' +
     `<defs><clipPath id="shade-drop-clip"><path d="${drop}"/></clipPath></defs>` +
-    `<path d="${drop}" fill="none" stroke="currentColor" stroke-width="1.7"/>` +
     liquid +
+    `<path d="${drop}" fill="none" stroke="currentColor" stroke-width="1.7"/>` +
     '</svg>'
   );
 }
