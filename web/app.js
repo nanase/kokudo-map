@@ -800,8 +800,7 @@ function wireShare() {
   $('#share-btn').addEventListener('click', () => {
     // ダイアログを開き直すタイミングでは #share-text の文章表示は不要な
     // ので、前回 blur が発火せず残っていた場合に備えて明示的に戻す。
-    restoreManualCopy();
-    $('#share-url').value = location.href;
+    showShareUrl();
     $('#share-body').innerHTML = shareSummaryHTML(shareState());
     dialog.showModal();
     $('#share-url').select();
@@ -809,9 +808,9 @@ function wireShare() {
 
   $('#share-copy').addEventListener('click', async () => {
     // iOS Safari は <button> のタップでフォーカスが移らず、
-    // revealForManualCopy() が待つ blur が発火しないことがある。
+    // showShareText() が待つ blur が発火しないことがある。
     // その場合に備え、コピー前に必ず真の URL へ戻してから読む。
-    restoreManualCopy();
+    showShareUrl();
     const input = $('#share-url');
     input.select();
     try {
@@ -837,7 +836,7 @@ function wireShare() {
     // 前回の失敗で #share-url が文章表示のまま残っていることがある
     // (iOS Safari では blur が発火しないため)。今回の結果に関わらず、
     // ここで一度まっさらな状態から始める。
-    restoreManualCopy();
+    showShareUrl();
     const text = shareText(location.href, shareState());
     if (navigator.share) {
       try {
@@ -845,7 +844,7 @@ function wireShare() {
       } catch (err) {
         // AbortError はユーザーが共有シートを閉じただけなので何もしない。
         // それ以外 (権限や埋め込み文脈による失敗) は手でコピーできるようにする。
-        if (err.name !== 'AbortError') revealForManualCopy(text);
+        if (err.name !== 'AbortError') showShareText(text);
       } finally {
         sharingText = false;
       }
@@ -854,7 +853,7 @@ function wireShare() {
     try {
       await navigator.clipboard.writeText(text);
     } catch {
-      revealForManualCopy(text);
+      showShareText(text);
       sharingText = false;
       return;
     }
@@ -864,43 +863,47 @@ function wireShare() {
 }
 
 // #share-text の共有シートが開いている間、連打による navigator.share() の
-// 多重呼び出しを防ぐガード。wireShare() と revealForManualCopy() 双方から
-// 参照するのでモジュールスコープに置く。
+// 多重呼び出しを防ぐガード。wireShare() から参照するのでモジュールスコープに置く。
 let sharingText = false;
 
-// revealForManualCopy() が #share-url を一時的な表示欄にしている間、元の
-// URL を覚えておく変数。null は「今は表示欄にしていない」を表す。
-let manualCopyOriginal = null;
+// #share-url が今何を表示しているかを表す状態。表示内容はここから導き、
+// 退避した元の値を戻す形にはしない (mode を 'url' に戻せば location.href
+// から書き直される)。
+let shareField = { mode: 'url', text: '' };
+
+/** shareField の内容を #share-url に反映する。 */
+function renderShareField() {
+  $('#share-url').value =
+    shareField.mode === 'url' ? location.href : shareField.text;
+}
+
+/** #share-url を現在の URL 表示に戻す。blur ハンドラからもここへ集約する。 */
+function showShareUrl() {
+  shareField = { mode: 'url', text: '' };
+  renderShareField();
+}
 
 /**
  * Web Share にもクリップボードにも失敗したときの最後の手段。#share-copy は
  * URL 欄が常に見えているので選択したまま手でコピーできるが、#share-text の
  * 文章はどこにも表示されていないので、このまま失敗すると打つ手が無くなる。
- * #share-url を一時的な表示欄として使い、フォーカスが外れたら元の URL に戻す。
+ * #share-url を一時的な表示欄として使い、フォーカスが外れたら showShareUrl()
+ * で URL 表示に戻す。
  *
  * text の改行はそのまま渡すと input が黙って捨て、タイトルと URL が区切りなく
  * くっついてしまうので、見える形に保つスペースへ置き換える。
  *
- * blur が発火する前にもう一度呼ばれても、真の URL は manualCopyOriginal に
- * 保持したまま取り直さない (このとき input.value は既に文章側のため)。
- * addEventListener は同じ関数参照を渡す限り二重登録されないので、
- * blur リスナーは毎回渡してよい。iOS Safari は <button> のタップで
- * フォーカスが移らず blur 自体が発火しないことがあるため、#share-copy と
- * #share-text 側でも restoreManualCopy() を呼んで確実に真の URL へ戻す。
+ * addEventListener は同じ関数参照を渡す限り二重登録されないので、blur
+ * リスナーは毎回渡してよい。iOS Safari は <button> のタップでフォーカスが
+ * 移らず blur 自体が発火しないことがあるため、#share-copy と #share-text
+ * 側でも showShareUrl() を呼んで確実に URL 表示へ戻す。
  */
-function revealForManualCopy(text) {
+function showShareText(text) {
+  shareField = { mode: 'text', text: text.replace(/\n/g, ' ') };
+  renderShareField();
   const input = $('#share-url');
-  if (manualCopyOriginal === null) manualCopyOriginal = input.value;
-  input.value = text.replace(/\n/g, ' ');
   input.select();
-  input.addEventListener('blur', restoreManualCopy, { once: true });
-}
-
-/** #share-url を revealForManualCopy() 呼び出し前の URL に戻す。 */
-function restoreManualCopy() {
-  if (manualCopyOriginal === null) return;
-  $('#share-url').value = manualCopyOriginal;
-  manualCopyOriginal = null;
+  input.addEventListener('blur', showShareUrl, { once: true });
 }
 
 const CHECK_ICON =
