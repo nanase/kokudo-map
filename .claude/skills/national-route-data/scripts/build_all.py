@@ -64,6 +64,20 @@ def failures(out: str) -> list[str]:
     return [ln.strip() for ln in out.splitlines() if ln.startswith("FAIL")]
 
 
+def outcome(label: str, code: int, out: str) -> list[str]:
+    """A subprocess's verdict, folding in exit codes that FAIL lines miss.
+
+    verify.py itself exits 1 whenever it prints FAIL lines, so `code != 0`
+    is not evidence of anything beyond what `failures()` already found.
+    Only a nonzero exit with no FAIL line at all — a traceback, a crash —
+    is new information, and it is reported once, not per FAIL line.
+    """
+    bad = failures(out)
+    if code != 0 and not bad:
+        bad.append(f"{label} が終了コード {code} で異常終了しました（FAIL 行なし）")
+    return bad
+
+
 def main() -> None:
     # A road name this terminal cannot encode must not be what stops the build.
     sys.stdout.reconfigure(errors="replace")
@@ -97,12 +111,12 @@ def main() -> None:
             continue
 
         code, out = run(["uv", "run", str(HERE / "verify.py"), region])
-        bad = failures(out)
+        bad = outcome("verify.py", code, out)
         line = f"{head} {verdict(out)}"
 
-        code2, out2 = run(["node", str(HERE / "check_expressions.mjs"), region])
-        bad += failures(out2)
-        line += f" | 式 {verdict(out2)}"
+        code, out = run(["node", str(HERE / "check_expressions.mjs"), region])
+        bad += outcome("check_expressions.mjs", code, out)
+        line += f" | 式 {verdict(out)}"
 
         print(line, flush=True)
         for f in bad:
