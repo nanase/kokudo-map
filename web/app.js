@@ -325,13 +325,18 @@ class HideRoutesControl {
 }
 
 /* -------------------------------------------------------------- gsi shade --- */
-/** How full the drop sits for each shade — 濃い brims, 薄い is a third full. */
-const SHADE_FILL = { light: 0.32, normal: 0.66, dark: 1 };
+/**
+ * How full the drop sits for each shade, and how tilted its liquid surface
+ * is. 薄い has no liquid at all (empty outline). 濃い brims flat, so no tilt
+ * is visible either way. 通常 sits just under half with a tilted surface —
+ * the tilt is what reads as "liquid", distinguishing it from an abstract
+ * gauge, at a glance and without already knowing the kanji for 濃い/薄い.
+ */
+const SHADE_FILL = { light: 0, normal: 0.42, dark: 1 };
+const SHADE_TILT = { light: 0, normal: 10.4, dark: 0 }; // 幅18に対し約30度
 
 /**
  * A water drop, filled from the bottom by how dark the current shade is.
- * Ink/water density is a more immediate read of "how dark" than an abstract
- * gauge, and does not depend on already knowing the kanji for 濃い/薄い.
  */
 function shadeIcon(level) {
   const drop =
@@ -339,14 +344,22 @@ function shadeIcon(level) {
   const top = 2.4;
   const bottom = 22.6; // 15.6 + 7 の半径ぶん下
   const fillH = (bottom - top) * SHADE_FILL[level];
-  const fillY = (bottom - fillH).toFixed(2);
+  const fillY = bottom - fillH;
+  const halfTilt = SHADE_TILT[level] / 2;
+  const leftY = (fillY + halfTilt).toFixed(2); // 左下から右上へ上がる液面
+  const rightY = (fillY - halfTilt).toFixed(2);
+  const below = (bottom + 3).toFixed(2); // クリップの外まで伸ばして隙間をなくす
+  const liquid =
+    fillH <= 0
+      ? ''
+      : '<g clip-path="url(#shade-drop-clip)">' +
+        `<polygon points="3,${below} 3,${leftY} 21,${rightY} 21,${below}" fill="currentColor"/>` +
+        '</g>';
   return (
     '<svg viewBox="0 0 24 24" aria-hidden="true">' +
     `<defs><clipPath id="shade-drop-clip"><path d="${drop}"/></clipPath></defs>` +
     `<path d="${drop}" fill="none" stroke="currentColor" stroke-width="1.7"/>` +
-    '<g clip-path="url(#shade-drop-clip)">' +
-    `<rect x="3" y="${fillY}" width="18" height="${fillH.toFixed(2)}" fill="currentColor"/>` +
-    '</g>' +
+    liquid +
     '</svg>'
   );
 }
