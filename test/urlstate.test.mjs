@@ -53,6 +53,7 @@ describe('encodeState', () => {
     expressway: true,
     special: true,
     ferry: true,
+    former: true,
   };
 
   test('すべて既定値なら空文字列', () => {
@@ -75,6 +76,11 @@ describe('encodeState', () => {
     expect(p.get('labels')).toBe('0');
     expect(p.get('ferry')).toBe('0');
     expect(p.has('termini')).toBe(false);
+  });
+
+  test('旧道をオフにすると former=0 が出る', () => {
+    const p = new URLSearchParams(encodeState({ ...base, former: false }));
+    expect(p.get('former')).toBe('0');
   });
 });
 
@@ -102,6 +108,10 @@ describe('decodeURLState', () => {
     });
   });
 
+  test('旧道の表示項目も 0/それ以外 で真偽になる', () => {
+    expect(decodeURLState('?former=0')).toEqual({ former: false });
+  });
+
   test('encodeState の出力を decodeURLState に通すと同じ差分が戻る', () => {
     const diff = { selected: new Set([1, 2, 3]), conc: 'all', special: false };
     const full = {
@@ -112,6 +122,7 @@ describe('decodeURLState', () => {
       expressway: true,
       special: true,
       ferry: true,
+      former: true,
       ...diff,
     };
     expect(decodeURLState(encodeState(full))).toEqual(diff);

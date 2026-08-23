@@ -15,9 +15,17 @@ export const DEFAULTS = {
   expressway: true,
   special: true,
   ferry: true,
+  former: true,
 };
 
-const TOGGLE_KEYS = ['labels', 'termini', 'expressway', 'special', 'ferry'];
+const TOGGLE_KEYS = [
+  'labels',
+  'termini',
+  'expressway',
+  'special',
+  'ferry',
+  'former',
+];
 
 // Every query key this module reads or writes. `?region=` is a separate
 // concern (app.js's initial-view hint) and deliberately not here, so a sync

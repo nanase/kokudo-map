@@ -15,6 +15,7 @@ import {
   CLICKABLE_LAYERS,
   EXCLUDE_FROM_ROADS_LAYER,
   FILTERED_LAYERS,
+  formerOpacity,
   hasRef,
   kindTest,
   NOTHING,
@@ -45,6 +46,24 @@ describe('buildFilter', () => {
       'all',
       ['any', hasRef(18)],
       ['>=', ['get', 'n'], 2],
+    ]);
+  });
+
+  test('既定では旧道も含む', () => {
+    expect(buildFilter([], 'off')).toBe(true);
+    expect(buildFilter([], 'off', true)).toBe(true);
+  });
+
+  test('旧道を隠すときは former を除く条件を足す', () => {
+    expect(buildFilter([], 'off', false)).toEqual([
+      'all',
+      ['!=', ['get', 'former'], 1],
+    ]);
+    expect(buildFilter([18], 'all', false)).toEqual([
+      'all',
+      ['any', hasRef(18)],
+      ['>=', ['get', 'n'], 2],
+      ['!=', ['get', 'former'], 1],
     ]);
   });
 });
@@ -176,6 +195,30 @@ describe('種別の切り分け', () => {
     );
     for (const kind of EXCLUDE_FROM_ROADS_LAYER)
       expect(shown.has(kind)).toBe(true);
+  });
+});
+
+describe('旧道の不透明度', () => {
+  const layers = routeLayers();
+  const byId = (id) => layers.find((l) => l.id === id);
+  // 影(picked)は「押されているアークの下」を示す層で、former の性質そのものを
+  // 表すものではないので対象に含めない。
+  const lineLayers = layers.filter(
+    (l) => l.type === 'line' && l.id !== 'picked',
+  );
+
+  test('道路を描くすべての線レイヤーが former で不透明度を下げる', () => {
+    for (const l of lineLayers) {
+      // 各レイヤーの元の不透明度を式そのものから読み、その値を通した
+      // formerOpacity() と一致するかを見る。実際の値(0.85 か既定の 1)を
+      // ここで思い出す必要が無い。
+      const base = l.paint['line-opacity'][3];
+      expect(l.paint['line-opacity']).toEqual(formerOpacity(base));
+    }
+  });
+
+  test('路線番号ラベルも former で不透明度を下げる', () => {
+    expect(byId('route-labels').paint['text-opacity']).toEqual(formerOpacity());
   });
 });
 

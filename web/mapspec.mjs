@@ -120,15 +120,23 @@ export const hasRef = (ref) => ['in', `,${ref},`, ['get', 'refs']];
 
 /**
  * The filter every road layer shares.
- * `selected` narrows which routes are drawn; `conc` narrows to concurrency.
+ * `selected` narrows which routes are drawn; `conc` narrows to concurrency;
+ * `showFormer` (default on) narrows out 旧道 when switched off.
  *
  * Concurrency is a property of the road, not of the selection: an arc carrying
  * 18 and 117 is a 重用区間 whether or not both numbers happen to be ticked.
+ *
+ * 旧道 is a property of the road too, not of a layer — it cuts across `kind`
+ * (road/expressway/foot/construction all have former arcs), so it belongs here
+ * rather than in FILTERED_LAYERS. Folding it into the shared filter also means
+ * pickedFilter picks it up for free: a former arc taken off the map loses its
+ * shadow along with everything else.
  */
-export function buildFilter(selected, conc) {
+export function buildFilter(selected, conc, showFormer = true) {
   const parts = [];
   if (selected.length) parts.push(['any', ...selected.map(hasRef)]);
   if (conc === 'all') parts.push(['>=', ['get', 'n'], 2]);
+  if (!showFormer) parts.push(['!=', ['get', 'former'], 1]);
 
   return parts.length ? ['all', ...parts] : true;
 }
@@ -170,6 +178,24 @@ export const colorByN = [
   3,
   N_COLORS[2],
   N_COLORS[3],
+];
+
+/* 旧道 is drawn as the same line, dimmed, rather than dashed: `line-dasharray`
+ * takes no data-driven expression, so dashing it would need a duplicate layer
+ * per kind, and a new dash would collide with the meaning dashes already carry
+ * — 点線国道・工事中・海上国道・未開通 use them for "not driveable", which is
+ * beside the point former is making (almost every 旧道 arc is ordinary
+ * driveable carriageway; kind and former status are independent facts).
+ * Colour is already carrying concurrency depth and width is already carrying
+ * both that and zoom, so opacity is what is left. */
+export const FORMER_OPACITY = 0.4;
+
+/** Scale a layer's opacity down to `FORMER_OPACITY` for 旧道 arcs. */
+export const formerOpacity = (base = 1) => [
+  'case',
+  ['==', ['get', 'former'], 1],
+  base * FORMER_OPACITY,
+  base,
 ];
 
 // Concurrency reads as weight as well as hue, so depth survives zooming out
@@ -277,7 +303,7 @@ export function routeLayers() {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#FFFFFF',
-        'line-opacity': 0.85,
+        'line-opacity': formerOpacity(0.85),
         'line-width': lineWidth({ add: 2.6 }),
       },
     },
@@ -299,6 +325,7 @@ export function routeLayers() {
       },
       paint: {
         'line-color': colorByN,
+        'line-opacity': formerOpacity(),
         'line-width': lineWidth(),
       },
     },
@@ -314,7 +341,7 @@ export function routeLayers() {
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
         'line-color': '#FFFFFF',
-        'line-opacity': 0.85,
+        'line-opacity': formerOpacity(0.85),
         'line-width': lineWidth({ add: 2.6 }),
       },
     },
@@ -330,6 +357,7 @@ export function routeLayers() {
       },
       paint: {
         'line-color': colorByN,
+        'line-opacity': formerOpacity(),
         'line-width': lineWidth(),
       },
     },
@@ -341,6 +369,7 @@ export function routeLayers() {
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': COLOR_CONSTRUCTION,
+        'line-opacity': formerOpacity(),
         'line-width': lineWidth({ add: 0.6, scaleByN: false }),
         'line-dasharray': [2, 2],
       },
@@ -357,6 +386,7 @@ export function routeLayers() {
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': COLOR_UNOPENED,
+        'line-opacity': formerOpacity(),
         'line-width': lineWidth({ add: 0.6, scaleByN: false }),
         'line-dasharray': [1, 3],
       },
@@ -369,6 +399,7 @@ export function routeLayers() {
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': COLOR_FOOT,
+        'line-opacity': formerOpacity(),
         'line-width': lineWidth({ add: 0.6, scaleByN: false }),
         'line-dasharray': [1, 2],
       },
@@ -384,6 +415,7 @@ export function routeLayers() {
       layout: { 'line-cap': 'butt', 'line-join': 'round' },
       paint: {
         'line-color': COLOR_FERRY,
+        'line-opacity': formerOpacity(),
         'line-width': lineWidth({ add: 0.6, scaleByN: false }),
         'line-dasharray': [4, 2.5],
       },
@@ -414,6 +446,7 @@ export function routeLayers() {
         'text-color': colorByN,
         'text-halo-color': '#FFFFFF',
         'text-halo-width': 2,
+        'text-opacity': formerOpacity(),
       },
     },
     {
