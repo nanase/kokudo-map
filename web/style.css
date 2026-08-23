@@ -152,7 +152,11 @@ body {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 10px; margin-bottom: 10px;
 }
-.block h2, #panel footer h2 {
+/* #panel を付けると id を含む分だけ詳細度が上がり、.fold > summary:hover h2
+   の hover 色 (クラスのみ) に勝ってしまう — データ情報だけホバーで色が
+   変わらない不具合になる。footer は #panel の中に一つしかないので、
+   id が無くても他要素と衝突しない。 */
+.block h2, footer h2 {
   margin: 0; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace;
@@ -307,30 +311,31 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .shield-btn:hover { background: var(--line-2); }
 
-/* footer ---------------------------------------------------------------- */
+/* footer ------------------------------------------------------------------
+   データ情報 (#freshness-block) は他の折りたたみブロックと同じく上に沿わせ、
+   GitHub リンクだけを下端に沿わせる。footer 自身に margin-top: auto を置くと
+   両方まとめて下端に押し出されてしまうので、footer を残り空間まで伸ばし
+   (flex: 1 0 auto)、その中で .repo-link だけを margin-top: auto で押し下げる。
+   中身がパネルの高さを超えて溢れるときは伸びる余地が無いので、これまで通り
+   自然に積み上がる。 */
 #panel footer {
-  padding: 14px 18px 4px; margin-top: auto;
+  padding: 14px 18px 4px; flex: 1 0 auto;
   display: flex; flex-direction: column; gap: 10px;
 }
 #freshness-block { margin: 0; }
-.stats {
-  font-family: ui-monospace, Consolas, monospace; font-size: .72rem;
-  color: var(--ink-2); background: var(--panel-2);
-  border: 1px solid var(--line-2); border-radius: 3px;
-  padding: 8px 10px; display: grid; gap: 2px;
-  font-variant-numeric: tabular-nums;
-}
 /* Data provenance: which day of OSM this map is showing. */
-.freshness {
-  margin: 8px 0 0; display: grid; grid-template-columns: max-content 1fr;
+.stats, .freshness {
+  display: grid; grid-template-columns: max-content 1fr;
   gap: 1px 10px; font-size: .68rem; line-height: 1.55;
   font-family: ui-monospace, Consolas, monospace;
 }
-.freshness dt { color: var(--ink-3); }
-.freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* データ基準以下との区切りとわかる程度の余白。 */
+.freshness { margin: 8px 0 0; }
+.stats dt, .freshness dt { color: var(--ink-3); }
+.stats dd, .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .freshness dd.warn { color: #B4690E; font-weight: 700; }
 @media (prefers-color-scheme: dark) { .freshness dd.warn { color: #E7B457; } }
-.repo-link { align-self: flex-start; }
+.repo-link { align-self: flex-start; margin-top: auto; }
 
 /* ----------------------------------------------------------------- map --- */
 /* 出典表示は地図の上、MapLibre の白い下敷きの上にある。本文の色を継がせない。 */

@@ -59,11 +59,15 @@ describe('statsHTML', () => {
 
   test('選択が空なら全路線を分子にする', () => {
     // 何も選んでいない状態は「全部出ている」ことであって、0 本ではない。
-    expect(statsHTML(0, 459, totals)).toContain('選択路線　459 / 459');
+    expect(statsHTML(0, 459, totals)).toContain(
+      '<dt>選択路線</dt><dd>459 / 459</dd>',
+    );
   });
 
   test('選択があればその数を出す', () => {
-    expect(statsHTML(3, 459, totals)).toContain('選択路線　3 / 459');
+    expect(statsHTML(3, 459, totals)).toContain(
+      '<dt>選択路線</dt><dd>3 / 459</dd>',
+    );
   });
 
   test('大きな数は桁を区切る', () => {

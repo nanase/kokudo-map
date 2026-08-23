@@ -45,10 +45,10 @@ export const routeListHTML = (routes) =>
 /* ------------------------------------------------------------------ 集計 --- */
 /** The footer's four numbers. An empty selection means everything. */
 export const statsHTML = (selectedCount, totalRoutes, { arcs, km, conc }) =>
-  `<span>選択路線　${selectedCount || totalRoutes} / ${totalRoutes}</span>` +
-  `<span>対象アーク　${arcs.toLocaleString()}</span>` +
-  `<span>延長　${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</span>` +
-  `<span>重用アーク　${conc.toLocaleString()}</span>`;
+  `<dt>選択路線</dt><dd>${selectedCount || totalRoutes} / ${totalRoutes}</dd>` +
+  `<dt>対象アーク</dt><dd>${arcs.toLocaleString()}</dd>` +
+  `<dt>延長</dt><dd>${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</dd>` +
+  `<dt>重用アーク</dt><dd>${conc.toLocaleString()}</dd>`;
 
 /**
  * What the clear button says.
@@ -191,7 +191,7 @@ export function freshnessHTML(meta, now = Date.now()) {
     `<dd class="${stale ? 'warn' : ''}">${utc(base)}（${ageText}）</dd>` +
     '<dt>区間の更新</dt>' +
     `<dd>${esc(meta.oldest_edit)} 〜 ${esc(meta.newest_edit)}</dd>` +
-    '<dt>取得元</dt>' +
+    '<dt>OSM 取得元</dt>' +
     `<dd>${esc(meta.endpoints.join(' / '))}</dd>` +
     (stale
       ? '<dt></dt><dd class="warn">最近の開通は反映されていない可能性があります</dd>'
