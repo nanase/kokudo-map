@@ -7,6 +7,8 @@
 #     1. review 本文 — CodeRabbit は nitpick を本文内の <details> に畳む。区画内にそのまま出るので開いて読む。
 #     2. インラインコメント — path:line と id。返信は reply.sh にこの id を渡す。
 #     3. サマリ / PR コメント — 先頭サマリは上書き更新されるので毎回読み直す。
+#        updated_at も出す。CodeRabbit のレート制限メッセージはこのコメントを
+#        上書きして出るため、解除時刻の起点として使う（CODERABBIT.md 参照）。
 set -euo pipefail
 
 R="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
@@ -32,4 +34,4 @@ gh api "repos/$R/pulls/$PR/comments" --paginate \
 
 echo "=== 3. サマリ / PR コメント ==="
 gh api "repos/$R/issues/$PR/comments" --paginate \
-  --jq '.[] | "--- \(.user.login) id:\(.id)\n\(.body)\n"'
+  --jq '.[] | "--- \(.user.login) id:\(.id) updated:\(.updated_at)\n\(.body)\n"'
