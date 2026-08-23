@@ -200,8 +200,19 @@ describe('sharedHTML', () => {
 
   test('押すと何が起きるかを aria-label で伝える', () => {
     expect(sharedHTML([point])).toContain(
-      'aria-label="国道7・8・17号が起終点を共有する地点を地図で表示"',
+      'aria-label="国道7・8・17号が起終点を共有する地点(北緯37.9100・東経139.0500)を地図で表示"',
     );
+  });
+
+  test('同じ路線の組が離れた地点にあっても aria-label が重複しない', () => {
+    // 全国データには refs が同じで座標が違う組が 32 件ある。座標が入って
+    // いないと、2 行とも同じ aria-label になってしまう。
+    const other = { refs: [7, 8, 17], lon: 130.4, lat: 33.6 };
+    const html = sharedHTML([point, other]);
+    const labels = [...html.matchAll(/<button[^>]*aria-label="([^"]*)"/g)].map(
+      ([, label]) => label,
+    );
+    expect(new Set(labels).size).toBe(2);
   });
 });
 

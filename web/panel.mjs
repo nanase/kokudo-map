@@ -109,7 +109,12 @@ export const sharedHTML = (rows) =>
   rows.length
     ? rows
         .map((t) => {
-          const label = `${routeLabel(t.refs)}が起終点を共有する地点を地図で表示`;
+          // 同じ路線の組が離れた土地で複数回起終点を共有することがあり
+          // (全国データで 32 組)、refs だけでは行を跨いで aria-label が
+          // 重複する。座標を足して行ごとに一意にする。
+          const label =
+            `${routeLabel(t.refs)}が起終点を共有する地点` +
+            `(北緯${t.lat.toFixed(4)}・東経${t.lon.toFixed(4)})を地図で表示`;
           return (
             `<button type="button" class="row" data-refs="${t.refs.join(',')}" ` +
             `data-at="${t.lon},${t.lat}" aria-label="${label}">` +
