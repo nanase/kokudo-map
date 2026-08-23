@@ -21,3 +21,6 @@ __pycache__/
 
 # Machine-local Claude Code settings, not shared
 .claude/settings.local.json
+
+# dev-flow が作る作業ツリー。clone のたびに作り直すので追跡しない。
+.claude/worktrees/
