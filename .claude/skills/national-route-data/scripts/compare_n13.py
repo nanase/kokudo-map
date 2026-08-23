@@ -29,17 +29,33 @@ Two comparisons, both point-in-the-other-direction of the same question:
              that comparison would flag every correctly-tagged 旧道 as a
              "mismatch" and mean nothing.
 
+An orphan only says "no 国道 nearby" — it does not say what, if anything, N13
+draws in its place. This script also looks up the nearest N13 line of *any*
+道路分類 for each orphan and reports its classification and distance. A
+definite non-国道 classification (都道府県道 / 市区町村道等 / 高速自動車国道等
+/ その他) sitting within a tight distance is a stronger signal than absence
+alone: it means N13 draws something specific, not-国道, exactly where our
+arc runs, which is what 指定解除 (a road handed down to a lower category, not
+simply erased) looks like from this source. 不明 does not count toward this —
+it asserts nothing to corroborate with.
+
 Both directions reuse the same grid: a region's own arcs are short OSM ways,
 N13 records are shorter still (cut at every attribute change, not just every
 junction), so nearest-*segment* distance is measured with a local
 equirectangular projection rather than nearest-vertex — vertex spacing on
 either side would otherwise read as false disagreement.
 
-Distances are not proof. A gap can be a real absence, an OSM tagging exclusion
-(check `why` — reused from audit.py's exclusion reasoning), or two independent
-digitisations of the same painted line. Only a human with 地理院地図 open
-decides which, and which route number applies — TRIAGE.md's "N13 は路線番号を
-持たないので…ここが人の出番です" is the load-bearing sentence in this file.
+Distances are not proof by themselves. A gap can be a real absence, an OSM
+tagging exclusion (check `why` — reused from audit.py's exclusion reasoning),
+or two independent digitisations of the same painted line — a human with
+地理院地図 open still decides which, and which route number applies, for
+gaps and for orphans this script cannot classify. TRIAGE.md's "N13 は路線番号
+を持たないので…ここが人の出番です" is still the load-bearing sentence for
+those. A confirmed orphan (marked in the report) is the one place that manual step
+is no longer needed to establish *that* 指定解除 happened; which number the
+road used to carry is still a human's call. Whether to bake this confirmation
+into build data (making N13 a build dependency) is a separate decision,
+deliberately left open — see issue #9.
 
 Usage:  uv run scripts/compare_n13.py [region] [--refresh]
 
@@ -76,6 +92,20 @@ UA = {"User-Agent": "NationalRouteMap/0.2 (build pipeline)"}
 # a Numeric field that would silently compare unequal to "1".
 RDCTG_FIELD = 2
 RDCTG_KOKUDO = "1"
+
+# 道路分類種別コードの全区分。KS-PS-N13-v1_1.pdf(2026-03, 国土交通省)4.1.3.2
+# の応用スキーマ文書と付属資料-2 の符号化仕様(XSD の enumeration/description)
+# の両方で確認済み — 推定ではない。orphan(旧道と疑われるアーク)の直下に
+# 国道以外の何が描かれているかを言うのに使う。不明(6)は「何かは分からない」
+# という情報しか持たないので、指定解除の裏付けにはならない。
+RDCTG_LABELS = {
+    "1": "国道",
+    "2": "都道府県道",
+    "3": "市区町村道等",
+    "4": "高速自動車国道等",
+    "5": "その他",
+    "6": "不明",
+}
 
 # 1次メッシュ code: p = floor(lat*1.5) (2 digits), q = floor(lon)-100 (2
 # digits), concatenated. Standard 地域メッシュ統計 first-level mesh, unrelated
@@ -203,9 +233,17 @@ def line_touches_bbox(line: list[tuple[float, float]], west: float, south: float
     return any(segment_intersects_bbox(a, b, west, south, east, north) for a, b in pairs)
 
 
-def load_kokudo(mesh: str, bbox: list[float], refresh: bool) -> list[list[tuple[float, float]]]:
-    """This mesh's full 国道-classified record set, filtered to the region's
-    bbox on every call.
+def load_classified(mesh: str, bbox: list[float], refresh: bool
+                     ) -> list[tuple[str, list[tuple[float, float]]]]:
+    """This mesh's full record set — every 道路分類, not just 国道 — filtered
+    to the region's bbox on every call.
+
+    One cache per mesh covers every classification, rather than one cache per
+    (mesh, classification we happen to want): the shapefile parse is the
+    expensive part (~8 s per mesh), and a second cache keyed on a filtered
+    subset would mean re-parsing the same shapefile to answer a question
+    ("what's the *other* classification here") this cache already has the
+    answer to.
 
     The cache holds the mesh's raw, unfiltered records and is keyed by mesh
     alone — a 1次メッシュ regularly spans a border between two regions (see
@@ -214,24 +252,24 @@ def load_kokudo(mesh: str, bbox: list[float], refresh: bool) -> list[list[tuple[
     shared mesh would silently reuse the *first* region's bbox-filtered
     subset instead of its own.
     """
-    cache_path = N13 / f"{mesh}.kokudo.raw.json"
+    cache_path = N13 / f"{mesh}.classified.raw.json"
     if cache_path.exists() and not refresh:
-        lines = json.loads(cache_path.read_text(encoding="utf-8"))
+        raw = json.loads(cache_path.read_text(encoding="utf-8"))
+        records = [(rdctg, [tuple(p) for p in line]) for rdctg, line in raw]
     else:
         shp_path = ensure_mesh(mesh, refresh)
-        lines = []
+        records = []
         if shp_path is not None:
             sf = shapefile.Reader(str(shp_path), encoding="utf-8")
             for i, rec in enumerate(sf.iterRecords()):
-                if rec[RDCTG_FIELD] != RDCTG_KOKUDO:
-                    continue
                 pts = sf.shape(i).points
-                lines.append([(lat, lon) for lon, lat in pts])
+                records.append((rec[RDCTG_FIELD], [(lat, lon) for lon, lat in pts]))
         N13.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps(lines), encoding="utf-8")
+        cache_path.write_text(json.dumps(records), encoding="utf-8")
 
     west, south, east, north = bbox
-    return [line for line in lines if line_touches_bbox(line, west, south, east, north)]
+    return [(rdctg, line) for rdctg, line in records
+            if line_touches_bbox(line, west, south, east, north)]
 
 
 # ---------------------------------------------------------------- geometry ---
@@ -307,6 +345,35 @@ def nearest_segment(pt, grid, radius=1):
     return best
 
 
+def build_classified_grid(records: list[tuple[str, list[tuple[float, float]]]]) -> dict:
+    """Same grid as build_segment_grid, but each entry keeps the rdCtg of the
+    line it came from — build_segment_grid's entries are plain (a, b) pairs
+    because every caller so far only ever grouped lines of one classification
+    (国道) at a time and never needed to ask "a match, but a match to what?"."""
+    grid: dict = {}
+    for rdctg, line in records:
+        for i in range(len(line) - 1):
+            a, b = line[i], line[i + 1]
+            for cell in cells_for_segment(a, b):
+                grid.setdefault(cell, []).append((rdctg, a, b))
+    return grid
+
+
+def nearest_classified_segment(pt, grid, radius=1):
+    """nearest_segment, but returns (distance, rdCtg) of the winning segment
+    instead of just the distance."""
+    c = cell_of(pt)
+    best = None
+    for dx in range(-radius, radius + 1):
+        for dy in range(-radius, radius + 1):
+            key = (round(c[0] + dx * CELL, 2), round(c[1] + dy * CELL, 2))
+            for rdctg, a, b in grid.get(key, []):
+                d = point_segment_distance_m(pt, a, b)
+                if best is None or d < best[0]:
+                    best = (d, rdctg)
+    return best
+
+
 # --------------------------------------------------------------- clustering --
 def node_key(pt):
     return (round(pt[0], 6), round(pt[1], 6))
@@ -340,6 +407,14 @@ def cluster_gaps(gap_lines: list[list[tuple[float, float]]]):
 # short missing link the way audit.py's own 50 m/2 km split would.
 GAP_THRESHOLD_M = 100
 ORPHAN_THRESHOLD_M = 100
+
+# Same calibration as ORPHAN_THRESHOLD_M above — this is the distance within
+# which "some other classification sits right where our former arc runs" is
+# a real match and not two unrelated lines that happen to be close. 国道(1)
+# and 不明(6) are excluded: a nearby 国道 is not evidence of 指定解除 (the
+# arc just isn't an orphan then), and 不明 asserts nothing to confirm with.
+CONFIRM_THRESHOLD_M = 100
+CONFIRMABLE_RDCTG = {"2", "3", "4", "5"}
 
 
 def nearby_osm_ways(cache, out_ids, point, radius_m):
@@ -383,17 +458,29 @@ def main() -> None:
     print(f"{region}: bbox {bbox} -> {len(meshes)} mesh(es): {', '.join(meshes)}")
 
     kokudo: list[list[tuple[float, float]]] = []
+    classified: list[tuple[str, list[tuple[float, float]]]] = []
     for mesh in meshes:
-        recs = load_kokudo(mesh, bbox, refresh)
-        print(f"  {mesh}: {len(recs)} N13 国道 record(s) inside bbox")
-        kokudo.extend(recs)
+        recs = load_classified(mesh, bbox, refresh)
+        n_kokudo = sum(1 for rdctg, _ in recs if rdctg == RDCTG_KOKUDO)
+        print(f"  {mesh}: {n_kokudo} N13 国道 record(s) inside bbox "
+              f"({len(recs)} all classifications)")
+        classified.extend(recs)
+        kokudo.extend(line for rdctg, line in recs if rdctg == RDCTG_KOKUDO)
     print(f"total N13 国道 records in {region}: {len(kokudo)}")
 
     our_lines = [
         [(lat, lon) for lon, lat in f["geometry"]["coordinates"]] for f in feats
     ]
     our_grid = build_segment_grid(our_lines)
-    n13_grid = build_segment_grid(kokudo)
+    # Every 国道 segment is also in `classified` (kokudo is filtered out of the
+    # same `recs` above), so deriving the 国道-only grid from the already-built
+    # classified grid — rather than a second build_segment_grid(kokudo) pass —
+    # avoids running cells_for_segment twice over the same 国道 records.
+    n13_classified_grid = build_classified_grid(classified)
+    n13_grid = {
+        cell: [(a, b) for rdctg, a, b in entries if rdctg == RDCTG_KOKUDO]
+        for cell, entries in n13_classified_grid.items()
+    }
 
     # ---- gaps: N13 国道 with nothing of ours nearby -----------------------
     gap_lines = []
@@ -444,22 +531,43 @@ def main() -> None:
         mid = coords[len(coords) // 2]
         d = nearest_segment(mid, n13_grid)
         if d is None or d > ORPHAN_THRESHOLD_M:
-            orphans.append((f, d))
+            # What's actually drawn under this arc, if not 国道? Answering
+            # this is the difference between "N13 has nothing here" (weak:
+            # could be a digitisation gap on N13's side too) and "N13 draws
+            # a 市区町村道 right here" (strong: a human doesn't need to open
+            # 地理院地図 to see the same thing).
+            nearest = nearest_classified_segment(mid, n13_classified_grid)
+            orphans.append((f, d, nearest))
+
+    confirmed_ids = {
+        f["properties"]["id"] for f, d, nearest in orphans
+        if nearest is not None and nearest[0] <= CONFIRM_THRESHOLD_M
+        and nearest[1] in CONFIRMABLE_RDCTG
+    }
 
     print("\n" + "=" * 80)
     print(f"our former arcs ({len(former_arcs)} total) with no N13 国道 within "
           f"{ORPHAN_THRESHOLD_M} m - candidates for a stale former flag "
           "(地理院地図 may already show this as 指定解除 outright)")
     print("=" * 80)
-    for f, d in sorted(orphans, key=lambda x: -(x[0]["properties"]["km"]))[:20]:
+    for f, d, nearest in sorted(orphans, key=lambda x: -(x[0]["properties"]["km"]))[:20]:
         p = f["properties"]
         dist = "no N13 nearby at all" if d is None else f"nearest N13 国道 {d:.0f} m away"
+        if nearest is None:
+            beneath = "nothing N13-classified nearby either"
+        else:
+            near_d, near_rdctg = nearest
+            label = RDCTG_LABELS.get(near_rdctg, f"コード{near_rdctg!r}")
+            mark = " [指定解除を機械確認]" if p["id"] in confirmed_ids else ""
+            beneath = f"directly under: {label} {near_d:.0f} m away{mark}"
         print(f"  way/{p['id']}  国道{'・'.join(map(str, p['refs_list']))}  "
-              f"{p['km']} km  {p.get('name') or ''}  ({dist})")
+              f"{p['km']} km  {p.get('name') or ''}  ({dist}; {beneath})")
     if not orphans:
         print("  none")
 
     print(f"\n{len(orphans)}/{len(former_arcs)} former arcs flagged")
+    print(f"{len(confirmed_ids)}/{len(orphans)} mechanically confirmed as 指定解除 "
+          f"(非国道の N13 分類が {CONFIRM_THRESHOLD_M} m 以内の直下にある)")
 
 
 if __name__ == "__main__":
