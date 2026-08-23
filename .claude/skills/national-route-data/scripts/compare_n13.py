@@ -136,12 +136,19 @@ def mesh_codes_for_bbox(bbox: list[float]) -> list[str]:
     return [f"{p}{q:02d}" for p in range(p_lo, p_hi + 1) for q in range(q_lo, q_hi + 1)]
 
 
-def mesh_code_for_point(pt: tuple[float, float]) -> str:
-    """Same p/q formula as mesh_codes_for_bbox, for a single (lat, lon) point
-    instead of a bbox — see classify_clusters_beneath, which needs the one
-    mesh a cluster's sample point falls in, not every mesh a region touches."""
+def neighbor_mesh_codes(pt: tuple[float, float]) -> list[str]:
+    """Same p/q formula as mesh_codes_for_bbox, for the mesh a single (lat,
+    lon) point falls in plus its 8 neighbours in the p/q grid.
+
+    A road is cut at every 1次メッシュ boundary, so a sample point within
+    CONFIRM_THRESHOLD_M of one can have its truly-nearest N13 line sitting in
+    the mesh next door rather than its own — checking only the containing
+    mesh (an earlier version of this function did) under-counts confirmed
+    clusters near an edge. See classify_clusters_beneath, which checks every
+    mesh here that it already knows about."""
     lat, lon = pt
-    return f"{math.floor(lat * 1.5)}{math.floor(lon) - 100:02d}"
+    p, q = math.floor(lat * 1.5), math.floor(lon) - 100
+    return [f"{p + dp}{q + dq:02d}" for dp in (-1, 0, 1) for dq in (-1, 0, 1)]
 
 
 # Mesh codes confirmed by hand to 404 — KSJ publishes no N13 shapefile for
@@ -441,13 +448,13 @@ def nearest_classified_segment(pt, grid, radius=1):
     return best
 
 
-def classify_beneath(sample: tuple[float, float], grid) -> tuple[str, bool]:
-    """One-line description of what N13 draws directly under a cluster's
-    sample point, plus whether that's a mechanical 指定解除 confirmation —
-    see the module docstring's paragraph on this. Shared by main()'s
-    single-region report and national_orphan_report so the two never drift
-    on what "confirmed" means."""
-    nearest = nearest_classified_segment(sample, grid)
+def classify_beneath(nearest: tuple[float, str] | None) -> tuple[str, bool]:
+    """Format a nearest-classified-segment result — (distance, rdCtg), or
+    None if nothing was found within search radius — into a report string
+    and a mechanical 指定解除 confirmation flag, see the module docstring's
+    paragraph on this. Shared by main()'s single-region report and
+    national_orphan_report so the two never drift on what "confirmed" means.
+    """
     if nearest is None:
         return "N13分類なし", False
     dist, rdctg = nearest
@@ -457,40 +464,61 @@ def classify_beneath(sample: tuple[float, float], grid) -> tuple[str, bool]:
     return f"直下 {dist:.0f}m に{label}{mark}", confirmed
 
 
-def classify_clusters_beneath(clusters: list[dict], refresh: bool) -> None:
+def classify_clusters_beneath(clusters: list[dict], refresh: bool,
+                               known_meshes: set[str]) -> None:
     """Attach "beneath" (str) and "confirmed" (bool) to every cluster in
-    place, by classify_beneath on each cluster's sample point.
+    place, from the nearest N13 line of any classification to each cluster's
+    sample point.
 
     One mesh's classified (全分類, not just 国道) record set runs 30-50x
     larger than its 国道-only subset — measured at 74k-137k records per mesh
     against 2-3k 国道 (issue #28) — so combining every mesh a caller's
     clusters might span into one grid, the way the 国道-only grid safely
     does, holds tens of millions of line records at once for a nationwide
-    call and exhausted memory in practice. Grouping clusters by the one mesh
-    their sample point falls in (mesh_code_for_point), then building and
-    discarding one mesh's classified grid at a time, keeps peak memory to a
-    single mesh's worth regardless of how many meshes the full cluster list
-    spans — the tradeoff is doing the classification pass separately from
-    the coverage_ratio pass (which does still read every mesh's 国道-only
-    subset into one grid; that one stays small enough to be fine, see
-    load_kokudo_raw's callers) rather than in the same mesh loop.
+    call and exhausted memory in practice. Building and discarding one mesh's
+    classified grid at a time keeps peak memory to a single mesh's worth
+    regardless of how many meshes the full cluster list spans — the tradeoff
+    is doing the classification pass separately from the coverage_ratio pass
+    (which does still read every mesh's 国道-only subset into one grid; that
+    one stays small enough to be fine, see load_kokudo_raw's callers) rather
+    than in the same mesh loop.
 
-    Every cluster's sample point falls inside a mesh the caller already
-    resolved and validated (region's own `meshes`, or `all_meshes` for the
-    nationwide report) — the arc the sample comes from was read from that
-    region's own data in the first place — so this never requests a mesh
-    ensure_mesh hasn't already confirmed to exist.
+    A road is cut at every mesh boundary, so a sample point within
+    CONFIRM_THRESHOLD_M of one can have its truly-nearest N13 line sitting in
+    the mesh next door — an earlier version of this function checked only
+    the sample's own containing mesh and under-counted confirmations near an
+    edge (CodeRabbit review on this PR). Each cluster is checked against its
+    own mesh and its 8 neighbours (neighbor_mesh_codes) instead, keeping the
+    single best match across all of them. Only neighbours already in
+    known_meshes — the caller's own already-resolved mesh set (region's own
+    `meshes`, or `all_meshes` nationwide) — are checked: every mesh a real
+    cluster can be near is already in that set, since prefecture bboxes
+    overlap generously, so restricting to it costs nothing while avoiding a
+    request for a mesh ensure_mesh has never validated (a genuinely new mesh
+    404ing there is a reason to stop and confirm by hand, not something this
+    function should risk triggering on a guess).
     """
-    by_mesh: dict[str, list[dict]] = {}
     for c in clusters:
-        by_mesh.setdefault(mesh_code_for_point(c["sample"]), []).append(c)
-    for mesh, mesh_clusters in by_mesh.items():
+        c["_nearest"] = None
+
+    mesh_to_clusters: dict[str, list[dict]] = {}
+    for c in clusters:
+        for mesh in neighbor_mesh_codes(c["sample"]):
+            if mesh in known_meshes:
+                mesh_to_clusters.setdefault(mesh, []).append(c)
+
+    for mesh, mesh_clusters in mesh_to_clusters.items():
         grid = build_classified_grid(load_classified_raw(mesh, refresh))
         for c in mesh_clusters:
-            c["beneath"], c["confirmed"] = classify_beneath(c["sample"], grid)
+            nearest = nearest_classified_segment(c["sample"], grid)
+            if nearest is not None and (c["_nearest"] is None or nearest[0] < c["_nearest"][0]):
+                c["_nearest"] = nearest
         # `grid` (and the mesh's raw records inside it) is dropped here, before
         # the next mesh's grid is built — this loop never holds two meshes'
         # classified data at once.
+
+    for c in clusters:
+        c["beneath"], c["confirmed"] = classify_beneath(c.pop("_nearest"))
 
 
 # ----------------------------------------------------------------- coverage --
@@ -727,7 +755,7 @@ def national_orphan_report(refresh: bool) -> None:
     clusters = cluster_former_arcs(candidates)
     print(f"\nclassifying what N13 draws beneath {len(clusters)} cluster(s), "
           "one mesh's 全分類 records at a time (see classify_clusters_beneath)...")
-    classify_clusters_beneath(clusters, refresh)
+    classify_clusters_beneath(clusters, refresh, all_meshes)
     print(f"{len(clusters)} cluster(s) from {len(candidates)} candidate arc(s) "
           f"(< {ORPHAN_CANDIDATE_RATIO * 100:.0f}% coverage) - candidates for a "
           "stale former flag (地理院地図 may already show this as 指定解除 outright)")
@@ -853,7 +881,7 @@ def main() -> None:
                       "matched": matched, "total": total, "min_dist": min_dist})
     candidates = [a for a in arcs if ratio_of(a) < ORPHAN_CANDIDATE_RATIO]
     clusters = cluster_former_arcs(candidates)
-    classify_clusters_beneath(clusters, refresh)
+    classify_clusters_beneath(clusters, refresh, set(meshes))
 
     print("\n" + "=" * 80)
     print(f"our former arcs ({len(former_arcs)} total) - {len(clusters)} cluster(s) "
