@@ -110,7 +110,9 @@ describe('popupHTML', () => {
   });
 
   test('旧道のときだけ備考が出る', () => {
-    expect(popupHTML(arc({ former: 1 }))).toContain('旧道（指定解除前）');
+    expect(popupHTML(arc({ former: 1 }))).toContain(
+      '<dt>備考</dt><dd>旧道</dd>',
+    );
     expect(popupHTML(arc({ former: 0 }))).not.toContain('旧道');
   });
 

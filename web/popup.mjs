@@ -85,7 +85,7 @@ export function popupHTML(p) {
     row('区間長', `${Number(p.km).toFixed(2)} km`) +
     row('最終更新', esc(p.updated) || '—') +
     row('典拠', esc(SRC_LABELS[p.src] || p.src)) +
-    (Number(p.former) ? row('備考', '旧道（指定解除前）') : '') +
+    (Number(p.former) ? row('備考', '旧道') : '') +
     row(
       'OSM',
       `<a href="https://www.openstreetmap.org/way/${esc(p.id)}" ` +

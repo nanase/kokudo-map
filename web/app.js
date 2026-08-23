@@ -88,6 +88,7 @@ const state = {
   special: true,
   ferry: true,
   expressway: true,
+  former: true,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -666,6 +667,7 @@ function syncControls() {
   $('#t-expressway').checked = state.expressway;
   $('#t-special').checked = state.special;
   $('#t-ferry').checked = state.ferry;
+  $('#t-former').checked = state.former;
 }
 
 /**
@@ -690,7 +692,7 @@ function fitInitialView(index) {
 
 /* --------------------------------------------------------------- filters --- */
 function applyFilters() {
-  const base = buildFilter([...state.selected], state.conc);
+  const base = buildFilter([...state.selected], state.conc, state.former);
 
   for (const { id, kinds, negate, toggle } of FILTERED_LAYERS) {
     if (toggle && !state[toggle]) {
@@ -782,6 +784,7 @@ function wireControls() {
   toggle('#t-expressway', 'expressway');
   toggle('#t-special', 'special');
   toggle('#t-ferry', 'ferry');
+  toggle('#t-former', 'former');
 }
 
 /* ------------------------------------------------------------------ share --- */

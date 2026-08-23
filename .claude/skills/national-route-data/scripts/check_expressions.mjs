@@ -154,16 +154,23 @@ const single = deepest[0];
 const pair = deepest.slice(0, 2);
 
 const scenarios = [
-  [[], 'off', 'no selection, no concurrency'],
-  [[single], 'off', 'single route'],
-  [deepest, 'off', 'multi route'],
-  [[], 'all', 'all concurrency'],
-  [pair, 'all', 'selection + all concurrency'],
-  [deepest, 'all', 'deepest selection + all concurrency'],
+  [[], 'off', true, 'no selection, no concurrency'],
+  [[single], 'off', true, 'single route'],
+  [deepest, 'off', true, 'multi route'],
+  [[], 'all', true, 'all concurrency'],
+  [pair, 'all', true, 'selection + all concurrency'],
+  [deepest, 'all', true, 'deepest selection + all concurrency'],
+  [[], 'off', false, 'former hidden, no other filter'],
+  [
+    deepest,
+    'all',
+    false,
+    'former hidden + deepest selection + all concurrency',
+  ],
 ];
 
-for (const [selected, conc, label] of scenarios) {
-  const base = buildFilter(selected, conc);
+for (const [selected, conc, showFormer, label] of scenarios) {
+  const base = buildFilter(selected, conc, showFormer);
   const filters = {};
   for (const { id, kinds, negate } of FILTERED_LAYERS) {
     filters[id] = kinds ? withKind(base, kinds, negate) : base;
@@ -193,17 +200,18 @@ const evaluate = (fn, f) =>
     { type: 'Feature', properties: f.properties, geometry: f.geometry },
   );
 
-function jsPredicate(selected, conc) {
+function jsPredicate(selected, conc, showFormer) {
   const set = new Set(selected);
   return (p) => {
     if (set.size && !p.refs_list.some((r) => set.has(r))) return false;
-    if (conc === 'all') return p.n >= 2;
+    if (conc === 'all' && p.n < 2) return false;
+    if (!showFormer && Number(p.former) === 1) return false;
     return true;
   };
 }
 
-for (const [selected, conc, label] of scenarios) {
-  const expr = buildFilter(selected, conc);
+for (const [selected, conc, showFormer, label] of scenarios) {
+  const expr = buildFilter(selected, conc, showFormer);
   if (expr === true) {
     pass++;
     console.log(`PASS  ${label}: filter is literal true (everything shown)`);
@@ -211,7 +219,7 @@ for (const [selected, conc, label] of scenarios) {
   }
   const fn = compile(expr);
   if (!fn) continue;
-  const js = jsPredicate(selected, conc);
+  const js = jsPredicate(selected, conc, showFormer);
   let diff = 0;
   let hits = 0;
   for (const f of geo.features) {
