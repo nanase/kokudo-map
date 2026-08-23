@@ -29,15 +29,30 @@ Two comparisons, both point-in-the-other-direction of the same question:
              that comparison would flag every correctly-tagged 旧道 as a
              "mismatch" and mean nothing.
 
-An orphan only says "no 国道 nearby" — it does not say what, if anything, N13
-draws in its place. This script also looks up the nearest N13 line of *any*
-道路分類 for each orphan and reports its classification and distance. A
-definite non-国道 classification (都道府県道 / 市区町村道等 / 高速自動車国道等
-/ その他) sitting within a tight distance is a stronger signal than absence
-alone: it means N13 draws something specific, not-国道, exactly where our
-arc runs, which is what 指定解除 (a road handed down to a lower category, not
-simply erased) looks like from this source. 不明 does not count toward this —
-it asserts nothing to corroborate with.
+The orphan direction is rated by coverage, not one point (issue #27): each
+arc is resampled every SAMPLE_INTERVAL_M along its length, and the ratio of
+samples within ORPHAN_THRESHOLD_M of N13 is the arc's coverage. A single
+midpoint (the old rule) or its own endpoint vertices (which sit near N13 by
+construction — a former arc reconnects to the current road) both mean
+something different from "how much of this road is still N13-backed".
+Contiguous arcs — one physical road split into many short OSM ways, or one
+still split by a prefecture-adjacent duplicate before dedup — are merged into
+one cluster (cluster_former_arcs, sharing cluster_by_endpoint with the gap
+direction's cluster_gaps) with one length-weighted ratio, so triage happens
+per road, not per way. `region all` additionally dedups the same way id
+across every prefecture whose padded bbox includes it before rating anything
+— see national_orphan_report.
+
+A low-coverage cluster only says "not much 国道 nearby" — it does not say
+what, if anything, N13 draws in its place. This script also looks up the
+nearest N13 line of *any* 道路分類 for each cluster's sample point and reports
+its classification and distance. A definite non-国道 classification (都道府県
+道 / 市区町村道等 / 高速自動車国道等 / その他) sitting within a tight distance
+is a stronger signal than absence alone: it means N13 draws something
+specific, not-国道, exactly where our road runs, which is what 指定解除 (a
+road handed down to a lower category, not simply erased) looks like from this
+source. 不明 does not count toward this — it asserts nothing to corroborate
+with.
 
 Both directions reuse the same grid: a region's own arcs are short OSM ways,
 N13 records are shorter still (cut at every attribute change, not just every
@@ -48,17 +63,18 @@ either side would otherwise read as false disagreement.
 Distances are not proof by themselves. A gap can be a real absence, an OSM
 tagging exclusion (check `why` — reused from audit.py's exclusion reasoning),
 or two independent digitisations of the same painted line — a human with
-地理院地図 open still decides which, and which route number applies, for
-gaps and for orphans this script cannot classify. TRIAGE.md's "N13 は路線番号
-を持たないので…ここが人の出番です" is still the load-bearing sentence for
-those. A confirmed orphan (marked in the report) is the one place that manual step
+地理院地図 open still decides which, and which route number applies, for gaps
+and for clusters this script cannot classify. TRIAGE.md's "N13 は路線番号を
+持たないので…ここが人の出番です" is still the load-bearing sentence for those.
+A confirmed cluster (marked in the report) is the one place that manual step
 is no longer needed to establish *that* 指定解除 happened; which number the
 road used to carry is still a human's call. Whether to bake this confirmation
 into build data (making N13 a build dependency) is a separate decision,
 deliberately left open — see issue #9.
 
-Usage:  uv run scripts/compare_n13.py [region] [--refresh]
+Usage:  uv run scripts/compare_n13.py [region|all] [--refresh]
 
+`all` runs the orphan direction only, nationwide, deduped by way id.
 `--refresh` re-downloads and re-parses every mesh even if a cache exists.
 """
 from __future__ import annotations
@@ -74,6 +90,7 @@ import shapefile
 
 from _paths import N13, REGIONS as DATA
 from audit import DSU, claims, haversine, load_cache, why_excluded
+from regions import REGIONS as PREFECTURES
 
 # https://nlftp.mlit.go.jp/ksj/gml/data/N13/N13-24/N13-24_<mesh>_SHP.zip serves
 # a shapefile per 1次メッシュ (~80 km square). The site also offers GML, but
@@ -95,9 +112,9 @@ RDCTG_KOKUDO = "1"
 
 # 道路分類種別コードの全区分。KS-PS-N13-v1_1.pdf(2026-03, 国土交通省)4.1.3.2
 # の応用スキーマ文書と付属資料-2 の符号化仕様(XSD の enumeration/description)
-# の両方で確認済み — 推定ではない。orphan(旧道と疑われるアーク)の直下に
-# 国道以外の何が描かれているかを言うのに使う。不明(6)は「何かは分からない」
-# という情報しか持たないので、指定解除の裏付けにはならない。
+# の両方で確認済み — 推定ではない。低被覆率クラスタの直下に国道以外の何が
+# 描かれているかを言うのに使う。不明(6)は「何かは分からない」という情報しか
+# 持たないので、指定解除の裏付けにはならない。
 RDCTG_LABELS = {
     "1": "国道",
     "2": "都道府県道",
@@ -117,6 +134,14 @@ def mesh_codes_for_bbox(bbox: list[float]) -> list[str]:
     p_lo, p_hi = math.floor(south * 1.5), math.floor(north * 1.5)
     q_lo, q_hi = math.floor(west) - 100, math.floor(east) - 100
     return [f"{p}{q:02d}" for p in range(p_lo, p_hi + 1) for q in range(q_lo, q_hi + 1)]
+
+
+def mesh_code_for_point(pt: tuple[float, float]) -> str:
+    """Same p/q formula as mesh_codes_for_bbox, for a single (lat, lon) point
+    instead of a bbox — see classify_clusters_beneath, which needs the one
+    mesh a cluster's sample point falls in, not every mesh a region touches."""
+    lat, lon = pt
+    return f"{math.floor(lat * 1.5)}{math.floor(lon) - 100:02d}"
 
 
 # Mesh codes confirmed by hand to 404 — KSJ publishes no N13 shapefile for
@@ -233,10 +258,10 @@ def line_touches_bbox(line: list[tuple[float, float]], west: float, south: float
     return any(segment_intersects_bbox(a, b, west, south, east, north) for a, b in pairs)
 
 
-def load_classified(mesh: str, bbox: list[float], refresh: bool
-                     ) -> list[tuple[str, list[tuple[float, float]]]]:
-    """This mesh's full record set — every 道路分類, not just 国道 — filtered
-    to the region's bbox on every call.
+def load_classified_raw(mesh: str, refresh: bool
+                         ) -> list[tuple[str, list[tuple[float, float]]]]:
+    """This mesh's full record set — every 道路分類, not just 国道 — uncut by
+    any bbox.
 
     One cache per mesh covers every classification, rather than one cache per
     (mesh, classification we happen to want): the shapefile parse is the
@@ -250,26 +275,31 @@ def load_classified(mesh: str, bbox: list[float], refresh: bool
     regions.py on rectangles spilling into neighbours), and keying by mesh
     only while filtering at write time meant the *second* region to touch a
     shared mesh would silently reuse the *first* region's bbox-filtered
-    subset instead of its own.
+    subset instead of its own. Filtering (by bbox, or to 国道 alone) is left
+    to the call site, same as load_kokudo_raw below.
     """
     cache_path = N13 / f"{mesh}.classified.raw.json"
     if cache_path.exists() and not refresh:
         raw = json.loads(cache_path.read_text(encoding="utf-8"))
-        records = [(rdctg, [tuple(p) for p in line]) for rdctg, line in raw]
-    else:
-        shp_path = ensure_mesh(mesh, refresh)
-        records = []
-        if shp_path is not None:
-            sf = shapefile.Reader(str(shp_path), encoding="utf-8")
-            for i, rec in enumerate(sf.iterRecords()):
-                pts = sf.shape(i).points
-                records.append((rec[RDCTG_FIELD], [(lat, lon) for lon, lat in pts]))
-        N13.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps(records), encoding="utf-8")
+        return [(rdctg, [tuple(p) for p in line]) for rdctg, line in raw]
 
-    west, south, east, north = bbox
-    return [(rdctg, line) for rdctg, line in records
-            if line_touches_bbox(line, west, south, east, north)]
+    shp_path = ensure_mesh(mesh, refresh)
+    records: list[tuple[str, list[tuple[float, float]]]] = []
+    if shp_path is not None:
+        sf = shapefile.Reader(str(shp_path), encoding="utf-8")
+        for i, rec in enumerate(sf.iterRecords()):
+            pts = sf.shape(i).points
+            records.append((rec[RDCTG_FIELD], [(lat, lon) for lon, lat in pts]))
+    N13.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(records), encoding="utf-8")
+    return records
+
+
+def load_kokudo_raw(mesh: str, refresh: bool) -> list[list[tuple[float, float]]]:
+    """The 国道-only subset of load_classified_raw, uncut by any bbox — see
+    that function's docstring for the caching rationale, which this shares."""
+    return [line for rdctg, line in load_classified_raw(mesh, refresh)
+            if rdctg == RDCTG_KOKUDO]
 
 
 # ---------------------------------------------------------------- geometry ---
@@ -295,6 +325,43 @@ def point_segment_distance_m(p, a, b) -> float:
     cx, cy = ax + t * dx, ay + t * dy
     return math.hypot(cx, cy)
 
+
+# Calibrated against mesh 5438 (長野県中心部): point-to-vertex distances came
+# back with a 6.6 m median and a 31.6 m 90th percentile against N13's own
+# claimed 25 m positional stddev. Point-to-segment tightens that further.
+# 100 m gives real digitisation slack on both sides room without hiding a
+# short missing link the way audit.py's own 50 m/2 km split would.
+GAP_THRESHOLD_M = 100
+ORPHAN_THRESHOLD_M = 100
+
+# A single sample per arc (the old rule used the midpoint) lets a road whose
+# only near-N13 stretch is its junction with the current road read as fully
+# orphaned, and lets one with a real gap in the middle read as fully backed
+# — see issue #27, which measured 45/804 candidates under the old rule as
+# "more than half N13-covered" despite being flagged as orphans outright.
+# 50 m is fine enough to catch either without over-sampling a road this
+# short.
+SAMPLE_INTERVAL_M = 50
+
+# Below this, a former arc is a candidate for a stale former flag; at or
+# above it, it is left alone. Issue #27 measured the layered distribution as
+# clearly bimodal — 501 arcs at exactly 0%, 104 more under 20%, then a
+# 20-80% grey band a human has to look at either way, then 746 at 80-100%
+# that 地理院地図 already draws as national — so 20% is the low edge of that
+# grey band, not an arbitrary round number. Arcs at or above this line are
+# excluded from clustering entirely (see cluster_by_endpoint's caller in
+# national_orphan_report/main), mirroring how the gap direction only ever
+# clusters unmatched N13 records, never matched ones.
+ORPHAN_CANDIDATE_RATIO = 0.2
+
+# Same calibration as ORPHAN_THRESHOLD_M above — this is the distance within
+# which "some other classification sits right where our cluster's sample
+# point falls" is a real match and not two unrelated lines that happen to be
+# close. 国道(1) and 不明(6) are excluded: a nearby 国道 does not fit here
+# (the cluster is already a low-coverage candidate), and 不明 asserts nothing
+# to confirm with.
+CONFIRM_THRESHOLD_M = 100
+CONFIRMABLE_RDCTG = {"2", "3", "4", "5"}
 
 CELL = 0.01  # ~1 km at these latitudes — see audit.py's own grid for precedent
 
@@ -374,49 +441,198 @@ def nearest_classified_segment(pt, grid, radius=1):
     return best
 
 
+def classify_beneath(sample: tuple[float, float], grid) -> tuple[str, bool]:
+    """One-line description of what N13 draws directly under a cluster's
+    sample point, plus whether that's a mechanical 指定解除 confirmation —
+    see the module docstring's paragraph on this. Shared by main()'s
+    single-region report and national_orphan_report so the two never drift
+    on what "confirmed" means."""
+    nearest = nearest_classified_segment(sample, grid)
+    if nearest is None:
+        return "N13分類なし", False
+    dist, rdctg = nearest
+    label = RDCTG_LABELS.get(rdctg, f"コード{rdctg!r}")
+    confirmed = dist <= CONFIRM_THRESHOLD_M and rdctg in CONFIRMABLE_RDCTG
+    mark = " [指定解除を機械確認]" if confirmed else ""
+    return f"直下 {dist:.0f}m に{label}{mark}", confirmed
+
+
+def classify_clusters_beneath(clusters: list[dict], refresh: bool) -> None:
+    """Attach "beneath" (str) and "confirmed" (bool) to every cluster in
+    place, by classify_beneath on each cluster's sample point.
+
+    One mesh's classified (全分類, not just 国道) record set runs 30-50x
+    larger than its 国道-only subset — measured at 74k-137k records per mesh
+    against 2-3k 国道 (issue #28) — so combining every mesh a caller's
+    clusters might span into one grid, the way the 国道-only grid safely
+    does, holds tens of millions of line records at once for a nationwide
+    call and exhausted memory in practice. Grouping clusters by the one mesh
+    their sample point falls in (mesh_code_for_point), then building and
+    discarding one mesh's classified grid at a time, keeps peak memory to a
+    single mesh's worth regardless of how many meshes the full cluster list
+    spans — the tradeoff is doing the classification pass separately from
+    the coverage_ratio pass (which does still read every mesh's 国道-only
+    subset into one grid; that one stays small enough to be fine, see
+    load_kokudo_raw's callers) rather than in the same mesh loop.
+
+    Every cluster's sample point falls inside a mesh the caller already
+    resolved and validated (region's own `meshes`, or `all_meshes` for the
+    nationwide report) — the arc the sample comes from was read from that
+    region's own data in the first place — so this never requests a mesh
+    ensure_mesh hasn't already confirmed to exist.
+    """
+    by_mesh: dict[str, list[dict]] = {}
+    for c in clusters:
+        by_mesh.setdefault(mesh_code_for_point(c["sample"]), []).append(c)
+    for mesh, mesh_clusters in by_mesh.items():
+        grid = build_classified_grid(load_classified_raw(mesh, refresh))
+        for c in mesh_clusters:
+            c["beneath"], c["confirmed"] = classify_beneath(c["sample"], grid)
+        # `grid` (and the mesh's raw records inside it) is dropped here, before
+        # the next mesh's grid is built — this loop never holds two meshes'
+        # classified data at once.
+
+
+# ----------------------------------------------------------------- coverage --
+def resample_line(coords: list[tuple[float, float]],
+                   interval_m: float = SAMPLE_INTERVAL_M) -> list[tuple[float, float]]:
+    """coords, resampled to one point every interval_m along its length, plus
+    both endpoints. A line shorter than interval_m still yields its two
+    endpoints, so coverage_ratio never divides by zero."""
+    if len(coords) < 2:
+        return list(coords)
+    points = [coords[0]]
+    dist_so_far = 0.0
+    next_mark = interval_m
+    for a, b in zip(coords, coords[1:]):
+        seg_len = haversine(a, b)
+        if seg_len == 0:
+            continue
+        while dist_so_far + seg_len >= next_mark:
+            t = (next_mark - dist_so_far) / seg_len
+            points.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+            next_mark += interval_m
+        dist_so_far += seg_len
+    if points[-1] != coords[-1]:
+        points.append(coords[-1])
+    return points
+
+
+def coverage_ratio(coords: list[tuple[float, float]], grid,
+                    threshold_m: float) -> tuple[int, int, float | None]:
+    """(matched, total, min_dist) for coords resampled every SAMPLE_INTERVAL_M.
+
+    Not the arc's own vertices, and not one midpoint (the old rule): a
+    former arc reconnects to the current road at both ends by construction,
+    so its two endpoint vertices sit inside threshold_m of N13 regardless of
+    whether the road itself still does, and its midpoint alone can land
+    anywhere along a road that is only partly still N13-backed. Sampling
+    along the whole length is what makes the ratio mean "how much of this
+    road" rather than "does one arbitrary point on it".
+
+    min_dist is the closest any sample came to N13, even when that is past
+    threshold_m — a CodeRabbit review on issue #27's own PR caught that
+    ratio == 0 does not mean "no N13 nearby": an N13 line sitting just
+    outside threshold_m of every 50 m sample still reads as 0% coverage, but
+    it is not "N13 なし". Only min_dist being None — no sample found
+    anything within nearest_segment's own search radius — means that.
+    """
+    points = resample_line(coords)
+    matched = 0
+    min_dist = None
+    for p in points:
+        d = nearest_segment(p, grid)
+        if d is None:
+            continue
+        if min_dist is None or d < min_dist:
+            min_dist = d
+        if d <= threshold_m:
+            matched += 1
+    return matched, len(points), min_dist
+
+
+def ratio_of(arc: dict) -> float:
+    return arc["matched"] / arc["total"] if arc["total"] else 0.0
+
+
+def coverage_label(cluster: dict) -> str:
+    """"N13 なし" only when min_dist is None — no sample found anything
+    within nearest_segment's own search radius. 0% coverage on its own does
+    not mean that: an N13 line just past ORPHAN_THRESHOLD_M of every sample
+    still reads as 0% covered but is not absent (see coverage_ratio)."""
+    if cluster["min_dist"] is None:
+        return "N13 なし"
+    label = f"被覆率 {cluster['ratio'] * 100:.0f}%"
+    if cluster["ratio"] == 0:
+        label += f"(最寄N13 {cluster['min_dist']:.0f}m)"
+    return label
+
+
 # --------------------------------------------------------------- clustering --
 def node_key(pt):
     return (round(pt[0], 6), round(pt[1], 6))
 
 
-def cluster_gaps(gap_lines: list[list[tuple[float, float]]]):
-    """Merge gap records that share an endpoint — N13 cuts a continuous road
-    into many short records at every attribute change, so one real gap is
-    routinely dozens of consecutive records, not one."""
+def cluster_by_endpoint(lines: list[list[tuple[float, float]]]) -> list[list[int]]:
+    """Indices into lines, grouped by shared start/end point via a DSU over
+    endpoints. N13 cuts a continuous road into many short records at every
+    attribute change, and a former route is routinely split into many short
+    OSM ways too, so one real road is routinely dozens of consecutive
+    records/arcs, not one — shared by both the gap and orphan directions
+    (issue #27 added the orphan side; the gap side already had it)."""
     dsu = DSU()
-    for line in gap_lines:
-        a, b = node_key(line[0]), node_key(line[-1])
-        dsu.union(a, b)
+    for line in lines:
+        dsu.union(node_key(line[0]), node_key(line[-1]))
     groups: dict = {}
-    for line in gap_lines:
+    for i, line in enumerate(lines):
         root = dsu.find(node_key(line[0]))
-        groups.setdefault(root, []).append(line)
+        groups.setdefault(root, []).append(i)
+    return list(groups.values())
+
+
+def cluster_gaps(gap_lines: list[list[tuple[float, float]]]):
     clusters = []
-    for lines in groups.values():
+    for idxs in cluster_by_endpoint(gap_lines):
+        lines = [gap_lines[i] for i in idxs]
         km = sum(haversine(l[i], l[i + 1]) for l in lines for i in range(len(l) - 1)) / 1000
         mid_line = lines[len(lines) // 2]
         clusters.append({"lines": lines, "km": km, "sample": mid_line[len(mid_line) // 2]})
     return sorted(clusters, key=lambda c: -c["km"])
 
 
+def cluster_former_arcs(arcs: list[dict]):
+    """Group former arcs sharing an endpoint into one triage unit, with a
+    length-weighted coverage ratio for the merged whole.
+
+    Each arc dict needs id, feature, coords, matched, total (see
+    coverage_ratio). Grouping first and rating second — rather than rating
+    each arc and grouping the ratings — is what lets a cluster whose
+    individual arcs sample unevenly (a short arc contributes as few as 2
+    points) still add up to one honest ratio for the road as a whole.
+    """
+    lines = [a["coords"] for a in arcs]
+    clusters = []
+    for idxs in cluster_by_endpoint(lines):
+        members = [arcs[i] for i in idxs]
+        km = sum(haversine(m["coords"][j], m["coords"][j + 1])
+                  for m in members for j in range(len(m["coords"]) - 1)) / 1000
+        matched = sum(m["matched"] for m in members)
+        total = sum(m["total"] for m in members)
+        dists = [m["min_dist"] for m in members if m["min_dist"] is not None]
+        mid = members[len(members) // 2]
+        clusters.append({
+            "members": members,
+            "km": km,
+            "ratio": matched / total if total else 0.0,
+            "min_dist": min(dists) if dists else None,
+            "sample": mid["coords"][len(mid["coords"]) // 2],
+            "ids": sorted({m["id"] for m in members}),
+            "refs": sorted({r for m in members for r in m["feature"]["properties"]["refs_list"]}),
+        })
+    return sorted(clusters, key=lambda c: -c["km"])
+
+
 # ------------------------------------------------------------------- report --
-# Calibrated against mesh 5438 (長野県中心部): point-to-vertex distances came
-# back with a 6.6 m median and a 31.6 m 90th percentile against N13's own
-# claimed 25 m positional stddev. Point-to-segment tightens that further.
-# 100 m gives real digitisation slack on both sides room without hiding a
-# short missing link the way audit.py's own 50 m/2 km split would.
-GAP_THRESHOLD_M = 100
-ORPHAN_THRESHOLD_M = 100
-
-# Same calibration as ORPHAN_THRESHOLD_M above — this is the distance within
-# which "some other classification sits right where our former arc runs" is
-# a real match and not two unrelated lines that happen to be close. 国道(1)
-# and 不明(6) are excluded: a nearby 国道 is not evidence of 指定解除 (the
-# arc just isn't an orphan then), and 不明 asserts nothing to confirm with.
-CONFIRM_THRESHOLD_M = 100
-CONFIRMABLE_RDCTG = {"2", "3", "4", "5"}
-
-
 def nearby_osm_ways(cache, out_ids, point, radius_m):
     hits = []
     for wid, w in cache["ways"].items():
@@ -440,6 +656,103 @@ def nearby_osm_ways(cache, out_ids, point, radius_m):
     return hits
 
 
+def national_orphan_report(refresh: bool) -> None:
+    """former 孤立候補を全国横断・重複排除・被覆率・クラスタ単位で出す — issue #27。
+
+    A single region's own run can't dedup: the same way turns up once per
+    prefecture whose padded bbox happens to include it (issue #27 measured
+    3,546 raw listings from #9 collapsing to 1,644 unique way ids, 1,301 of
+    them duplicated across 2+ prefectures). Only a run that has every
+    region's output in hand at once can tell "the same arc, listed twice"
+    from "two different arcs".
+    """
+    per_way: dict[int, dict] = {}
+    raw_count = 0
+    all_meshes: set[str] = set()
+    for region in PREFECTURES:
+        meta = json.loads((DATA / f"{region}.meta.json").read_text(encoding="utf-8"))
+        gj = json.loads((DATA / f"{region}.geojson").read_text(encoding="utf-8"))
+        all_meshes |= set(mesh_codes_for_bbox(meta["bbox"]))
+        for f in gj["features"]:
+            if not f["properties"].get("former"):
+                continue
+            raw_count += 1
+            per_way.setdefault(f["properties"]["id"], f)
+    print(f"former arcs: {raw_count} raw across {len(PREFECTURES)} region(s), "
+          f"{len(per_way)} unique way id(s) after dedup by way id")
+
+    print(f"loading {len(all_meshes)} N13 mesh(es) nationwide (mesh-wide, no bbox cut — "
+          "see load_kokudo_raw)...")
+    # Only the 国道-only subset is accumulated across every mesh at once —
+    # nationwide that stays small enough for one grid (issue #27 already
+    # proved this out). The 全分類 (all classifications) reads used for
+    # classify_clusters_beneath below are deliberately *not* held here too;
+    # see that function's docstring for why combining every mesh's full
+    # classification set nationwide exhausts memory.
+    kokudo_raw: list[list[tuple[float, float]]] = []
+    for mesh in sorted(all_meshes):
+        kokudo_raw.extend(load_kokudo_raw(mesh, refresh))
+    print(f"N13 国道 records nationwide: {len(kokudo_raw)}")
+    grid = build_segment_grid(kokudo_raw)
+
+    arcs = []
+    for wid, f in per_way.items():
+        coords = [(lat, lon) for lon, lat in f["geometry"]["coordinates"]]
+        matched, total, min_dist = coverage_ratio(coords, grid, ORPHAN_THRESHOLD_M)
+        arcs.append({"id": wid, "feature": f, "coords": coords, "matched": matched,
+                      "total": total, "min_dist": min_dist})
+
+    def bucket(ratio: float) -> str:
+        pct = ratio * 100
+        if pct == 0:
+            return "0%"
+        if pct < 20:
+            return "0-20%"
+        if pct < 80:
+            return "20-80%"
+        return "80-100%"
+
+    counts = {"0%": 0, "0-20%": 0, "20-80%": 0, "80-100%": 0}
+    for a in arcs:
+        counts[bucket(ratio_of(a))] += 1
+    print("\narc-level coverage distribution:")
+    for k in ("0%", "0-20%", "20-80%", "80-100%"):
+        print(f"  {k}: {counts[k]}")
+
+    # Cluster only candidate arcs (ratio_of < ORPHAN_CANDIDATE_RATIO) — an
+    # arc that is itself well N13-backed never joins a cluster, the same way
+    # cluster_gaps only ever sees N13 records already classified as
+    # unmatched, never matched ones.
+    candidates = [a for a in arcs if ratio_of(a) < ORPHAN_CANDIDATE_RATIO]
+    clusters = cluster_former_arcs(candidates)
+    print(f"\nclassifying what N13 draws beneath {len(clusters)} cluster(s), "
+          "one mesh's 全分類 records at a time (see classify_clusters_beneath)...")
+    classify_clusters_beneath(clusters, refresh)
+    print(f"{len(clusters)} cluster(s) from {len(candidates)} candidate arc(s) "
+          f"(< {ORPHAN_CANDIDATE_RATIO * 100:.0f}% coverage) - candidates for a "
+          "stale former flag (地理院地図 may already show this as 指定解除 outright)")
+    print("=" * 80)
+    confirmed_clusters = 0
+    confirmed_arcs = 0
+    for c in clusters:
+        lat, lon = c["sample"]
+        label = coverage_label(c)
+        if c["confirmed"]:
+            confirmed_clusters += 1
+            confirmed_arcs += len(c["members"])
+        id_list = ", ".join(f"way/{i}" for i in c["ids"][:5])
+        if len(c["ids"]) > 5:
+            id_list += f", 他{len(c['ids']) - 5}件"
+        print(f"  国道{'・'.join(map(str, c['refs']))}  {c['km']:.2f} km  "
+              f"{len(c['members']):>3} arc(s)  {label}  sample {lat:.5f},{lon:.5f}  "
+              f"({c['beneath']})")
+        print(f"    {id_list}")
+
+    print(f"\n{confirmed_clusters}/{len(clusters)} cluster(s) mechanically confirmed as "
+          f"指定解除 ({confirmed_arcs} arc(s)) — 非国道の N13 分類が "
+          f"{CONFIRM_THRESHOLD_M} m 以内の直下にある")
+
+
 def main() -> None:
     # Windows terminals default stdout to cp932, which lacks glyphs this
     # script prints (em dash, 一部の記号). build_all.py hits the same wall.
@@ -447,6 +760,10 @@ def main() -> None:
     args = [a for a in sys.argv[1:] if a != "--refresh"]
     refresh = "--refresh" in sys.argv[1:]
     region = args[0] if args else "nagano"
+
+    if region == "all":
+        national_orphan_report(refresh)
+        return
 
     meta = json.loads((DATA / f"{region}.meta.json").read_text(encoding="utf-8"))
     gj = json.loads((DATA / f"{region}.geojson").read_text(encoding="utf-8"))
@@ -457,30 +774,28 @@ def main() -> None:
     meshes = mesh_codes_for_bbox(bbox)
     print(f"{region}: bbox {bbox} -> {len(meshes)} mesh(es): {', '.join(meshes)}")
 
-    kokudo: list[list[tuple[float, float]]] = []
-    classified: list[tuple[str, list[tuple[float, float]]]] = []
+    west, south, east, north = bbox
+    kokudo: list[list[tuple[float, float]]] = []       # bbox-filtered: gap direction
+    kokudo_raw: list[list[tuple[float, float]]] = []   # mesh-wide: orphan direction
+    # 全分類 (all 道路分類, not just 国道) is *not* accumulated across meshes
+    # here — see classify_clusters_beneath's docstring on why holding every
+    # mesh's full classification set at once is the thing that exhausted
+    # memory. classify_clusters_beneath re-reads it later, one mesh at a
+    # time, from load_classified_raw's on-disk cache instead.
     for mesh in meshes:
-        recs = load_classified(mesh, bbox, refresh)
-        n_kokudo = sum(1 for rdctg, _ in recs if rdctg == RDCTG_KOKUDO)
-        print(f"  {mesh}: {n_kokudo} N13 国道 record(s) inside bbox "
-              f"({len(recs)} all classifications)")
-        classified.extend(recs)
-        kokudo.extend(line for rdctg, line in recs if rdctg == RDCTG_KOKUDO)
-    print(f"total N13 国道 records in {region}: {len(kokudo)}")
+        raw = load_kokudo_raw(mesh, refresh)
+        filtered = [line for line in raw if line_touches_bbox(line, west, south, east, north)]
+        print(f"  {mesh}: {len(filtered)} N13 国道 record(s) inside bbox ({len(raw)} in mesh)")
+        kokudo.extend(filtered)
+        kokudo_raw.extend(raw)
+    print(f"total N13 国道 records in {region}: {len(kokudo)} bbox-filtered, "
+          f"{len(kokudo_raw)} mesh-wide")
 
     our_lines = [
         [(lat, lon) for lon, lat in f["geometry"]["coordinates"]] for f in feats
     ]
     our_grid = build_segment_grid(our_lines)
-    # Every 国道 segment is also in `classified` (kokudo is filtered out of the
-    # same `recs` above), so deriving the 国道-only grid from the already-built
-    # classified grid — rather than a second build_segment_grid(kokudo) pass —
-    # avoids running cells_for_segment twice over the same 国道 records.
-    n13_classified_grid = build_classified_grid(classified)
-    n13_grid = {
-        cell: [(a, b) for rdctg, a, b in entries if rdctg == RDCTG_KOKUDO]
-        for cell, entries in n13_classified_grid.items()
-    }
+    n13_grid_raw = build_segment_grid(kokudo_raw)
 
     # ---- gaps: N13 国道 with nothing of ours nearby -----------------------
     gap_lines = []
@@ -524,50 +839,46 @@ def main() -> None:
             print("    no excluded OSM way here - absent from OSM itself")
 
     # ---- orphans: our former arcs with no N13 backing nearby --------------
+    # Uses n13_grid_raw (mesh-wide, not bbox-filtered) — a single region's
+    # own former arcs can still sit near this region's own border, and
+    # cutting N13 to the bbox here would reproduce the false "N13 なし" this
+    # script now avoids nationally. For cross-region dedup of the same way
+    # id, run with region "all" instead — see national_orphan_report.
     former_arcs = [f for f in feats if f["properties"].get("former")]
-    orphans = []
+    arcs = []
     for f in former_arcs:
         coords = [(lat, lon) for lon, lat in f["geometry"]["coordinates"]]
-        mid = coords[len(coords) // 2]
-        d = nearest_segment(mid, n13_grid)
-        if d is None or d > ORPHAN_THRESHOLD_M:
-            # What's actually drawn under this arc, if not 国道? Answering
-            # this is the difference between "N13 has nothing here" (weak:
-            # could be a digitisation gap on N13's side too) and "N13 draws
-            # a 市区町村道 right here" (strong: a human doesn't need to open
-            # 地理院地図 to see the same thing).
-            nearest = nearest_classified_segment(mid, n13_classified_grid)
-            orphans.append((f, d, nearest))
-
-    confirmed_ids = {
-        f["properties"]["id"] for f, d, nearest in orphans
-        if nearest is not None and nearest[0] <= CONFIRM_THRESHOLD_M
-        and nearest[1] in CONFIRMABLE_RDCTG
-    }
+        matched, total, min_dist = coverage_ratio(coords, n13_grid_raw, ORPHAN_THRESHOLD_M)
+        arcs.append({"id": f["properties"]["id"], "feature": f, "coords": coords,
+                      "matched": matched, "total": total, "min_dist": min_dist})
+    candidates = [a for a in arcs if ratio_of(a) < ORPHAN_CANDIDATE_RATIO]
+    clusters = cluster_former_arcs(candidates)
+    classify_clusters_beneath(clusters, refresh)
 
     print("\n" + "=" * 80)
-    print(f"our former arcs ({len(former_arcs)} total) with no N13 国道 within "
-          f"{ORPHAN_THRESHOLD_M} m - candidates for a stale former flag "
-          "(地理院地図 may already show this as 指定解除 outright)")
+    print(f"our former arcs ({len(former_arcs)} total) - {len(clusters)} cluster(s) "
+          f"from {len(candidates)} candidate arc(s) (< {ORPHAN_CANDIDATE_RATIO * 100:.0f}% "
+          "N13 coverage) - candidates for a stale former flag (地理院地図 may already "
+          "show this as 指定解除 outright)")
     print("=" * 80)
-    for f, d, nearest in sorted(orphans, key=lambda x: -(x[0]["properties"]["km"]))[:20]:
-        p = f["properties"]
-        dist = "no N13 nearby at all" if d is None else f"nearest N13 国道 {d:.0f} m away"
-        if nearest is None:
-            beneath = "nothing N13-classified nearby either"
-        else:
-            near_d, near_rdctg = nearest
-            label = RDCTG_LABELS.get(near_rdctg, f"コード{near_rdctg!r}")
-            mark = " [指定解除を機械確認]" if p["id"] in confirmed_ids else ""
-            beneath = f"directly under: {label} {near_d:.0f} m away{mark}"
-        print(f"  way/{p['id']}  国道{'・'.join(map(str, p['refs_list']))}  "
-              f"{p['km']} km  {p.get('name') or ''}  ({dist}; {beneath})")
-    if not orphans:
+    confirmed_clusters = 0
+    confirmed_arcs = 0
+    for c in clusters:
+        lat, lon = c["sample"]
+        label = coverage_label(c)
+        if c["confirmed"]:
+            confirmed_clusters += 1
+            confirmed_arcs += len(c["members"])
+        print(f"  国道{'・'.join(map(str, c['refs']))}  {c['km']:.2f} km  "
+              f"{len(c['members']):>3} arc(s)  {label}  sample {lat:.5f},{lon:.5f}  "
+              f"({c['beneath']})")
+    if not clusters:
         print("  none")
 
-    print(f"\n{len(orphans)}/{len(former_arcs)} former arcs flagged")
-    print(f"{len(confirmed_ids)}/{len(orphans)} mechanically confirmed as 指定解除 "
-          f"(非国道の N13 分類が {CONFIRM_THRESHOLD_M} m 以内の直下にある)")
+    print(f"\n{len(clusters)} cluster(s) flagged, from {len(candidates)}/{len(former_arcs)} arc(s)")
+    print(f"{confirmed_clusters}/{len(clusters)} cluster(s) mechanically confirmed as "
+          f"指定解除 ({confirmed_arcs} arc(s)) — 非国道の N13 分類が "
+          f"{CONFIRM_THRESHOLD_M} m 以内の直下にある")
 
 
 if __name__ == "__main__":
