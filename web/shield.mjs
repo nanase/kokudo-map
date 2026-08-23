@@ -31,27 +31,30 @@ export const SHIELD_PATH =
   '65.743,25.853Z';
 
 /**
- * Border thickness, in the same units as `SHIELD_PATH`.
+ * Border thickness, in the same units as `SHIELD_PATH`, for every drawing of
+ * the sign except the favicon — `shield()` below (panel row, popup) and the
+ * share card scripts/make_brand.mjs renders to og.png.
  *
- * One value for every size the sign is drawn at, favicon included — the
- * traced sign has one true border proportion. What differs by context is how
- * much of it shows: scripts/make_brand.mjs paints the favicon and card with
- * `paint-order="stroke"` so the face keeps its full size with nothing behind
- * it to blend into; `shield()` below does not, since its background is
- * always the panel or a popup, and the border blending into that edge is the
- * point (see the CSS comment above `.shield`).
+ * What differs by context is how much of it shows: make_brand.mjs paints the
+ * card with `paint-order="stroke"` so the face keeps its full size with
+ * nothing behind it to blend into; `shield()` does not, since its background
+ * is always the panel or a popup, and the border blending into that edge is
+ * the point (see the CSS comment above `.shield`).
  */
 export const SHIELD_STROKE_WIDTH = 15.94;
 
 /**
- * Border thickness for the standalone brand mark — favicon, the panel's own
- * title icon, the share card — drawn by scripts/make_brand.mjs.
+ * Border thickness for the favicon and the panel's own title icon —
+ * `web/favicon.svg`, drawn by scripts/make_brand.mjs and reused by both.
  *
  * The mark carries no number, so unlike `SHIELD_STROKE_WIDTH` there is no
  * text for a heavier border to crowd, and it can afford to read clearly at
  * favicon size. `SHIELD_VIEWBOX`'s ~10-unit margin is too tight for a border
  * this heavy on its own, so make_brand.mjs pads the viewBox by
- * `SHIELD_ICON_PAD` before drawing it.
+ * `SHIELD_ICON_PAD` before drawing it. The share card keeps the lighter
+ * `SHIELD_STROKE_WIDTH` instead — its border is invisible against the card's
+ * white background regardless, so there is nothing to gain by thickening it,
+ * only a smaller-looking mark from the extra padding.
  */
 export const SHIELD_ICON_STROKE_WIDTH = 56;
 
