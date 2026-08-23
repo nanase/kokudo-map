@@ -433,33 +433,64 @@ def build_classified_grid(records: list[tuple[str, list[tuple[float, float]]]]) 
     return grid
 
 
-def nearest_classified_segment(pt, grid, radius=1):
-    """nearest_segment, but returns (distance, rdCtg) of the winning segment
-    instead of just the distance."""
+# classify_clusters_beneath's search radius. CELL is ~1 km, so radius=4
+# reaches roughly 4 km in every direction — CONFIRM_THRESHOLD_M is only
+# 100 m, so this is not about the confirmation decision itself (nothing
+# past a couple hundred metres could ever confirm) but about the *report*:
+# radius=1 (the distance-threshold searches elsewhere in this file use)
+# left a real gap where a genuinely nearest classified line sitting a
+# few hundred metres to a couple of km past the 3x3-cell search — plausible
+# in Japan's sparser mountain meshes — would silently be missed and reported
+# as "N13分類なし" (CodeRabbit review on this PR). A full per-mesh exhaustive
+# search would close that gap completely, but at this radius the pathological
+# case (nothing classified within ~8 km²) is rare enough in a country this
+# densely roaded not to be worth that complexity.
+CLASSIFY_SEARCH_RADIUS = 4
+
+
+def nearest_classified_segment(pt, grid, radius=CLASSIFY_SEARCH_RADIUS
+                                ) -> tuple[tuple[float, str] | None, tuple[float, str] | None]:
+    """Two nearest-segment searches in one pass over the grid: nearest_any is
+    unconstrained by classification (what's truly closest, for reporting),
+    nearest_confirmable is restricted to CONFIRMABLE_RDCTG (for the 指定解除
+    decision) and can be a different, farther segment than nearest_any — a
+    nearer 国道 segment must not suppress a slightly farther 都道府県道 one
+    still within CONFIRM_THRESHOLD_M (CodeRabbit review on this PR: picking
+    one overall-nearest segment and checking only *its* classification made
+    a nearby-but-uninformative 国道 hide a real confirmation next to it).
+    Each returned value is (distance, rdCtg) or None.
+    """
     c = cell_of(pt)
-    best = None
+    best_any = None
+    best_confirmable = None
     for dx in range(-radius, radius + 1):
         for dy in range(-radius, radius + 1):
             key = (round(c[0] + dx * CELL, 2), round(c[1] + dy * CELL, 2))
             for rdctg, a, b in grid.get(key, []):
                 d = point_segment_distance_m(pt, a, b)
-                if best is None or d < best[0]:
-                    best = (d, rdctg)
-    return best
+                if best_any is None or d < best_any[0]:
+                    best_any = (d, rdctg)
+                if rdctg in CONFIRMABLE_RDCTG and (best_confirmable is None or d < best_confirmable[0]):
+                    best_confirmable = (d, rdctg)
+    return best_any, best_confirmable
 
 
-def classify_beneath(nearest: tuple[float, str] | None) -> tuple[str, bool]:
-    """Format a nearest-classified-segment result — (distance, rdCtg), or
-    None if nothing was found within search radius — into a report string
-    and a mechanical 指定解除 confirmation flag, see the module docstring's
-    paragraph on this. Shared by main()'s single-region report and
-    national_orphan_report so the two never drift on what "confirmed" means.
+def classify_beneath(nearest_any: tuple[float, str] | None,
+                      nearest_confirmable: tuple[float, str] | None) -> tuple[str, bool]:
+    """Format a nearest_classified_segment result into a report string (what
+    N13 draws closest to the sample point, whatever its classification) and
+    a mechanical 指定解除 confirmation flag (whether a *confirmable*
+    classification — see CONFIRMABLE_RDCTG — exists within
+    CONFIRM_THRESHOLD_M, independently of what's closest overall). See the
+    module docstring's paragraph on this. Shared by main()'s single-region
+    report and national_orphan_report so the two never drift on what
+    "confirmed" means.
     """
-    if nearest is None:
-        return "N13分類なし", False
-    dist, rdctg = nearest
+    confirmed = nearest_confirmable is not None and nearest_confirmable[0] <= CONFIRM_THRESHOLD_M
+    if nearest_any is None:
+        return "N13分類なし", confirmed
+    dist, rdctg = nearest_any
     label = RDCTG_LABELS.get(rdctg, f"コード{rdctg!r}")
-    confirmed = dist <= CONFIRM_THRESHOLD_M and rdctg in CONFIRMABLE_RDCTG
     mark = " [指定解除を機械確認]" if confirmed else ""
     return f"直下 {dist:.0f}m に{label}{mark}", confirmed
 
@@ -499,7 +530,8 @@ def classify_clusters_beneath(clusters: list[dict], refresh: bool,
     function should risk triggering on a guess).
     """
     for c in clusters:
-        c["_nearest"] = None
+        c["_nearest_any"] = None
+        c["_nearest_confirmable"] = None
 
     mesh_to_clusters: dict[str, list[dict]] = {}
     for c in clusters:
@@ -510,15 +542,19 @@ def classify_clusters_beneath(clusters: list[dict], refresh: bool,
     for mesh, mesh_clusters in mesh_to_clusters.items():
         grid = build_classified_grid(load_classified_raw(mesh, refresh))
         for c in mesh_clusters:
-            nearest = nearest_classified_segment(c["sample"], grid)
-            if nearest is not None and (c["_nearest"] is None or nearest[0] < c["_nearest"][0]):
-                c["_nearest"] = nearest
+            nearest_any, nearest_confirmable = nearest_classified_segment(c["sample"], grid)
+            if nearest_any is not None and (c["_nearest_any"] is None
+                                             or nearest_any[0] < c["_nearest_any"][0]):
+                c["_nearest_any"] = nearest_any
+            if nearest_confirmable is not None and (c["_nearest_confirmable"] is None
+                                                      or nearest_confirmable[0] < c["_nearest_confirmable"][0]):
+                c["_nearest_confirmable"] = nearest_confirmable
         # `grid` (and the mesh's raw records inside it) is dropped here, before
         # the next mesh's grid is built — this loop never holds two meshes'
         # classified data at once.
 
     for c in clusters:
-        c["beneath"], c["confirmed"] = classify_beneath(c.pop("_nearest"))
+        c["beneath"], c["confirmed"] = classify_beneath(c.pop("_nearest_any"), c.pop("_nearest_confirmable"))
 
 
 # ----------------------------------------------------------------- coverage --
