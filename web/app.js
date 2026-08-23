@@ -259,6 +259,36 @@ map.addControl(
   'bottom-right',
 );
 
+/* ------------------------------------------------------------- state tip --- */
+/**
+ * A label that flashes next to a control button right after it changes
+ * state — the same confirmation a hover title gives, but for a tap, which
+ * has no hover. Lives inside the button's own control group so it tracks
+ * that group's position without any layout math of its own.
+ */
+const STATE_TIP_MS = 2400;
+
+function attachStateTip(container) {
+  const tip = document.createElement('div');
+  tip.className = 'state-tip';
+  container.appendChild(tip);
+  let hideTimer;
+  const hide = () => {
+    clearTimeout(hideTimer);
+    tip.classList.remove('show');
+  };
+  tip.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    hide();
+  });
+  return (text) => {
+    tip.textContent = text;
+    tip.classList.add('show');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(hide, STATE_TIP_MS);
+  };
+}
+
 /* ------------------------------------------------------------ hide-routes --- */
 /**
  * A temporary "basemap only" view, for reading the terrain under the routes.
@@ -296,6 +326,12 @@ function setHideBtnState(btn, hidden) {
   btn.setAttribute('aria-label', label);
 }
 
+// title/aria-label 用の label は次に押すと起きる動作(動詞)なので、押した
+// 直後の状態を示す state-tip にはそのまま使えない。この一箇所だけで結ぶ。
+function hideStateTip(hidden) {
+  return hidden ? '国道: 非表示' : '国道: 表示';
+}
+
 function setRoutesHidden(hidden) {
   routesHidden = hidden;
   for (const { id } of routeLayers()) {
@@ -315,7 +351,11 @@ class HideRoutesControl {
     btn.type = 'button';
     btn.id = 'hide-routes-btn';
     setHideBtnState(btn, false);
-    btn.addEventListener('click', () => setRoutesHidden(!routesHidden));
+    const showTip = attachStateTip(container);
+    btn.addEventListener('click', () => {
+      setRoutesHidden(!routesHidden);
+      showTip(hideStateTip(routesHidden));
+    });
     container.appendChild(btn);
     this._container = container;
     return container;
@@ -391,10 +431,12 @@ class GsiShadeControl {
       btn.title = label;
       btn.setAttribute('aria-label', label);
     };
+    const showTip = attachStateTip(container);
     btn.addEventListener('click', () => {
       const i = GSI_SHADE_LEVELS.indexOf(gsiShade);
       applyGsiShade(GSI_SHADE_LEVELS[(i + 1) % GSI_SHADE_LEVELS.length]);
       render();
+      showTip(btn.title);
     });
     render();
     container.appendChild(btn);
@@ -472,10 +514,12 @@ class BasemapControl {
       btn.title = label;
       btn.setAttribute('aria-label', label);
     };
+    const showTip = attachStateTip(container);
     btn.addEventListener('click', () => {
       const i = GSI_BASEMAP_ORDER.indexOf(basemap);
       applyBasemap(GSI_BASEMAP_ORDER[(i + 1) % GSI_BASEMAP_ORDER.length]);
       render();
+      showTip(btn.title);
     });
     render();
     container.appendChild(btn);
