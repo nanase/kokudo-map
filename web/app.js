@@ -290,6 +290,71 @@ function attachStateTip(container) {
   };
 }
 
+/* --------------------------------------------------------- control factory --- */
+/**
+ * The three top-right controls are all the same shape: a MapLibre IControl —
+ * so `addControl(…, 'top-right')` stacks it in its own rounded group
+ * directly under the zoom buttons for free — whose button steps through
+ * `order` on click and re-renders its icon/title/aria-label from whatever
+ * value is now current. `get`/`apply` reach into state that lives outside
+ * the control (map layers, localStorage) — this factory only owns the
+ * button.
+ *
+ * A two-value `order` is a toggle, not a cycle, and gets the `active` class
+ * and `aria-pressed` that only a toggle needs; the two three-value controls
+ * fall through untouched. `tip` defaults to `label`, since only the
+ * hide-routes button needs a different phrasing for "what happens next" vs.
+ * "what just happened" (see `hideStateTip`).
+ */
+function buildCycleControl({
+  className,
+  id,
+  order,
+  get,
+  apply,
+  icon,
+  label,
+  tip,
+}) {
+  const tipFor = tip ?? label;
+  const isToggle = order.length === 2;
+  return class CycleControl {
+    onAdd() {
+      const container = document.createElement('div');
+      container.className = `maplibregl-ctrl maplibregl-ctrl-group ${className}`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = id;
+      const render = () => {
+        const value = get();
+        btn.innerHTML = icon(value);
+        const text = label(value);
+        btn.title = text;
+        btn.setAttribute('aria-label', text);
+        if (isToggle) {
+          const pressed = value === order[1];
+          btn.classList.toggle('active', pressed);
+          btn.setAttribute('aria-pressed', String(pressed));
+        }
+      };
+      const showTip = attachStateTip(container);
+      btn.addEventListener('click', () => {
+        const next = order[(order.indexOf(get()) + 1) % order.length];
+        apply(next);
+        render();
+        showTip(tipFor(next));
+      });
+      render();
+      container.appendChild(btn);
+      this._container = container;
+      return container;
+    }
+    onRemove() {
+      this._container.remove();
+    }
+  };
+}
+
 /* ------------------------------------------------------------ hide-routes --- */
 /**
  * A temporary "basemap only" view, for reading the terrain under the routes.
@@ -318,15 +383,6 @@ const EYE_OFF_ICON =
 
 let routesHidden = false;
 
-function setHideBtnState(btn, hidden) {
-  btn.innerHTML = hidden ? EYE_OFF_ICON : EYE_ICON;
-  btn.classList.toggle('active', hidden);
-  btn.setAttribute('aria-pressed', String(hidden));
-  const label = hidden ? '国道の表示に戻す' : '国道を一時的に隠す';
-  btn.title = label;
-  btn.setAttribute('aria-label', label);
-}
-
 // title/aria-label 用の label は次に押すと起きる動作(動詞)なので、押した
 // 直後の状態を示す state-tip にはそのまま使えない。この一箇所だけで結ぶ。
 function hideStateTip(hidden) {
@@ -338,33 +394,18 @@ function setRoutesHidden(hidden) {
   for (const { id } of routeLayers()) {
     map.setLayoutProperty(id, 'visibility', hidden ? 'none' : 'visible');
   }
-  setHideBtnState($('#hide-routes-btn'), hidden);
 }
 
-// A MapLibre IControl, so `addControl(…, 'top-right')` stacks it in its own
-// rounded group directly under the zoom buttons for free.
-class HideRoutesControl {
-  onAdd() {
-    const container = document.createElement('div');
-    container.className =
-      'maplibregl-ctrl maplibregl-ctrl-group hide-routes-ctrl';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'hide-routes-btn';
-    setHideBtnState(btn, false);
-    const showTip = attachStateTip(container);
-    btn.addEventListener('click', () => {
-      setRoutesHidden(!routesHidden);
-      showTip(hideStateTip(routesHidden));
-    });
-    container.appendChild(btn);
-    this._container = container;
-    return container;
-  }
-  onRemove() {
-    this._container.remove();
-  }
-}
+const HideRoutesControl = buildCycleControl({
+  className: 'hide-routes-ctrl',
+  id: 'hide-routes-btn',
+  order: [false, true],
+  get: () => routesHidden,
+  apply: setRoutesHidden,
+  icon: (hidden) => (hidden ? EYE_OFF_ICON : EYE_ICON),
+  label: (hidden) => (hidden ? '国道の表示に戻す' : '国道を一時的に隠す'),
+  tip: hideStateTip,
+});
 
 /* -------------------------------------------------------------- gsi shade --- */
 /**
@@ -431,36 +472,15 @@ function applyGsiShade(level) {
   }
 }
 
-class GsiShadeControl {
-  onAdd() {
-    const container = document.createElement('div');
-    container.className =
-      'maplibregl-ctrl maplibregl-ctrl-group gsi-shade-ctrl';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'gsi-shade-btn';
-    const render = () => {
-      btn.innerHTML = shadeIcon(gsiShade);
-      const label = `地図の濃さ: ${GSI_SHADE_LABELS[gsiShade]}`;
-      btn.title = label;
-      btn.setAttribute('aria-label', label);
-    };
-    const showTip = attachStateTip(container);
-    btn.addEventListener('click', () => {
-      const i = GSI_SHADE_LEVELS.indexOf(gsiShade);
-      applyGsiShade(GSI_SHADE_LEVELS[(i + 1) % GSI_SHADE_LEVELS.length]);
-      render();
-      showTip(btn.title);
-    });
-    render();
-    container.appendChild(btn);
-    this._container = container;
-    return container;
-  }
-  onRemove() {
-    this._container.remove();
-  }
-}
+const GsiShadeControl = buildCycleControl({
+  className: 'gsi-shade-ctrl',
+  id: 'gsi-shade-btn',
+  order: GSI_SHADE_LEVELS,
+  get: () => gsiShade,
+  apply: applyGsiShade,
+  icon: shadeIcon,
+  label: (level) => `地図の濃さ: ${GSI_SHADE_LABELS[level]}`,
+});
 
 /* --------------------------------------------------------------- basemap --- */
 /**
@@ -515,35 +535,15 @@ function applyBasemap(id) {
   }
 }
 
-class BasemapControl {
-  onAdd() {
-    const container = document.createElement('div');
-    container.className = 'maplibregl-ctrl maplibregl-ctrl-group basemap-ctrl';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'basemap-btn';
-    const render = () => {
-      btn.innerHTML = BASEMAP_ICONS[basemap];
-      const label = `地図の種類: ${GSI_BASEMAPS[basemap].label}`;
-      btn.title = label;
-      btn.setAttribute('aria-label', label);
-    };
-    const showTip = attachStateTip(container);
-    btn.addEventListener('click', () => {
-      const i = GSI_BASEMAP_ORDER.indexOf(basemap);
-      applyBasemap(GSI_BASEMAP_ORDER[(i + 1) % GSI_BASEMAP_ORDER.length]);
-      render();
-      showTip(btn.title);
-    });
-    render();
-    container.appendChild(btn);
-    this._container = container;
-    return container;
-  }
-  onRemove() {
-    this._container.remove();
-  }
-}
+const BasemapControl = buildCycleControl({
+  className: 'basemap-ctrl',
+  id: 'basemap-btn',
+  order: GSI_BASEMAP_ORDER,
+  get: () => basemap,
+  apply: applyBasemap,
+  icon: (bmId) => BASEMAP_ICONS[bmId],
+  label: (bmId) => `地図の種類: ${GSI_BASEMAPS[bmId].label}`,
+});
 
 /* ----------------------------------------------------------------- panel --- */
 /**
