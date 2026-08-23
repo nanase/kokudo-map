@@ -81,6 +81,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 import zipfile
 from pathlib import Path
@@ -294,11 +295,25 @@ def load_classified_raw(mesh: str, refresh: bool
     records: list[tuple[str, list[tuple[float, float]]]] = []
     if shp_path is not None:
         sf = shapefile.Reader(str(shp_path), encoding="utf-8")
-        for i, rec in enumerate(sf.iterRecords()):
-            pts = sf.shape(i).points
-            records.append((rec[RDCTG_FIELD], [(lat, lon) for lon, lat in pts]))
+        try:
+            for i, rec in enumerate(sf.iterRecords()):
+                pts = sf.shape(i).points
+                records.append((rec[RDCTG_FIELD], [(lat, lon) for lon, lat in pts]))
+        finally:
+            # try/finally rather than a `with` block: the pinned dependency
+            # (pyshp, unversioned in the script header) is not guaranteed to
+            # be a version whose Reader supports the context-manager protocol.
+            sf.close()
     N13.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps(records), encoding="utf-8")
+    # Write to a temp file in the same directory and rename into place,
+    # rather than writing cache_path directly — a run interrupted mid-write
+    # (Ctrl-C, OOM kill) would otherwise leave a truncated JSON file that
+    # crashes the next run's json.loads above instead of just re-parsing
+    # (CodeRabbit review on this PR). Same directory keeps the rename on one
+    # filesystem, which is what makes it atomic.
+    tmp_path = cache_path.with_name(cache_path.name + f".{os.getpid()}.tmp")
+    tmp_path.write_text(json.dumps(records), encoding="utf-8")
+    os.replace(tmp_path, cache_path)
     return records
 
 
