@@ -419,65 +419,48 @@ def nearest_segment(pt, grid, radius=1):
     return best
 
 
-def build_classified_grid(records: list[tuple[str, list[tuple[float, float]]]]) -> dict:
-    """Same grid as build_segment_grid, but each entry keeps the rdCtg of the
-    line it came from — build_segment_grid's entries are plain (a, b) pairs
-    because every caller so far only ever grouped lines of one classification
-    (国道) at a time and never needed to ask "a match, but a match to what?"."""
-    grid: dict = {}
-    for rdctg, line in records:
-        for i in range(len(line) - 1):
-            a, b = line[i], line[i + 1]
-            for cell in cells_for_segment(a, b):
-                grid.setdefault(cell, []).append((rdctg, a, b))
-    return grid
+def nearest_classified_in_records(pt: tuple[float, float],
+                                   records: list[tuple[str, list[tuple[float, float]]]]
+                                   ) -> tuple[tuple[float, str] | None, tuple[float, str] | None]:
+    """Exact nearest-segment search over one mesh's full classified record
+    set — every segment, not a cell-radius neighbourhood.
 
+    A cell-radius search (an earlier version of this function used one, and
+    the grid/CELL scheme every *other* nearest-segment search in this file
+    still uses) is only safe when the caller is a threshold comparison whose
+    threshold is tiny next to the search span — true for every other grid
+    lookup here (100 m thresholds against a multi-km span), but not true for
+    classify_beneath's "beneath" text, which reports the genuinely nearest
+    line's distance even when that is well past CONFIRM_THRESHOLD_M. Any
+    fixed radius, however generous, is a guess about how sparse a mesh's
+    classified roads can get, and CodeRabbit review on this PR flagged that
+    guess twice (once at ~1 km, again at ~4 km) as still possibly missing a
+    real segment. Scanning every segment removes the guess entirely.
 
-# classify_clusters_beneath's search radius. CELL is ~1 km, so radius=4
-# reaches roughly 4 km in every direction — CONFIRM_THRESHOLD_M is only
-# 100 m, so this is not about the confirmation decision itself (nothing
-# past a couple hundred metres could ever confirm) but about the *report*:
-# radius=1 (the distance-threshold searches elsewhere in this file use)
-# left a real gap where a genuinely nearest classified line sitting a
-# few hundred metres to a couple of km past the 3x3-cell search — plausible
-# in Japan's sparser mountain meshes — would silently be missed and reported
-# as "N13分類なし" (CodeRabbit review on this PR). A full per-mesh exhaustive
-# search would close that gap completely, but at this radius the pathological
-# case (nothing classified within ~8 km²) is rare enough in a country this
-# densely roaded not to be worth that complexity.
-CLASSIFY_SEARCH_RADIUS = 4
+    Cheap enough to afford: this runs once per (cluster, candidate mesh)
+    pair — at most a few hundred times for a nationwide run — not once per
+    arc or per resampled point, and one mesh's classified set (tens to a
+    couple hundred thousand short records, see load_classified_raw) scans in
+    a small fraction of a second.
 
-
-def nearest_classified_segment(pt, grid, radius=CLASSIFY_SEARCH_RADIUS
-                                ) -> tuple[tuple[float, str] | None, tuple[float, str] | None]:
-    """Two nearest-segment searches in one pass over the grid: nearest_any is
-    unconstrained by classification (what's truly closest, for reporting),
-    nearest_confirmable is restricted to CONFIRMABLE_RDCTG (for the 指定解除
-    decision) and can be a different, farther segment than nearest_any — a
-    nearer 国道 segment must not suppress a slightly farther 都道府県道 one
-    still within CONFIRM_THRESHOLD_M (CodeRabbit review on this PR: picking
-    one overall-nearest segment and checking only *its* classification made
-    a nearby-but-uninformative 国道 hide a real confirmation next to it).
-    Each returned value is (distance, rdCtg) or None.
+    Returns (nearest_any, nearest_confirmable) — see classify_beneath for
+    what each means. Each is (distance, rdCtg) or None.
     """
-    c = cell_of(pt)
     best_any = None
     best_confirmable = None
-    for dx in range(-radius, radius + 1):
-        for dy in range(-radius, radius + 1):
-            key = (round(c[0] + dx * CELL, 2), round(c[1] + dy * CELL, 2))
-            for rdctg, a, b in grid.get(key, []):
-                d = point_segment_distance_m(pt, a, b)
-                if best_any is None or d < best_any[0]:
-                    best_any = (d, rdctg)
-                if rdctg in CONFIRMABLE_RDCTG and (best_confirmable is None or d < best_confirmable[0]):
-                    best_confirmable = (d, rdctg)
+    for rdctg, line in records:
+        for i in range(len(line) - 1):
+            d = point_segment_distance_m(pt, line[i], line[i + 1])
+            if best_any is None or d < best_any[0]:
+                best_any = (d, rdctg)
+            if rdctg in CONFIRMABLE_RDCTG and (best_confirmable is None or d < best_confirmable[0]):
+                best_confirmable = (d, rdctg)
     return best_any, best_confirmable
 
 
 def classify_beneath(nearest_any: tuple[float, str] | None,
                       nearest_confirmable: tuple[float, str] | None) -> tuple[str, bool]:
-    """Format a nearest_classified_segment result into a report string (what
+    """Format a nearest_classified_in_records result into a report string (what
     N13 draws closest to the sample point, whatever its classification) and
     a mechanical 指定解除 confirmation flag (whether a *confirmable*
     classification — see CONFIRMABLE_RDCTG — exists within
@@ -504,15 +487,15 @@ def classify_clusters_beneath(clusters: list[dict], refresh: bool,
     One mesh's classified (全分類, not just 国道) record set runs 30-50x
     larger than its 国道-only subset — measured at 74k-137k records per mesh
     against 2-3k 国道 (issue #28) — so combining every mesh a caller's
-    clusters might span into one grid, the way the 国道-only grid safely
-    does, holds tens of millions of line records at once for a nationwide
-    call and exhausted memory in practice. Building and discarding one mesh's
-    classified grid at a time keeps peak memory to a single mesh's worth
-    regardless of how many meshes the full cluster list spans — the tradeoff
-    is doing the classification pass separately from the coverage_ratio pass
-    (which does still read every mesh's 国道-only subset into one grid; that
-    one stays small enough to be fine, see load_kokudo_raw's callers) rather
-    than in the same mesh loop.
+    clusters might span into one combined set, the way the 国道-only grid
+    safely does, holds tens of millions of line records at once for a
+    nationwide call and exhausted memory in practice. Loading and discarding
+    one mesh's classified records at a time keeps peak memory to a single
+    mesh's worth regardless of how many meshes the full cluster list spans —
+    the tradeoff is doing the classification pass separately from the
+    coverage_ratio pass (which does still read every mesh's 国道-only subset
+    into one grid; that one stays small enough to be fine, see
+    load_kokudo_raw's callers) rather than in the same mesh loop.
 
     A road is cut at every mesh boundary, so a sample point within
     CONFIRM_THRESHOLD_M of one can have its truly-nearest N13 line sitting in
@@ -540,18 +523,17 @@ def classify_clusters_beneath(clusters: list[dict], refresh: bool,
                 mesh_to_clusters.setdefault(mesh, []).append(c)
 
     for mesh, mesh_clusters in mesh_to_clusters.items():
-        grid = build_classified_grid(load_classified_raw(mesh, refresh))
+        records = load_classified_raw(mesh, refresh)
         for c in mesh_clusters:
-            nearest_any, nearest_confirmable = nearest_classified_segment(c["sample"], grid)
+            nearest_any, nearest_confirmable = nearest_classified_in_records(c["sample"], records)
             if nearest_any is not None and (c["_nearest_any"] is None
                                              or nearest_any[0] < c["_nearest_any"][0]):
                 c["_nearest_any"] = nearest_any
             if nearest_confirmable is not None and (c["_nearest_confirmable"] is None
                                                       or nearest_confirmable[0] < c["_nearest_confirmable"][0]):
                 c["_nearest_confirmable"] = nearest_confirmable
-        # `grid` (and the mesh's raw records inside it) is dropped here, before
-        # the next mesh's grid is built — this loop never holds two meshes'
-        # classified data at once.
+        # `records` is dropped here, before the next mesh's records are
+        # loaded — this loop never holds two meshes' classified data at once.
 
     for c in clusters:
         c["beneath"], c["confirmed"] = classify_beneath(c.pop("_nearest_any"), c.pop("_nearest_confirmable"))
