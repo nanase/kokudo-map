@@ -160,6 +160,27 @@ describe('rankingHTML', () => {
   test('該当が無ければそう言う', () => {
     expect(rankingHTML([])).toContain('該当する重用区間はありません');
   });
+
+  test('押すと何が起きるかを aria-label で伝える', () => {
+    const html = rankingHTML([combo([7, 8], 4.21, 18)]);
+    expect(html).toContain(
+      'aria-label="国道7・8号の重用区間 4.2kmを地図で表示"',
+    );
+  });
+
+  test('aria-label は名称も含める', () => {
+    const row = { ...combo([7, 8], 4.21, 18), names: ['栗ノ木'] };
+    expect(rankingHTML([row])).toContain(
+      'aria-label="国道7・8号の重用区間 4.2km、栗ノ木を地図で表示"',
+    );
+  });
+
+  test('aria-label の名称もエスケープする', () => {
+    const row = { ...combo([7, 8], 4.21, 18), names: ['<b>栗ノ木</b>'] };
+    expect(rankingHTML([row])).toContain(
+      '&lt;b&gt;栗ノ木&lt;/b&gt;を地図で表示',
+    );
+  });
 });
 
 describe('sharedHTML', () => {
@@ -175,6 +196,12 @@ describe('sharedHTML', () => {
 
   test('該当が無ければそう言う', () => {
     expect(sharedHTML([])).toContain('該当地点はありません');
+  });
+
+  test('押すと何が起きるかを aria-label で伝える', () => {
+    expect(sharedHTML([point])).toContain(
+      'aria-label="国道7・8・17号が起終点を共有する地点を地図で表示"',
+    );
   });
 });
 
