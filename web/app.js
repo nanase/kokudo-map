@@ -765,18 +765,44 @@ function wireShare() {
     if (navigator.share) {
       try {
         await navigator.share({ text });
-      } catch {
-        // User dismissed the share sheet — nothing to recover.
+      } catch (err) {
+        // AbortError はユーザーが共有シートを閉じただけなので何もしない。
+        // それ以外 (権限や埋め込み文脈による失敗) は手でコピーできるようにする。
+        if (err.name !== 'AbortError') revealForManualCopy(text);
       }
       return;
     }
     try {
       await navigator.clipboard.writeText(text);
     } catch {
+      revealForManualCopy(text);
       return;
     }
     flashCopied($('#share-text'));
   });
+}
+
+/**
+ * Web Share にもクリップボードにも失敗したときの最後の手段。#share-copy は
+ * URL 欄が常に見えているので選択したまま手でコピーできるが、#share-text の
+ * 文章はどこにも表示されていないので、このまま失敗すると打つ手が無くなる。
+ * #share-url を一時的な表示欄として使い、フォーカスが外れたら元の URL に戻す。
+ *
+ * text の改行はそのまま渡すと input が黙って捨て、タイトルと URL が区切りなく
+ * くっついてしまうので、見える形に保つスペースへ置き換える。
+ */
+function revealForManualCopy(text) {
+  const input = $('#share-url');
+  const original = input.value;
+  input.value = text.replace(/\n/g, ' ');
+  input.select();
+  input.addEventListener(
+    'blur',
+    () => {
+      input.value = original;
+    },
+    { once: true },
+  );
 }
 
 const CHECK_ICON =
