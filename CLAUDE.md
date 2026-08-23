@@ -42,15 +42,4 @@
 
 ## 構成
 
-| 場所 | 中身 |
-| --- | --- |
-| `web/` | 地図本体。配信データは手元用の中間置き場 |
-| `web/data/national-routes.pmtiles` | 全国のベクタタイル。手元では `web/data/`、公開先は `data.nanase.cc`(R2) |
-| `web/data/national.meta.json` | 画面が出す集計。指定の組み合わせ単位。公開先は同上 |
-| `web/mapspec.mjs` | スタイルと絞り込み式。検証スクリプトも同じ物を読む |
-| `scripts/` | 地図の資材を作る道具。グリフ、favicon、ライブラリの複製 |
-| `test/` | データを持たずに答えられることの単体テスト |
-| `docs/` | README から辿る詳細文書 |
-| `.claude/skills/national-route-data/` | 手順、判定ルール、スクリプト |
-| `.github/workflows/` | 検査と GitHub Pages への配信 |
-| `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |
+場所ごとの中身は [docs/development.md](docs/development.md) の「構成」節にあります。
