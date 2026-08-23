@@ -8,12 +8,20 @@
 # available in: **N minutes**" のような分数が出る。解除時刻は経過時間で数えず、
 # 常にそのコメントの updated_at を起点に計算し直す（何度待ち直しても正確）。
 #
+# ただし N は分単位で切り捨てられており秒の情報が無いため、計算した解除時刻は
+# 実際より最大 1 分弱早くなりうる。これに当たると促しが早すぎて「数秒待て」と
+# 返されるだけでなく、複数 PR が順番待ちしている場合は待ち直しになり被害が大きい
+# ので、BUFFER_MINUTES ぶん余分に待って解除時刻を後ろにずらす。
+#
 # 出力（標準出力、key=value）:
 #   STATUS=no_limit                                  制限メッセージが無い。通常のループへ
 #   STATUS=ready   MINUTES=N UPDATED_AT=...           解除時刻を過ぎている。促してよい
 #   STATUS=waiting REMAINING_SECONDS=S DEADLINE=... MINUTES=N UPDATED_AT=...
 #                                                      解除時刻まで S 秒残っている
 set -euo pipefail
+
+# 解除時刻の分数表示は切り捨てなので、その誤差を吸収するための余分な待ち時間。
+BUFFER_MINUTES=3
 
 R="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
 PR="${1:-$(gh pr view --json number -q .number)}"
@@ -46,7 +54,7 @@ if [[ ! "$BODY" =~ $RE ]]; then
 fi
 MINUTES="${BASH_REMATCH[1]}"
 
-DEADLINE_EPOCH="$(date -u -d "$UPDATED_AT + ${MINUTES} minutes" +%s)"
+DEADLINE_EPOCH="$(date -u -d "$UPDATED_AT + ${MINUTES} minutes + ${BUFFER_MINUTES} minutes" +%s)"
 NOW_EPOCH="$(date -u +%s)"
 REMAINING=$((DEADLINE_EPOCH - NOW_EPOCH))
 
