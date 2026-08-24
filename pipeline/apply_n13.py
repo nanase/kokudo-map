@@ -42,11 +42,27 @@ def main() -> None:
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     gj = json.loads(gj_path.read_text(encoding="utf-8"))
 
+    # Reset first: this script is meant to run right after build_routes.py,
+    # which already writes revoked=0 fresh on every arc, but it is also run
+    # standalone during triage (mise run apply-n13). Without this reset, a
+    # second standalone run over a geojson that already has revoked=1 from a
+    # prior run would only ever add confirmations, never retract one for an
+    # arc that dropped out of the candidate set (CodeRabbit review on this
+    # PR) — this loop is what makes every run start from the same baseline
+    # regardless of what called it.
+    for f in gj["features"]:
+        f["properties"]["revoked"] = 0
+
     # No former arcs at all (e.g. a region with none) means nothing to check
     # against N13 — skip the mesh fetch entirely rather than downloading data
-    # this region has no use for.
+    # this region has no use for. Still write back the reset above, so a
+    # region that used to have former arcs and no longer does loses any
+    # stale revoked=1 too.
     if not any(f["properties"].get("former") for f in gj["features"]):
         print(f"{region}: no former arcs, nothing to confirm against N13")
+        gj_path.write_text(
+            json.dumps(gj, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+        )
         meta["revoked_arcs"] = 0
         meta_path.write_text(
             json.dumps(meta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
