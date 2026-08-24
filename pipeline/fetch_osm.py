@@ -117,7 +117,8 @@ def run(ep: str, query: str, label: str, tries: int = 4) -> dict:
         except Exception as e:
             print(f"    failed: {str(e)[:120]}", flush=True)
             last = e
-            time.sleep(20)
+            if i < tries - 1:
+                time.sleep(20)
     raise SystemExit(f"query {label!r} failed after {tries} attempts: {last}")
 
 

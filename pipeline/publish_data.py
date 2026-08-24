@@ -40,9 +40,12 @@ FILES = ["national-routes.pmtiles", "national.meta.json", "regions.json"]
 def wrangler(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     # `bunx` 自体は mise がシムを作らないことがあります。`bun x` は bun 本体の
     # サブコマンドなので、mise.toml が述べる bun さえ入っていれば必ず通ります。
-    return subprocess.run(
-        ["bun", "x", "wrangler", *args], text=True, capture_output=True, check=check
+    r = subprocess.run(
+        ["bun", "x", "wrangler", *args], text=True, capture_output=True
     )
+    if check and r.returncode != 0:
+        sys.exit(f"wrangler が失敗した（終了コード {r.returncode}）:\n{r.stdout}{r.stderr}")
+    return r
 
 
 def preflight() -> None:
