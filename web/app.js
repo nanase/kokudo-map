@@ -100,7 +100,7 @@ const $ = (sel) => document.querySelector(sel);
 /* ------------------------------------------------------------------- map --- */
 // PMTiles is one archive read by byte range, so a static host serves the whole
 // country without a tile server. Any host will do — but it must answer Range
-// requests, which is why the development server is scripts/serve.py and not
+// requests, which is why the development server is pipeline/serve.py and not
 // `python -m http.server`.
 maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
 
@@ -137,7 +137,7 @@ const map = new maplibregl.Map({
   zoom: 7.6,
 });
 
-// exposed for debugging and for scripts/render_check.mjs
+// exposed for debugging and for pipeline/render_check.mjs
 window.map = map;
 
 // Registered synchronously, before any fetch can let the map race ahead: `load`

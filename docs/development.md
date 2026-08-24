@@ -77,7 +77,7 @@ bun run test                 # 単体テスト
 bun run check                # スタイルと絞り込み式(生成済みの地域が要る)
 bun run check --spec-only    # 同上。データを読まない
 bun run check:docs           # 命令の一覧が食い違っていないか
-uvx ruff check .claude/skills/national-route-data/scripts   # Python の静的検査
+uvx ruff check pipeline      # Python の静的検査
 ```
 
 ## 構成
@@ -97,10 +97,11 @@ uvx ruff check .claude/skills/national-route-data/scripts   # Python の静的�
 | `web/html.mjs` | エスケープ。OSM の文字は信用できない |
 | `web/glyphs/` | ラベルの SDF グリフ。数字と `・` の 11 字 |
 | `scripts/` | 地図そのものの道具。データ生成には関わらない |
+| `pipeline/` | データ生成のコード一式。取得・判定・検証・タイル化 |
 | `test/` | データを持たずに答えられることの単体テスト |
 | `docs/` | この文書から辿る詳細文書 |
 | `.github/workflows/` | 検査と GitHub Pages への配信 |
-| `.claude/skills/national-route-data/` | 生成と品質管理の手順、判定ルール、スクリプト |
+| `.claude/skills/national-route-data/` | 生成と品質管理の手順、判定ルール |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |
 
 ## 関連文書

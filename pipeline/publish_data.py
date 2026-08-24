@@ -20,7 +20,7 @@ bug, so the data lives there instead — at data.nanase.cc — and
 JS to point at it.
 
 Usage:
-    uv run scripts/publish_data.py
+    uv run pipeline/publish_data.py
 """
 from __future__ import annotations
 

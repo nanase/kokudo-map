@@ -14,7 +14,7 @@ Names are not measured. The ISO 3166-2:JP code is the identity, and the slug and
 Japanese label for each code are fixed, so they are stated here and matched
 against what the file contains.
 
-Usage:  uv run scripts/prefecture_boxes.py [--pbf path] [--pad 0.05]
+Usage:  uv run pipeline/prefecture_boxes.py [--pbf path] [--pad 0.05]
 """
 from __future__ import annotations
 

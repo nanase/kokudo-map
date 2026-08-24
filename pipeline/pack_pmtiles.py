@@ -13,7 +13,7 @@ vt-pbf are JavaScript, the PMTiles writer is Python. The handover is a blob and
 an index, not a directory, because creating a hundred thousand small files on
 Windows takes longer than cutting the tiles did.
 
-Usage:  uv run scripts/pack_pmtiles.py
+Usage:  uv run pipeline/pack_pmtiles.py
 """
 from __future__ import annotations
 

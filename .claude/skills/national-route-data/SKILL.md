@@ -7,8 +7,8 @@ OpenStreetMap から日本の一般国道を取り出し、重用区間の全指
 ## 生成する
 
 ```sh
-uv run scripts/extract_pbf.py     # pbf から 47 地域ぶんを切り出す
-uv run scripts/build_all.py       # 判定・検証・結合・タイル化まで通す
+uv run pipeline/extract_pbf.py     # pbf から 47 地域ぶんを切り出す
+uv run pipeline/build_all.py       # 判定・検証・結合・タイル化まで通す
 ```
 
 初回は pbf が要ります。約 2.5 GB です。
@@ -29,9 +29,9 @@ mise run fetch-pbf
 | 結合 | 地域を繋ぎ、集計してタイルを切る | 全国 |
 | 全国検証 | 結合後にしか答えられないことを確認する | 全国 |
 
-1 地域だけ Overpass から作り直すなら `uv run scripts/pipeline.py <地域>` を使います。全国を Overpass から取ってはいけません。47 都道府県は約 140 クエリ、raw 1 GB になり、公開ミラーの用途から外れます。
+1 地域だけ Overpass から作り直すなら `uv run pipeline/pipeline.py <地域>` を使います。全国を Overpass から取ってはいけません。47 都道府県は約 140 クエリ、raw 1 GB になり、公開ミラーの用途から外れます。
 
-ブラウザでの実描画確認は `scripts/render_check.mjs` が担います。ローカルサーバを先に起動しておく必要があります。PMTiles は Range 要求で読むので、サーバは `scripts/serve.py` です。`python -m http.server` では配れません。
+ブラウザでの実描画確認は `pipeline/render_check.mjs` が担います。ローカルサーバを先に起動しておく必要があります。PMTiles は Range 要求で読むので、サーバは `pipeline/serve.py` です。`python -m http.server` では配れません。
 
 画面写真は一時ディレクトリに書き出し、最後にその場所を表示します。作業ツリーには残しません。手元に置きたいときだけ、保存先のディレクトリを引数で渡します。
 
@@ -54,11 +54,11 @@ way 自身が主張する番号は、同じ地域の国道リレーションが�
 
 地域は二つのデータファイルで定義します。コードには触りません。
 
-1. `scripts/regions.py` に地域名、日本語ラベル、bbox を足す
+1. `pipeline/regions.py` に地域名、日本語ラベル、bbox を足す
    - bbox は南、西、北、東の順
-   - 47 都道府県ぶんは `scripts/prefecture_boxes.py` が pbf の行政界から測って出す
+   - 47 都道府県ぶんは `pipeline/prefecture_boxes.py` が pbf の行政界から測って出す
    - 矩形は県境に沿わないので、隣県が食み込むことは避けられない
-2. `scripts/expectations.py` にその地域の既知の事実を足す
+2. `pipeline/expectations.py` にその地域の既知の事実を足す
    - 確実に通る路線、確実に通らない路線、点線国道を持つ路線
    - 確信のない事実は書かない。誤った期待値は失敗を無視する癖を作る
 3. パイプラインを走らせる
@@ -75,7 +75,7 @@ way 自身が主張する番号は、同じ地域の国道リレーションが�
 | `web/data/national.meta.json` | 画面が出す集計。指定の組み合わせ単位 |
 | `web/data/regions.json` | 地域の一覧。`?region=` の初期表示に使う |
 
-この三つは git に入れません。公開するときは `scripts/publish_data.py` が data.nanase.cc(Cloudflare R2)へ直接上げます。GitHub Pages の裏側(Fastly)が Range 要求の先頭以外を壊す不具合を抱えており、Pages 経由では配れませんでした。手順は [docs/architecture.md](../../../docs/architecture.md) にあります。
+この三つは git に入れません。公開するときは `pipeline/publish_data.py` が data.nanase.cc(Cloudflare R2)へ直接上げます。GitHub Pages の裏側(Fastly)が Range 要求の先頭以外を壊す不具合を抱えており、Pages 経由では配れませんでした。手順は [docs/architecture.md](../../../docs/architecture.md) にあります。
 
 集計は**指定の組み合わせ**ごとに 1 行です。路線別の表では足りません。重用区間のアークは複数の路線に属するので、路線の行を足すと共有部分を二重に数えます。それは地図が隠すのをやめさせたい数そのものです。
 

@@ -6,7 +6,7 @@
  * while the real layers were rejected by MapLibre for wrapping a `zoom`
  * interpolation in arithmetic and for a data-driven `line-dasharray`.
  *
- * Usage:  node build/check_expressions.mjs
+ * Usage:  node pipeline/check_expressions.mjs
  */
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

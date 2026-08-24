@@ -56,7 +56,7 @@ jobs:
           test -s web/vendor/maplibre-gl.js
           test -s web/vendor/pmtiles.js
 
-      # data.nanase.cc に直接向けます。'data/…' は手元の scripts/serve.py 用の
+      # data.nanase.cc に直接向けます。'data/…' は手元の pipeline/serve.py 用の
       # 相対パスなので、置き換え忘れれば 404 になって検査で気付きます。
       - name: 配信データの向き先を書き換える
         run: |

@@ -29,8 +29,8 @@ that set approaches all 459 numbers and the guard stops filtering — 長野県�
 would come back as 国道372号. Acquisition goes nationwide; adjudication stays
 boxed. See RULES.md 裏取り and CASES.md 1・2.
 
-Usage:  uv run scripts/extract_pbf.py [region ...]   (default: every region)
-        uv run scripts/extract_pbf.py --pbf path/to/japan-latest.osm.pbf
+Usage:  uv run pipeline/extract_pbf.py [region ...]   (default: every region)
+        uv run pipeline/extract_pbf.py --pbf path/to/japan-latest.osm.pbf
 """
 from __future__ import annotations
 

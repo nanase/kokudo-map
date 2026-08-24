@@ -15,9 +15,9 @@ are reported together. Stopping at the first one would mean learning about 47
 prefectures one run at a time. Packing still only happens if all of them passed:
 a half-built set packed into an archive looks exactly like a complete one.
 
-Usage:  uv run scripts/build_all.py [region ...]   (default: every region)
-        uv run scripts/build_all.py --skip-verify  (build and pack only)
-        uv run scripts/build_all.py --no-pack      (per-region only)
+Usage:  uv run pipeline/build_all.py [region ...]   (default: every region)
+        uv run pipeline/build_all.py --skip-verify  (build and pack only)
+        uv run pipeline/build_all.py --no-pack      (per-region only)
 """
 from __future__ import annotations
 

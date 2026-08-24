@@ -26,7 +26,7 @@ admission rules dropped it — a rule bug, fixable once for the whole country.
 If no such way exists, the road is absent from OSM and no rule change will
 conjure it; only reference data (国土数値情報 N13) can find that case.
 
-Usage:  uv run build/audit.py [region] [--route N ...] [--all]
+Usage:  uv run pipeline/audit.py [region] [--route N ...] [--all]
 """
 from __future__ import annotations
 
@@ -170,7 +170,7 @@ def load_cache(region):
     if "competing_relations" not in raw:
         raise SystemExit(
             f"{region}: cache predates per-number competing claims; "
-            "re-run build/fetch_osm.py")
+            "re-run pipeline/fetch_osm.py")
     ways = {}
     for src in ("core", "candidates"):
         for e in raw[src]:

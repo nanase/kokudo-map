@@ -12,7 +12,7 @@ the viewer would pull the entire archive on the first tile and fail to parse it.
 Every static host worth deploying to answers ranges; only the development server
 did not.
 
-Usage:  uv run scripts/serve.py [port]
+Usage:  uv run pipeline/serve.py [port]
 """
 from __future__ import annotations
 

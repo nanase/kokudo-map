@@ -14,8 +14,8 @@ bun = "1.3"
 uv = "0.12"
 
 [env]
-# The build scripts belong to the national-route-data skill.
-SKILL = ".claude/skills/national-route-data/scripts"
+# データ生成のコード一式。
+PIPELINE = "pipeline"
 # 生成系の入口は全部 `uv run` なので、どの Python で地図が作られるかは uv が
 # 決めていました。スクリプトの requires-python は >=3.12 としか言わないので、uv は
 # 手持ちの最も新しいものを選びます。__pycache__ には 3.13 と 3.14 の両方の跡が
@@ -34,50 +34,50 @@ run = "curl -L --retry 3 -C - --create-dirs -o build/pbf/japan-latest.osm.pbf ht
 
 [tasks.extract]
 description = "pbf から 47 都道府県ぶんのキャッシュを切り出す"
-run = "uv run {{env.SKILL}}/extract_pbf.py {{arg(name='regions', var=true, default='')}}"
+run = "uv run {{env.PIPELINE}}/extract_pbf.py {{arg(name='regions', var=true, default='')}}"
 
 [tasks.build-all]
 description = "全地域を作り直し、結合して配信データまで通す"
-run = "uv run {{env.SKILL}}/build_all.py {{arg(name='regions', var=true, default='')}}"
+run = "uv run {{env.PIPELINE}}/build_all.py {{arg(name='regions', var=true, default='')}}"
 
 [tasks.build]
 description = "1 地域を取得から検証まで通す"
-run = "uv run {{env.SKILL}}/pipeline.py {{arg(name='region', default='nagano')}}"
+run = "uv run {{env.PIPELINE}}/pipeline.py {{arg(name='region', default='nagano')}}"
 
 [tasks.rebuild]
 description = "1 地域をキャッシュから再生成する（取得しない）"
-run = "uv run {{env.SKILL}}/pipeline.py {{arg(name='region', default='nagano')}} --skip-fetch"
+run = "uv run {{env.PIPELINE}}/pipeline.py {{arg(name='region', default='nagano')}} --skip-fetch"
 
 [tasks.pack]
 description = "build/regions/ から web/data/ を作り直す"
 # 段の順番は build_all.py が持っています。ここに書き写した複製は、複数行の
 # run が Windows で 1 行目しか実行されないせいで、タイルを切っただけで
 # 黙って終わっていました。PMTiles にも全国検証にも届いていませんでした。
-run = "uv run {{env.SKILL}}/build_all.py --pack-only"
+run = "uv run {{env.PIPELINE}}/build_all.py --pack-only"
 
 [tasks.publish-data]
 description = "web/data/ を R2(data.nanase.cc)に上げる"
 # データは git に入れません。R2 の資産として置き、サイトはそこから直接読みます。
-run = "uv run {{env.SKILL}}/publish_data.py"
+run = "uv run {{env.PIPELINE}}/publish_data.py"
 
 [tasks.audit]
 description = "鎖が切れている路線を機械的に探す"
-run = "uv run {{env.SKILL}}/audit.py {{arg(name='region', default='nagano')}}"
+run = "uv run {{env.PIPELINE}}/audit.py {{arg(name='region', default='nagano')}}"
 
 [tasks.compare]
 description = "Overpass 由来の基準と pbf 由来の生成物を突き合わせる"
-run = "uv run {{env.SKILL}}/compare_sources.py {{arg(name='region', default='nagano')}}"
+run = "uv run {{env.PIPELINE}}/compare_sources.py {{arg(name='region', default='nagano')}}"
 
 [tasks.compare-n13]
 description = "国土数値情報 N13(道路)と突き合わせ、OSM に無い国道の候補を探す"
-run = "uv run {{env.SKILL}}/compare_n13.py {{arg(name='region', default='nagano')}}"
+run = "uv run {{env.PIPELINE}}/compare_n13.py {{arg(name='region', default='nagano')}}"
 
 [tasks.serve]
 description = "ローカルサーバを起動する (http://localhost:8000/)"
 # PMTiles は Range 要求で読むので、http.server では配れません。
-run = "uv run {{env.SKILL}}/serve.py {{arg(name='port', default='8000')}}"
+run = "uv run {{env.PIPELINE}}/serve.py {{arg(name='port', default='8000')}}"
 
 [tasks.render-check]
 description = "ブラウザで実描画を確認する（serve を先に起動）"
 # 引数なしなら一時ディレクトリに撮ります。保存先を指定するときだけ渡します。
-run = "node {{env.SKILL}}/render_check.mjs {{arg(name='outdir', default='')}}"
+run = "node {{env.PIPELINE}}/render_check.mjs {{arg(name='outdir', default='')}}"

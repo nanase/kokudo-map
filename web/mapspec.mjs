@@ -1,5 +1,5 @@
 /* Style and filter definitions, kept free of any browser dependency so that
- * build/check_expressions.mjs validates the *same* objects the viewer uses.
+ * pipeline/check_expressions.mjs validates the *same* objects the viewer uses.
  * An earlier version duplicated them, and the duplicate quietly passed while
  * the real layers were rejected by MapLibre.
  */
