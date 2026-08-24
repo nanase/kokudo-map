@@ -110,8 +110,14 @@ def main() -> None:
             print(f"{head} 判定のみ", flush=True)
             continue
 
+        # revoked は verify.py の突き合わせより前に書く必要がある。N13 側の
+        # 障害(ネットワーク・KSJ 側の不具合)はこの県だけの失敗として扱い、
+        # 他県の続行は止めない — build_routes.py の失敗とは別扱い。
+        code, out = run(["uv", "run", str(HERE / "apply_n13.py"), region])
+        bad = outcome("apply_n13.py", code, out)
+
         code, out = run(["uv", "run", str(HERE / "verify.py"), region])
-        bad = outcome("verify.py", code, out)
+        bad += outcome("verify.py", code, out)
         line = f"{head} {verdict(out)}"
 
         code, out = run(["node", str(HERE / "check_expressions.mjs"), region])

@@ -726,6 +726,36 @@ def nearby_osm_ways(cache, out_ids, point, radius_m):
     return hits
 
 
+def region_former_clusters(meta: dict, gj: dict, refresh: bool) -> tuple[list[dict], int]:
+    """This region's own former arcs, clustered and classified against N13 —
+    mesh-wide, not bbox-cut (a region's former arc can sit near its own
+    border; see main()'s own comment on n13_grid_raw for why a bbox cut here
+    would reproduce the false "N13 なし" issue #27 fixed nationally).
+
+    Shared by main()'s single-region report and apply_n13.py's write path, so
+    the report a human reads and the `revoked` property a build actually
+    writes never drift on which arcs count as confirmed — see issue #9.
+    Returns (clusters, former_arc_count).
+    """
+    meshes = mesh_codes_for_bbox(meta["bbox"])
+    kokudo_raw: list[list[tuple[float, float]]] = []
+    for mesh in meshes:
+        kokudo_raw.extend(load_kokudo_raw(mesh, refresh))
+    grid = build_segment_grid(kokudo_raw)
+
+    former_arcs = [f for f in gj["features"] if f["properties"].get("former")]
+    arcs = []
+    for f in former_arcs:
+        coords = [(lat, lon) for lon, lat in f["geometry"]["coordinates"]]
+        matched, total, min_dist = coverage_ratio(coords, grid, ORPHAN_THRESHOLD_M)
+        arcs.append({"id": f["properties"]["id"], "feature": f, "coords": coords,
+                      "matched": matched, "total": total, "min_dist": min_dist})
+    candidates = [a for a in arcs if ratio_of(a) < ORPHAN_CANDIDATE_RATIO]
+    clusters = cluster_former_arcs(candidates)
+    classify_clusters_beneath(clusters, refresh, set(meshes))
+    return clusters, len(former_arcs)
+
+
 def national_orphan_report(refresh: bool) -> None:
     """former 孤立候補を全国横断・重複排除・被覆率・クラスタ単位で出す — issue #27。
 
@@ -865,7 +895,6 @@ def main() -> None:
         [(lat, lon) for lon, lat in f["geometry"]["coordinates"]] for f in feats
     ]
     our_grid = build_segment_grid(our_lines)
-    n13_grid_raw = build_segment_grid(kokudo_raw)
 
     # ---- gaps: N13 国道 with nothing of ours nearby -----------------------
     gap_lines = []
@@ -909,25 +938,14 @@ def main() -> None:
             print("    no excluded OSM way here - absent from OSM itself")
 
     # ---- orphans: our former arcs with no N13 backing nearby --------------
-    # Uses n13_grid_raw (mesh-wide, not bbox-filtered) — a single region's
-    # own former arcs can still sit near this region's own border, and
-    # cutting N13 to the bbox here would reproduce the false "N13 なし" this
-    # script now avoids nationally. For cross-region dedup of the same way
-    # id, run with region "all" instead — see national_orphan_report.
-    former_arcs = [f for f in feats if f["properties"].get("former")]
-    arcs = []
-    for f in former_arcs:
-        coords = [(lat, lon) for lon, lat in f["geometry"]["coordinates"]]
-        matched, total, min_dist = coverage_ratio(coords, n13_grid_raw, ORPHAN_THRESHOLD_M)
-        arcs.append({"id": f["properties"]["id"], "feature": f, "coords": coords,
-                      "matched": matched, "total": total, "min_dist": min_dist})
-    candidates = [a for a in arcs if ratio_of(a) < ORPHAN_CANDIDATE_RATIO]
-    clusters = cluster_former_arcs(candidates)
-    classify_clusters_beneath(clusters, refresh, set(meshes))
+    # For cross-region dedup of the same way id, run with region "all"
+    # instead — see national_orphan_report.
+    clusters, former_count = region_former_clusters(meta, gj, refresh)
+    candidate_count = sum(len(c["members"]) for c in clusters)
 
     print("\n" + "=" * 80)
-    print(f"our former arcs ({len(former_arcs)} total) - {len(clusters)} cluster(s) "
-          f"from {len(candidates)} candidate arc(s) (< {ORPHAN_CANDIDATE_RATIO * 100:.0f}% "
+    print(f"our former arcs ({former_count} total) - {len(clusters)} cluster(s) "
+          f"from {candidate_count} candidate arc(s) (< {ORPHAN_CANDIDATE_RATIO * 100:.0f}% "
           "N13 coverage) - candidates for a stale former flag (地理院地図 may already "
           "show this as 指定解除 outright)")
     print("=" * 80)
@@ -945,7 +963,7 @@ def main() -> None:
     if not clusters:
         print("  none")
 
-    print(f"\n{len(clusters)} cluster(s) flagged, from {len(candidates)}/{len(former_arcs)} arc(s)")
+    print(f"\n{len(clusters)} cluster(s) flagged, from {candidate_count}/{former_count} arc(s)")
     print(f"{confirmed_clusters}/{len(clusters)} cluster(s) mechanically confirmed as "
           f"指定解除 ({confirmed_arcs} arc(s)) — 非国道の N13 分類が "
           f"{CONFIRM_THRESHOLD_M} m 以内の直下にある")

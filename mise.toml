@@ -72,6 +72,10 @@ run = "uv run {{env.PIPELINE}}/compare_sources.py {{arg(name='region', default='
 description = "国土数値情報 N13(道路)と突き合わせ、OSM に無い国道の候補を探す"
 run = "uv run {{env.PIPELINE}}/compare_n13.py {{arg(name='region', default='nagano')}}"
 
+[tasks.apply-n13]
+description = "former のうち N13 で指定解除を機械確認できたものに revoked を書き込む"
+run = "uv run {{env.PIPELINE}}/apply_n13.py {{arg(name='region', default='nagano')}}"
+
 [tasks.serve]
 description = "ローカルサーバを起動する (http://localhost:8000/)"
 # PMTiles は Range 要求で読むので、http.server では配れません。

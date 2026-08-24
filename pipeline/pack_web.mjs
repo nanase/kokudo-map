@@ -86,6 +86,7 @@ for (const f of features) {
     kind: p.kind,
     src: p.src,
     former: p.former,
+    revoked: p.revoked,
     name: p.name || '',
     updated: p.updated,
     km: p.km,
