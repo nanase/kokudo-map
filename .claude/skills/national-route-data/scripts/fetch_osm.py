@@ -36,12 +36,11 @@ import json
 import sys
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 
 import requests
 
 from _paths import CACHE
-from regions import REGIONS, for_region
+from regions import for_region
 
 ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
@@ -74,7 +73,7 @@ def probe(ep: str, tries: int = 3) -> tuple[str | None, str | None]:
                               headers=UA, timeout=90)
             r.raise_for_status()
             return r.json().get("osm3s", {}).get("timestamp_osm_base"), None
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             last = str(e)[:90]
             if i < tries - 1:
                 time.sleep(15)
@@ -115,7 +114,7 @@ def run(ep: str, query: str, label: str, tries: int = 4) -> dict:
             r = requests.post(ep, data={"data": query}, headers=UA, timeout=900)
             r.raise_for_status()
             return r.json()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"    failed: {str(e)[:120]}", flush=True)
             last = e
             time.sleep(20)

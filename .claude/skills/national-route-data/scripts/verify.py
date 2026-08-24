@@ -44,7 +44,11 @@ bad_key = [
 ]
 check(not bad_key, f"refs key matches refs_list ({len(bad_key)} mismatches)")
 
-bad_n = [f["properties"]["id"] for f in feats if f["properties"]["n"] != len(f["properties"]["refs_list"])]
+bad_n = [
+    f["properties"]["id"]
+    for f in feats
+    if f["properties"]["n"] != len(f["properties"]["refs_list"])
+]
 check(not bad_n, f"n equals the designation count ({len(bad_n)} mismatches)")
 
 sorted_ok = all(f["properties"]["refs_list"] == sorted(f["properties"]["refs_list"]) for f in feats)
@@ -73,7 +77,10 @@ for r in [f["ref"] for f in meta["routes"]]:
     by_list = sum(1 for f in feats if r in f["properties"]["refs_list"])
     if by_key != by_list:
         mismatch += 1
-check(not mismatch, f"key-based filter agrees with list membership for all {len(meta['routes'])} routes")
+check(
+    not mismatch,
+    f"key-based filter agrees with list membership for all {len(meta['routes'])} routes",
+)
 
 # --- domain facts we independently know ------------------------------------
 label = meta.get("label", region)
@@ -82,7 +89,9 @@ refs_present = {f["ref"] for f in meta["routes"]}
 for r in expect["present"]:
     check(r in refs_present, f"route {r} is present (known to run through {label})")
 
-invalid = refs_present - ((set(range(1, 59)) | set(range(101, 508))) - {109, 110, 111, 214, 215, 216})
+invalid = refs_present - (
+    (set(range(1, 59)) | set(range(101, 508))) - {109, 110, 111, 214, 215, 216}
+)
 check(not invalid, f"no impossible route numbers ({sorted(invalid)})")
 
 # Regression guard for numbers leaking in: these routes run nowhere near the
@@ -94,7 +103,10 @@ for r, where in expect["absent"]:
 # The general invariant behind those cases: a route may only appear if some
 # national-route relation in the region vouches for its number.
 uncorroborated = refs_present - set(meta["corroborated_refs"])
-check(not uncorroborated, f"every route present is corroborated by a relation ({sorted(uncorroborated)})")
+check(
+    not uncorroborated,
+    f"every route present is corroborated by a relation ({sorted(uncorroborated)})",
+)
 
 # ...and the invariant behind *that*: the vouching set is regional. A general
 # national route can be numbered 1-58 or 101-507, six of them abolished — 459
@@ -138,7 +150,10 @@ check(all(f["properties"]["refs_list"] for f in former),
       f"former arcs still carry their designation ({len(former)} arcs)")
 
 # Freshness must be recorded, and the data must not be silently ancient.
-check(bool(meta.get("osm_timestamp")), f"OSM data timestamp is recorded ({meta.get('osm_timestamp')})")
+check(
+    bool(meta.get("osm_timestamp")),
+    f"OSM data timestamp is recorded ({meta.get('osm_timestamp')})",
+)
 age_days = (
     datetime.now(timezone.utc)
     - datetime.fromisoformat(meta["osm_timestamp"].replace("Z", "+00:00"))

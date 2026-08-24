@@ -521,7 +521,7 @@ def main() -> None:
     print(f"\n  relation-less roads recovered by rule (c): {len(tag_only)} arcs, "
           f"{sum(a['length_m'] for a in tag_only) / 1000:.1f} km")
     for (refs, name), c in by_name.most_common(14):
-        print(f"    国道{'・'.join(map(str, refs)):<12} {str(name):<24} x{c}")
+        print(f"    国道{'・'.join(map(str, refs)):<12} {name!s:<24} x{c}")
 
     # ---- per-route master ------------------------------------------------
     routes: dict[int, dict] = {}
@@ -687,7 +687,9 @@ def main() -> None:
         "n_histogram": {str(k): v for k, v in sorted(n_hist.items())},
     }
     meta_path = OUT / f"{region}.meta.json"
-    meta_path.write_text(json.dumps(meta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    meta_path.write_text(
+        json.dumps(meta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    )
 
     # Index of everything built so far, so the viewer can offer a region picker
     # without being told which regions exist.

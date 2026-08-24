@@ -77,6 +77,7 @@ bun run test                 # 単体テスト
 bun run check                # スタイルと絞り込み式(生成済みの地域が要る)
 bun run check --spec-only    # 同上。データを読まない
 bun run check:docs           # 命令の一覧が食い違っていないか
+uvx ruff check .claude/skills/national-route-data/scripts   # Python の静的検査
 ```
 
 ## 構成

@@ -21,6 +21,7 @@ import re
 import sys
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from typing import ClassVar
 
 from _paths import ROOT
 
@@ -28,7 +29,7 @@ RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
 class RangeHandler(SimpleHTTPRequestHandler):
-    extensions_map = {
+    extensions_map: ClassVar[dict[str, str]] = {
         **SimpleHTTPRequestHandler.extensions_map,
         ".pmtiles": "application/octet-stream",
         ".mjs": "text/javascript",
@@ -52,7 +53,9 @@ class RangeHandler(SimpleHTTPRequestHandler):
         if os.path.isdir(path):
             return super().send_head()
         try:
-            f = open(path, "rb")
+            # The file outlives this method — it's read later via the _Slice
+            # returned below, so a context manager here would close it too soon.
+            f = open(path, "rb")  # noqa: SIM115
         except OSError:
             self.send_error(404, "File not found")
             return None

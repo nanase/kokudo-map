@@ -194,7 +194,9 @@ def why_excluded(wid, tags, cache, corroborated):
         reasons.append(f"claims {sorted(c)}, none corroborated by a relation here")
     competing_hit = c & cache["competing"].get(wid, set())
     if competing_hit:
-        reasons.append(f"a competing route relation claims the same number(s) {sorted(competing_hit)}")
+        reasons.append(
+            f"a competing route relation claims the same number(s) {sorted(competing_hit)}"
+        )
     hw = tags.get("highway")
     if hw not in NATIONAL_GRADE:
         reasons.append(f"highway={hw} is below national grade")
