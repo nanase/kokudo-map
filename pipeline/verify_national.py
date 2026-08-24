@@ -168,31 +168,49 @@ if meta.get("osm_timestamp"):
     check(age <= 7, f"OSM data is {age} days old (threshold 7)")
 
 # --- the archive the browser downloads ---------------------------------------
+# How many places in the archive are asked for a tile. One is enough to catch an
+# archive that reads back as nothing; a handful spread through the index also
+# says the reader can find tiles that are not next to each other.
+PROBES = 5
+
+
+def tile_at(z: int, lat: float, lon: float) -> tuple[int, int]:
+    """The tile covering a point, in the archive's own numbering."""
+    n = 2**z
+    rad = math.radians(lat)
+    return (
+        int((lon + 180) / 360 * n),
+        int((1 - math.log(math.tan(rad) + 1 / math.cos(rad)) / math.pi) / 2 * n),
+    )
+
+
 path = DATA / "national-routes.pmtiles"
 check(path.exists(), f"{path.name} exists")
 if path.exists():
+    # A tile at the deepest zoom must actually come back, or the map draws
+    # nothing however valid the header is. The places asked are termini, which
+    # are points on the roads themselves. The probe used to be the centre of
+    # the country's bounding rectangle — 34.93N 134.87E, open water in the
+    # 播磨灘 — and a z14 tile is 2.4 km wide, so it asked for a square with no
+    # 国道 in it. An empty tile is absent from the archive by design, so the
+    # check failed on an archive that was correct.
+    probes = meta["termini"][:: max(1, len(meta["termini"]) // PROBES)][:PROBES]
     with open(path, "r+b") as f:
         reader = Reader(MmapSource(f))
         header = reader.header()
         pm_meta = reader.metadata()
-        # A tile at the deepest zoom must actually come back, or the map draws
-        # nothing however valid the header is.
-        lon = (meta["bbox"][0] + meta["bbox"][2]) / 2
-        lat = (meta["bbox"][1] + meta["bbox"][3]) / 2
         z = header["max_zoom"]
-        n = 2**z
-        x = int((lon + 180) / 360 * n)
-        lat_rad = math.radians(lat)
-        y = int((1 - math.log(math.tan(lat_rad) + 1 / math.cos(lat_rad)) / math.pi) / 2 * n)
-        tile = reader.get(z, x, y)
+        at = [tile_at(z, t["lat"], t["lon"]) for t in probes]
+        missing = [f"{z}/{x}/{y}" for x, y in at if reader.get(z, x, y) is None]
     layers = [v["id"] for v in pm_meta.get("vector_layers", [])]
     check(layers == ["routes"], f"the archive declares one layer, routes ({layers})")
     check(header["max_zoom"] >= 12,
           f"tiles go to z{header['max_zoom']} (z{header['min_zoom']}-{header['max_zoom']})")
     check(header["clustered"], "the archive is clustered, so a range request can find a tile")
-    check(tile is not None, f"a z{z} tile comes back near the centre ({z}/{x}/{y})")
+    check(bool(probes) and not missing,
+          f"a z{z} tile comes back at each of {len(probes)} termini ({missing})")
     print(f"NOTE  archive {path.stat().st_size / 1e6:.1f} MB, "
-          f"{header['addressed_tiles_count']:,} tiles, centre {lat:.2f},{lon:.2f}")
+          f"{header['addressed_tiles_count']:,} tiles, probed {len(probes)} termini")
 
 print("\n".join(notes))
 if fails:
