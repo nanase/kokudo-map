@@ -48,12 +48,15 @@ mise run serve        # http://localhost:8000/
 | `mise run rebuild <地域>` | 1 地域だけ作り直す |
 | `mise run pack` | `build/regions/` から `web/data/` を作り直す |
 | `mise run publish-data` | 配信データを R2(data.nanase.cc)に上げる |
+| `mise run decree` | 政令の別表から起点・終点を取り込み、座標を当てる |
 | `mise run audit <地域>` | 鎖が切れている路線を機械的に探す |
 | `mise run compare <地域>` | Overpass 由来の基準と突き合わせる |
 | `mise run compare-n13 <地域>` | 国土数値情報 N13(道路)と突き合わせ、OSM に無い国道の候補を探す |
 | `mise run apply-n13 <地域>` | former のうち N13 で指定解除を機械確認できたものに revoked を書き込む |
 | `mise run serve` | ローカルサーバを起動する |
 | `mise run render-check` | Chromium で実描画を確認する |
+
+`mise run decree` は初回に国土数値情報 N03(行政区域)を取ります。47 都道府県ぶんを現行と 2000 年版の二つ、約 530 MB です。以後はキャッシュから読みます。
 
 `serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが要ります。
 

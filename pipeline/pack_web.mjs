@@ -30,7 +30,7 @@ import { join } from 'node:path';
 import geojsonvt from 'geojson-vt';
 import vtpbf from 'vt-pbf';
 
-import { DATA, REGIONS, ROOT } from './_paths.mjs';
+import { DATA, DECREE, REGIONS, ROOT } from './_paths.mjs';
 
 const TILEDIR = join(ROOT, 'build', 'tiles');
 
@@ -188,6 +188,18 @@ function mergeTermini(ms) {
   };
 }
 
+/* The decree's own 起点 / 終点 / 重要な経過地, put here by pipeline/decree.py.
+ * It is a column beside the endpoints, not a replacement: the endpoints say
+ * where a route's arcs stop, this says where the route legally begins. Routes
+ * whose coordinate could not be found keep their place name and say why. */
+const decree = JSON.parse(
+  readFileSync(join(DECREE, 'decree.json'), 'utf8'),
+);
+if (decree.routes.length !== 459)
+  throw new Error(
+    `build/decree/decree.json has ${decree.routes.length} routes, not 459`,
+  );
+
 const min = (v) => v.filter(Boolean).sort()[0] || null;
 const max = (v) => v.filter(Boolean).sort().slice(-1)[0] || null;
 
@@ -211,6 +223,7 @@ const meta = {
   },
   combinations: combos,
   ...termini,
+  decree,
 };
 
 mkdirSync(DATA, { recursive: true });
@@ -222,6 +235,12 @@ console.log(
   `combinations: ${combos.length.toLocaleString()} | routes: ${routes.size} | ` +
     `termini: ${termini.termini.length.toLocaleString()} ` +
     `(shared ${termini.shared_termini.length.toLocaleString()})`,
+);
+const located = decree.routes.filter(
+  (r) => r.start.lat !== undefined && r.end.lat !== undefined,
+).length;
+console.log(
+  `decree: ${decree.routes.length} routes, both termini located for ${located}`,
 );
 
 /* ------------------------------------------------------------------ tiles --- */

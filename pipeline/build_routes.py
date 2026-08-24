@@ -69,6 +69,12 @@ NATIONAL_GRADE_UNDER_CONSTRUCTION = {"trunk", "motorway"}
 # clipping the region rather than real termini
 EDGE_TOL = 0.02
 
+# How far apart two routes' endpoints may sit and still be the same junction.
+# One crossing is several OSM nodes — one per approach — so the endpoints of the
+# routes that meet there scatter over the intersection rather than coinciding.
+# decree.py reads this too, to tell a legal terminus from an OSM break.
+TERMINI_CLUSTER_M = 150
+
 
 # ---------------------------------------------------------------- geometry ---
 def haversine(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -566,7 +572,7 @@ def main() -> None:
     clusters: list[dict] = []
     for e in endpoints:
         for c in clusters:
-            if haversine((e["lat"], e["lon"]), (c["lat"], c["lon"])) < 150:
+            if haversine((e["lat"], e["lon"]), (c["lat"], c["lon"])) < TERMINI_CLUSTER_M:
                 c["refs"].add(e["ref"])
                 break
         else:

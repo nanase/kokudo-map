@@ -157,6 +157,10 @@ def main() -> None:
     if no_pack:
         return
 
+    # 台帳の起点・終点は地域ごとの端点を読むので、判定の後・結合の前に置く。
+    # pack_web.mjs はこれが無いと meta を書けないので、失敗はここで止める。
+    stage("台帳 — 政令の別表から起点・終点を取り込む",
+          ["uv", "run", str(HERE / "decree.py")])
     # 47 prefectures of GeoJSON, the merged features and the whole tile pyramid
     # are live at once here; the default heap is not enough.
     stage("配信データ — 地域を結合してタイルを切る",
