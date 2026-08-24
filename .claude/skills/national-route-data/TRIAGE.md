@@ -9,7 +9,7 @@ uv run pipeline/audit.py nagano             # 怪しい路線を順位付けす�
 uv run pipeline/audit.py nagano --route 418 # 個別に切断箇所を列挙する
 ```
 
-パスはスキルのディレクトリからの相対です。
+コマンドはリポジトリのルートから実行します。
 
 ## 隙間の長さで原因を分ける
 

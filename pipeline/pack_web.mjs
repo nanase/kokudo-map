@@ -23,7 +23,7 @@
  * sources, so the geometry the browser draws is arrived at the same way it
  * always was. tippecanoe has no Windows build; this does not need one.
  *
- * Usage:  node scripts/pack_web.mjs [--maxzoom 14]
+ * Usage:  node pipeline/pack_web.mjs [--maxzoom 14]
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -28,7 +28,7 @@ Freshness matters and is not automatic: public Overpass mirrors can fall
 badly behind. We probe every endpoint, pick the freshest, and record its
 `timestamp_osm_base` so the map can state which day it is showing.
 
-Usage:  uv run build/fetch_osm.py [region]
+Usage:  uv run pipeline/fetch_osm.py [region]
 """
 from __future__ import annotations
 

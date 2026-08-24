@@ -72,7 +72,7 @@ road used to carry is still a human's call. Whether to bake this confirmation
 into build data (making N13 a build dependency) is a separate decision,
 deliberately left open — see issue #9.
 
-Usage:  uv run scripts/compare_n13.py [region|all] [--refresh]
+Usage:  uv run pipeline/compare_n13.py [region|all] [--refresh]
 
 `all` runs the orphan direction only, nationwide, deduped by way id.
 `--refresh` re-downloads and re-parses every mesh even if a cache exists.

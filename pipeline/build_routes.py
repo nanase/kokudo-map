@@ -32,7 +32,7 @@ Deciding that has two halves, and they need different evidence:
         numbering scheme (首都高速道路 etc.) makes the identical kind of claim
         — see resolve_competing_claims and CASES.md 20.
 
-Usage:  uv run build/build_routes.py [region]
+Usage:  uv run pipeline/build_routes.py [region]
 """
 from __future__ import annotations
 
@@ -360,14 +360,14 @@ def main() -> None:
     region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
     raw_path = CACHE / f"{region}.raw.json"
     if not raw_path.exists():
-        raise SystemExit(f"no cache for {region!r}; run build/fetch_osm.py {region} first")
+        raise SystemExit(f"no cache for {region!r}; run pipeline/fetch_osm.py {region} first")
 
     raw = json.loads(raw_path.read_text(encoding="utf-8"))
     if "core" not in raw:
-        raise SystemExit("cache is in the old single-query format; re-run build/fetch_osm.py")
+        raise SystemExit("cache is in the old single-query format; re-run pipeline/fetch_osm.py")
     if "competing_relations" not in raw:
         raise SystemExit(
-            "cache predates per-number competing claims; re-run build/fetch_osm.py")
+            "cache predates per-number competing claims; re-run pipeline/fetch_osm.py")
 
     base_ts = raw["timestamp_osm_base"]
     bbox = raw["bbox"]
@@ -638,7 +638,7 @@ def main() -> None:
         "fetched_at": raw["fetched_at"],
         "endpoint": raw["endpoint"],
         # Every route number the region's relations vouch for. Nothing in
-        # `routes` may fall outside this set — see build/verify.py.
+        # `routes` may fall outside this set — see pipeline/verify.py.
         #
         # This set is what makes the guard a guard, and it only works because it
         # is regional. Judged over the whole country it would approach all 459

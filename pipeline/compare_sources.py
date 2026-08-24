@@ -15,8 +15,8 @@ here is either a real defect in the new path or a genuine edit to OSM between
 the two moments the data was cut — and the script separates the two by
 reporting *what* differs, not just how many.
 
-Usage:  uv run scripts/compare_sources.py nagano
-        uv run scripts/compare_sources.py nagano --baseline build/overpass-baseline
+Usage:  uv run pipeline/compare_sources.py nagano
+        uv run pipeline/compare_sources.py nagano --baseline build/overpass-baseline
 """
 from __future__ import annotations
 

@@ -18,7 +18,7 @@ it, and both are the ones that matter once the map covers the country:
       The per-region checks pass over GeoJSON that is no longer served. The
       archive is opened here and read back.
 
-Usage:  uv run scripts/verify_national.py
+Usage:  uv run pipeline/verify_national.py
 """
 from __future__ import annotations
 
