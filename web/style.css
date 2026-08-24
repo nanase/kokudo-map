@@ -320,7 +320,11 @@ input[type="search"]::placeholder { font-size: .82em; }
    自然に積み上がる。 */
 #panel footer {
   padding: 14px 18px 4px; flex: 1 0 auto;
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column;
+  /* データ情報と GitHub リンクのあいだは段落 1 行ぶん空ける。gap は最小値
+     なので、余地があるときは .repo-link の margin-top: auto がさらに広げる。
+     .repo-link 自身に margin-top を置くと auto を潰してしまう。 */
+  gap: 1.6em;
 }
 #freshness-block { margin: 0; }
 /* Data provenance: which day of OSM this map is showing. */
