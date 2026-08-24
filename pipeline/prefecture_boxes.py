@@ -60,12 +60,12 @@ def main() -> None:
     pad = 0.05
     if "--pbf" in args:
         i = args.index("--pbf")
-        if i + 1 >= len(args):
+        if i + 1 >= len(args) or args[i + 1].startswith("--"):
             raise SystemExit("--pbf needs a value")
         path = args[i + 1]
     if "--pad" in args:
         i = args.index("--pad")
-        if i + 1 >= len(args):
+        if i + 1 >= len(args) or args[i + 1].startswith("--"):
             raise SystemExit("--pad needs a value")
         pad = float(args[i + 1])
 

@@ -400,7 +400,7 @@ def main() -> None:
         if flag not in args:
             return current
         i = args.index(flag)
-        if i + 1 >= len(args):
+        if i + 1 >= len(args) or args[i + 1].startswith("--"):
             raise SystemExit(f"{flag} needs a value")
         value = args[i + 1]
         args = args[:i] + args[i + 2:]
