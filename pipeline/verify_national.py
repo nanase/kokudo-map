@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 
 from pmtiles.reader import MmapSource, Reader
@@ -65,6 +66,44 @@ dupes = len(combos) - len({tuple(c["refs"]) for c in combos})
 check(not dupes, f"each combination appears once ({dupes} duplicates)")
 check(all(combos[i]["n"] >= combos[i + 1]["n"] for i in range(len(combos) - 1)),
       "combinations are ordered deepest first")
+
+# --- and the parts of a length have to add up to it --------------------------
+# "How much of 国道152号 can you drive" is answered by adding the driveable kinds
+# and leaving out the rest, so a row whose parts miss its own length answers it
+# wrongly rather than imprecisely. The vocabulary is not restated here: the
+# kinds a row may name are the ones the regional builds classified arcs into.
+KINDS = {k for m in metas for r in m["routes"] for k in r["kinds"]}
+kinds_of = {k for c in combos for k in c.get("kinds", {})}
+
+check(all("kinds" in c for c in combos), "every combination carries a kind breakdown")
+check(kinds_of <= KINDS,
+      f"the breakdown names only kinds the build produces ({sorted(kinds_of - KINDS)})")
+empty = [c["refs"] for c in combos if any(v <= 0 for v in c.get("kinds", {}).values())]
+check(not empty, f"no kind is written out at zero length ({empty[:3]})")
+
+# Each part is rounded to 10 m and the ones under 5 m are dropped, so a row of
+# seven kinds can sit 40 m from its own total. Anything past that is an arc
+# counted into the wrong bucket, or into none.
+off, refs = max((abs(sum(c.get("kinds", {}).values()) - c["km"]), c["refs"]) for c in combos)
+check(off <= 0.05,
+      f"every combination's kinds add up to its own length "
+      f"(worst {refs}, off by {off * 1000:.0f} m)")
+
+kind_km: Counter[str] = Counter()
+for c in combos:
+    kind_km.update(c.get("kinds", {}))
+check(abs(sum(kind_km.values()) - meta["total_km"]) < 1,
+      f"the kinds add up to the nationwide total "
+      f"({sum(kind_km.values()):,.1f} vs {meta['total_km']:,.1f} km)")
+
+# 旧道 is not a kind but a second axis over the same road (#26), so it is bounded
+# by the row rather than added to it. A row more 旧道 than long means the two
+# axes were folded into one somewhere.
+over = [c["refs"] for c in combos if c.get("former_km", 0) > c["km"] + 0.01]
+check(not over, f"no combination is more 旧道 than it is long ({over[:3]})")
+former_km = sum(c.get("former_km", 0) for c in combos)
+check(0 < former_km < meta["total_km"],
+      f"旧道 is part of the total and not all of it ({former_km:,.1f} km)")
 
 invalid = set(routes) - VALID
 check(not invalid, f"no impossible route numbers ({sorted(invalid)})")
@@ -161,6 +200,8 @@ if fails:
 print(f"\narcs {meta['arc_count']:,} | {meta['total_km']:,.0f} km | "
       f"routes {len(routes)} | combinations {len(combos):,} | "
       f"termini {len(meta['termini']):,} (shared {len(meta['shared_termini']):,})")
+print("kinds " + " | ".join(f"{k} {v:,.0f}" for k, v in kind_km.most_common())
+      + f" | 旧道 {former_km:,.0f} km")
 print(f"regions {len(metas)} | corroborated per region "
       f"{min(sizes.values())}..{worst} | union {union}")
 print(f"\n{len(notes)} passed, {len(fails)} failed")

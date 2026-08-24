@@ -13,11 +13,12 @@
  * once here, over the deduplicated arcs, and shipped as data.
  *
  * The aggregate is one table: every distinct *combination* of designations,
- * with its length, arc count and extent. Route totals, the ranking and the
- * selection stats are all sums over its rows, so there is one set of numbers
- * rather than three that can disagree. Concurrency is why a per-route table
- * would not do: an arc carrying 18 and 117 belongs to both, and adding the two
- * route rows would count it twice.
+ * with its length, arc count, extent, and what that length is made of — split
+ * by `kind` and by 旧道. Route totals, the ranking and the selection stats are
+ * all sums over its rows, so there is one set of numbers rather than three that
+ * can disagree. Concurrency is why a per-route table would not do: an arc
+ * carrying 18 and 117 belongs to both, and adding the two route rows would
+ * count it twice.
  *
  * Tiles are cut with geojson-vt — the same code MapLibre uses for GeoJSON
  * sources, so the geometry the browser draws is arrived at the same way it
@@ -120,8 +121,21 @@ const dataBbox = features.reduce(
 );
 
 /* -------------------------------------------------------------- aggregate --- */
+const km2 = (v) => Math.round(v * 100) / 100;
+
 /** One row per distinct set of designations. Everything the panel shows is a
- *  sum over a subset of these rows. */
+ *  sum over a subset of these rows.
+ *
+ *  A row also carries what its length is made of, because the total on its own
+ *  cannot answer "how much of 国道152号 can you actually drive". `kinds` splits
+ *  the length by the same `kind` the tiles carry, and `former_km` says how much
+ *  of it is 旧道. The two are separate keys because they are separate axes: a
+ *  旧道 is a road of some kind that is no longer the current alignment, so
+ *  folding it into `kinds` would lose the expressway and foot 旧道 (#26).
+ *
+ *  Zero is written as absence in both. There are ~1,200 rows and seven kinds,
+ *  and a row names one or two of them; spelling out the five that are zero
+ *  would triple the table to say nothing. */
 function combinationsOf(feats) {
   const by = new Map();
   for (const f of feats) {
@@ -133,6 +147,8 @@ function combinationsOf(feats) {
         n: p.n,
         km: 0,
         arcs: 0,
+        kinds: new Map(),
+        former: 0,
         names: new Map(),
         bbox: [Infinity, Infinity, -Infinity, -Infinity],
       };
@@ -140,6 +156,8 @@ function combinationsOf(feats) {
     }
     e.km += p.km;
     e.arcs++;
+    e.kinds.set(p.kind, (e.kinds.get(p.kind) || 0) + p.km);
+    if (p.former) e.former += p.km;
     if (p.name) e.names.set(p.name, (e.names.get(p.name) || 0) + 1);
     e.bbox = [
       Math.min(e.bbox[0], f.bbox[0]),
@@ -149,17 +167,29 @@ function combinationsOf(feats) {
     ];
   }
   return [...by.values()]
-    .map((e) => ({
-      refs: e.refs,
-      n: e.n,
-      km: Math.round(e.km * 100) / 100,
-      arcs: e.arcs,
-      names: [...e.names.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([n]) => n),
-      bbox: e.bbox.map((v) => Math.round(v * 1e5) / 1e5),
-    }))
+    .map((e) => {
+      // Rounded first, then dropped: a kind that rounds away is under 5 m and
+      // has nothing to say. The names are whatever the build classified the
+      // arcs as; nothing here invents a vocabulary of its own.
+      const kinds = [...e.kinds.entries()]
+        .map(([k, v]) => [k, km2(v)])
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+      const former = km2(e.former);
+      return {
+        refs: e.refs,
+        n: e.n,
+        km: km2(e.km),
+        arcs: e.arcs,
+        kinds: Object.fromEntries(kinds),
+        ...(former > 0 ? { former_km: former } : {}),
+        names: [...e.names.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([n]) => n),
+        bbox: e.bbox.map((v) => Math.round(v * 1e5) / 1e5),
+      };
+    })
     .sort((a, b) => b.n - a.n || b.km - a.km);
 }
 
