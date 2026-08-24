@@ -302,18 +302,23 @@ ok(
 );
 // Every number of the deepest combination must land on the same arcs — the
 // thing the map exists to show — and the filter primitive must agree with the
-// stored list about which arcs those are.
-const together = compile(['all', ...top.refs.map(hasRef)]);
-const byExpr = geo.features.filter(
-  (f) => evaluate(together, f) === true,
-).length;
-const byList = geo.features.filter((f) =>
-  top.refs.every((r) => f.properties.refs_list.includes(r)),
-).length;
-ok(
-  byExpr === byList && byExpr > 0,
-  `${JSON.stringify(top.refs)} run together on ${byExpr} arcs (list agrees: ${byList})`,
-);
+// stored list about which arcs those are. A prefecture with no concurrency at
+// all has nothing to compare here.
+if (!top) {
+  console.log('NOTE  この地域に重用区間は無いので、この検査は行わない');
+} else {
+  const together = compile(['all', ...top.refs.map(hasRef)]);
+  const byExpr = geo.features.filter(
+    (f) => evaluate(together, f) === true,
+  ).length;
+  const byList = geo.features.filter((f) =>
+    top.refs.every((r) => f.properties.refs_list.includes(r)),
+  ).length;
+  ok(
+    byExpr === byList && byExpr > 0,
+    `${JSON.stringify(top.refs)} run together on ${byExpr} arcs (list agrees: ${byList})`,
+  );
+}
 
 console.log(fails.length ? `\n${fails.join('\n')}` : '');
 console.log(`\n${pass} passed, ${fails.length} failed`);

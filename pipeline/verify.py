@@ -154,11 +154,12 @@ check(
     bool(meta.get("osm_timestamp")),
     f"OSM data timestamp is recorded ({meta.get('osm_timestamp')})",
 )
-age_days = (
-    datetime.now(timezone.utc)
-    - datetime.fromisoformat(meta["osm_timestamp"].replace("Z", "+00:00"))
-).days
-check(age_days <= 7, f"OSM data is {age_days} days old (threshold 7)")
+if meta.get("osm_timestamp"):
+    age_days = (
+        datetime.now(timezone.utc)
+        - datetime.fromisoformat(meta["osm_timestamp"].replace("Z", "+00:00"))
+    ).days
+    check(age_days <= 7, f"OSM data is {age_days} days old (threshold 7)")
 
 # Named roads that must be present and designated. 長野南バイパス is the case the
 # user reported missing: 国道19号, open for decades, in no route relation.

@@ -23,6 +23,7 @@ Usage:  uv run pipeline/verify_national.py
 from __future__ import annotations
 
 import json
+import math
 import sys
 from datetime import datetime, timezone
 
@@ -122,9 +123,10 @@ check(
     bool(meta.get("osm_timestamp")),
     f"OSM data timestamp is recorded ({meta.get('osm_timestamp')})",
 )
-age = (datetime.now(timezone.utc)
-       - datetime.fromisoformat(meta["osm_timestamp"].replace("Z", "+00:00"))).days
-check(age <= 7, f"OSM data is {age} days old (threshold 7)")
+if meta.get("osm_timestamp"):
+    age = (datetime.now(timezone.utc)
+           - datetime.fromisoformat(meta["osm_timestamp"].replace("Z", "+00:00"))).days
+    check(age <= 7, f"OSM data is {age} days old (threshold 7)")
 
 # --- the archive the browser downloads ---------------------------------------
 path = DATA / "national-routes.pmtiles"
@@ -134,14 +136,22 @@ if path.exists():
         reader = Reader(MmapSource(f))
         header = reader.header()
         pm_meta = reader.metadata()
+        # A tile at the deepest zoom must actually come back, or the map draws
+        # nothing however valid the header is.
+        lon = (meta["bbox"][0] + meta["bbox"][2]) / 2
+        lat = (meta["bbox"][1] + meta["bbox"][3]) / 2
+        z = header["max_zoom"]
+        n = 2**z
+        x = int((lon + 180) / 360 * n)
+        lat_rad = math.radians(lat)
+        y = int((1 - math.log(math.tan(lat_rad) + 1 / math.cos(lat_rad)) / math.pi) / 2 * n)
+        tile = reader.get(z, x, y)
     layers = [v["id"] for v in pm_meta.get("vector_layers", [])]
     check(layers == ["routes"], f"the archive declares one layer, routes ({layers})")
     check(header["max_zoom"] >= 12,
           f"tiles go to z{header['max_zoom']} (z{header['min_zoom']}-{header['max_zoom']})")
     check(header["clustered"], "the archive is clustered, so a range request can find a tile")
-    # A tile at the deepest zoom must actually come back, or the map draws
-    # nothing however valid the header is.
-    lon, lat = (meta["bbox"][0] + meta["bbox"][2]) / 2, (meta["bbox"][1] + meta["bbox"][3]) / 2
+    check(tile is not None, f"a z{z} tile comes back near the centre ({z}/{x}/{y})")
     print(f"NOTE  archive {path.stat().st_size / 1e6:.1f} MB, "
           f"{header['addressed_tiles_count']:,} tiles, centre {lat:.2f},{lon:.2f}")
 

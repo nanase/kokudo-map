@@ -59,9 +59,15 @@ def main() -> None:
     path = str(PBF / "japan-latest.osm.pbf")
     pad = 0.05
     if "--pbf" in args:
-        path = args[args.index("--pbf") + 1]
+        i = args.index("--pbf")
+        if i + 1 >= len(args) or args[i + 1].startswith("--"):
+            raise SystemExit("--pbf needs a value")
+        path = args[i + 1]
     if "--pad" in args:
-        pad = float(args[args.index("--pad") + 1])
+        i = args.index("--pad")
+        if i + 1 >= len(args) or args[i + 1].startswith("--"):
+            raise SystemExit("--pad needs a value")
+        pad = float(args[i + 1])
 
     print("pass 1/2: admin_level=4 boundary relations", flush=True)
     members: dict[str, set[int]] = {}
