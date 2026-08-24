@@ -237,14 +237,18 @@ describe('wireRouteFold — 国道一覧の折りたたみ', () => {
   });
 
   /* 畳む幅は style.css の @media と wiring.mjs の二箇所にある。片方だけ
-   * 動かすと、見出しを消したまま中身も畳まれた画面ができる。 */
+   * 動かすと、見出しを消したまま中身も畳まれた画面ができる。
+   *
+   * 見出しを隠す側は補集合で書く。min-width: 861px のように 1px ずらすと、
+   * そのあいだの幅がどちらにも入らず、開いた一覧の上に見出しだけが残る。 */
   test('畳む幅が style.css の @media と一致する', () => {
     const css = readFileSync(
       new URL('../web/style.css', import.meta.url),
       'utf8',
     );
     expect(NARROW_QUERY).toBe('(max-width: 860px)');
-    expect(css).toContain('@media (max-width: 860px)');
+    expect(css).toContain(`@media ${NARROW_QUERY}`);
+    expect(css).toContain(`@media not all and ${NARROW_QUERY}`);
   });
 
   test('畳んだままでも絞り込み欄と選択解除は一覧の外にある', () => {
