@@ -10,7 +10,7 @@
     "glyphs": "node scripts/make_glyphs.mjs",
     "brand": "node scripts/make_brand.mjs",
     "test": "bun test test/",
-    "check": "node .claude/skills/national-route-data/scripts/check_expressions.mjs",
+    "check": "node pipeline/check_expressions.mjs",
     "check:docs": "node scripts/check_docs.mjs",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

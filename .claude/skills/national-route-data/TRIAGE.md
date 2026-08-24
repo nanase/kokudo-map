@@ -5,8 +5,8 @@
 ## 監査を走らせる
 
 ```sh
-uv run scripts/audit.py nagano             # 怪しい路線を順位付けする
-uv run scripts/audit.py nagano --route 418 # 個別に切断箇所を列挙する
+uv run pipeline/audit.py nagano             # 怪しい路線を順位付けする
+uv run pipeline/audit.py nagano --route 418 # 個別に切断箇所を列挙する
 ```
 
 パスはスキルのディレクトリからの相対です。
@@ -65,7 +65,7 @@ OSM だけを見ていても分かりません。参照データが要ります�
   - 電子国土基本図由来で、地理院地図と同じ出典
   - 道路分類に国道があるが、路線番号は持たない
   - 我々の線でカバーされない国道を抽出すれば、地理院地図との差分になる
-  - `uv run scripts/compare_n13.py <地域>` (`mise run compare-n13`) が実行する。取得・しきい値・他都道府県への広げ方は issue #1 にまとめてある
+  - `uv run pipeline/compare_n13.py <地域>` (`mise run compare-n13`) が実行する。取得・しきい値・他都道府県への広げ方は issue #1 にまとめてある
   - former 孤立候補（地理院地図で指定解除済みかもしれない旧道）は `region all` (`mise run compare-n13 all`) で全国横断・重複排除・クラスタ単位で出す。CASES.md 25 を参照
 - 道路統計年報 表 26・27(未実装)
   - 路線別、都道府県別の実延長
