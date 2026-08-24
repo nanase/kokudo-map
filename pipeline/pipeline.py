@@ -14,7 +14,7 @@ is not what those mirrors are for.
 Packing runs last because web/data is nationwide. Rebuilding one region and
 leaving it out would put the map a region behind its own data.
 
-Usage:  uv run pipeline.py [region] [--skip-fetch] [--no-pack]
+Usage:  uv run pipeline.py [region] [--skip-fetch] [--skip-n13] [--no-pack]
 """
 from __future__ import annotations
 
@@ -37,6 +37,7 @@ def run(label: str, cmd: list[str]) -> None:
 def main() -> None:
     args = sys.argv[1:]
     skip_fetch = "--skip-fetch" in args
+    skip_n13 = "--skip-n13" in args
     no_pack = "--no-pack" in args
     args = [a for a in args if not a.startswith("--")]
     region = args[0] if args else "nagano"
@@ -45,9 +46,18 @@ def main() -> None:
     if not skip_fetch:
         stages.append(("取得 — OSM から取得してキャッシュする",
                        ["uv", "run", str(HERE / "fetch_osm.py"), region]))
-    stages += [
+    stages.append(
         ("判定 — build/regions/ を生成する",
          ["uv", "run", str(HERE / "build_routes.py"), region]),
+    )
+    if not skip_n13:
+        # N13(国土数値情報)への都度ネットワーク取得が要る — オフライン反復時は
+        # --skip-n13 で飛ばす。ミラーは無く、単一の政府サイトのみを見る。
+        stages.append(
+            ("指定解除確認 — N13 と照合し revoked を書き込む",
+             ["uv", "run", str(HERE / "apply_n13.py"), region]),
+        )
+    stages += [
         ("検証 — 生成物の整合性を確認する",
          ["uv", "run", str(HERE / "verify.py"), region]),
         ("式検証 — 地図スタイルと絞り込み式を確認する",

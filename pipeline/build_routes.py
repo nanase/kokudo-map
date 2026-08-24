@@ -610,6 +610,12 @@ def main() -> None:
                 "kind": a["kind"],
                 "src": a["src"],
                 "former": 1 if a["former"] else 0,
+                # Only apply_n13.py ever sets this to 1 — see issue #9. It is
+                # independent of `former`: a former arc keeps former=1 either
+                # way, since 指定解除 (revoked) can lag OSM's own tagging by
+                # years (RULES.md 旧道). 0 means "not confirmed", not
+                # "confirmed still current".
+                "revoked": 0,
                 "name": a["name"],
                 "updated": a["updated"],
                 "km": round(a["length_m"] / 1000, 3),

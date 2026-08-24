@@ -149,6 +149,15 @@ check(not missing, f"every 旧道-named arc carries the former flag ({len(missin
 check(all(f["properties"]["refs_list"] for f in former),
       f"former arcs still carry their designation ({len(former)} arcs)")
 
+# revoked (issue #9) is independent of former but never wider than it —
+# apply_n13.py only ever sets revoked=1 on arcs that were already former.
+revoked_not_former = [
+    f["properties"]["id"] for f in feats
+    if f["properties"].get("revoked") and not f["properties"].get("former")
+]
+check(not revoked_not_former,
+      f"revoked arcs are a subset of former ({len(revoked_not_former)} counterexamples)")
+
 # Freshness must be recorded, and the data must not be silently ancient.
 check(
     bool(meta.get("osm_timestamp")),

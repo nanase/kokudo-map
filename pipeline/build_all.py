@@ -106,12 +106,26 @@ def main() -> None:
             print(f"{head} 判定に失敗\n{out}", flush=True)
             broken[region] = ["build_routes.py failed"]
             continue
+
+        # revoked は検証ではなくデータそのものなので、--skip-verify でも飛ばさ
+        # ない。この後のパックは --skip-verify の有無に関係なく走るので、ここを
+        # 飛ばすと revoked が反映されないデータがそのまま配信物になる
+        # (CodeRabbit review on this PR)。N13 側の障害(ネットワーク・KSJ 側の
+        # 不具合)はこの県だけの失敗として扱い、他県の続行は止めない —
+        # build_routes.py の失敗とは別扱い。
+        code, out = run(["uv", "run", str(HERE / "apply_n13.py"), region])
+        bad = outcome("apply_n13.py", code, out)
+
         if skip_verify:
             print(f"{head} 判定のみ", flush=True)
+            for f in bad:
+                print(f"        {f}", flush=True)
+            if bad:
+                broken[region] = bad
             continue
 
         code, out = run(["uv", "run", str(HERE / "verify.py"), region])
-        bad = outcome("verify.py", code, out)
+        bad += outcome("verify.py", code, out)
         line = f"{head} {verdict(out)}"
 
         code, out = run(["node", str(HERE / "check_expressions.mjs"), region])
