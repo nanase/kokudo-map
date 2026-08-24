@@ -17,6 +17,9 @@
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
 
+<!-- style.css の解析を待たずに路線番号シールドの書体を取り始める。
+     待つと HTML→style.css→woff2 の依存鎖が 1 段伸びる。 -->
+<link rel="preload" href="vendor/roboto-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <link rel="stylesheet" href="style.css">
 </head>
