@@ -89,8 +89,14 @@ jobs:
       # Cloudflare は nanase.cc の手前でエッジキャッシュを持ち、Pages のデプロイとは
       # 無関係に動いている。.js/.mjs/.css は GitHub Pages が返す
       # cache-control: max-age=172800(48時間)をそのまま尊重するので、ここで
-      # 明示的にパージしないと最大48時間古いファイルが配られ続ける。HTML は
-      # Cloudflare が基本キャッシュしないので対象に含めていない。
+      # 明示的にパージしないと最大48時間古いファイルが配られ続ける。
+      #
+      # パージ対象は web/ 配下を丸ごと走査して作る。upload-pages-artifact が
+      # web/ をそのまま配信物にしている(上の path: web)ため、web/ にある物は
+      # 全て配信され、理論上すべてキャッシュされうる。一覧を手で持つと、ファイル
+      # を足したのにここへの追記を忘れて古いまま配られる不具合が起きる
+      # (実際に urlstate.mjs・wiring.mjs・vendor/roboto-latin-700-normal.woff2
+      # で起きた)。走査ならその種類の漏れは構造的に起きない。
       #
       # base_url は「公開 URL を埋める」と同じ steps.pages.outputs.base_url を使う。
       # nanase.cc はユーザーページの独自ドメインで、このリポジトリはプロジェクト
@@ -100,8 +106,10 @@ jobs:
       # トークンは Cache Purge 権限のみ・nanase.cc ゾーンのみに絞ってある
       # (CLOUDFLARE_CACHE_PURGE_TOKEN、github-pages environment の Secret)。
       # ファイル名にハッシュを付けていないため URL 単位でしか指定できない。
-      # web/ 直下に新しい .mjs や静的資材を足したときは、ここにも追記が要る
-      # (追記を忘れても壊れはしないが、そのファイルだけ古いまま配られる)。
+      # Cloudflare の purge_cache は1回の呼び出しで URL 30件までしか受け付け
+      # ない。現状は web/ 配下(vendor/ を含む)で20件台なので収まっているが、
+      # 超えれば Cloudflare の応答が success: false になり、下の jq -e が
+      # 落ちて気付ける。
       - name: Cloudflare のキャッシュをパージする
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
@@ -109,15 +117,28 @@ jobs:
           SITE_URL: ${{ steps.pages.outputs.base_url }}
         run: |
           set -euo pipefail
-          paths=(
-            "" "index.html" "app.js" "mapspec.mjs" "termini.mjs" "aggregate.mjs"
-            "shield.mjs" "html.mjs" "panel.mjs" "popup.mjs" "style.css"
-            "favicon.svg" "og.png" "vendor/maplibre-gl.js" "vendor/maplibre-gl.css"
-            "vendor/pmtiles.js"
-          )
-          payload=$(printf '%s\n' "${paths[@]}" \
-            | jq -R --arg base "$SITE_URL" '$base + "/" + .' \
-            | jq -s '{files: .}')
+          # "" はルート(ディレクトリ索引)。以降は web/ 配下の全ファイルを
+          # web/ からの相対パスに直して並べる。find | sort を素通しの
+          # process substitution で読むと find の失敗を set -e が拾えない
+          # ため、一度ファイルへ書き出してからループへ渡す。
+          paths_file=$(mktemp)
+          trap 'rm -f "$paths_file"' EXIT
+          find web -type f -print0 | sort -z > "$paths_file"
+
+          paths=("")
+          while IFS= read -r -d '' file; do
+            paths+=("${file#web/}")
+          done < "$paths_file"
+
+          # ファイル名に改行が混じっても1件のまま扱えるよう、printf/jq -R
+          # でテキスト化せず、argv 経由(jq --args)でそのまま渡す。区切りの
+          # "/" は残したまま、各階層ごとに @uri で percent-encode する
+          # (# ? 空白 改行 等を含むパスでも配信 URL と一致させるため)。
+          payload=$(jq -n --arg base "$SITE_URL" '
+              {files: ($ARGS.positional | map(
+                $base + "/" + (split("/") | map(@uri) | join("/"))
+              ))}
+            ' --args "${paths[@]}")
           echo "パージ対象:"
           echo "$payload" | jq .
 
