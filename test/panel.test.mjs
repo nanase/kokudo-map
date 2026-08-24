@@ -13,6 +13,7 @@ import {
   rankingHTML,
   routeListHTML,
   STALE_DAYS,
+  selectionLabel,
   sharedHTML,
   shareSummaryHTML,
   shareText,
@@ -93,6 +94,17 @@ describe('clearLabel', () => {
     // これがあるので、選択数を述べる行が別に要りません。
     expect(clearLabel(1)).toBe('1 路線を選択解除');
     expect(clearLabel(12)).toBe('12 路線を選択解除');
+  });
+});
+
+describe('selectionLabel', () => {
+  test('選択が無ければ全部が対象だと言う', () => {
+    // 0 と書くと「何も出ていない」と読めます。地図の見え方はその逆です。
+    expect(selectionLabel(0, 459)).toBe('すべて（459 路線）');
+  });
+
+  test('選択があれば全体に対する数を言う', () => {
+    expect(selectionLabel(3, 459)).toBe('3 / 459 路線');
   });
 });
 

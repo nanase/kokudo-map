@@ -60,6 +60,18 @@ export const statsHTML = (selectedCount, totalRoutes, { arcs, km, conc }) =>
 export const clearLabel = (selectedCount) =>
   selectedCount ? `${selectedCount} 路線を選択解除` : '選択解除';
 
+/**
+ * 畳んだ国道一覧の見出しが述べる数。
+ *
+ * 選択が無いときは 0 ではなく「すべて」と言う。選択が空であることは
+ * 「何も出ていない」ではなく「全部出ている」を意味するので、0 と書くと
+ * 地図の見え方と逆になる。共有ダイアログも同じ言い方をする。
+ */
+export const selectionLabel = (selectedCount, totalRoutes) =>
+  selectedCount
+    ? `${selectedCount} / ${totalRoutes} 路線`
+    : `すべて（${totalRoutes} 路線）`;
+
 /* -------------------------------------------------------------- 重用一覧 --- */
 /**
  * The concurrent sections a selection is asking about.

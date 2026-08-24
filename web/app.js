@@ -71,13 +71,19 @@ import {
   rankingHTML,
   routeListHTML,
   SHARED_ROWS,
+  selectionLabel,
   sharedHTML,
   statsHTML,
 } from './panel.mjs';
 import { deepest, popupHTML } from './popup.mjs';
 import { terminiFeatures } from './termini.mjs';
 import { decodeURLState, encodeState, MANAGED_KEYS } from './urlstate.mjs';
-import { setSelection, wireControls, wireShare } from './wiring.mjs';
+import {
+  setSelection,
+  wireControls,
+  wireRouteFold,
+  wireShare,
+} from './wiring.mjs';
 
 const state = {
   meta: null,
@@ -622,6 +628,7 @@ async function boot() {
 
   wirePopups();
   wireControls(document, state, applyFilters);
+  wireRouteFold(document);
   wireShare(document, state);
 
   map.getSource('termini').setData(terminiFeatures(state.meta));
@@ -755,6 +762,9 @@ function updateStats() {
   const clear = $('#sel-none');
   clear.disabled = sel.size === 0;
   clear.textContent = clearLabel(sel.size);
+
+  // 畳んだ一覧は中身を見せないので、選択がいくつあるかは見出しが述べる。
+  $('#route-count').textContent = selectionLabel(sel.size, state.routes.length);
 }
 
 /** The ranking is folded away by default, so its size has to show on the tab. */

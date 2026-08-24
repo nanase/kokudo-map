@@ -205,7 +205,19 @@ input[type="search"] {
 input[type="search"]::placeholder { font-size: .82em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
-/* route checkbox grid --------------------------------------------------- */
+/* route checkbox grid ----------------------------------------------------
+   一覧は #route-block(details.fold)の中にある。狭い画面でだけ畳むので、
+   広い画面では見出しを消して、今までどおり開いた一覧だけが見えるようにする。
+   open の出し入れは wiring.mjs の wireRouteFold() が持つ — CSS では閉じた
+   details の中身を見せられない。
+
+   条件は wireRouteFold() が見る (max-width: 860px) の補集合そのものにする。
+   min-width: 861px と書くと、そのあいだ(拡大率やデバイス比で 860.5px の
+   ような幅は起こる)がどちらにも入らず、開いた一覧の上に見出しだけが残る。 */
+@media not all and (max-width: 860px) {
+  #route-block > summary { display: none; }
+  #route-block[open] > summary { margin-bottom: 0; }
+}
 .route-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
   gap: 3px; position: relative;
@@ -320,7 +332,11 @@ input[type="search"]::placeholder { font-size: .82em; }
    自然に積み上がる。 */
 #panel footer {
   padding: 14px 18px 4px; flex: 1 0 auto;
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column;
+  /* データ情報と GitHub リンクのあいだは段落 1 行ぶん空ける。gap は最小値
+     なので、余地があるときは .repo-link の margin-top: auto がさらに広げる。
+     .repo-link 自身に margin-top を置くと auto を潰してしまう。 */
+  gap: 1.6em;
 }
 #freshness-block { margin: 0; }
 /* Data provenance: which day of OSM this map is showing. */

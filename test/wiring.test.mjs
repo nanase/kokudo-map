@@ -7,7 +7,12 @@ import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 
 import { routeListHTML } from '../web/panel.mjs';
-import { setSelection, wireControls } from '../web/wiring.mjs';
+import {
+  NARROW_QUERY,
+  setSelection,
+  wireControls,
+  wireRouteFold,
+} from '../web/wiring.mjs';
 
 const indexHtml = readFileSync(
   new URL('../web/index.html', import.meta.url),
@@ -169,5 +174,87 @@ describe('wireControls — 表示のトグル', () => {
     }
     // labels はどのケースでも触っていない。
     expect(state.labels).toBe(true);
+  });
+});
+
+/* 折りたたみは画面幅に従う。happy-dom の matchMedia は matches を答えるが、
+ * 画面幅を変えても change を自分では発火しないので、境界をまたぐ側は
+ * 手で change を投げて確かめる。 */
+describe('wireRouteFold — 国道一覧の折りたたみ', () => {
+  const fold = (width) => {
+    const window = new Window({
+      url: 'https://example.invalid/',
+      width,
+      height: 720,
+    });
+    const document = window.document;
+    document.write(indexHtml);
+    // matchMedia は呼ぶたびに別の MediaQueryList を返すので、配線が実際に
+    // 購読した一つを捕まえておく。別の個体へ change を投げても届かない。
+    const real = window.matchMedia.bind(window);
+    const created = [];
+    window.matchMedia = (q) => {
+      const m = real(q);
+      created.push(m);
+      return m;
+    };
+    wireRouteFold(document);
+    return {
+      window,
+      document,
+      block: document.querySelector('#route-block'),
+      mq: created[0],
+    };
+  };
+
+  const resize = ({ window, mq }, width) => {
+    window.happyDOM.setViewport({ width, height: 720 });
+    mq.dispatchEvent(new window.Event('change'));
+  };
+
+  test('広い画面では開いている', () => {
+    expect(fold(1280).block.open).toBe(true);
+  });
+
+  test('狭い画面では畳まれている', () => {
+    expect(fold(375).block.open).toBe(false);
+  });
+
+  test('狭い画面から広げると開く', () => {
+    const ctx = fold(375);
+    expect(ctx.block.open).toBe(false);
+
+    resize(ctx, 1280);
+    expect(ctx.block.open).toBe(true);
+  });
+
+  test('広い画面から狭めると畳まれる', () => {
+    const ctx = fold(1280);
+    expect(ctx.block.open).toBe(true);
+
+    resize(ctx, 375);
+    expect(ctx.block.open).toBe(false);
+  });
+
+  /* 畳む幅は style.css の @media と wiring.mjs の二箇所にある。片方だけ
+   * 動かすと、見出しを消したまま中身も畳まれた画面ができる。
+   *
+   * 見出しを隠す側は補集合で書く。min-width: 861px のように 1px ずらすと、
+   * そのあいだの幅がどちらにも入らず、開いた一覧の上に見出しだけが残る。 */
+  test('畳む幅が style.css の @media と一致する', () => {
+    const css = readFileSync(
+      new URL('../web/style.css', import.meta.url),
+      'utf8',
+    );
+    expect(NARROW_QUERY).toBe('(max-width: 860px)');
+    expect(css).toContain(`@media ${NARROW_QUERY}`);
+    expect(css).toContain(`@media not all and ${NARROW_QUERY}`);
+  });
+
+  test('畳んだままでも絞り込み欄と選択解除は一覧の外にある', () => {
+    const { document, block } = fold(375);
+    expect(block.open).toBe(false);
+    expect(block.contains(document.querySelector('#route-filter'))).toBe(false);
+    expect(block.contains(document.querySelector('#sel-none'))).toBe(false);
   });
 });

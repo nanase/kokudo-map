@@ -27,6 +27,30 @@ export function setSelection(doc, state, refs, applyFilters) {
   applyFilters();
 }
 
+/** 畳む幅。style.css の @media と同じ値である。 */
+export const NARROW_QUERY = '(max-width: 860px)';
+
+/**
+ * 国道一覧の折りたたみを画面幅に従わせる。
+ *
+ * 狭い画面ではサイドバーが画面の上に積まれ、高さは画面の 48% までしかない。
+ * 459 個のチェックボックスがその大半を占めるので、既定では畳んでおく。
+ *
+ * 広い画面では畳む理由が無いので開いたままにし、見出しは CSS で消す。閉じた
+ * details の中身は CSS では出せないため、open の出し入れはここが持つ。境界を
+ * またいだときだけ書き換えるので、利用者が狭い画面で自分で開いた一覧は、幅が
+ * 変わらないかぎり開いたままである。
+ */
+export function wireRouteFold(doc) {
+  const block = doc.querySelector('#route-block');
+  const mq = doc.defaultView.matchMedia(NARROW_QUERY);
+  const apply = () => {
+    block.open = !mq.matches;
+  };
+  mq.addEventListener('change', apply);
+  apply();
+}
+
 /** サイドバーの一覧・絞り込み・表示トグルを state へ配線する。 */
 export function wireControls(doc, state, applyFilters) {
   const $ = (sel) => doc.querySelector(sel);
