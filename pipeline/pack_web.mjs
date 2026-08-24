@@ -87,13 +87,33 @@ for (const f of features) {
     kind: p.kind,
     src: p.src,
     former: p.former,
-    revoked: p.revoked,
+    // A region built before `revoked` existed has no such key (it arrived
+    // with #51, and most of build/regions predates it). 0 is what the field
+    // means when nobody has checked — 未確認, not 現役 — so it is the honest
+    // stand-in as well as the only one MVT can carry.
+    revoked: p.revoked || 0,
     name: p.name || '',
     updated: p.updated,
     km: p.km,
   };
   f.bbox = bboxOf(f.geometry.coordinates);
   f.refs_list = list;
+}
+
+/* MVT has no null. vt-pbf writes a missing property as a value with no field
+ * set, and MapLibre answers "unknown feature value" and throws the whole tile
+ * away — so one absent property on one arc costs every road in that tile. It
+ * fails in the browser, long after the build said it was done, which is why it
+ * is worth a pass over 130,000 features to say it here instead. */
+for (const f of features) {
+  for (const [k, v] of Object.entries(f.properties)) {
+    if (v === null || v === undefined) {
+      throw new Error(
+        `arc ${f.properties.id}: property "${k}" is ${v}. MVT cannot carry ` +
+          'it, and MapLibre drops every tile that contains it.',
+      );
+    }
+  }
 }
 
 function bboxOf(coords) {
