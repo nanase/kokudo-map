@@ -131,9 +131,13 @@ jobs:
           done < "$paths_file"
 
           # ファイル名に改行が混じっても1件のまま扱えるよう、printf/jq -R
-          # でテキスト化せず、argv 経由(jq --args)でそのまま渡す。
+          # でテキスト化せず、argv 経由(jq --args)でそのまま渡す。区切りの
+          # "/" は残したまま、各階層ごとに @uri で percent-encode する
+          # (# ? 空白 改行 等を含むパスでも配信 URL と一致させるため)。
           payload=$(jq -n --arg base "$SITE_URL" '
-              {files: ($ARGS.positional | map($base + "/" + .))}
+              {files: ($ARGS.positional | map(
+                $base + "/" + (split("/") | map(@uri) | join("/"))
+              ))}
             ' --args "${paths[@]}")
           echo "パージ対象:"
           echo "$payload" | jq .
