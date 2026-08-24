@@ -87,6 +87,7 @@ uvx ruff check .claude/skills/national-route-data/scripts   # Python の静的�
 | `web/` | 地図本体。MapLibre GL JS と配信データ |
 | `web/mapspec.mjs` | スタイルと絞り込み式の定義。検証スクリプトも同じ物を読む |
 | `web/app.js` | 地図と操作の繋ぎ込み。生きた地図と頁が要る部分だけが残る |
+| `web/wiring.mjs` | index.html の要素と state の対応づけ。地図を作らずに import できる |
 | `web/urlstate.mjs` | 絞り込みと表示状態を URL のクエリ文字列に載せる |
 | `web/aggregate.mjs` | 画面が出す数を組み合わせ表から読む |
 | `web/panel.mjs` | 側面の一覧・集計・凡例の組み立て |

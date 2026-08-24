@@ -24,7 +24,11 @@
  * What is left in this file is the part that needs a live map and a live page:
  * the map itself, the one mutable `state`, the filters that state drives, the
  * listeners, and boot order. Everything that is a plain function of the data
- * was moved out so it can be checked directly — see test/.
+ * was moved out so it can be checked directly — see test/. wireControls() and
+ * wireShare() moved out too, to wiring.mjs, not because they are pure but
+ * because they only need document/state/applyFilters — no map — so
+ * test/wiring.test.mjs can wire them to a real index.html in happy-dom
+ * without building a map.
  *
  *   mapspec.mjs    style, layers, filter expressions
  *   aggregate.mjs  the panel's numbers, read off the combination table
@@ -33,6 +37,7 @@
  *   termini.mjs    起点・終点 as a GeoJSON source
  *   shield.mjs     the 国道番号標識
  *   html.mjs       escaping, because OSM text is untrusted
+ *   wiring.mjs     index.html の要素と state の対応づけ
  */
 
 import { routesOf, statsFor } from './aggregate.mjs';
@@ -67,13 +72,12 @@ import {
   routeListHTML,
   SHARED_ROWS,
   sharedHTML,
-  shareSummaryHTML,
-  shareText,
   statsHTML,
 } from './panel.mjs';
 import { deepest, popupHTML } from './popup.mjs';
 import { terminiFeatures } from './termini.mjs';
 import { decodeURLState, encodeState, MANAGED_KEYS } from './urlstate.mjs';
+import { setSelection, wireControls, wireShare } from './wiring.mjs';
 
 const state = {
   meta: null,
@@ -617,8 +621,8 @@ async function boot() {
   map.addControl(new BasemapControl(), 'top-right');
 
   wirePopups();
-  wireControls();
-  wireShare();
+  wireControls(document, state, applyFilters);
+  wireShare(document, state);
 
   map.getSource('termini').setData(terminiFeatures(state.meta));
 
@@ -739,224 +743,6 @@ function buildUI() {
   $('#route-filter').value = '';
   $('#freshness').innerHTML = freshnessHTML(state.meta);
   renderShared();
-}
-
-/** Listeners that are wired once. */
-function wireControls() {
-  const list = $('#route-list');
-  list.addEventListener('change', (e) => {
-    const cb = e.target.closest('input[type=checkbox]');
-    if (!cb) return;
-    const ref = Number(cb.value);
-    if (cb.checked) state.selected.add(ref);
-    else state.selected.delete(ref);
-    cb.closest('label').classList.toggle('on', cb.checked);
-    applyFilters();
-  });
-
-  $('#sel-none').addEventListener('click', () => setSelection([]));
-
-  $('#route-filter').addEventListener('input', (e) => {
-    const q = e.target.value.trim();
-    for (const el of list.querySelectorAll('label')) {
-      el.classList.toggle('hidden', q !== '' && !el.dataset.ref.startsWith(q));
-    }
-  });
-
-  for (const el of document.querySelectorAll('input[name=conc]')) {
-    el.addEventListener('change', () => {
-      state.conc = document.querySelector('input[name=conc]:checked').value;
-      applyFilters();
-    });
-  }
-
-  const toggle = (id, key) =>
-    $(id).addEventListener('change', (e) => {
-      state[key] = e.target.checked;
-      // The shadow layer is not restricted by kind, so a toggle that takes the
-      // picked arc off the map would otherwise leave its shadow lying on the
-      // basemap with no road inside it.
-      state.picked = null;
-      applyFilters();
-    });
-  toggle('#t-labels', 'labels');
-  toggle('#t-termini', 'termini');
-  toggle('#t-expressway', 'expressway');
-  toggle('#t-special', 'special');
-  toggle('#t-ferry', 'ferry');
-  toggle('#t-former', 'former');
-}
-
-/* ------------------------------------------------------------------ share --- */
-/**
- * The dialog only ever shows what is on screen right now — no controls of its
- * own to drift out of step with the map. `location.href` already carries the
- * filter/display state (syncURL keeps the query string current) and the map's
- * own hash, so it needs no assembly here.
- */
-function wireShare() {
-  const dialog = $('#share-dialog');
-
-  $('#share-btn').addEventListener('click', () => {
-    // ダイアログを開き直すタイミングでは #share-text の文章表示は不要な
-    // ので、前回 blur が発火せず残っていた場合に備えて明示的に戻す。
-    showShareUrl();
-    $('#share-body').innerHTML = shareSummaryHTML(shareState());
-    dialog.showModal();
-    $('#share-url').select();
-  });
-
-  $('#share-copy').addEventListener('click', async () => {
-    // iOS Safari は <button> のタップでフォーカスが移らず、
-    // showShareText() が待つ blur が発火しないことがある。
-    // その場合に備え、コピー前に必ず真の URL へ戻してから読む。
-    showShareUrl();
-    const input = $('#share-url');
-    input.select();
-    try {
-      await navigator.clipboard.writeText(input.value);
-    } catch {
-      // Clipboard permission denied or unavailable (e.g. non-HTTPS origin):
-      // the field is already selected, so the reader can still copy by hand.
-      return;
-    }
-    flashCopied($('#share-copy'));
-  });
-
-  // SNS への共有はタイトル付きの文章を渡したい。Web Share API があれば
-  // OS 自体の共有シートに渡し、無ければ (デスクトップ Firefox など)
-  // クリップボードへコピーして #share-copy と同じ形で成功を伝える。
-  $('#share-text').addEventListener('click', async () => {
-    // 共有シートが開いている間の連打は navigator.share() 側が
-    // InvalidStateError で reject するだけで、AbortError と違って
-    // 「閉じただけ」ではないため、そのまま通すとフォールバック表示が
-    // 誤って出てしまう。進行中は追加のクリックごと無視する。
-    if (sharingText) return;
-    sharingText = true;
-    // 前回の失敗で #share-url が文章表示のまま残っていることがある
-    // (iOS Safari では blur が発火しないため)。今回の結果に関わらず、
-    // ここで一度まっさらな状態から始める。
-    showShareUrl();
-    const text = shareText(location.href, shareState());
-    if (navigator.share) {
-      try {
-        await navigator.share({ text });
-      } catch (err) {
-        // AbortError はユーザーが共有シートを閉じただけなので何もしない。
-        // それ以外 (権限や埋め込み文脈による失敗) は手でコピーできるようにする。
-        if (err.name !== 'AbortError') showShareText(text);
-      } finally {
-        sharingText = false;
-      }
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      showShareText(text);
-      sharingText = false;
-      return;
-    }
-    flashCopied($('#share-text'));
-    sharingText = false;
-  });
-}
-
-// #share-text の共有シートが開いている間、連打による navigator.share() の
-// 多重呼び出しを防ぐガード。wireShare() から参照するのでモジュールスコープに置く。
-let sharingText = false;
-
-// #share-url が今何を表示しているかを表す状態。表示内容はここから導き、
-// 退避した元の値を戻す形にはしない (mode を 'url' に戻せば location.href
-// から書き直される)。
-let shareField = { mode: 'url', text: '' };
-
-/** shareField の内容を #share-url に反映する。 */
-function renderShareField() {
-  $('#share-url').value =
-    shareField.mode === 'url' ? location.href : shareField.text;
-}
-
-/** #share-url を現在の URL 表示に戻す。blur ハンドラからもここへ集約する。 */
-function showShareUrl() {
-  shareField = { mode: 'url', text: '' };
-  renderShareField();
-}
-
-/**
- * Web Share にもクリップボードにも失敗したときの最後の手段。#share-copy は
- * URL 欄が常に見えているので選択したまま手でコピーできるが、#share-text の
- * 文章はどこにも表示されていないので、このまま失敗すると打つ手が無くなる。
- * #share-url を一時的な表示欄として使い、フォーカスが外れたら showShareUrl()
- * で URL 表示に戻す。
- *
- * text の改行はそのまま渡すと input が黙って捨て、タイトルと URL が区切りなく
- * くっついてしまうので、見える形に保つスペースへ置き換える。
- *
- * addEventListener は同じ関数参照を渡す限り二重登録されないので、blur
- * リスナーは毎回渡してよい。iOS Safari は <button> のタップでフォーカスが
- * 移らず blur 自体が発火しないことがあるため、#share-copy と #share-text
- * 側でも showShareUrl() を呼んで確実に URL 表示へ戻す。
- */
-function showShareText(text) {
-  shareField = { mode: 'text', text: text.replace(/\n/g, ' ') };
-  renderShareField();
-  const input = $('#share-url');
-  input.select();
-  input.addEventListener('blur', showShareUrl, { once: true });
-}
-
-const CHECK_ICON =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" ' +
-  'fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" ' +
-  'stroke-linejoin="round"/></svg>';
-
-/** The success flash `#share-copy` and `#share-text`'s clipboard fallback share. */
-function flashCopied(btn) {
-  const original = btn.innerHTML;
-  btn.innerHTML = CHECK_ICON;
-  btn.classList.add('copied');
-  btn.setAttribute('aria-label', 'コピーしました');
-  btn.disabled = true;
-  setTimeout(() => {
-    btn.innerHTML = original;
-    btn.classList.remove('copied');
-    btn.removeAttribute('aria-label');
-    btn.disabled = false;
-  }, 1500);
-}
-
-/**
- * Read the display state straight off the controls rather than restating
- * their labels here — index.html is the one place those strings live, and a
- * second copy would be free to go stale when they change.
- */
-function shareState() {
-  const toggles = [...document.querySelectorAll('#panel .checks label')].map(
-    (label) => ({
-      label: label.textContent.trim(),
-      checked: label.querySelector('input').checked,
-    }),
-  );
-  const concLabel = document
-    .querySelector('input[name=conc]:checked')
-    .closest('label')
-    .textContent.trim();
-  return {
-    selectedRefs: [...state.selected].sort((a, b) => a - b),
-    totalRoutes: state.routes.length,
-    concLabel,
-    toggles,
-  };
-}
-
-function setSelection(refs) {
-  state.selected = new Set(refs);
-  for (const cb of document.querySelectorAll('#route-list input')) {
-    cb.checked = state.selected.has(Number(cb.value));
-    cb.closest('label').classList.toggle('on', cb.checked);
-  }
-  applyFilters();
 }
 
 function updateStats() {
@@ -1088,7 +874,8 @@ function wirePopups() {
 // was wired, and will not exist by the time the next popup opens.
 document.addEventListener('click', (ev) => {
   const btn = ev.target.closest('.shield-btn');
-  if (btn) setSelection([Number(btn.dataset.ref)]);
+  if (btn)
+    setSelection(document, state, [Number(btn.dataset.ref)], applyFilters);
 });
 
 boot().catch((err) => {
