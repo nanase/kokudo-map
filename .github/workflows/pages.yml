@@ -118,15 +118,23 @@ jobs:
         run: |
           set -euo pipefail
           # "" はルート(ディレクトリ索引)。以降は web/ 配下の全ファイルを
-          # web/ からの相対パスに直して並べる。
+          # web/ からの相対パスに直して並べる。find | sort を素通しの
+          # process substitution で読むと find の失敗を set -e が拾えない
+          # ため、一度ファイルへ書き出してからループへ渡す。
+          paths_file=$(mktemp)
+          trap 'rm -f "$paths_file"' EXIT
+          find web -type f -print0 | sort -z > "$paths_file"
+
           paths=("")
           while IFS= read -r -d '' file; do
             paths+=("${file#web/}")
-          done < <(find web -type f -print0 | sort -z)
+          done < "$paths_file"
 
-          payload=$(printf '%s\n' "${paths[@]}" \
-            | jq -R --arg base "$SITE_URL" '$base + "/" + .' \
-            | jq -s '{files: .}')
+          # ファイル名に改行が混じっても1件のまま扱えるよう、printf/jq -R
+          # でテキスト化せず、argv 経由(jq --args)でそのまま渡す。
+          payload=$(jq -n --arg base "$SITE_URL" '
+              {files: ($ARGS.positional | map($base + "/" + .))}
+            ' --args "${paths[@]}")
           echo "パージ対象:"
           echo "$payload" | jq .
 
