@@ -315,6 +315,14 @@ function attachStateTip(container) {
  * fall through untouched. `tip` defaults to `label`, since only the
  * hide-routes button needs a different phrasing for "what happens next" vs.
  * "what just happened" (see `hideStateTip`).
+ *
+ * `onExternalChange`, if given, is handed the button's own `render` so a
+ * control can redraw when its state changes off-screen from any click —
+ * the pitch button's state also moves via Ctrl+drag. `isPressed` likewise
+ * defaults to exact equality with `order[1]`, which the two hard-toggle
+ * buttons never need to override — but the pitch button's `get()` can land
+ * on any angle a drag left it at, not just the two the button cycles
+ * between, so it treats every non-zero pitch as pressed.
  */
 function buildCycleControl({
   className,
@@ -325,6 +333,8 @@ function buildCycleControl({
   icon,
   label,
   tip,
+  isPressed = (value) => value === order[1],
+  onExternalChange,
 }) {
   const tipFor = tip ?? label;
   const isToggle = order.length === 2;
@@ -342,7 +352,7 @@ function buildCycleControl({
         btn.title = text;
         btn.setAttribute('aria-label', text);
         if (isToggle) {
-          const pressed = value === order[1];
+          const pressed = isPressed(value);
           btn.classList.toggle('active', pressed);
           btn.setAttribute('aria-pressed', String(pressed));
         }
@@ -355,6 +365,7 @@ function buildCycleControl({
         showTip(tipFor(next));
       });
       render();
+      onExternalChange?.(render);
       container.appendChild(btn);
       this._container = container;
       return container;
@@ -364,6 +375,58 @@ function buildCycleControl({
     }
   };
 }
+
+/* ----------------------------------------------------------------- pitch --- */
+/**
+ * Straight-down is the map's normal reading posture; 60° is a look at the
+ * terrain. Ctrl+drag reaches any angle in between, so `mapPitch` (the
+ * button's own idea of where it is) is resynced from the map's actual pitch
+ * whenever a drag ends, via `onExternalChange`. Any pitch short of exactly
+ * flat counts as "tilted" for the toggle: `order.indexOf` misses a
+ * mid-drag angle and falls back to `order[0]`, which is flat — so the
+ * button always offers to return to flat unless it is already there.
+ */
+const PITCH_TILT_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<path d="M4 8 12 4l8 4-8 4-8-4Z" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+  '<path d="M4 8v9l8 4 8-4V8" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
+  '</svg>';
+const PITCH_FLAT_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<rect x="4" y="4" width="16" height="16" rx="1" fill="none" ' +
+  'stroke="currentColor" stroke-width="2"/>' +
+  '</svg>';
+
+let mapPitch = map.getPitch();
+
+function pitchStateTip(pitch) {
+  return pitch === 0 ? '視点: 真上' : '視点: 斜め 60°';
+}
+
+function applyPitch(pitch) {
+  mapPitch = pitch;
+  map.easeTo({ pitch, duration: 400 });
+}
+
+const PitchControl = buildCycleControl({
+  className: 'pitch-ctrl',
+  id: 'pitch-btn',
+  order: [0, 60],
+  get: () => mapPitch,
+  apply: applyPitch,
+  icon: (pitch) => (pitch === 0 ? PITCH_FLAT_ICON : PITCH_TILT_ICON),
+  label: (pitch) => (pitch === 0 ? '視点を斜めにする' : '視点を真上に戻す'),
+  tip: pitchStateTip,
+  isPressed: (pitch) => pitch !== 0,
+  onExternalChange: (render) => {
+    map.on('pitchend', () => {
+      mapPitch = map.getPitch();
+      render();
+    });
+  },
+});
 
 /* ------------------------------------------------------------ hide-routes --- */
 /**
@@ -622,6 +685,7 @@ async function boot() {
   const sources = routeSources(new URL(PMTILES_URL, location.href).href);
   for (const [id, src] of Object.entries(sources)) map.addSource(id, src);
   for (const layer of routeLayers()) map.addLayer(layer);
+  map.addControl(new PitchControl(), 'top-right');
   map.addControl(new HideRoutesControl(), 'top-right');
   map.addControl(new GsiShadeControl(), 'top-right');
   map.addControl(new BasemapControl(), 'top-right');
