@@ -205,7 +205,15 @@ input[type="search"] {
 input[type="search"]::placeholder { font-size: .82em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
-/* route checkbox grid --------------------------------------------------- */
+/* route checkbox grid ----------------------------------------------------
+   一覧は #route-block(details.fold)の中にある。狭い画面でだけ畳むので、
+   広い画面では見出しを消して、今までどおり開いた一覧だけが見えるようにする。
+   open の出し入れは wiring.mjs の wireRouteFold() が持つ — CSS では閉じた
+   details の中身を見せられない。 */
+@media (min-width: 861px) {
+  #route-block > summary { display: none; }
+  #route-block[open] > summary { margin-bottom: 0; }
+}
 .route-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
   gap: 3px; position: relative;

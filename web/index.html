@@ -47,11 +47,20 @@
         <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 15）" autocomplete="off">
         <button type="button" id="sel-none" class="mini" disabled>選択解除</button>
       </div>
-      <div id="route-list" class="route-list" role="group" aria-label="国道の選択">
-        <!-- buildUI() が innerHTML を丸ごと差し替えるので、データが届けば
-             このまま消える。表示・非表示を別に持つ必要が無い。 -->
-        <div class="route-list-spinner" aria-hidden="true"></div>
-      </div>
+      <!-- 狭い画面でだけ畳む。広い画面では summary を出さず、開いたままにする
+           (style.css と wiring.mjs の wireRouteFold)。絞り込み欄と選択解除は
+           外に置いてあるので、畳んだままでも選択は外せる。 -->
+      <details id="route-block" class="fold" open>
+        <summary>
+          <h2>国道を選ぶ</h2>
+          <span class="count" id="route-count"></span>
+        </summary>
+        <div id="route-list" class="route-list" role="group" aria-label="国道の選択">
+          <!-- buildUI() が innerHTML を丸ごと差し替えるので、データが届けば
+               このまま消える。表示・非表示を別に持つ必要が無い。 -->
+          <div class="route-list-spinner" aria-hidden="true"></div>
+        </div>
+      </details>
     </section>
 
     <section class="block">
