@@ -318,7 +318,11 @@ function attachStateTip(container) {
  *
  * `onExternalChange`, if given, is handed the button's own `render` so a
  * control can redraw when its state changes off-screen from any click —
- * the pitch button's state also moves via Ctrl+drag.
+ * the pitch button's state also moves via Ctrl+drag. `isPressed` likewise
+ * defaults to exact equality with `order[1]`, which the two hard-toggle
+ * buttons never need to override — but the pitch button's `get()` can land
+ * on any angle a drag left it at, not just the two the button cycles
+ * between, so it treats every non-zero pitch as pressed.
  */
 function buildCycleControl({
   className,
@@ -329,6 +333,7 @@ function buildCycleControl({
   icon,
   label,
   tip,
+  isPressed = (value) => value === order[1],
   onExternalChange,
 }) {
   const tipFor = tip ?? label;
@@ -347,7 +352,7 @@ function buildCycleControl({
         btn.title = text;
         btn.setAttribute('aria-label', text);
         if (isToggle) {
-          const pressed = value === order[1];
+          const pressed = isPressed(value);
           btn.classList.toggle('active', pressed);
           btn.setAttribute('aria-pressed', String(pressed));
         }
@@ -414,6 +419,7 @@ const PitchControl = buildCycleControl({
   icon: (pitch) => (pitch === 0 ? PITCH_FLAT_ICON : PITCH_TILT_ICON),
   label: (pitch) => (pitch === 0 ? '視点を斜めにする' : '視点を真上に戻す'),
   tip: pitchStateTip,
+  isPressed: (pitch) => pitch !== 0,
   onExternalChange: (render) => {
     map.on('pitchend', () => {
       mapPitch = map.getPitch();
