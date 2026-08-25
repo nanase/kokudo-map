@@ -388,12 +388,16 @@ function buildCycleControl({
  * flat counts as "tilted" for the toggle: `order.indexOf` misses a
  * mid-drag angle and falls back to `order[0]`, which is flat — so the
  * button always offers to return to flat unless it is already there.
+ *
+ * The two icons are the same square seen from the two postures: face-on from
+ * straight above, and foreshortened into a trapezoid — near edge long, far
+ * edge short — from the tilted one. An isometric box was drawn here first,
+ * but a box is a solid, and what the button turns is the angle the flat map
+ * is looked at.
  */
 const PITCH_TILT_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-  '<path d="M4 8 12 4l8 4-8 4-8-4Z" fill="none" stroke="currentColor" ' +
-  'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
-  '<path d="M4 8v9l8 4 8-4V8" fill="none" stroke="currentColor" ' +
+  '<path d="M8 6h8l5 12H3L8 6Z" fill="none" stroke="currentColor" ' +
   'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
   '</svg>';
 const PITCH_FLAT_ICON =
@@ -994,22 +998,74 @@ function applyDetailPadding(animate) {
   else map.setPadding(padding);
 }
 
+/**
+ * 箱を開いた時点の居場所。閉じるときに、寄せたぶんを戻すかどうかを決める。
+ *
+ * padding を外せば地図は中心を画面の真ん中へ戻すので、絵は寄せたときと逆へ
+ * 動く。開けて読んで閉じるだけなら、それは開く前の眺めに戻ることであり、
+ * 戻すのが正しい。
+ *
+ * 開いているあいだに動いた——地図を掴んで送った、起終点へ飛んだ——なら話が
+ * 変わる。今の眺めは利用者が選んだものなので、閉じた拍子に横へ滑るのはただ
+ * のずれである。だから動いていたら、padding を外しても絵を動かさない。
+ *
+ * 見るのは中心と縮尺だけである。padding だけの ease はどちらも変えないので、
+ * 差が出れば場所が動いたということになる。傾きと向きは場所ではないので数え
+ * ない。
+ */
+let detailOpenedAt = null;
+
+const cameraNow = () => ({ ...map.getCenter(), zoom: map.getZoom() });
+
+/* 度で 1e-6 は 10 cm ほどである。padding だけの ease が中心に残しうるのは
+ * 丸め誤差だけなので、これを超えていれば地図は本当に動いている。 */
+const CAMERA_EPS = 1e-6;
+
+const cameraMoved = (a, b) =>
+  Math.abs(a.lng - b.lng) > CAMERA_EPS ||
+  Math.abs(a.lat - b.lat) > CAMERA_EPS ||
+  Math.abs(a.zoom - b.zoom) > CAMERA_EPS;
+
+/**
+ * padding を外しても絵を動かさない。
+ *
+ * padding は「地図が中心と見なす点」をずらす仕組みなので、外すとその点は画面
+ * の真ん中へ戻り、絵は逆へ滑る。滑らせないためには、いま画面の真ん中に写って
+ * いる地点を、そのまま新しい中心に据え直せばよい。
+ */
+function dropDetailPadding() {
+  const canvas = $('#map').getBoundingClientRect();
+  const anchor = map.unproject([canvas.width / 2, canvas.height / 2]);
+  map.jumpTo({ padding: { ...NO_PADDING }, center: anchor });
+}
+
 function openDetail(ref) {
   const route = state.routes.find((r) => r.ref === ref);
   if (!route) return;
+  // 箱を出すときは、後ろのポップアップを引き取る。ポップアップはアーク 1 本
+  // について、箱は路線そのものについて述べるので、両方が出ていると同じ画面で
+  // 二つが別のことを語る。箱は地図の左下を覆うから、狭い画面では重なりもする。
+  // 影はポップアップのものなので、closePopup() が一緒に消す。
+  closePopup();
   detailBody.innerHTML = detailHTML({
     route,
     kinds: kindsFor(state.meta.combinations, new Set([ref])),
     termini: decreeTerminiOf(state.meta, ref),
   });
+  // 別の路線に開き直しただけなら、居場所は開いたときのままにしておく。
+  // ここで取り直すと、動いた後に開き直した人が閉じたときに横へ滑る。
+  if (detail.hidden) detailOpenedAt = cameraNow();
   detail.hidden = false;
   applyDetailPadding(true);
 }
 
 function closeDetail() {
   if (detail.hidden) return;
+  const moved = detailOpenedAt && cameraMoved(detailOpenedAt, cameraNow());
+  detailOpenedAt = null;
   detail.hidden = true;
-  applyDetailPadding(true);
+  if (moved) dropDetailPadding();
+  else applyDetailPadding(true);
 }
 
 $('#detail-close').addEventListener('click', closeDetail);
@@ -1050,7 +1106,7 @@ document.addEventListener('click', (ev) => {
     return;
   }
 
-  const terminus = ev.target.closest('.detail-termini .row[data-at]');
+  const terminus = ev.target.closest('.detail-termini .end[data-at]');
   if (terminus) {
     const [lon, lat] = terminus.dataset.at.split(',').map(Number);
     map.flyTo({ center: [lon, lat], zoom: 12 });

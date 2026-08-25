@@ -97,24 +97,37 @@ describe('decreeTerminiOf', () => {
   });
 });
 
-describe('detailHTML — 見出しとリンク', () => {
-  test('標識と路線名を出す', () => {
+describe('detailHTML — 見出しとボタン', () => {
+  test('標識を出し、路線名は読み上げにだけ残す', () => {
+    // 標識が路線の名前そのものなので、隣に「国道18号」とは書きません。ただし
+    // 箱の aria-labelledby が指す先なので、名前は #detail-title に残します。
     const html = detailHTML({ route: route() });
-    expect(html).toContain('国道18号');
     expect(html).toContain('aria-label="国道18号"'); // shield() の svg
+    expect(html).toContain(
+      '<h2 id="detail-title" class="sr-only">国道18号</h2>',
+    );
   });
 
-  test('Wikipedia へのリンクは新しいタブで開く', () => {
+  test('Wikipedia はボタンで、新しいタブで開く', () => {
     const html = detailHTML({ route: route() });
     expect(html).toContain(`href="${wikipediaURL(18)}"`);
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener"');
+    expect(html).toContain('class="icon-btn detail-wiki"');
+    // ロゴは写せないので W 一文字で名乗ります。字体は書体が持つので、隣の
+    // 漏斗と同じ svg に入れて出します。書体は style.css が当てます。
+    expect(html).toContain('<svg viewBox="0 0 24 24" aria-hidden="true">');
+    expect(html).toContain('>W</text>');
+    expect(html).toContain(
+      'aria-label="Wikipedia「国道18号」を新しいタブで開く"',
+    );
   });
 
   test('その路線だけを表示するボタンが番号を持つ', () => {
     const html = detailHTML({ route: route({ ref: 459 }) });
-    expect(html).toContain('class="mini detail-only" data-ref="459"');
-    expect(html).toContain('国道459号だけを表示');
+    expect(html).toContain('class="icon-btn detail-only" data-ref="459"');
+    // 字が消えてアイコンだけになったので、名乗りは aria-label が持ちます。
+    expect(html).toContain('aria-label="国道459号だけを表示"');
   });
 });
 
@@ -175,24 +188,55 @@ describe('detailHTML — 起点・終点', () => {
     expect(detailHTML({ route: route() })).not.toContain('detail-termini');
   });
 
-  test('座標があれば押せる行になる', () => {
+  test('座標があれば押せる', () => {
     const html = detailHTML({
       route: route(),
       termini: [{ label: '起点', name: '群馬県高崎市', at: [139.0, 36.3] }],
     });
     expect(html).toContain('data-at="139,36.3"');
-    expect(html).toContain('<button type="button" class="row"');
+    expect(html).toContain('<button type="button" class="end from"');
     expect(html).toContain('aria-label="国道18号の起点(群馬県高崎市)へ移動"');
   });
 
-  test('座標が無ければ押せない行になる', () => {
+  test('座標が無ければ押せない', () => {
     const html = detailHTML({
       route: route(),
       termini: [{ label: '起点', name: '東京都中央区', at: null }],
     });
     expect(html).toContain('東京都中央区');
     expect(html).not.toContain('data-at');
-    expect(html).not.toContain('<button type="button" class="row"');
+    expect(html).not.toContain('<button type="button" class="end');
+  });
+
+  test('起点は左、終点は右に寄せる', () => {
+    // 寄せる向きだけで両端のどちらであるかを述べるので、向きは中身が持ちます。
+    const html = detailHTML({
+      route: route(),
+      termini: [
+        { label: '起点', name: '高崎市', at: [139.0, 36.3] },
+        { label: '終点', name: '上越市', at: [138.2, 37.1] },
+      ],
+    });
+    expect(html.indexOf('class="end from"')).toBeLessThan(
+      html.indexOf('class="end to"'),
+    );
+  });
+
+  test('矢印は両端が揃ったときだけ引く', () => {
+    const both = detailHTML({
+      route: route(),
+      termini: [
+        { label: '起点', name: '高崎市', at: [139.0, 36.3] },
+        { label: '終点', name: '上越市', at: [138.2, 37.1] },
+      ],
+    });
+    expect(both).toContain('class="arrow"');
+    // 片方しか無い路線に、行き先の無い矢印は出しません。
+    const one = detailHTML({
+      route: route(),
+      termini: [{ label: '起点', name: '高崎市', at: [139.0, 36.3] }],
+    });
+    expect(one).not.toContain('class="arrow"');
   });
 
   test('地名はエスケープしてから入れる', () => {

@@ -42,6 +42,11 @@
   --shield-face: #00449E;
   --shield-edge: #FFFFFF;
   --shield-ink: #FFFFFF;
+  /* 白い縁は明るい配色の面では地に溶け、標識が面に貼り付いて見える。実物は
+     面から浮いて立っているので、縁の外側を薄い影で締める。同じ影を暗い面へも
+     かける——地が暗いぶん見えないだけで、邪魔にはならない。そちらは縁自身が
+     境目になるので、もともと助けが要らない。 */
+  --shield-shadow: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .34));
 
   /* 地図の上の出典表示。MapLibre が白い下敷きを敷くので、本文の色を継ぐと
      暗い配色のときに白い字が白い下敷きに載って消える。ここだけ固定する。 */
@@ -147,6 +152,13 @@ body {
 .icon-btn:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
 .icon-btn svg { width: 15px; height: 15px; }
 .share-btn { margin-left: auto; flex: 0 0 auto; }
+/* 目には出さず、読み上げにだけ残す文字。display: none と違って描画はされる
+   ので、aria-labelledby の指し先になれるし、Chromium の innerText にも出る
+   (pipeline/render_check.mjs が箱の名乗りをそこから読む)。 */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
 .block { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
 .block-hd {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -305,7 +317,12 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* 幅は決め打ちにしない。SHIELD_VIEWBOX の縦横比が変わっても、svg 自身の
    実寸（height だけ決めて width を auto にする）が追随する。 */
 .shield { height: 30px; flex: 0 0 auto; display: block; }
-.shield svg { display: block; height: 100%; width: auto; }
+/* 影は縁の外側に落ちるので、svg の枠より外へ出る。CSS の filter は枠で切らない
+   ので、置き場所は標識ごと——番号だけに落ちないよう、path ではなく svg に
+   かける。 */
+.shield svg {
+  display: block; height: 100%; width: auto; filter: var(--shield-shadow);
+}
 .shield path { fill: var(--shield-face); stroke: var(--shield-edge); }
 .shield text {
   /* x/y/textLength in shield.mjs はここと合わせて目で調整してある。
@@ -453,10 +470,46 @@ input[type="search"]::placeholder { font-size: .82em; }
   border-radius: 4px; background: var(--panel); color: var(--ink);
   box-shadow: 0 4px 20px rgba(0,0,0,.22);
 }
-.maplibregl-popup-tip { border-top-color: var(--panel) !important; border-bottom-color: var(--panel) !important; }
+/* 吹き出しの角。MapLibre は三角形を border で描くので、色を差し替える辺は
+   どちらへ尖るかで変わる——下向きなら border-top、左向きなら border-right で
+   ある。残る二辺は透明のままでなければ、三角ではなく四角に見える。
+
+   これまでは辺を選ばず上下の色だけを差し替えていた。上下と四隅は、尖る向き
+   と逆の辺が `border: none` で幅を持たないので無事だったが、左右へ出たときは
+   上下とも幅を持っている。塗られた二辺が加わって四角になり、肝心の尖る辺は
+   MapLibre の既定の白のままだった。
+
+   MapLibre 側と同じ形の選択子にしてあるので、詳細度は並ぶ。勝っているのは
+   この規則があとに読まれるからで、`.hide-routes-ctrl button.active:hover` と
+   同じ勝ち方である。 */
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--panel);
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--panel);
+}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--panel); }
+.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--panel); }
+/* 閉じるボタン。MapLibre の既定は寸法を持たず、× の字面ぶんしか当たり判定が
+   無い——指では狙いにくい。共有ダイアログの × (.dialog-close) と同じ 32px 角に
+   揃える。 */
+.maplibregl-popup-close-button {
+  top: 2px; right: 2px; width: 32px; height: 32px; border-radius: 4px;
+  display: grid; place-items: center;
+  font-size: 1.6rem; line-height: 1; color: var(--ink-3);
+}
+.maplibregl-popup-close-button:hover {
+  color: var(--ink); background: var(--panel-2);
+}
 .pop-hd {
   display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
-  margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line-2);
+  /* 右は閉じるボタンのぶんだけ空ける。標識がその下に潜り込まないように。 */
+  margin-bottom: 8px; padding-bottom: 8px; padding-right: 26px;
+  border-bottom: 1px solid var(--line-2);
 }
 .pop-n {
   font-family: ui-monospace, Consolas, monospace; font-size: .7rem;
@@ -498,9 +551,11 @@ input[type="search"]::placeholder { font-size: .82em; }
   padding: 12px 44px 12px 14px;
   border-bottom: 1px solid var(--line-2);
 }
-/* ポップアップの標識 (30px) より大きく。これが箱のタイトルである。 */
+/* ポップアップの標識 (30px) より大きく。これが箱のタイトルである——番号を
+   書いた標識が路線の名前そのものなので、隣に「国道N号」と書き添えない。 */
 .detail-hd .shield { height: 44px; }
-.detail-hd h2 { margin: 0; font-size: 1.05rem; font-weight: 800; }
+/* 標識の空けた場所には、その路線について次にできることを置く。 */
+.detail-acts { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .detail-scroll {
   flex: 1; min-height: 0; overflow-y: auto;
   /* 箱の中を読み切ってもページごと動かさない。 */
@@ -508,31 +563,66 @@ input[type="search"]::placeholder { font-size: .82em; }
   padding: 12px 14px 14px;
   display: flex; flex-direction: column; gap: 12px;
 }
-.detail-wiki {
-  align-self: flex-start; display: flex; align-items: center; gap: 6px;
-  color: var(--sign-blue); font-size: .8rem; text-decoration: none;
+/* Wikipedia の W。字体は書体が持つ (detail.mjs の WIKIPEDIA_ICON)。並べた
+   書体はどれも同じオールドスタイルのセリフで、先頭から入っているものが使われ
+   る。おにぎりの番号 (.shield text) と同じく、寸法は svg 側の viewBox・
+   textLength と目で合わせてある。 */
+.detail-wiki { text-decoration: none; }
+.detail-wiki text {
+  fill: currentcolor; font-size: 22px; font-weight: 400;
+  font-family: Garamond, 'Adobe Garamond Pro', Warnock, 'Warnock Pro',
+    Bodoni, 'Bodoni MT', 'Goudy Old Style', Musica, serif;
 }
-.detail-wiki:hover { text-decoration: underline; }
-.detail-wiki svg { width: 13px; height: 13px; flex: 0 0 auto; }
 
-.detail-termini { display: flex; flex-direction: column; gap: 3px; }
-.detail-termini .row {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  font: inherit; text-align: left; padding: 6px 8px;
-  border: 1px solid var(--line-2); border-radius: 3px;
-  background: var(--panel-2); color: var(--ink-2);
+/* 起点・終点 --------------------------------------------------------------
+   行そのものを路線に見立てる。左端が起点、右端が終点で、あいだを矢印が結ぶ。
+   ラベルは地名の上に載せ、寄せる向きだけで両端のどちらであるかを述べる。 */
+.detail-termini {
+  display: flex; align-items: center; gap: 6px;
+  /* 押せる範囲は字面より広く取る。その食み出したぶんを外へ逃がして、
+     左右の端をこの箱の他の欄と揃える。 */
+  margin: 0 -6px;
+}
+/* 両端は地名ぶんだけ取る。余りは矢印が飲むので、字数が少ない路線ほど矢印が
+   長くなる——行の長さは変わらないまま、二つの地点の遠さだけが見える。
+   入り切らないときはここが縮み、地名は … で切れる。 */
+.detail-termini .end {
+  flex: 0 1 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  font: inherit; text-align: left; padding: 4px 6px;
+  border: 0; border-radius: 3px; background: none; color: var(--ink-2);
+}
+/* 終点は右端に立つ。片方しか無い路線では唯一の flex item になり、寄せ先を
+   自分で持たないと左端に残る——地名が要素の中で右へ寄るだけになる。矢印が
+   余りを飲みきる普段は、auto が取る余白が残らないので何も起きない。 */
+.detail-termini .to {
+  margin-left: auto; align-items: flex-end; text-align: right;
 }
 /* 座標が当たらなかった起終点は地名だけの <div> で出る。押せないものに
    ホバーの反応を付けない。 */
-.detail-termini button.row { cursor: pointer; }
-.detail-termini button.row:hover { border-color: var(--sign-blue); }
+.detail-termini button.end { cursor: pointer; }
+.detail-termini button.end:hover {
+  background: var(--panel-2); color: var(--sign-blue);
+}
 .detail-termini .lbl {
-  flex: 0 0 auto; font-size: .68rem; color: var(--ink-3);
+  font-size: .68rem; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace; letter-spacing: .06em;
 }
 .detail-termini .nm {
-  font-size: .78rem; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%; font-size: .78rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 矢印は線と鏃を CSS で引く。span 一つで済む。幅は持たず、両端が取った残りを
+   すべて飲む。地名が長い路線では 16px まで詰めて、そこで止める。 */
+.detail-termini .arrow {
+  flex: 1 1 auto; min-width: 16px; height: 1px;
+  background: var(--ink-3); position: relative;
+}
+.detail-termini .arrow::after {
+  content: ''; position: absolute; right: 0; top: 50%;
+  width: 5px; height: 5px;
+  border-top: 1px solid var(--ink-3); border-right: 1px solid var(--ink-3);
+  transform: translateY(-50%) rotate(45deg);
 }
 
 .detail-stats {
@@ -553,7 +643,6 @@ input[type="search"]::placeholder { font-size: .82em; }
   text-transform: uppercase; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace;
 }
-.mini.detail-only { align-self: flex-start; padding: 6px 12px; font-size: .78rem; }
 
 /* share dialog ------------------------------------------------------------
    ネイティブの <dialog> を使う。表示状態を変更する口は無いので、独自の
@@ -631,7 +720,9 @@ input[type="search"]::placeholder { font-size: .82em; }
     height: min(42vh, 240px);
     border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0;
   }
-  #panel { width: 100%; flex: 0 0 auto; max-height: 48%; border-right: 0; border-bottom: 1px solid var(--line); }
+  /* 上を占めるのはパネルだが、この幅で見に来た人が見たいのは地図である。
+     絞り込みと表示の切り替えまでは畳まずに見えるので、これ以上は要らない。 */
+  #panel { width: 100%; flex: 0 0 auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--line); }
   /* 横並びではないので、左へずらしても隠れない。高さが割合なので畳めもしない。 */
   #app.panel-off #panel { margin-left: 0; display: none; }
   #map-wrap { flex: 1; }

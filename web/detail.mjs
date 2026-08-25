@@ -62,28 +62,55 @@ const fmtKm = (km) =>
 
 const row = (dt, dd) => `<dt>${dt}</dt><dd>${dd}</dd>`;
 
-/* 新しいタブで開くことを、文字ではなく印で述べる。 */
-const EXTERNAL_ICON =
+/* Wikipedia の記事へ。あちらのロゴはパブリックドメインではないので写さない。
+ * 代わりに、記事の見出しが使う系統の書体で W 一文字を出す——字体そのものは
+ * 書体が持ち、ここは持たない(書体は style.css の `.detail-wiki text`)。
+ *
+ * 隣の漏斗と同じ svg にしてある。同じ `.icon-btn svg` の寸法がそのまま効き、
+ * 二つのボタンの中身が同じ高さで並ぶ。textLength は shield.mjs の番号と同じ
+ * 用途で、どの書体が当たっても枠から食み出させないためである。 */
+const WIKIPEDIA_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-  '<path d="M14 4h6v6M20 4l-8.5 8.5" fill="none" stroke="currentColor" ' +
-  'stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" ' +
-  'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
-  'stroke-linejoin="round"/></svg>';
+  '<text x="12" y="18" text-anchor="middle" textLength="20" ' +
+  'lengthAdjust="spacingAndGlyphs">W</text></svg>';
+
+/* 絞り込みの漏斗。側面の「番号で絞り込み」と同じ所作——他を落として一つに
+ * するもの——なので、同じ形で述べる。 */
+const ONLY_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+
+/* 起点と終点を 1 行で。
+ *
+ * 左端に起点、右端に終点、あいだを矢印が結ぶ——線形の路線を、そのまま線形に
+ * 置く。ラベルは名前の上に載せ、起点は左、終点は右に寄せて、行の両端が二つの
+ * 地点であることを配置だけで述べる。寄せる向きは中身が決めるので、どちらの端
+ * かをここで印にして CSS へ渡す。片方しか無い路線でも向きは変わらない。
+ *
+ * 矢印は `join()` で挟む。片方しか無ければ挟む隙間が無いので出ない——行き先の
+ * 無い矢印を引かないためである。 */
+const SIDE = { 起点: 'from', 終点: 'to' };
+
+const ARROW = '<span class="arrow" aria-hidden="true"></span>';
+
+const terminusHTML = (ref, { label, name, at }) => {
+  const side = SIDE[label] ?? 'from';
+  const inner =
+    `<span class="lbl">${label}</span>` +
+    `<span class="nm">${esc(name)}</span>`;
+  return at
+    ? `<button type="button" class="end ${side}" data-at="${at.join(',')}" ` +
+        `aria-label="国道${ref}号の${label}(${esc(name)})へ移動">` +
+        `${inner}</button>`
+    : `<div class="end ${side}">${inner}</div>`;
+};
 
 const terminiHTML = (ref, termini) =>
   termini.length
     ? `<div class="detail-termini">${termini
-        .map(({ label, name, at }) =>
-          at
-            ? `<button type="button" class="row" data-at="${at.join(',')}" ` +
-              `aria-label="国道${ref}号の${label}(${esc(name)})へ移動">` +
-              `<span class="lbl">${label}</span>` +
-              `<span class="nm">${esc(name)}</span></button>`
-            : `<div class="row"><span class="lbl">${label}</span>` +
-              `<span class="nm">${esc(name)}</span></div>`,
-        )
-        .join('')}</div>`
+        .map((t) => terminusHTML(ref, t))
+        .join(ARROW)}</div>`
     : '';
 
 const kindsHTML = (kinds) =>
@@ -103,16 +130,29 @@ const kindsHTML = (kinds) =>
  * 内訳、`termini` は decreeTerminiOf() が返す起終点である。後ろの二つは meta が
  * その欄を持って初めて埋まる(区分別は issue #58、起終点は issue #59)。どちらが
  * 先に入っても壊れないよう、欄が無ければその欄ごと出さない。
+ *
+ * 見出しは標識だけを出す。標識は番号を書いた路線の名前そのものなので、隣に
+ * 「国道N号」と書き添えるのは同じことを二度言うことだった。空いた場所には、
+ * その路線について次にできること——記事を読む・地図をその路線だけにする——を
+ * ボタンで置く。名前は読み上げのために `h2` に残す(`.sr-only`)。箱の
+ * `aria-labelledby` がそれを指している。
  */
 export function detailHTML({ route, kinds = [], termini = [] }) {
   const { ref } = route;
   const name = `国道${ref}号`;
   return (
     `<header class="detail-hd">${shield(ref)}` +
-    `<h2 id="detail-title">${name}</h2></header>` +
+    `<h2 id="detail-title" class="sr-only">${name}</h2>` +
+    '<div class="detail-acts">' +
+    `<a class="icon-btn detail-wiki" href="${wikipediaURL(ref)}" ` +
+    `target="_blank" rel="noopener" title="Wikipedia「${name}」" ` +
+    `aria-label="Wikipedia「${name}」を新しいタブで開く">` +
+    `${WIKIPEDIA_ICON}</a>` +
+    `<button type="button" class="icon-btn detail-only" data-ref="${ref}" ` +
+    `title="${name}だけを表示" aria-label="${name}だけを表示">` +
+    `${ONLY_ICON}</button>` +
+    '</div></header>' +
     '<div class="detail-scroll">' +
-    `<a class="detail-wiki" href="${wikipediaURL(ref)}" target="_blank" ` +
-    `rel="noopener">Wikipedia「${name}」${EXTERNAL_ICON}</a>` +
     terminiHTML(ref, termini) +
     '<dl class="detail-stats">' +
     row('延長', `${fmtKm(route.km)} km`) +
@@ -123,8 +163,6 @@ export function detailHTML({ route, kinds = [], termini = [] }) {
     row('最大重用数', route.max_n > 1 ? `${route.max_n} 重用` : '単独指定') +
     '</dl>' +
     kindsHTML(kinds) +
-    `<button type="button" class="mini detail-only" data-ref="${ref}">` +
-    `${name}だけを表示</button>` +
     '</div>'
   );
 }

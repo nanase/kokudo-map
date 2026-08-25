@@ -460,6 +460,88 @@ if (!target) {
   );
   await page.screenshot({ path: shot('7-picked') });
 
+  /* 吹き出しの角は border で描いた三角形なので、色を差し替える辺は尖る向きで
+   * 変わる——下向きなら border-top、左向きなら border-right である。残る二辺
+   * は透明のままでなければ、三角ではなく四角になる。
+   *
+   * 上下の辺だけを差し替えていたころ、左右へ出た角は MapLibre 既定の白のまま
+   * で、しかも塗られた上下が加わって四角に見えていた。出る向きは吹き出しが
+   * 画面のどこに立つかで決まるので、普通に触っていて出会うのは八方向のうちの
+   * 一つだけである。八つとも作って、幅を持つ辺のうち塗られているのがちょうど
+   * 一つで、その色が吹き出しの地の色であることを見る。残りの辺が透明であること
+   * は、この二つが言えれば同じことである。
+   *
+   * 幅を持つ辺が何本あるかは数えない。尖る向きと逆の辺を MapLibre が落とすの
+   * で、四方は三本、四隅は二本になる——「三本あるはず」と書いて四隅で落ちた。 */
+  const tips = await page.evaluate(() => {
+    const anchors = [
+      'top',
+      'bottom',
+      'left',
+      'right',
+      'top-left',
+      'top-right',
+      'bottom-left',
+      'bottom-right',
+    ];
+    const clear = (c) => /^rgba\(.*,\s*0\)$/.test(c);
+    return anchors.map((anchor) => {
+      const p = new maplibregl.Popup({
+        anchor,
+        closeButton: false,
+        closeOnClick: false,
+      })
+        .setLngLat(window.map.getCenter())
+        .setHTML('<div style="width:80px;height:30px"></div>')
+        .addTo(window.map);
+      const el = p.getElement();
+      // 地の色は書き写さず、その吹き出し自身から読む。style.css が var(--panel)
+      // を両方に配っているので、食い違えばここで出る。
+      const want = getComputedStyle(
+        el.querySelector('.maplibregl-popup-content'),
+      ).backgroundColor;
+      const s = getComputedStyle(el.querySelector('.maplibregl-popup-tip'));
+      const sides = ['Top', 'Bottom', 'Left', 'Right']
+        .map((side) => ({
+          side,
+          width: Number.parseFloat(s[`border${side}Width`]),
+          color: s[`border${side}Color`],
+        }))
+        .filter((x) => x.width > 0);
+      p.remove();
+      const painted = sides.filter((x) => !clear(x.color));
+      return {
+        anchor,
+        why:
+          painted.length !== 1
+            ? `${painted.length} painted of ${sides.length} sides`
+            : painted[0].color !== want
+              ? `${painted[0].side} is ${painted[0].color}, not ${want}`
+              : '',
+      };
+    });
+  });
+  const badTips = tips.filter((t) => t.why);
+  ok(
+    badTips.length === 0,
+    `every popup tip is one panel-coloured triangle ` +
+      `(${badTips.map((t) => `${t.anchor}: ${t.why}`).join('; ') || 'all 8 anchors'})`,
+  );
+
+  // Closing the popup has to take the shadow with it, or the map keeps a dark
+  // smear over a road nothing is describing any more.
+  await page.click('.maplibregl-popup-close-button');
+  await page.waitForTimeout(1200);
+  const closed = await page.evaluate(
+    () => window.map.queryRenderedFeatures({ layers: ['picked'] }).length,
+  );
+  ok(closed === 0, `closing the popup clears the shadow (${closed} left)`);
+
+  // 同じアークをもう一度開く。ここから先は標識を押して箱を出すところを見るが、
+  // 箱を出すこと自体がポップアップを閉じるので、開き直さないと押す標識が無い。
+  await page.mouse.click(target.x, target.y);
+  await page.waitForTimeout(1500);
+
   // The sign is the button: pressing it opens the box that talks about that one
   // route. It used to narrow the selection instead, and this check still said
   // so long after #65 moved that to the box's own 「…だけを表示」 — the page had
@@ -472,6 +554,8 @@ if (!target) {
     return {
       open: el ? !el.hidden : false,
       text: el ? el.innerText.replace(/\s+/g, ' ') : '',
+      popups: document.querySelectorAll('.maplibregl-popup').length,
+      shadow: window.map.queryRenderedFeatures({ layers: ['picked'] }).length,
     };
   });
   ok(box.open, `pressing a sign opens the detail box (国道${ref}号)`);
@@ -479,6 +563,13 @@ if (!target) {
     box.text.includes(`国道${ref}号`),
     `the box names the route whose sign was pressed (国道${ref}号)`,
   );
+  // 箱はアーク 1 本ではなく路線そのものについて述べる。ポップアップを後ろに
+  // 残すと同じ画面で二つが別のことを語るので、箱を出すときに引き取る。
+  ok(
+    box.popups === 0,
+    `opening the box closes the popup behind it (${box.popups} left)`,
+  );
+  ok(box.shadow === 0, `and takes the shadow with it (${box.shadow} left)`);
 
   /* 起終点は政令の別表から来る。書く側(pack_web.mjs の decree 欄)と読む側
    * (detail.mjs の decreeTerminiOf)が同じ名前を指しているかは、実データを
@@ -511,14 +602,52 @@ if (!target) {
     `the box's 「だけを表示」 selects that route alone (${narrowed.join(', ')})`,
   );
 
-  // Closing the popup has to take the shadow with it, or the map keeps a dark
-  // smear over a road nothing is describing any more.
-  await page.click('.maplibregl-popup-close-button');
+  /* 箱は地図の一部を覆うので、開くあいだ地図は覆われたぶん脇へ寄る。開けて
+   * 読んで閉じるだけなら、閉じたときに寄せたぶんが戻るのが正しい——開く前の
+   * 眺めに戻ることだからである。
+   *
+   * 開いているあいだに地図を動かしたなら話が変わる。今の眺めは利用者が選んだ
+   * ものなので、閉じた拍子に横へ滑るのはただのずれである。寄せ幅は padding
+   * で、画面には出ない。絵が動いたかどうかは、画面の真ん中に写っている地点が
+   * 変わったかで見る。 */
+  const midpoint = () =>
+    page.evaluate(() => {
+      const r = document.querySelector('#map').getBoundingClientRect();
+      const p = window.map.unproject([r.width / 2, r.height / 2]);
+      return [p.lng, p.lat];
+    });
+  const apart = (from, to) =>
+    page.evaluate(([from, to]) => {
+      const a = window.map.project(from);
+      const b = window.map.project(to);
+      return Math.round(Math.hypot(a.x - b.x, a.y - b.y));
+    }, [from, to]);
+
+  const canvasBox = await page.locator('#map').boundingBox();
+  const at = (fx, fy) => [
+    canvasBox.x + canvasBox.width * fx,
+    canvasBox.y + canvasBox.height * fy,
+  ];
+  await page.mouse.move(...at(0.7, 0.6));
+  await page.mouse.down();
+  await page.mouse.move(...at(0.55, 0.45), { steps: 12 });
+  await page.mouse.up();
   await page.waitForTimeout(1200);
-  const closed = await page.evaluate(
-    () => window.map.queryRenderedFeatures({ layers: ['picked'] }).length,
+  const before = await midpoint();
+  await page.click('#detail-close');
+  await page.waitForTimeout(1200);
+  const slid = await apart(before, await midpoint());
+  ok(
+    slid === 0,
+    `closing the box after moving the map leaves the view where it is ` +
+      `(${slid}px)`,
   );
-  ok(closed === 0, `closing the popup clears the shadow (${closed} left)`);
+  // 滑らなかったのは padding を外し忘れたからではない、と言えるようにする。
+  const padding = await page.evaluate(() => window.map.getPadding());
+  ok(
+    Object.values(padding).every((v) => v === 0),
+    `and the box's padding is gone (${JSON.stringify(padding)})`,
+  );
 }
 
 // Back to everything: the checks below count what each prefecture draws.
