@@ -569,7 +569,7 @@ input[type="search"]::placeholder { font-size: .82em; }
    textLength と目で合わせてある。 */
 .detail-wiki { text-decoration: none; }
 .detail-wiki text {
-  fill: currentColor; font-size: 22px; font-weight: 400;
+  fill: currentcolor; font-size: 22px; font-weight: 400;
   font-family: Garamond, 'Adobe Garamond Pro', Warnock, 'Warnock Pro',
     Bodoni, 'Bodoni MT', 'Goudy Old Style', Musica, serif;
 }
