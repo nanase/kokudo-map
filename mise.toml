@@ -60,6 +60,12 @@ description = "web/data/ を R2(data.nanase.cc)に上げる"
 # データは git に入れません。R2 の資産として置き、サイトはそこから直接読みます。
 run = "uv run {{env.PIPELINE}}/publish_data.py"
 
+[tasks.decree]
+description = "政令の別表から起点・終点を取り込み、座標を当てる"
+# 政令は年に数回しか変わらないので取得はキャッシュします。90 日を過ぎると
+# 取り直し、`--refresh` を渡せばその場で取り直します。
+run = "uv run {{env.PIPELINE}}/decree.py {{arg(name='flags', var=true, default='')}}"
+
 [tasks.audit]
 description = "鎖が切れている路線を機械的に探す"
 run = "uv run {{env.PIPELINE}}/audit.py {{arg(name='region', default='nagano')}}"

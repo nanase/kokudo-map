@@ -118,6 +118,47 @@ vouched = {r for m in metas for r in m["corroborated_refs"]}
 check(set(routes) <= vouched,
       f"every route on the map is vouched for by some region ({sorted(set(routes) - vouched)})")
 
+# --- the decree's own termini ------------------------------------------------
+# The 別表 is a fixed list: 459 rows, one per general national route, and it is
+# the whole point of the column that it stays that list. A coordinate on one of
+# those rows is never invented — decree.py may only hand back an endpoint the
+# route already has — so that claim is checked here rather than trusted, and it
+# is what makes "distance from the coordinate to the route's arcs" zero.
+decree = meta["decree"]
+rows = decree["routes"]
+refs = [r["ref"] for r in rows]
+check(len(rows) == 459, f"the decree table has all 459 routes ({len(rows)})")
+check(len(set(refs)) == len(refs),
+      f"no route appears twice in the decree table ({len(refs) - len(set(refs))} repeats)")
+check(set(refs) == VALID,
+      f"the decree's route numbers are the general national ones "
+      f"({sorted(set(refs) ^ VALID)})")
+
+LOCATED = {"sole", "junction", "farthest"}
+UNLOCATED = {"no-boundary", "no-endpoint", "ring"}
+sides = [(r["ref"], s) for r in rows for s in (r["start"], r["end"])]
+check(all(s["name"] for _, s in sides), "every decree terminus keeps its place name")
+check(all(s["how"] in LOCATED | UNLOCATED for _, s in sides),
+      "every decree terminus says how it was located")
+mismatched = [ref for ref, s in sides if ("lat" in s) != (s["how"] in LOCATED)]
+check(not mismatched,
+      f"a decree terminus has a coordinate exactly when it was located "
+      f"({sorted(set(mismatched))})")
+
+own = {(t["ref"], t["lat"], t["lon"]) for t in meta["termini"]}
+stray = [ref for ref, s in sides
+         if "lat" in s and (ref, s["lat"], s["lon"]) not in own]
+check(not stray,
+      f"every decree coordinate is one of that route's own endpoints, so it sits "
+      f"on the route's arcs ({sorted(set(stray))})")
+
+located = sum(1 for _, s in sides if "lat" in s)
+both = sum(1 for r in rows if "lat" in r["start"] and "lat" in r["end"])
+print(f"NOTE  decree termini located {located}/{len(sides)}, "
+      f"both ends on {both}/{len(rows)} routes; "
+      + ", ".join(f"{k} {sum(1 for _, s in sides if s['how'] == k)}"
+                  for k in sorted(LOCATED | UNLOCATED)))
+
 # --- freshness ---------------------------------------------------------------
 check(
     bool(meta.get("osm_timestamp")),
