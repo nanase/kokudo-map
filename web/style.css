@@ -460,7 +460,30 @@ input[type="search"]::placeholder { font-size: .82em; }
   border-radius: 4px; background: var(--panel); color: var(--ink);
   box-shadow: 0 4px 20px rgba(0,0,0,.22);
 }
-.maplibregl-popup-tip { border-top-color: var(--panel) !important; border-bottom-color: var(--panel) !important; }
+/* 吹き出しの角。MapLibre は三角形を border で描くので、色を差し替える辺は
+   どちらへ尖るかで変わる——下向きなら border-top、左向きなら border-right で
+   ある。残る二辺は透明のままでなければ、三角ではなく四角に見える。
+
+   これまでは辺を選ばず上下の色だけを差し替えていた。上下と四隅は、尖る向き
+   と逆の辺が `border: none` で幅を持たないので無事だったが、左右へ出たときは
+   上下とも幅を持っている。塗られた二辺が加わって四角になり、肝心の尖る辺は
+   MapLibre の既定の白のままだった。
+
+   MapLibre 側と同じ形の選択子にしてあるので、詳細度は並ぶ。勝っているのは
+   この規則があとに読まれるからで、`.hide-routes-ctrl button.active:hover` と
+   同じ勝ち方である。 */
+.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: var(--panel);
+}
+.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: var(--panel);
+}
+.maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: var(--panel); }
+.maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: var(--panel); }
 /* 閉じるボタン。MapLibre の既定は寸法を持たず、× の字面ぶんしか当たり判定が
    無い——指では狙いにくい。共有ダイアログの × (.dialog-close) と同じ 32px 角に
    揃える。 */

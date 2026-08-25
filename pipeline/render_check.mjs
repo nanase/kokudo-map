@@ -460,6 +460,72 @@ if (!target) {
   );
   await page.screenshot({ path: shot('7-picked') });
 
+  /* 吹き出しの角は border で描いた三角形なので、色を差し替える辺は尖る向きで
+   * 変わる——下向きなら border-top、左向きなら border-right である。残る二辺
+   * は透明のままでなければ、三角ではなく四角になる。
+   *
+   * 上下の辺だけを差し替えていたころ、左右へ出た角は MapLibre 既定の白のまま
+   * で、しかも塗られた上下が加わって四角に見えていた。出る向きは吹き出しが
+   * 画面のどこに立つかで決まるので、普通に触っていて出会うのは八方向のうちの
+   * 一つだけである。八つとも作って、塗られた辺がちょうど一つであること、その
+   * 色が吹き出しの地の色であること、残りが透明であることを見る。 */
+  const tips = await page.evaluate(() => {
+    const anchors = [
+      'top',
+      'bottom',
+      'left',
+      'right',
+      'top-left',
+      'top-right',
+      'bottom-left',
+      'bottom-right',
+    ];
+    const clear = (c) => /^rgba\(.*,\s*0\)$/.test(c);
+    return anchors.map((anchor) => {
+      const p = new maplibregl.Popup({
+        anchor,
+        closeButton: false,
+        closeOnClick: false,
+      })
+        .setLngLat(window.map.getCenter())
+        .setHTML('<div style="width:80px;height:30px"></div>')
+        .addTo(window.map);
+      const el = p.getElement();
+      // 地の色は書き写さず、その吹き出し自身から読む。style.css が var(--panel)
+      // を両方に配っているので、食い違えばここで出る。
+      const want = getComputedStyle(
+        el.querySelector('.maplibregl-popup-content'),
+      ).backgroundColor;
+      const s = getComputedStyle(el.querySelector('.maplibregl-popup-tip'));
+      const sides = ['Top', 'Bottom', 'Left', 'Right']
+        .map((side) => ({
+          side,
+          width: Number.parseFloat(s[`border${side}Width`]),
+          color: s[`border${side}Color`],
+        }))
+        .filter((x) => x.width > 0);
+      p.remove();
+      const painted = sides.filter((x) => !clear(x.color));
+      return {
+        anchor,
+        why:
+          painted.length !== 1
+            ? `${painted.length} painted sides`
+            : painted[0].color !== want
+              ? `${painted[0].color} not ${want}`
+              : sides.length !== 3
+                ? `${sides.length} sides have width`
+                : '',
+      };
+    });
+  });
+  const badTips = tips.filter((t) => t.why);
+  ok(
+    badTips.length === 0,
+    `every popup tip is one panel-coloured triangle ` +
+      `(${badTips.map((t) => `${t.anchor}: ${t.why}`).join('; ') || 'all 8 anchors'})`,
+  );
+
   // Closing the popup has to take the shadow with it, or the map keeps a dark
   // smear over a road nothing is describing any more.
   await page.click('.maplibregl-popup-close-button');
