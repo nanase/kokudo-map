@@ -550,8 +550,11 @@ input[type="search"]::placeholder { font-size: .82em; }
      左右の端をこの箱の他の欄と揃える。 */
   margin: 0 -6px;
 }
+/* 両端は地名ぶんだけ取る。余りは矢印が飲むので、字数が少ない路線ほど矢印が
+   長くなる——行の長さは変わらないまま、二つの地点の遠さだけが見える。
+   入り切らないときはここが縮み、地名は … で切れる。 */
 .detail-termini .end {
-  flex: 1 1 0; min-width: 0;
+  flex: 0 1 auto; min-width: 0;
   display: flex; flex-direction: column; gap: 2px;
   font: inherit; text-align: left; padding: 4px 6px;
   border: 0; border-radius: 3px; background: none; color: var(--ink-2);
@@ -571,10 +574,10 @@ input[type="search"]::placeholder { font-size: .82em; }
   max-width: 100%; font-size: .78rem;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* 矢印は線と鏃を CSS で引く。span 一つで済み、幅は両端が使った残りに合わせて
-   伸び縮みする。 */
+/* 矢印は線と鏃を CSS で引く。span 一つで済む。幅は持たず、両端が取った残りを
+   すべて飲む。地名が長い路線では 16px まで詰めて、そこで止める。 */
 .detail-termini .arrow {
-  flex: 0 1 40px; min-width: 16px; height: 1px;
+  flex: 1 1 auto; min-width: 16px; height: 1px;
   background: var(--ink-3); position: relative;
 }
 .detail-termini .arrow::after {
