@@ -467,8 +467,12 @@ if (!target) {
    * 上下の辺だけを差し替えていたころ、左右へ出た角は MapLibre 既定の白のまま
    * で、しかも塗られた上下が加わって四角に見えていた。出る向きは吹き出しが
    * 画面のどこに立つかで決まるので、普通に触っていて出会うのは八方向のうちの
-   * 一つだけである。八つとも作って、塗られた辺がちょうど一つであること、その
-   * 色が吹き出しの地の色であること、残りが透明であることを見る。 */
+   * 一つだけである。八つとも作って、幅を持つ辺のうち塗られているのがちょうど
+   * 一つで、その色が吹き出しの地の色であることを見る。残りの辺が透明であること
+   * は、この二つが言えれば同じことである。
+   *
+   * 幅を持つ辺が何本あるかは数えない。尖る向きと逆の辺を MapLibre が落とすの
+   * で、四方は三本、四隅は二本になる——「三本あるはず」と書いて四隅で落ちた。 */
   const tips = await page.evaluate(() => {
     const anchors = [
       'top',
@@ -510,12 +514,10 @@ if (!target) {
         anchor,
         why:
           painted.length !== 1
-            ? `${painted.length} painted sides`
+            ? `${painted.length} painted of ${sides.length} sides`
             : painted[0].color !== want
-              ? `${painted[0].color} not ${want}`
-              : sides.length !== 3
-                ? `${sides.length} sides have width`
-                : '',
+              ? `${painted[0].side} is ${painted[0].color}, not ${want}`
+              : '',
       };
     });
   });
