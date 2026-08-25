@@ -1001,6 +1001,11 @@ function applyDetailPadding(animate) {
 function openDetail(ref) {
   const route = state.routes.find((r) => r.ref === ref);
   if (!route) return;
+  // 箱を出すときは、後ろのポップアップを引き取る。ポップアップはアーク 1 本
+  // について、箱は路線そのものについて述べるので、両方が出ていると同じ画面で
+  // 二つが別のことを語る。箱は地図の左下を覆うから、狭い画面では重なりもする。
+  // 影はポップアップのものなので、closePopup() が一緒に消す。
+  closePopup();
   detailBody.innerHTML = detailHTML({
     route,
     kinds: kindsFor(state.meta.combinations, new Set([ref])),

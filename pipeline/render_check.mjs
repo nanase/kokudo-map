@@ -460,6 +460,20 @@ if (!target) {
   );
   await page.screenshot({ path: shot('7-picked') });
 
+  // Closing the popup has to take the shadow with it, or the map keeps a dark
+  // smear over a road nothing is describing any more.
+  await page.click('.maplibregl-popup-close-button');
+  await page.waitForTimeout(1200);
+  const closed = await page.evaluate(
+    () => window.map.queryRenderedFeatures({ layers: ['picked'] }).length,
+  );
+  ok(closed === 0, `closing the popup clears the shadow (${closed} left)`);
+
+  // 同じアークをもう一度開く。ここから先は標識を押して箱を出すところを見るが、
+  // 箱を出すこと自体がポップアップを閉じるので、開き直さないと押す標識が無い。
+  await page.mouse.click(target.x, target.y);
+  await page.waitForTimeout(1500);
+
   // The sign is the button: pressing it opens the box that talks about that one
   // route. It used to narrow the selection instead, and this check still said
   // so long after #65 moved that to the box's own 「…だけを表示」 — the page had
@@ -472,6 +486,8 @@ if (!target) {
     return {
       open: el ? !el.hidden : false,
       text: el ? el.innerText.replace(/\s+/g, ' ') : '',
+      popups: document.querySelectorAll('.maplibregl-popup').length,
+      shadow: window.map.queryRenderedFeatures({ layers: ['picked'] }).length,
     };
   });
   ok(box.open, `pressing a sign opens the detail box (国道${ref}号)`);
@@ -479,6 +495,13 @@ if (!target) {
     box.text.includes(`国道${ref}号`),
     `the box names the route whose sign was pressed (国道${ref}号)`,
   );
+  // 箱はアーク 1 本ではなく路線そのものについて述べる。ポップアップを後ろに
+  // 残すと同じ画面で二つが別のことを語るので、箱を出すときに引き取る。
+  ok(
+    box.popups === 0,
+    `opening the box closes the popup behind it (${box.popups} left)`,
+  );
+  ok(box.shadow === 0, `and takes the shadow with it (${box.shadow} left)`);
 
   /* 起終点は政令の別表から来る。書く側(pack_web.mjs の decree 欄)と読む側
    * (detail.mjs の decreeTerminiOf)が同じ名前を指しているかは、実データを
@@ -510,15 +533,6 @@ if (!target) {
     JSON.stringify(narrowed) === JSON.stringify([ref]),
     `the box's 「だけを表示」 selects that route alone (${narrowed.join(', ')})`,
   );
-
-  // Closing the popup has to take the shadow with it, or the map keeps a dark
-  // smear over a road nothing is describing any more.
-  await page.click('.maplibregl-popup-close-button');
-  await page.waitForTimeout(1200);
-  const closed = await page.evaluate(
-    () => window.map.queryRenderedFeatures({ layers: ['picked'] }).length,
-  );
-  ok(closed === 0, `closing the popup clears the shadow (${closed} left)`);
 }
 
 // Back to everything: the checks below count what each prefecture draws.
