@@ -22,14 +22,20 @@ export const wikipediaURL = (ref) =>
 /**
  * 台帳(政令)の起点・終点。national.meta.json がその欄を持たなければ空である。
  *
- * meta を読むのはここ 1 箇所だけにしてある。欄の形を決めるのは issue #59 で、
- * 決まったときに直す場所がこの関数だけで済むようにするためである。
+ * 欄は `decree.routes` で、`pipeline/pack_web.mjs` が書く。この関数を書いた
+ * 時点では欄がまだ無く、`decree_termini` という名前を見込んでいた。#64 が
+ * 実際に載せた名前は違ったので、欄はあるのに何も出ない状態が続いていた。
+ * 名前を当てにする側は、当てにした名前を実物と突き合わせないと気づけない。
+ * `pipeline/render_check.mjs` が実データで出ることを毎回確かめる。
+ *
+ * meta を読むのはここ 1 箇所だけにしてある。欄の形が変わっても、直す場所が
+ * この関数だけで済むようにするためである。
  *
  * 座標が当たらなかった路線は地名だけを持つ。その場合も欄は出す——飛べない
  * だけで、どこが起終点かは述べられる。
  */
 export function decreeTerminiOf(meta, ref) {
-  const row = meta?.decree_termini?.find((t) => Number(t.ref) === Number(ref));
+  const row = meta?.decree?.routes?.find((t) => Number(t.ref) === Number(ref));
   if (!row) return [];
   return [
     ['起点', row.start],

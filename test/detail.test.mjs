@@ -33,21 +33,30 @@ describe('wikipediaURL', () => {
 });
 
 describe('decreeTerminiOf', () => {
+  /* `pipeline/pack_web.mjs` が書く形をそのまま写しています。入れ物の名前
+   * (`decree.routes`)と、その中の `ref`・`start`・`end`・`how` までを含みます。
+   * ここを実物と違う形にしていたために、欄はあるのに詳細の起終点が空のまま
+   * でした。名前を思い込みで書くと、この検査は通ったまま画面だけが空になり
+   * ます。実データで出ることは `pipeline/render_check.mjs` が確かめます。 */
   const meta = {
-    decree_termini: [
-      {
-        ref: 18,
-        start: { name: '群馬県高崎市', lon: 139.0, lat: 36.3 },
-        end: { name: '新潟県上越市', lon: 138.2, lat: 37.1 },
-      },
-      // 座標が当たらなかった路線。地名だけを持ちます。
-      {
-        ref: 20,
-        start: { name: '東京都中央区' },
-        end: { name: '長野県塩尻市' },
-      },
-      { ref: 21, start: null, end: null },
-    ],
+    decree: {
+      law_num: '昭和四十年政令第五十八号',
+      routes: [
+        {
+          ref: 18,
+          via: '安中市　小諸市　上田市　長野市',
+          start: { name: '高崎市', lon: 139.0, lat: 36.3, how: 'sole' },
+          end: { name: '上越市', lon: 138.2, lat: 37.1, how: 'farthest' },
+        },
+        // 座標が当たらなかった路線。地名だけを持ちます。
+        {
+          ref: 20,
+          start: { name: '中央区', how: 'no-endpoint' },
+          end: { name: '塩尻市', how: 'no-endpoint' },
+        },
+        { ref: 21, start: null, end: null },
+      ],
+    },
   };
 
   test('起点・終点をこの順で返す', () => {
@@ -60,8 +69,17 @@ describe('decreeTerminiOf', () => {
 
   test('座標が無ければ地名だけを持つ', () => {
     const [start] = decreeTerminiOf(meta, 20);
-    expect(start.name).toBe('東京都中央区');
+    expect(start.name).toBe('中央区');
     expect(start.at).toBeNull();
+  });
+
+  test('読むのは decree.routes である', () => {
+    // 見込みで置いていた `decree_termini` を読んでいたので、meta に欄があって
+    // も詳細は空のままでした。同じ中身を別の名前で渡しても出ないことを、
+    // 名前の取り違えとして固定します。
+    const wrong = { decree_termini: meta.decree.routes };
+    expect(decreeTerminiOf(wrong, 18)).toEqual([]);
+    expect(decreeTerminiOf(meta, 18)).not.toEqual([]);
   });
 
   test('地名すら無い欄は出さない', () => {
