@@ -592,7 +592,12 @@ input[type="search"]::placeholder { font-size: .82em; }
   font: inherit; text-align: left; padding: 4px 6px;
   border: 0; border-radius: 3px; background: none; color: var(--ink-2);
 }
-.detail-termini .to { align-items: flex-end; text-align: right; }
+/* 終点は右端に立つ。片方しか無い路線では唯一の flex item になり、寄せ先を
+   自分で持たないと左端に残る——地名が要素の中で右へ寄るだけになる。矢印が
+   余りを飲みきる普段は、auto が取る余白が残らないので何も起きない。 */
+.detail-termini .to {
+  margin-left: auto; align-items: flex-end; text-align: right;
+}
 /* 座標が当たらなかった起終点は地名だけの <div> で出る。押せないものに
    ホバーの反応を付けない。 */
 .detail-termini button.end { cursor: pointer; }
