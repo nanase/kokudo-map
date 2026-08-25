@@ -470,6 +470,91 @@ input[type="search"]::placeholder { font-size: .82em; }
    theme-aware sign blue like everything else. */
 .maplibregl-popup-content a { color: var(--sign-blue); }
 
+/* detail ------------------------------------------------------------------
+   一つの国道について語る箱。地図の上に浮かせ、地図のほうは padding でその
+   ぶんだけ空ける (app.js の applyDetailPadding)。#map を細くして横に並べる
+   と canvas の寸法が変わり、開くたびに全部描き直しになる。
+
+   大きさは固定する。路線によって中身の量は違うが、箱が伸び縮みすると地図の
+   ずれ幅も毎回変わってしまう。入り切らないぶんは .detail-scroll が飲む。 */
+#detail {
+  position: absolute; left: 12px; bottom: 12px; z-index: 4;
+  width: 320px; height: 340px;
+  display: flex; flex-direction: column;
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 26px rgba(0,0,0,.26);
+}
+/* display:flex は hidden の既定 (display:none) より強い。閉じている箱が
+   出たままにならないよう、ここで明示的に伏せる。 */
+#detail[hidden] { display: none; }
+/* × は共有ダイアログのそれと同じ見た目でよい。.icon-btn と同じ考え方で、
+   載る要素は問わない。 */
+#detail-close { position: absolute; top: 4px; right: 4px; z-index: 1; }
+#detail-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.detail-hd {
+  display: flex; align-items: center; gap: 10px;
+  /* 右は閉じるボタンのぶんだけ空ける。 */
+  padding: 12px 44px 12px 14px;
+  border-bottom: 1px solid var(--line-2);
+}
+/* ポップアップの標識 (30px) より大きく。これが箱のタイトルである。 */
+.detail-hd .shield { height: 44px; }
+.detail-hd h2 { margin: 0; font-size: 1.05rem; font-weight: 800; }
+.detail-scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  /* 箱の中を読み切ってもページごと動かさない。 */
+  overscroll-behavior: contain;
+  padding: 12px 14px 14px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.detail-wiki {
+  align-self: flex-start; display: flex; align-items: center; gap: 6px;
+  color: var(--sign-blue); font-size: .8rem; text-decoration: none;
+}
+.detail-wiki:hover { text-decoration: underline; }
+.detail-wiki svg { width: 13px; height: 13px; flex: 0 0 auto; }
+
+.detail-termini { display: flex; flex-direction: column; gap: 3px; }
+.detail-termini .row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  font: inherit; text-align: left; padding: 6px 8px;
+  border: 1px solid var(--line-2); border-radius: 3px;
+  background: var(--panel-2); color: var(--ink-2);
+}
+/* 座標が当たらなかった起終点は地名だけの <div> で出る。押せないものに
+   ホバーの反応を付けない。 */
+.detail-termini button.row { cursor: pointer; }
+.detail-termini button.row:hover { border-color: var(--sign-blue); }
+.detail-termini .lbl {
+  flex: 0 0 auto; font-size: .68rem; color: var(--ink-3);
+  font-family: ui-monospace, Consolas, monospace; letter-spacing: .06em;
+}
+.detail-termini .nm {
+  font-size: .78rem; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-stats {
+  display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px;
+  margin: 0; font-size: .72rem; line-height: 1.6;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.detail-stats dt { color: var(--ink-3); }
+/* 数の列は右で揃える。左揃えだと桁の違う km が単位ごとばらける — ポップアップ
+   の .pop-row が dt と dd を両端に振り分けているのと同じ理由である。 */
+.detail-stats dd {
+  margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.detail-kinds { display: flex; flex-direction: column; gap: 5px; }
+.detail-sub {
+  font-size: .68rem; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-3);
+  font-family: ui-monospace, Consolas, monospace;
+}
+.mini.detail-only { align-self: flex-start; padding: 6px 12px; font-size: .78rem; }
+
 /* share dialog ------------------------------------------------------------
    ネイティブの <dialog> を使う。表示状態を変更する口は無いので、独自の
    フォーカストラップやキー処理を書く理由が無い — showModal() 自身が Esc と
@@ -539,6 +624,13 @@ input[type="search"]::placeholder { font-size: .82em; }
 
 @media (max-width: 860px) {
   #app { flex-direction: column; }
+  /* 左下の固定箱にしない。横に 320px を割く幅が無く、割いたところで地図に
+     残るのは細い帯になる。画面下部いっぱいの帯にして、地図は下へずらす。 */
+  #detail {
+    left: 0; right: 0; bottom: 0; width: auto;
+    height: min(42vh, 240px);
+    border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0;
+  }
   #panel { width: 100%; flex: 0 0 auto; max-height: 48%; border-right: 0; border-bottom: 1px solid var(--line); }
   /* 横並びではないので、左へずらしても隠れない。高さが割合なので畳めもしない。 */
   #app.panel-off #panel { margin-left: 0; display: none; }

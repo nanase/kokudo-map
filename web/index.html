@@ -141,6 +141,13 @@
               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
+    <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。
+         地図の上に浮かせ、地図のほうは padding でその幅ぶんずらす — 地図の
+         要素を細くすると canvas ごと描き直しになる。 -->
+    <aside id="detail" hidden aria-labelledby="detail-title">
+      <button type="button" id="detail-close" class="dialog-close" aria-label="閉じる">×</button>
+      <div id="detail-body"></div>
+    </aside>
     <div id="loading">データを読み込んでいます…</div>
   </main>
 </div>

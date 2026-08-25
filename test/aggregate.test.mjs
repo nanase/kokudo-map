@@ -14,7 +14,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import { routesOf, statsFor } from '../web/aggregate.mjs';
+import { kindsFor, routesOf, statsFor } from '../web/aggregate.mjs';
 
 const row = (refs, km, arcs) => ({ refs, n: refs.length, km, arcs });
 
@@ -73,6 +73,22 @@ describe('routesOf', () => {
 
   test('組み合わせが無ければ路線も無い', () => {
     expect(routesOf([])).toEqual([]);
+  });
+
+  test('conc_km はその路線が重用で通る距離である', () => {
+    // 7 号は 8 号との 10 km と 6 重用の 4 km を重用で通ります。単独の 100 km
+    // は入りません。
+    expect(by(7).conc_km).toBe(14);
+    // 17 号は 6 重用の 4 km だけが重用です。
+    expect(by(17).conc_km).toBe(4);
+  });
+
+  test('重用を持たない路線の conc_km は 0 である', () => {
+    expect(routesOf([row([2], 50, 500)])[0].conc_km).toBe(0);
+  });
+
+  test('conc_km は延長を超えない', () => {
+    for (const r of routes) expect(r.conc_km).toBeLessThanOrEqual(r.km);
   });
 });
 
@@ -136,5 +152,61 @@ describe('二つの読み方が食い違わない', () => {
       const picked = statsFor(COMBOS, new Set([r.ref]));
       expect(picked.km).toBeGreaterThanOrEqual(r.km);
     }
+  });
+});
+
+/* 区分別の内訳は issue #58 が組み合わせ表に足す欄を読みます。web/data は追跡して
+ * いないので、欄を持たない古い meta が配信されたまま新しいコードが出ること
+ * があります。そのときに空を返すことが、ここで一番大事な振る舞いです。 */
+describe('kindsFor', () => {
+  const KINDED = [
+    { refs: [7], n: 1, km: 100, arcs: 1000, kinds: { road: 90, ferry: 10 } },
+    { refs: [8], n: 1, km: 200, arcs: 2000, kinds: { road: 200 } },
+    {
+      refs: [7, 8],
+      n: 2,
+      km: 10,
+      arcs: 100,
+      kinds: { road: 6, expressway: 4 },
+    },
+  ];
+
+  test('選択が触れる組み合わせの区分を足す', () => {
+    expect(kindsFor(KINDED, new Set([7]))).toEqual([
+      { kind: 'road', km: 96 },
+      { kind: 'ferry', km: 10 },
+      { kind: 'expressway', km: 4 },
+    ]);
+  });
+
+  test('km の大きい順に並ぶ', () => {
+    const kms = kindsFor(KINDED, new Set()).map((k) => k.km);
+    expect(kms).toEqual([...kms].sort((a, b) => b - a));
+  });
+
+  test('重なる区間を二重に数えない', () => {
+    // 7 号と 8 号を両方選んでも、共有する行は 1 回だけ入ります。
+    const both = kindsFor(KINDED, new Set([7, 8]));
+    expect(both.find((k) => k.kind === 'expressway').km).toBe(4);
+    expect(both.reduce((a, k) => a + k.km, 0)).toBe(310);
+  });
+
+  test('区分の合計は選択の延長と一致する', () => {
+    const total = kindsFor(KINDED, new Set([7])).reduce((a, k) => a + k.km, 0);
+    expect(total).toBe(statsFor(KINDED, new Set([7])).km);
+  });
+
+  test('kinds を持たない組み合わせ表では空になる', () => {
+    expect(kindsFor(COMBOS, new Set())).toEqual([]);
+    expect(kindsFor(COMBOS, new Set([7]))).toEqual([]);
+  });
+
+  test('欄を持つ行と持たない行が混ざっていても落ちない', () => {
+    const mixed = [...KINDED, { refs: [9], n: 1, km: 5, arcs: 50 }];
+    expect(kindsFor(mixed, new Set([9]))).toEqual([]);
+    expect(kindsFor(mixed, new Set([8, 9]))).toEqual([
+      { kind: 'road', km: 206 },
+      { kind: 'expressway', km: 4 },
+    ]);
   });
 });

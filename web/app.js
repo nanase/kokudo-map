@@ -34,13 +34,15 @@
  *   aggregate.mjs  the panel's numbers, read off the combination table
  *   panel.mjs      the sidebar's markup
  *   popup.mjs      what a clicked arc says about itself
+ *   detail.mjs     what one route says about itself
  *   termini.mjs    起点・終点 as a GeoJSON source
  *   shield.mjs     the 国道番号標識
  *   html.mjs       escaping, because OSM text is untrusted
  *   wiring.mjs     index.html の要素と state の対応づけ
  */
 
-import { routesOf, statsFor } from './aggregate.mjs';
+import { kindsFor, routesOf, statsFor } from './aggregate.mjs';
+import { decreeTerminiOf, detailHTML } from './detail.mjs';
 import {
   baseStyle,
   buildFilter,
@@ -79,6 +81,7 @@ import { deepest, popupHTML } from './popup.mjs';
 import { terminiFeatures } from './termini.mjs';
 import { decodeURLState, encodeState, MANAGED_KEYS } from './urlstate.mjs';
 import {
+  NARROW_QUERY,
   setSelection,
   wireControls,
   wireRouteFold,
@@ -943,13 +946,115 @@ function wirePopups() {
   });
 }
 
-// A sign inside a popup narrows the map to that one route. Delegated because
-// popups come and go: the element the click lands on did not exist when this
-// was wired, and will not exist by the time the next popup opens.
+/* ---------------------------------------------------------------- detail --- */
+/**
+ * 路線そのものについて語る箱。中身の組み立ては detail.mjs が持ち、ここに残る
+ * のは地図が要る三つ——開いたぶん地図をずらすこと、起終点へ飛ぶこと、選択を
+ * 差し替えること——だけである。
+ *
+ * 箱は地図の上に浮かせてある。#map を細くして横に並べる手もあるが、それは
+ * canvas の寸法を変えることであり、開くたびに全部描き直しになる。浮かせて
+ * padding をずらせば、地図が持っている絵はそのままである。
+ */
+const detail = $('#detail');
+const detailBody = $('#detail-body');
+const narrowMq = window.matchMedia(NARROW_QUERY);
+
+const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
+/** 箱と地図のあいだに残す余白。箱の寸法と位置は style.css が持つので、ここは
+ *  実測した矩形にこの余白だけを足す——同じ数を CSS と二箇所で言わない。 */
+const DETAIL_GAP = 12;
+const DETAIL_EASE_MS = window.matchMedia('(prefers-reduced-motion: reduce)')
+  .matches
+  ? 0
+  : 260;
+
+/**
+ * 箱が覆っているぶんの padding。
+ *
+ * 広い画面では左下の固定箱なので左を、狭い画面では下部の帯になるので下を
+ * 空ける。どちらも style.css の @media と同じ境界で切り替わるよう、
+ * wiring.mjs が持つ NARROW_QUERY をそのまま見る。
+ */
+function detailPadding() {
+  if (detail.hidden) return { ...NO_PADDING };
+  const box = detail.getBoundingClientRect();
+  const canvas = $('#map').getBoundingClientRect();
+  return narrowMq.matches
+    ? { ...NO_PADDING, bottom: canvas.bottom - box.top + DETAIL_GAP }
+    : { ...NO_PADDING, left: box.right - canvas.left + DETAIL_GAP };
+}
+
+/** 渡すのは padding だけである。center も zoom も渡さないので、地図が持って
+ *  いる絵はそのままで、地図が中心と見なす点だけが箱の右(狭い画面では上)へ
+ *  寄る。 */
+function applyDetailPadding(animate) {
+  const padding = detailPadding();
+  if (animate) map.easeTo({ padding, duration: DETAIL_EASE_MS });
+  else map.setPadding(padding);
+}
+
+function openDetail(ref) {
+  const route = state.routes.find((r) => r.ref === ref);
+  if (!route) return;
+  detailBody.innerHTML = detailHTML({
+    route,
+    kinds: kindsFor(state.meta.combinations, new Set([ref])),
+    termini: decreeTerminiOf(state.meta, ref),
+  });
+  detail.hidden = false;
+  applyDetailPadding(true);
+}
+
+function closeDetail() {
+  if (detail.hidden) return;
+  detail.hidden = true;
+  applyDetailPadding(true);
+}
+
+$('#detail-close').addEventListener('click', closeDetail);
+
+// 共有ダイアログが開いているあいだの Esc はそちらのものである。<dialog> の
+// キャンセルは document まで上がってくるので、ここで譲らないと後ろの箱まで
+// 一緒に閉じる。
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && !$('#share-dialog').open) closeDetail();
+});
+
+// 箱の大きさは画面幅で変わる(狭い画面では下部の帯になる)ので、開いている
+// あいだは幅の変化に padding を追随させる。開閉と違って利用者が窓を掴んで
+// いる最中なので、滑らせずにその場で合わせる。
+window.addEventListener('resize', () => {
+  if (!detail.hidden) applyDetailPadding(false);
+});
+
+/**
+ * 標識と、箱の中のボタン。
+ *
+ * どちらも委譲で受ける。ポップアップは開くたびに作り直され、箱の中身は
+ * 路線が変わるたびに innerHTML ごと入れ替わるので、配線した時点の要素は
+ * 押される時点には残っていない。
+ */
 document.addEventListener('click', (ev) => {
-  const btn = ev.target.closest('.shield-btn');
-  if (btn)
-    setSelection(document, state, [Number(btn.dataset.ref)], applyFilters);
+  const shieldBtn = ev.target.closest('.shield-btn');
+  if (shieldBtn) {
+    openDetail(Number(shieldBtn.dataset.ref));
+    return;
+  }
+
+  // 選択の持ち主は state.selected のままである。ここは setSelection を呼ぶ
+  // だけで、サイドバーのチェックもそちらが合わせる。
+  const only = ev.target.closest('.detail-only');
+  if (only) {
+    setSelection(document, state, [Number(only.dataset.ref)], applyFilters);
+    return;
+  }
+
+  const terminus = ev.target.closest('.detail-termini .row[data-at]');
+  if (terminus) {
+    const [lon, lat] = terminus.dataset.at.split(',').map(Number);
+    map.flyTo({ center: [lon, lat], zoom: 12 });
+  }
 });
 
 boot().catch((err) => {

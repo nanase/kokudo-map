@@ -62,14 +62,19 @@ const row = (dt, dd) =>
 export function popupHTML(p) {
   const refs = refsOf(p.refs);
 
-  // Each sign in the header is a way to say "only this one". A road carrying
-  // six designations is exactly where that is worth asking for, and the sign is
-  // already the name of the route in the reader's hand.
+  // Each sign in the header opens what the map has to say about that one
+  // route (detail.mjs). A road carrying six designations is exactly where that
+  // is worth asking for, and the sign is already the name of the route in the
+  // reader's hand.
+  //
+  // 押しても選択は変わらない。「その路線だけを表示」は詳細の中のボタンが持つ
+  // ——標識を押しただけで地図から他の 458 路線が消えるのは、詳細を読みたい
+  // だけの人にとっては行き過ぎだった。
   const heading = refs
     .map(
       (r) =>
         `<button type="button" class="shield-btn" data-ref="${r}" ` +
-        `title="国道${r}号だけを表示">${shield(r)}</button>`,
+        `title="国道${r}号の詳細">${shield(r)}</button>`,
     )
     .join('');
 
