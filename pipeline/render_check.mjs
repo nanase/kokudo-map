@@ -460,17 +460,55 @@ if (!target) {
   );
   await page.screenshot({ path: shot('7-picked') });
 
-  // The sign is the button: pressing it narrows the map to that one route.
+  // The sign is the button: pressing it opens the box that talks about that one
+  // route. It used to narrow the selection instead, and this check still said
+  // so long after #65 moved that to the box's own 「…だけを表示」 — the page had
+  // changed and the check had not, so it failed on a page that was working.
+  const ref = target.refs[0];
   await page.click('.shield-btn');
+  await page.waitForTimeout(1800);
+  const box = await page.evaluate(() => {
+    const el = document.querySelector('#detail');
+    return {
+      open: el ? !el.hidden : false,
+      text: el ? el.innerText.replace(/\s+/g, ' ') : '',
+    };
+  });
+  ok(box.open, `pressing a sign opens the detail box (国道${ref}号)`);
+  ok(
+    box.text.includes(`国道${ref}号`),
+    `the box names the route whose sign was pressed (国道${ref}号)`,
+  );
+
+  /* 起終点は政令の別表から来る。書く側(pack_web.mjs の decree 欄)と読む側
+   * (detail.mjs の decreeTerminiOf)が同じ名前を指しているかは、実データを
+   * 通してしか分からない。名前が食い違っても例外は出ず、欄が黙って空になる
+   * だけである。実際 #64 と #65 は違う名前を選び、両方が main に乗ったまま
+   * 誰も転ばなかった。meta が持っている地名を、画面に出ているか直接見る。 */
+  const decreeRow = meta.decree?.routes?.find((r) => String(r.ref) === ref);
+  const wanted = [decreeRow?.start?.name, decreeRow?.end?.name].filter(Boolean);
+  ok(
+    wanted.length === 2,
+    `the meta carries both decree termini for 国道${ref}号 (${wanted.join(' / ') || 'none'})`,
+  );
+  const missing = wanted.filter((n) => !box.text.includes(n));
+  ok(
+    wanted.length === 2 && missing.length === 0,
+    `the box shows the decree termini the meta gave it ` +
+      `(${wanted.join(' / ')}${missing.length ? `; missing ${missing.join(' / ')}` : ''})`,
+  );
+
+  // Narrowing the map to one route moved into the box with #65.
+  await page.click('.detail-only');
   await page.waitForTimeout(2500);
-  const narrowed = await page.evaluate(() => ({
-    checked: [...document.querySelectorAll('#route-list input:checked')].map(
+  const narrowed = await page.evaluate(() =>
+    [...document.querySelectorAll('#route-list input:checked')].map(
       (i) => i.value,
     ),
-  }));
+  );
   ok(
-    JSON.stringify(narrowed.checked) === JSON.stringify([target.refs[0]]),
-    `pressing a sign selects that route alone (${narrowed.checked.join(', ')})`,
+    JSON.stringify(narrowed) === JSON.stringify([ref]),
+    `the box's 「だけを表示」 selects that route alone (${narrowed.join(', ')})`,
   );
 
   // Closing the popup has to take the shadow with it, or the map keeps a dark
