@@ -42,6 +42,11 @@
   --shield-face: #00449E;
   --shield-edge: #FFFFFF;
   --shield-ink: #FFFFFF;
+  /* 白い縁は明るい配色の面では地に溶け、標識が面に貼り付いて見える。実物は
+     面から浮いて立っているので、縁の外側を薄い影で締める。同じ影を暗い面へも
+     かける——地が暗いぶん見えないだけで、邪魔にはならない。そちらは縁自身が
+     境目になるので、もともと助けが要らない。 */
+  --shield-shadow: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .34));
 
   /* 地図の上の出典表示。MapLibre が白い下敷きを敷くので、本文の色を継ぐと
      暗い配色のときに白い字が白い下敷きに載って消える。ここだけ固定する。 */
@@ -312,7 +317,12 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* 幅は決め打ちにしない。SHIELD_VIEWBOX の縦横比が変わっても、svg 自身の
    実寸（height だけ決めて width を auto にする）が追随する。 */
 .shield { height: 30px; flex: 0 0 auto; display: block; }
-.shield svg { display: block; height: 100%; width: auto; }
+/* 影は縁の外側に落ちるので、svg の枠より外へ出る。CSS の filter は枠で切らない
+   ので、置き場所は標識ごと——番号だけに落ちないよう、path ではなく svg に
+   かける。 */
+.shield svg {
+  display: block; height: 100%; width: auto; filter: var(--shield-shadow);
+}
 .shield path { fill: var(--shield-face); stroke: var(--shield-edge); }
 .shield text {
   /* x/y/textLength in shield.mjs はここと合わせて目で調整してある。
