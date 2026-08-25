@@ -283,7 +283,10 @@ def paired_fraction(arc: dict, ai: int, arcs: list[dict], grid, cell: float,
         if seglen == 0.0:
             continue
         u = ((x2 - x1) / seglen, (y2 - y1) / seglen)
-        n = max(1, int(seglen / SAMPLE_M))
+        # Rounded up, so no sample ever stands for more than SAMPLE_M of road.
+        # Truncating gave a 49 m segment one sample and let that single probe
+        # decide all 49 m, which is not a measurement every 25 m.
+        n = max(1, math.ceil(seglen / SAMPLE_M))
         step = seglen / n
         for i in range(n):
             t = (i + 0.5) / n
