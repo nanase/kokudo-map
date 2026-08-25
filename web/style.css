@@ -454,9 +454,22 @@ input[type="search"]::placeholder { font-size: .82em; }
   box-shadow: 0 4px 20px rgba(0,0,0,.22);
 }
 .maplibregl-popup-tip { border-top-color: var(--panel) !important; border-bottom-color: var(--panel) !important; }
+/* 閉じるボタン。MapLibre の既定は寸法を持たず、× の字面ぶんしか当たり判定が
+   無い——指では狙いにくい。共有ダイアログの × (.dialog-close) と同じ 32px 角に
+   揃える。 */
+.maplibregl-popup-close-button {
+  top: 2px; right: 2px; width: 32px; height: 32px; border-radius: 4px;
+  display: grid; place-items: center;
+  font-size: 1.6rem; line-height: 1; color: var(--ink-3);
+}
+.maplibregl-popup-close-button:hover {
+  color: var(--ink); background: var(--panel-2);
+}
 .pop-hd {
   display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
-  margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line-2);
+  /* 右は閉じるボタンのぶんだけ空ける。標識がその下に潜り込まないように。 */
+  margin-bottom: 8px; padding-bottom: 8px; padding-right: 26px;
+  border-bottom: 1px solid var(--line-2);
 }
 .pop-n {
   font-family: ui-monospace, Consolas, monospace; font-size: .7rem;
