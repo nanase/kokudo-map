@@ -539,24 +539,47 @@ input[type="search"]::placeholder { font-size: .82em; }
     Bodoni, 'Bodoni MT', 'Goudy Old Style', Musica, serif;
 }
 
-.detail-termini { display: flex; flex-direction: column; gap: 3px; }
-.detail-termini .row {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  font: inherit; text-align: left; padding: 6px 8px;
-  border: 1px solid var(--line-2); border-radius: 3px;
-  background: var(--panel-2); color: var(--ink-2);
+/* 起点・終点 --------------------------------------------------------------
+   行そのものを路線に見立てる。左端が起点、右端が終点で、あいだを矢印が結ぶ。
+   ラベルは地名の上に載せ、寄せる向きだけで両端のどちらであるかを述べる。 */
+.detail-termini {
+  display: flex; align-items: center; gap: 6px;
+  /* 押せる範囲は字面より広く取る。その食み出したぶんを外へ逃がして、
+     左右の端をこの箱の他の欄と揃える。 */
+  margin: 0 -6px;
 }
+.detail-termini .end {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  font: inherit; text-align: left; padding: 4px 6px;
+  border: 0; border-radius: 3px; background: none; color: var(--ink-2);
+}
+.detail-termini .to { align-items: flex-end; text-align: right; }
 /* 座標が当たらなかった起終点は地名だけの <div> で出る。押せないものに
    ホバーの反応を付けない。 */
-.detail-termini button.row { cursor: pointer; }
-.detail-termini button.row:hover { border-color: var(--sign-blue); }
+.detail-termini button.end { cursor: pointer; }
+.detail-termini button.end:hover {
+  background: var(--panel-2); color: var(--sign-blue);
+}
 .detail-termini .lbl {
-  flex: 0 0 auto; font-size: .68rem; color: var(--ink-3);
+  font-size: .68rem; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace; letter-spacing: .06em;
 }
 .detail-termini .nm {
-  font-size: .78rem; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%; font-size: .78rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 矢印は線と鏃を CSS で引く。span 一つで済み、幅は両端が使った残りに合わせて
+   伸び縮みする。 */
+.detail-termini .arrow {
+  flex: 0 1 40px; min-width: 16px; height: 1px;
+  background: var(--ink-3); position: relative;
+}
+.detail-termini .arrow::after {
+  content: ''; position: absolute; right: 0; top: 50%;
+  width: 5px; height: 5px;
+  border-top: 1px solid var(--ink-3); border-right: 1px solid var(--ink-3);
+  transform: translateY(-50%) rotate(45deg);
 }
 
 .detail-stats {

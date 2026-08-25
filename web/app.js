@@ -1054,7 +1054,7 @@ document.addEventListener('click', (ev) => {
     return;
   }
 
-  const terminus = ev.target.closest('.detail-termini .row[data-at]');
+  const terminus = ev.target.closest('.detail-termini .end[data-at]');
   if (terminus) {
     const [lon, lat] = terminus.dataset.at.split(',').map(Number);
     map.flyTo({ center: [lon, lat], zoom: 12 });

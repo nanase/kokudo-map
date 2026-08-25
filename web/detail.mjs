@@ -69,19 +69,36 @@ const ONLY_ICON =
   '<path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor" ' +
   'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 
+/* 起点と終点を 1 行で。
+ *
+ * 左端に起点、右端に終点、あいだを矢印が結ぶ——線形の路線を、そのまま線形に
+ * 置く。ラベルは名前の上に載せ、起点は左、終点は右に寄せて、行の両端が二つの
+ * 地点であることを配置だけで述べる。寄せる向きは中身が決めるので、どちらの端
+ * かをここで印にして CSS へ渡す。片方しか無い路線でも向きは変わらない。
+ *
+ * 矢印は `join()` で挟む。片方しか無ければ挟む隙間が無いので出ない——行き先の
+ * 無い矢印を引かないためである。 */
+const SIDE = { 起点: 'from', 終点: 'to' };
+
+const ARROW = '<span class="arrow" aria-hidden="true"></span>';
+
+const terminusHTML = (ref, { label, name, at }) => {
+  const side = SIDE[label] ?? 'from';
+  const inner =
+    `<span class="lbl">${label}</span>` +
+    `<span class="nm">${esc(name)}</span>`;
+  return at
+    ? `<button type="button" class="end ${side}" data-at="${at.join(',')}" ` +
+        `aria-label="国道${ref}号の${label}(${esc(name)})へ移動">` +
+        `${inner}</button>`
+    : `<div class="end ${side}">${inner}</div>`;
+};
+
 const terminiHTML = (ref, termini) =>
   termini.length
     ? `<div class="detail-termini">${termini
-        .map(({ label, name, at }) =>
-          at
-            ? `<button type="button" class="row" data-at="${at.join(',')}" ` +
-              `aria-label="国道${ref}号の${label}(${esc(name)})へ移動">` +
-              `<span class="lbl">${label}</span>` +
-              `<span class="nm">${esc(name)}</span></button>`
-            : `<div class="row"><span class="lbl">${label}</span>` +
-              `<span class="nm">${esc(name)}</span></div>`,
-        )
-        .join('')}</div>`
+        .map((t) => terminusHTML(ref, t))
+        .join(ARROW)}</div>`
     : '';
 
 const kindsHTML = (kinds) =>
