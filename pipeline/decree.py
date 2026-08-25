@@ -354,16 +354,24 @@ def meeting_counts(routes: dict[int, list]) -> dict[int, dict]:
     Same cluster distance the map already uses for shared termini: one crossing
     is several nodes, so the ends that meet there do not coincide exactly.
     """
-    cell = TERMINI_CLUSTER_M / 111_320  # degrees of latitude
+    lat_cell = TERMINI_CLUSTER_M / 111_320  # degrees of latitude
+    # A degree of longitude is shorter the further north it is, so the same
+    # number of degrees makes a narrower cell in 宗谷 than in 八重山 — 105 m
+    # against 150 m. Two endpoints 150 m apart would then land two cells apart
+    # and the neighbour scan below, which only looks one cell out, would miss
+    # them. Sizing the longitude cell at the northernmost endpoint in the data
+    # keeps every cell at least TERMINI_CLUSTER_M wide.
+    top = max(abs(p[0]) for pts in routes.values() for p in pts)
+    lon_cell = lat_cell / math.cos(math.radians(top))
     grid: dict[tuple, list] = collections.defaultdict(list)
     for ref, pts in routes.items():
         for p in pts:
-            grid[(int(p[0] // cell), int(p[1] // cell))].append((ref, p))
+            grid[(int(p[0] // lat_cell), int(p[1] // lon_cell))].append((ref, p))
     out: dict[int, dict] = {}
     for ref, pts in routes.items():
         counts = {}
         for p in pts:
-            gy, gx = int(p[0] // cell), int(p[1] // cell)
+            gy, gx = int(p[0] // lat_cell), int(p[1] // lon_cell)
             near = set()
             for dy in (-1, 0, 1):
                 for dx in (-1, 0, 1):
