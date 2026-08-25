@@ -122,10 +122,17 @@ SEA_FIELDS = (*NAME_FIELDS, "description", "note")
 # nationwide extract has to carry. extract_pbf.py imports this rather than
 # restating it: a rule that starts reading a new tag must widen the set here, or
 # the tag will silently be absent from the cache it builds from.
+#
+# `oneway` is the exception: no rule here reads it, and none should — which
+# carriageway a way is has nothing to do with whether it is a national route or
+# which one. compare_annual_report.py reads it, to tell a divided road's two
+# carriageways (two OSM ways, one length in the ledger) from a frontage road
+# that merely runs alongside. It is listed here because this set is what the
+# extract carries, not because this file consults it.
 TAGS_USED = frozenset({
     *SEA_FIELDS, "ref", "highway", "construction", "route", "access", "motor_vehicle",
     "proposed", "planned",
-    "historic:highway",
+    "historic:highway", "oneway",
 })
 
 # Sections bypassed by a newer alignment. These are deliberately *kept*: a
