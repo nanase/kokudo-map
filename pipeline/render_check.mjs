@@ -533,6 +533,53 @@ if (!target) {
     JSON.stringify(narrowed) === JSON.stringify([ref]),
     `the box's 「だけを表示」 selects that route alone (${narrowed.join(', ')})`,
   );
+
+  /* 箱は地図の一部を覆うので、開くあいだ地図は覆われたぶん脇へ寄る。開けて
+   * 読んで閉じるだけなら、閉じたときに寄せたぶんが戻るのが正しい——開く前の
+   * 眺めに戻ることだからである。
+   *
+   * 開いているあいだに地図を動かしたなら話が変わる。今の眺めは利用者が選んだ
+   * ものなので、閉じた拍子に横へ滑るのはただのずれである。寄せ幅は padding
+   * で、画面には出ない。絵が動いたかどうかは、画面の真ん中に写っている地点が
+   * 変わったかで見る。 */
+  const midpoint = () =>
+    page.evaluate(() => {
+      const r = document.querySelector('#map').getBoundingClientRect();
+      const p = window.map.unproject([r.width / 2, r.height / 2]);
+      return [p.lng, p.lat];
+    });
+  const apart = (from, to) =>
+    page.evaluate(([from, to]) => {
+      const a = window.map.project(from);
+      const b = window.map.project(to);
+      return Math.round(Math.hypot(a.x - b.x, a.y - b.y));
+    }, [from, to]);
+
+  const canvasBox = await page.locator('#map').boundingBox();
+  const at = (fx, fy) => [
+    canvasBox.x + canvasBox.width * fx,
+    canvasBox.y + canvasBox.height * fy,
+  ];
+  await page.mouse.move(...at(0.7, 0.6));
+  await page.mouse.down();
+  await page.mouse.move(...at(0.55, 0.45), { steps: 12 });
+  await page.mouse.up();
+  await page.waitForTimeout(1200);
+  const before = await midpoint();
+  await page.click('#detail-close');
+  await page.waitForTimeout(1200);
+  const slid = await apart(before, await midpoint());
+  ok(
+    slid === 0,
+    `closing the box after moving the map leaves the view where it is ` +
+      `(${slid}px)`,
+  );
+  // 滑らなかったのは padding を外し忘れたからではない、と言えるようにする。
+  const padding = await page.evaluate(() => window.map.getPadding());
+  ok(
+    Object.values(padding).every((v) => v === 0),
+    `and the box's padding is gone (${JSON.stringify(padding)})`,
+  );
 }
 
 // Back to everything: the checks below count what each prefecture draws.
