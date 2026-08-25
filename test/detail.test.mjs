@@ -114,8 +114,10 @@ describe('detailHTML — 見出しとボタン', () => {
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener"');
     expect(html).toContain('class="icon-btn detail-wiki"');
-    // ロゴは写せないので W 一文字で名乗ります。書体は style.css が持ちます。
-    expect(html).toContain('<span aria-hidden="true">W</span>');
+    // ロゴは写せないので W 一文字で名乗ります。字体は書体が持つので、隣の
+    // 漏斗と同じ svg に入れて出します。書体は style.css が当てます。
+    expect(html).toContain('<svg viewBox="0 0 24 24" aria-hidden="true">');
+    expect(html).toContain('>W</text>');
     expect(html).toContain(
       'aria-label="Wikipedia「国道18号」を新しいタブで開く"',
     );

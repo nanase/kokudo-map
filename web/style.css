@@ -530,11 +530,13 @@ input[type="search"]::placeholder { font-size: .82em; }
   padding: 12px 14px 14px;
   display: flex; flex-direction: column; gap: 12px;
 }
-/* Wikipedia の記事へ。あちらのロゴはパブリックドメインではないので写さず、
-   記事の見出しが使う系統の書体で W 一文字を出す。並べた書体はどれも同じ
-   オールドスタイルのセリフで、先頭から入っているものが使われる。 */
-.detail-wiki {
-  text-decoration: none; font-size: 1.1rem; font-weight: 400; line-height: 1;
+/* Wikipedia の W。字体は書体が持つ (detail.mjs の WIKIPEDIA_ICON)。並べた
+   書体はどれも同じオールドスタイルのセリフで、先頭から入っているものが使われ
+   る。おにぎりの番号 (.shield text) と同じく、寸法は svg 側の viewBox・
+   textLength と目で合わせてある。 */
+.detail-wiki { text-decoration: none; }
+.detail-wiki text {
+  fill: currentColor; font-size: 22px; font-weight: 400;
   font-family: Garamond, 'Adobe Garamond Pro', Warnock, 'Warnock Pro',
     Bodoni, 'Bodoni MT', 'Goudy Old Style', Musica, serif;
 }

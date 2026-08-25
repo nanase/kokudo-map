@@ -62,6 +62,18 @@ const fmtKm = (km) =>
 
 const row = (dt, dd) => `<dt>${dt}</dt><dd>${dd}</dd>`;
 
+/* Wikipedia の記事へ。あちらのロゴはパブリックドメインではないので写さない。
+ * 代わりに、記事の見出しが使う系統の書体で W 一文字を出す——字体そのものは
+ * 書体が持ち、ここは持たない(書体は style.css の `.detail-wiki text`)。
+ *
+ * 隣の漏斗と同じ svg にしてある。同じ `.icon-btn svg` の寸法がそのまま効き、
+ * 二つのボタンの中身が同じ高さで並ぶ。textLength は shield.mjs の番号と同じ
+ * 用途で、どの書体が当たっても枠から食み出させないためである。 */
+const WIKIPEDIA_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<text x="12" y="18" text-anchor="middle" textLength="20" ' +
+  'lengthAdjust="spacingAndGlyphs">W</text></svg>';
+
 /* 絞り込みの漏斗。側面の「番号で絞り込み」と同じ所作——他を落として一つに
  * するもの——なので、同じ形で述べる。 */
 const ONLY_ICON =
@@ -135,7 +147,7 @@ export function detailHTML({ route, kinds = [], termini = [] }) {
     `<a class="icon-btn detail-wiki" href="${wikipediaURL(ref)}" ` +
     `target="_blank" rel="noopener" title="Wikipedia「${name}」" ` +
     `aria-label="Wikipedia「${name}」を新しいタブで開く">` +
-    '<span aria-hidden="true">W</span></a>' +
+    `${WIKIPEDIA_ICON}</a>` +
     `<button type="button" class="icon-btn detail-only" data-ref="${ref}" ` +
     `title="${name}だけを表示" aria-label="${name}だけを表示">` +
     `${ONLY_ICON}</button>` +
