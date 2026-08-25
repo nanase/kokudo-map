@@ -388,12 +388,16 @@ function buildCycleControl({
  * flat counts as "tilted" for the toggle: `order.indexOf` misses a
  * mid-drag angle and falls back to `order[0]`, which is flat — so the
  * button always offers to return to flat unless it is already there.
+ *
+ * The two icons are the same square seen from the two postures: face-on from
+ * straight above, and foreshortened into a trapezoid — near edge long, far
+ * edge short — from the tilted one. An isometric box was drawn here first,
+ * but a box is a solid, and what the button turns is the angle the flat map
+ * is looked at.
  */
 const PITCH_TILT_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-  '<path d="M4 8 12 4l8 4-8 4-8-4Z" fill="none" stroke="currentColor" ' +
-  'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
-  '<path d="M4 8v9l8 4 8-4V8" fill="none" stroke="currentColor" ' +
+  '<path d="M8 6h8l5 12H3L8 6Z" fill="none" stroke="currentColor" ' +
   'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
   '</svg>';
 const PITCH_FLAT_ICON =
