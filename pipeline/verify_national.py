@@ -196,8 +196,8 @@ if path.exists():
     # check failed on an archive that was correct.
     # 先頭と末尾を必ず含む等間隔の 5 点。等間隔だけを見て末尾を落とすと、途中で
     # 切れた archive が検査を素通りする。末尾は最後に書かれる場所なので、書き
-    # きれなかったときに最初に欠ける。全国の 5,706 点では 0・1426・2853・4279・
-    # 5705 番目を引く。
+    # きれなかったときに最初に欠ける。全国の 5,706 点では 0・1426・2852・4279・
+    # 5705 番目を引く(3 点目は 2852.5 で、round() が偶数側へ丸める)。
     termini = meta["termini"]
     if PROBES < 2 or len(termini) <= PROBES:
         probes = termini[:PROBES]
