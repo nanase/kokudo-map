@@ -123,10 +123,12 @@ def load_report() -> dict[str, float]:
 
 # ---------------------------------------------------------------- geometry ---
 def bearing(a: tuple[float, float], b: tuple[float, float]) -> float:
+    """Direction of a-b in degrees, modulo 180: which line, not which way."""
     return math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) % 180.0
 
 
 def parallel(one: float, other: float) -> bool:
+    """Are two bearings within PARALLEL_DEG of each other, either way round?"""
     d = abs(one - other)
     return min(d, 180.0 - d) <= PARALLEL_DEG
 
@@ -369,6 +371,11 @@ def base_timestamp() -> str:
 
 
 def row(label: str, ledger: float | None, map_km: float | None) -> str:
+    """One comparison line: the ledger, the map, and the gap between them.
+
+    Either side may be None — 徒歩道 has no column in the ledger to compare
+    against, and saying so is not the same as calling it zero.
+    """
     if ledger is None or map_km is None:
         gap = ""
     else:
