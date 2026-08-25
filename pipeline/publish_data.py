@@ -40,8 +40,13 @@ FILES = ["national-routes.pmtiles", "national.meta.json", "regions.json"]
 def wrangler(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     # `bunx` 自体は mise がシムを作らないことがあります。`bun x` は bun 本体の
     # サブコマンドなので、mise.toml が述べる bun さえ入っていれば必ず通ります。
+    # encoding を省くと日本語 Windows では cp932 に落ち、wrangler が出す UTF-8 の
+    # 飾り罫を読み取りスレッドが読めず、成功時も含め毎回そこで落ちます。実行自体は
+    # そのまま進むので実害は薄いのですが、wrangler が本当に失敗したときだけ、
+    # 下の sys.exit が見せるはずの理由が読めなくなります。
     r = subprocess.run(
-        ["bun", "x", "wrangler", *args], text=True, capture_output=True
+        ["bun", "x", "wrangler", *args], text=True, capture_output=True,
+        encoding="utf-8", errors="replace",
     )
     if check and r.returncode != 0:
         sys.exit(f"wrangler が失敗した（終了コード {r.returncode}）:\n{r.stdout}{r.stderr}")
@@ -66,6 +71,8 @@ def preflight() -> None:
 
 
 def main() -> None:
+    # Windows terminals default stdout to cp932 — see build_all.main().
+    sys.stdout.reconfigure(errors="replace")
     preflight()
 
     for name in FILES:
