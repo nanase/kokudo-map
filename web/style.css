@@ -147,6 +147,13 @@ body {
 .icon-btn:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
 .icon-btn svg { width: 15px; height: 15px; }
 .share-btn { margin-left: auto; flex: 0 0 auto; }
+/* 目には出さず、読み上げにだけ残す文字。display: none と違って描画はされる
+   ので、aria-labelledby の指し先になれるし、Chromium の innerText にも出る
+   (pipeline/render_check.mjs が箱の名乗りをそこから読む)。 */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
 .block { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
 .block-hd {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -511,9 +518,11 @@ input[type="search"]::placeholder { font-size: .82em; }
   padding: 12px 44px 12px 14px;
   border-bottom: 1px solid var(--line-2);
 }
-/* ポップアップの標識 (30px) より大きく。これが箱のタイトルである。 */
+/* ポップアップの標識 (30px) より大きく。これが箱のタイトルである——番号を
+   書いた標識が路線の名前そのものなので、隣に「国道N号」と書き添えない。 */
 .detail-hd .shield { height: 44px; }
-.detail-hd h2 { margin: 0; font-size: 1.05rem; font-weight: 800; }
+/* 標識の空けた場所には、その路線について次にできることを置く。 */
+.detail-acts { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .detail-scroll {
   flex: 1; min-height: 0; overflow-y: auto;
   /* 箱の中を読み切ってもページごと動かさない。 */
@@ -521,12 +530,14 @@ input[type="search"]::placeholder { font-size: .82em; }
   padding: 12px 14px 14px;
   display: flex; flex-direction: column; gap: 12px;
 }
+/* Wikipedia の記事へ。あちらのロゴはパブリックドメインではないので写さず、
+   記事の見出しが使う系統の書体で W 一文字を出す。並べた書体はどれも同じ
+   オールドスタイルのセリフで、先頭から入っているものが使われる。 */
 .detail-wiki {
-  align-self: flex-start; display: flex; align-items: center; gap: 6px;
-  color: var(--sign-blue); font-size: .8rem; text-decoration: none;
+  text-decoration: none; font-size: 1.1rem; font-weight: 400; line-height: 1;
+  font-family: Garamond, 'Adobe Garamond Pro', Warnock, 'Warnock Pro',
+    Bodoni, 'Bodoni MT', 'Goudy Old Style', Musica, serif;
 }
-.detail-wiki:hover { text-decoration: underline; }
-.detail-wiki svg { width: 13px; height: 13px; flex: 0 0 auto; }
 
 .detail-termini { display: flex; flex-direction: column; gap: 3px; }
 .detail-termini .row {
@@ -566,7 +577,6 @@ input[type="search"]::placeholder { font-size: .82em; }
   text-transform: uppercase; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace;
 }
-.mini.detail-only { align-self: flex-start; padding: 6px 12px; font-size: .78rem; }
 
 /* share dialog ------------------------------------------------------------
    ネイティブの <dialog> を使う。表示状態を変更する口は無いので、独自の

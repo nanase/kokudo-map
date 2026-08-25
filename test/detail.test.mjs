@@ -97,24 +97,35 @@ describe('decreeTerminiOf', () => {
   });
 });
 
-describe('detailHTML — 見出しとリンク', () => {
-  test('標識と路線名を出す', () => {
+describe('detailHTML — 見出しとボタン', () => {
+  test('標識を出し、路線名は読み上げにだけ残す', () => {
+    // 標識が路線の名前そのものなので、隣に「国道18号」とは書きません。ただし
+    // 箱の aria-labelledby が指す先なので、名前は #detail-title に残します。
     const html = detailHTML({ route: route() });
-    expect(html).toContain('国道18号');
     expect(html).toContain('aria-label="国道18号"'); // shield() の svg
+    expect(html).toContain(
+      '<h2 id="detail-title" class="sr-only">国道18号</h2>',
+    );
   });
 
-  test('Wikipedia へのリンクは新しいタブで開く', () => {
+  test('Wikipedia はボタンで、新しいタブで開く', () => {
     const html = detailHTML({ route: route() });
     expect(html).toContain(`href="${wikipediaURL(18)}"`);
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener"');
+    expect(html).toContain('class="icon-btn detail-wiki"');
+    // ロゴは写せないので W 一文字で名乗ります。書体は style.css が持ちます。
+    expect(html).toContain('<span aria-hidden="true">W</span>');
+    expect(html).toContain(
+      'aria-label="Wikipedia「国道18号」を新しいタブで開く"',
+    );
   });
 
   test('その路線だけを表示するボタンが番号を持つ', () => {
     const html = detailHTML({ route: route({ ref: 459 }) });
-    expect(html).toContain('class="mini detail-only" data-ref="459"');
-    expect(html).toContain('国道459号だけを表示');
+    expect(html).toContain('class="icon-btn detail-only" data-ref="459"');
+    // 字が消えてアイコンだけになったので、名乗りは aria-label が持ちます。
+    expect(html).toContain('aria-label="国道459号だけを表示"');
   });
 });
 
