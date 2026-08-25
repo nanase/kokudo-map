@@ -82,6 +82,11 @@ run = "uv run {{env.PIPELINE}}/compare_n13.py {{arg(name='region', default='naga
 description = "former のうち N13 で指定解除を機械確認できたものに revoked を書き込む"
 run = "uv run {{env.PIPELINE}}/apply_n13.py {{arg(name='region', default='nagano')}}"
 
+[tasks.compare-annual-report]
+description = "道路統計年報と延長を突き合わせ、差の内訳を出す"
+# 渡せるのは上下線分離を見る側方の距離だけです。既定の 40 m を疑うときに使います。
+run = "uv run {{env.PIPELINE}}/compare_annual_report.py {{arg(name='flags', var=true, default='')}}"
+
 [tasks.serve]
 description = "ローカルサーバを起動する (http://localhost:8000/)"
 # PMTiles は Range 要求で読むので、http.server では配れません。

@@ -53,6 +53,7 @@ mise run serve        # http://localhost:8000/
 | `mise run compare <地域>` | Overpass 由来の基準と突き合わせる |
 | `mise run compare-n13 <地域>` | 国土数値情報 N13(道路)と突き合わせ、OSM に無い国道の候補を探す |
 | `mise run apply-n13 <地域>` | former のうち N13 で指定解除を機械確認できたものに revoked を書き込む |
+| `mise run compare-annual-report` | 道路統計年報と延長を突き合わせ、差の内訳を出す |
 | `mise run serve` | ローカルサーバを起動する |
 | `mise run render-check` | Chromium で実描画を確認する |
 
@@ -102,7 +103,7 @@ uvx ruff check pipeline      # Python の静的検査
 | `web/html.mjs` | エスケープ。OSM の文字は信用できない |
 | `web/glyphs/` | ラベルの SDF グリフ。数字と `・` の 11 字 |
 | `scripts/` | 地図そのものの道具。データ生成には関わらない |
-| `pipeline/` | データ生成のコード一式。取得・判定・検証・タイル化 |
+| `pipeline/` | データ生成のコード一式。取得・判定・検証・タイル化。突き合わせ相手の年報の値もここに置く |
 | `test/` | データを持たずに答えられることの単体テスト |
 | `docs/` | この文書から辿る詳細文書 |
 | `.github/workflows/` | 検査と GitHub Pages への配信 |

@@ -70,8 +70,10 @@ describe('routesOf', () => {
     expect(routesOf([row([2], 50, 500)])[0].max_n).toBe(1);
   });
 
-  test('路線の延長を足すと、重用のぶんだけ実延長を超える', () => {
-    // これが路線別の表で全体を語れない理由です。実延長は 614 km しかありません。
+  test('路線の延長を足すと、重用のぶんだけ重複排除の延長を超える', () => {
+    // これが路線別の表で全体を語れない理由です。重複排除の延長は 614 km しか
+    // ありません。「実延長」とは呼びません。道路統計年報の同名の値は、未供用も
+    // 海上も含まない別物です。docs/results.md の検算の節を参照してください。
     const sumOfRoutes = routes.reduce((a, r) => a + r.km, 0);
     const actual = COMBOS.reduce((a, c) => a + c.km, 0);
     expect(actual).toBe(614);
