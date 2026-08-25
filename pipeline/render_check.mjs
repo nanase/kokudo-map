@@ -135,8 +135,8 @@ const report = await page.evaluate(() => {
   // #stats now lives inside the folded データ情報 block (closed by default),
   // and a closed <details> renders no box for its non-summary children —
   // `innerText` reports empty for anything unrendered. `textContent` does not
-  // care about layout, so the four numbers are read straight off their spans.
-  out.stats = [...document.querySelectorAll('#stats span')]
+  // care about layout, so the four numbers are read straight off the <dd>s.
+  out.stats = [...document.querySelectorAll('#stats dd')]
     .map((s) => s.textContent)
     .join(' | ');
   // The three UI decisions this page is built around.
@@ -277,7 +277,7 @@ await page.click('input[name=conc][value=all]');
 await page.waitForTimeout(3500);
 const concStats = await page.evaluate(() => ({
   roads: window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
-  stats: [...document.querySelectorAll('#stats span')]
+  stats: [...document.querySelectorAll('#stats dd')]
     .map((s) => s.textContent)
     .join(' | '),
 }));

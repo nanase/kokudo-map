@@ -11,10 +11,18 @@
  * them two different ways: `routesOf` fans a combination out to each of its
  * routes, `statsFor` adds each combination at most once. Getting those two the
  * wrong way round is the bug this file is here to catch.
+ *
+ * 旧道はもう一つの軸である。区分ではないので、`formerKmFor` の値を
+ * `kindsFor` の合計に足すと、その道を二度数える。
  */
 import { describe, expect, test } from 'bun:test';
 
-import { kindsFor, routesOf, statsFor } from '../web/aggregate.mjs';
+import {
+  formerKmFor,
+  kindsFor,
+  routesOf,
+  statsFor,
+} from '../web/aggregate.mjs';
 
 const row = (refs, km, arcs) => ({ refs, n: refs.length, km, arcs });
 
@@ -208,5 +216,66 @@ describe('kindsFor', () => {
       { kind: 'road', km: 206 },
       { kind: 'expressway', km: 4 },
     ]);
+  });
+});
+
+describe('formerKmFor', () => {
+  /* 旧道は区分と直交します。下の 3 km は road と construction の内側に既に
+   * 入っていて、その外側にあるのではありません。 */
+  const FORMER = [
+    {
+      refs: [7],
+      n: 1,
+      km: 100,
+      arcs: 1000,
+      kinds: { road: 97, construction: 3 },
+      former_km: 3,
+    },
+    { refs: [8], n: 1, km: 200, arcs: 2000, kinds: { road: 200 } },
+    {
+      refs: [7, 8],
+      n: 2,
+      km: 10,
+      arcs: 100,
+      kinds: { road: 10 },
+      former_km: 0.5,
+    },
+  ];
+
+  test('選択が触れる組み合わせの旧道を足す', () => {
+    expect(formerKmFor(FORMER, new Set([7]))).toBe(3.5);
+    // 8 号の単独区間に旧道はなく、7 号との重用区間の 0.5 km だけが残ります。
+    expect(formerKmFor(FORMER, new Set([8]))).toBe(0.5);
+  });
+
+  test('選択が空なら全部を数える', () => {
+    expect(formerKmFor(FORMER, new Set())).toBe(3.5);
+  });
+
+  test('重なる区間を二重に数えない', () => {
+    // 7 号と 8 号を両方選んでも、共有する行は 1 回だけ入ります。
+    expect(formerKmFor(FORMER, new Set([7, 8]))).toBe(3.5);
+  });
+
+  test('旧道を区分の合計に足すと、選択の延長を超える', () => {
+    const sel = new Set([7]);
+    const kinds = kindsFor(FORMER, sel).reduce((a, k) => a + k.km, 0);
+    expect(kinds).toBe(statsFor(FORMER, sel).km);
+    expect(kinds + formerKmFor(FORMER, sel)).toBeGreaterThan(
+      statsFor(FORMER, sel).km,
+    );
+  });
+
+  test('former_km を持たない組み合わせ表では 0 になる', () => {
+    expect(formerKmFor(COMBOS, new Set())).toBe(0);
+    expect(formerKmFor(COMBOS, new Set([7]))).toBe(0);
+  });
+
+  test('欄を持つ行と持たない行が混ざっていても落ちない', () => {
+    expect(formerKmFor([FORMER[1], FORMER[2]], new Set())).toBe(0.5);
+  });
+
+  test('どの組み合わせにも居ない番号を選ぶと 0 になる', () => {
+    expect(formerKmFor(FORMER, new Set([999]))).toBe(0);
   });
 });

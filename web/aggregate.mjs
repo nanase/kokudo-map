@@ -14,6 +14,12 @@
  * 桁で落とす。 */
 const round1 = (km) => Math.round(km * 10) / 10;
 
+/* 選択が問うている行かどうか。選択が空なら全部——それが地図の見せている
+ * ものである。下の三つの合計は同じ絞り方をするので、規則はここに一度だけ
+ * 書く。写しを持つと、延長と内訳が別の道の話を始める。 */
+const touched = (c, selected) =>
+  !selected.size || c.refs.some((r) => selected.has(r));
+
 /**
  * The build ships one table: every distinct *combination* of designations, with
  * its length, arc count and extent. Everything the panel shows is a sum over a
@@ -57,7 +63,7 @@ export function statsFor(combos, selected) {
   let km = 0;
   let conc = 0;
   for (const c of combos) {
-    if (selected.size && !c.refs.some((r) => selected.has(r))) continue;
+    if (!touched(c, selected)) continue;
     arcs += c.arcs;
     km += c.km;
     if (c.n >= 2) conc += c.arcs;
@@ -78,7 +84,7 @@ export function statsFor(combos, selected) {
 export function kindsFor(combos, selected) {
   const by = new Map();
   for (const c of combos) {
-    if (selected.size && !c.refs.some((r) => selected.has(r))) continue;
+    if (!touched(c, selected)) continue;
     for (const [kind, km] of Object.entries(c.kinds ?? {})) {
       by.set(kind, (by.get(kind) ?? 0) + km);
     }
@@ -86,4 +92,22 @@ export function kindsFor(combos, selected) {
   return [...by]
     .map(([kind, km]) => ({ kind, km: round1(km) }))
     .sort((a, b) => b.km - a.km);
+}
+
+/**
+ * 選択が触れる組み合わせのうち、旧道が占める距離。
+ *
+ * 旧道は区分ではない。旧道もどれかの区分の道なので、kindsFor() の値に足すと
+ * その道を二度数える(#26)。別の軸として別に数える。
+ *
+ * `former_km` を持たない meta では 0 を返す。kindsFor() が空を返すのと同じ
+ * 理由である。
+ */
+export function formerKmFor(combos, selected) {
+  let km = 0;
+  for (const c of combos) {
+    if (!touched(c, selected)) continue;
+    km += c.former_km ?? 0;
+  }
+  return round1(km);
 }

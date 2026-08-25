@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import math
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 
 from pmtiles.reader import MmapSource, Reader
@@ -65,6 +66,44 @@ dupes = len(combos) - len({tuple(c["refs"]) for c in combos})
 check(not dupes, f"each combination appears once ({dupes} duplicates)")
 check(all(combos[i]["n"] >= combos[i + 1]["n"] for i in range(len(combos) - 1)),
       "combinations are ordered deepest first")
+
+# --- and the parts of a length have to add up to it --------------------------
+# "How much of 国道152号 can you drive" is answered by adding the driveable kinds
+# and leaving out the rest, so a row whose parts miss its own length answers it
+# wrongly rather than imprecisely. The vocabulary is not restated here: the
+# kinds a row may name are the ones the regional builds classified arcs into.
+KINDS = {k for m in metas for r in m["routes"] for k in r["kinds"]}
+kinds_of = {k for c in combos for k in c.get("kinds", {})}
+
+check(all("kinds" in c for c in combos), "every combination carries a kind breakdown")
+check(kinds_of <= KINDS,
+      f"the breakdown names only kinds the build produces ({sorted(kinds_of - KINDS)})")
+empty = [c["refs"] for c in combos if any(v <= 0 for v in c.get("kinds", {}).values())]
+check(not empty, f"no kind is written out at zero length ({empty[:3]})")
+
+# Each part is rounded to 10 m and the ones under 5 m are dropped, so a row of
+# seven kinds can sit 40 m from its own total. Anything past that is an arc
+# counted into the wrong bucket, or into none.
+off, refs = max((abs(sum(c.get("kinds", {}).values()) - c["km"]), c["refs"]) for c in combos)
+check(off <= 0.05,
+      f"every combination's kinds add up to its own length "
+      f"(worst {refs}, off by {off * 1000:.0f} m)")
+
+kind_km: Counter[str] = Counter()
+for c in combos:
+    kind_km.update(c.get("kinds", {}))
+check(abs(sum(kind_km.values()) - meta["total_km"]) < 1,
+      f"the kinds add up to the nationwide total "
+      f"({sum(kind_km.values()):,.1f} vs {meta['total_km']:,.1f} km)")
+
+# 旧道 is not a kind but a second axis over the same road (#26), so it is bounded
+# by the row rather than added to it. A row more 旧道 than long means the two
+# axes were folded into one somewhere.
+over = [c["refs"] for c in combos if c.get("former_km", 0) > c["km"] + 0.01]
+check(not over, f"no combination is more 旧道 than it is long ({over[:3]})")
+former_km = sum(c.get("former_km", 0) for c in combos)
+check(0 < former_km < meta["total_km"],
+      f"旧道 is part of the total and not all of it ({former_km:,.1f} km)")
 
 invalid = set(routes) - VALID
 check(not invalid, f"no impossible route numbers ({sorted(invalid)})")
@@ -170,31 +209,58 @@ if meta.get("osm_timestamp"):
     check(age <= 7, f"OSM data is {age} days old (threshold 7)")
 
 # --- the archive the browser downloads ---------------------------------------
+# How many places in the archive are asked for a tile. One is enough to catch an
+# archive that reads back as nothing; a handful spread through the index also
+# says the reader can find tiles that are not next to each other.
+PROBES = 5
+
+
+def tile_at(z: int, lat: float, lon: float) -> tuple[int, int]:
+    """The tile covering a point, in the archive's own numbering."""
+    n = 2**z
+    rad = math.radians(lat)
+    return (
+        int((lon + 180) / 360 * n),
+        int((1 - math.log(math.tan(rad) + 1 / math.cos(rad)) / math.pi) / 2 * n),
+    )
+
+
 path = DATA / "national-routes.pmtiles"
 check(path.exists(), f"{path.name} exists")
 if path.exists():
+    # A tile at the deepest zoom must actually come back, or the map draws
+    # nothing however valid the header is. The places asked are termini, which
+    # are points on the roads themselves. The probe used to be the centre of
+    # the country's bounding rectangle — 34.93N 134.87E, open water in the
+    # 播磨灘 — and a z14 tile is 2.4 km wide, so it asked for a square with no
+    # 国道 in it. An empty tile is absent from the archive by design, so the
+    # check failed on an archive that was correct.
+    # 先頭と末尾を必ず含む等間隔の 5 点。等間隔だけを見て末尾を落とすと、途中で
+    # 切れた archive が検査を素通りする。末尾は最後に書かれる場所なので、書き
+    # きれなかったときに最初に欠ける。全国の 5,706 点では 0・1426・2852・4279・
+    # 5705 番目を引く(3 点目は 2852.5 で、round() が偶数側へ丸める)。
+    termini = meta["termini"]
+    if PROBES < 2 or len(termini) <= PROBES:
+        probes = termini[:PROBES]
+    else:
+        last = len(termini) - 1
+        probes = [termini[round(i * last / (PROBES - 1))] for i in range(PROBES)]
     with open(path, "r+b") as f:
         reader = Reader(MmapSource(f))
         header = reader.header()
         pm_meta = reader.metadata()
-        # A tile at the deepest zoom must actually come back, or the map draws
-        # nothing however valid the header is.
-        lon = (meta["bbox"][0] + meta["bbox"][2]) / 2
-        lat = (meta["bbox"][1] + meta["bbox"][3]) / 2
         z = header["max_zoom"]
-        n = 2**z
-        x = int((lon + 180) / 360 * n)
-        lat_rad = math.radians(lat)
-        y = int((1 - math.log(math.tan(lat_rad) + 1 / math.cos(lat_rad)) / math.pi) / 2 * n)
-        tile = reader.get(z, x, y)
+        at = [tile_at(z, t["lat"], t["lon"]) for t in probes]
+        missing = [f"{z}/{x}/{y}" for x, y in at if reader.get(z, x, y) is None]
     layers = [v["id"] for v in pm_meta.get("vector_layers", [])]
     check(layers == ["routes"], f"the archive declares one layer, routes ({layers})")
     check(header["max_zoom"] >= 12,
           f"tiles go to z{header['max_zoom']} (z{header['min_zoom']}-{header['max_zoom']})")
     check(header["clustered"], "the archive is clustered, so a range request can find a tile")
-    check(tile is not None, f"a z{z} tile comes back near the centre ({z}/{x}/{y})")
+    check(bool(probes) and not missing,
+          f"a z{z} tile comes back at each of {len(probes)} termini ({missing})")
     print(f"NOTE  archive {path.stat().st_size / 1e6:.1f} MB, "
-          f"{header['addressed_tiles_count']:,} tiles, centre {lat:.2f},{lon:.2f}")
+          f"{header['addressed_tiles_count']:,} tiles, probed {len(probes)} termini")
 
 print("\n".join(notes))
 if fails:
@@ -202,6 +268,8 @@ if fails:
 print(f"\narcs {meta['arc_count']:,} | {meta['total_km']:,.0f} km | "
       f"routes {len(routes)} | combinations {len(combos):,} | "
       f"termini {len(meta['termini']):,} (shared {len(meta['shared_termini']):,})")
+print("kinds " + " | ".join(f"{k} {v:,.0f}" for k, v in kind_km.most_common())
+      + f" | 旧道 {former_km:,.0f} km")
 print(f"regions {len(metas)} | corroborated per region "
       f"{min(sizes.values())}..{worst} | union {union}")
 print(f"\n{len(notes)} passed, {len(fails)} failed")
