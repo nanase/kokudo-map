@@ -38,6 +38,7 @@ FILES = ["national-routes.pmtiles", "national.meta.json", "regions.json"]
 
 
 def wrangler(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    """Run wrangler via bun x, decoding its output as UTF-8 regardless of locale."""
     # `bunx` 自体は mise がシムを作らないことがあります。`bun x` は bun 本体の
     # サブコマンドなので、mise.toml が述べる bun さえ入っていれば必ず通ります。
     # encoding を省くと日本語 Windows では cp932 に落ち、wrangler が出す UTF-8 の
@@ -71,6 +72,7 @@ def preflight() -> None:
 
 
 def main() -> None:
+    """Upload each file in FILES to BUCKET via wrangler."""
     # Windows terminals default stdout to cp932 — see build_all.main().
     sys.stdout.reconfigure(errors="replace")
     preflight()
