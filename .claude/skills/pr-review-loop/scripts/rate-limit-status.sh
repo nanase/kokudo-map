@@ -4,9 +4,16 @@
 # 使い方: rate-limit-status.sh [PR番号]
 #   PR 番号を省略すると現在のブランチの PR を使う。
 #
-# サマリ（PR 先頭コメント）は制限に当たるたびに上書き更新され、"Next review
-# available in: **N minutes**" のような分数が出る。解除時刻は経過時間で数えず、
-# 常にそのコメントの updated_at を起点に計算し直す（何度待ち直しても正確）。
+# サマリ（PR 先頭コメント）は制限に当たるたびに上書き更新され、"Next included
+# review available in 55 minutes." のような分数が出る。解除時刻は経過時間で
+# 数えず、常にそのコメントの updated_at を起点に計算し直す（何度待ち直しても
+# 正確）。
+#
+# 文面は CodeRabbit 側の都合で動く。"Next review available in:** **43 minutes**"
+# だったものが "Next included review available in 55 minutes." になった。語が
+# 増え、コロンが消え、強調の位置が変わっている。分数の読み取りが止まると、
+# ループはそこで進めなくなる。強調とコロンを先に落としてから読むことで、
+# 語順が同じかぎりどちらの文面でも同じ式が当たる。
 #
 # ただし N は分単位で切り捨てられており秒の情報が無いため、計算した解除時刻は
 # 実際より最大 1 分弱早くなりうる。これに当たると促しが早すぎて「数秒待て」と
@@ -46,13 +53,17 @@ fi
 UPDATED_AT="${LATEST%%$'\t'*}"
 BODY="$(echo "${LATEST#*$'\t'}" | base64 -d)"
 
-# 例: "**Next review available in:** **43 minutes**"
-RE='Next review available in:\*\*[[:space:]]*\*\*([0-9]+)[[:space:]]*minutes?\*\*'
-if [[ ! "$BODY" =~ $RE ]]; then
+# 強調の `*` とコロンは文面が変わるたびに位置が動くので、読む前に落とす。残る
+# のは語順だけで、次のどちらも同じ形になる。
+#   "**Next review available in:** **43 minutes**"
+#   "**Next included review available in 55 minutes.**"
+FLAT="$(printf '%s' "$BODY" | tr -d '*:')"
+RE='Next[[:space:]]+(included[[:space:]]+)?review[[:space:]]+available[[:space:]]+in[[:space:]]+([0-9]+)[[:space:]]*minutes?'
+if [[ ! "$FLAT" =~ $RE ]]; then
   echo "レート制限メッセージは見つかりましたが分数を抽出できませんでした。コメントの文言が変わっていないか確認してください。" >&2
   exit 2
 fi
-MINUTES="${BASH_REMATCH[1]}"
+MINUTES="${BASH_REMATCH[2]}"
 
 DEADLINE_EPOCH="$(date -u -d "$UPDATED_AT + ${MINUTES} minutes + ${BUFFER_MINUTES} minutes" +%s)"
 NOW_EPOCH="$(date -u +%s)"
