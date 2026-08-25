@@ -682,7 +682,9 @@ input[type="search"]::placeholder { font-size: .82em; }
     height: min(42vh, 240px);
     border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0;
   }
-  #panel { width: 100%; flex: 0 0 auto; max-height: 48%; border-right: 0; border-bottom: 1px solid var(--line); }
+  /* 上を占めるのはパネルだが、この幅で見に来た人が見たいのは地図である。
+     絞り込みと表示の切り替えまでは畳まずに見えるので、これ以上は要らない。 */
+  #panel { width: 100%; flex: 0 0 auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--line); }
   /* 横並びではないので、左へずらしても隠れない。高さが割合なので畳めもしない。 */
   #app.panel-off #panel { margin-left: 0; display: none; }
   #map-wrap { flex: 1; }
