@@ -194,7 +194,16 @@ if path.exists():
     # 播磨灘 — and a z14 tile is 2.4 km wide, so it asked for a square with no
     # 国道 in it. An empty tile is absent from the archive by design, so the
     # check failed on an archive that was correct.
-    probes = meta["termini"][:: max(1, len(meta["termini"]) // PROBES)][:PROBES]
+    # 先頭と末尾を必ず含む等間隔の 5 点。等間隔だけを見て末尾を落とすと、途中で
+    # 切れた archive が検査を素通りする。末尾は最後に書かれる場所なので、書き
+    # きれなかったときに最初に欠ける。全国の 5,706 点では 0・1426・2853・4279・
+    # 5705 番目を引く。
+    termini = meta["termini"]
+    if PROBES < 2 or len(termini) <= PROBES:
+        probes = termini[:PROBES]
+    else:
+        last = len(termini) - 1
+        probes = [termini[round(i * last / (PROBES - 1))] for i in range(PROBES)]
     with open(path, "r+b") as f:
         reader = Reader(MmapSource(f))
         header = reader.header()
