@@ -213,6 +213,68 @@ function combinationsOf(feats) {
     .sort((a, b) => b.n - a.n || b.km - a.km);
 }
 
+/** 平面で交わる路線の組。
+ *
+ * 重用は「一本の道が複数の番号を持つ」ことなので、組み合わせ表がすでに述べて
+ * いる。ここが述べるのはその逆——別々の道が一点で出会うこと——で、表のどこにも
+ * 無い。交差点はアークの端とはかぎらない。OSM の way は交差のたびに切れている
+ * とはかぎらず、一方の途中の節点をもう一方の端が踏むことがあるので、端だけを
+ * 見ると出会う組の 2% を取り落とす。だから節点を全部見る。
+ *
+ * 節点は座標そのもので同定する。同じ OSM 節点から出た座標は build_routes.py が
+ * 同じ桁(小数第 6 位、約 10 cm)で丸めているので、文字列として一致する。立体交差
+ * は節点を共有しないので、ここには出ない——曲がれない交差は交差ではない。
+ *
+ * 最初にその節点を踏んだアークの refs_list は、複製せずそのまま置く。二本目が
+ * 来て初めて Set に起こす。全国の節点は 160 万あり、その大半は一本しか踏まない
+ * ので、この一手で置き場のほとんどが参照だけで済む。同時に、一本しか踏まない
+ * 節点(＝交差点ではない)が組を作らないことが、この形そのものから従う。
+ *
+ * 重用したことのある組は落とす。重用は重用として述べる場所があり、同じことを
+ * 二箇所で言わないためである。落とす相手は「同じアークに載ったことがある組」
+ * なので、一本のアークが自分の節点に落とす影も一緒に消える。
+ */
+function crossingsOf(feats) {
+  const concurrent = new Set();
+  for (const f of feats) {
+    const refs = f.refs_list;
+    for (let i = 0; i < refs.length; i++)
+      for (let j = i + 1; j < refs.length; j++)
+        concurrent.add(`${refs[i]},${refs[j]}`);
+  }
+
+  const at = new Map();
+  for (const f of feats) {
+    const refs = f.refs_list;
+    for (const c of f.geometry.coordinates) {
+      const k = `${c[0]},${c[1]}`;
+      const cur = at.get(k);
+      if (cur === undefined) at.set(k, refs);
+      else if (Array.isArray(cur)) {
+        const s = new Set(cur);
+        for (const r of refs) s.add(r);
+        at.set(k, s);
+      } else {
+        for (const r of refs) cur.add(r);
+      }
+    }
+  }
+
+  const pairs = new Set();
+  for (const v of at.values()) {
+    if (Array.isArray(v) || v.size < 2) continue;
+    const rs = [...v].sort((a, b) => a - b);
+    for (let i = 0; i < rs.length; i++)
+      for (let j = i + 1; j < rs.length; j++) {
+        const k = `${rs[i]},${rs[j]}`;
+        if (!concurrent.has(k)) pairs.add(k);
+      }
+  }
+  return [...pairs]
+    .map((k) => k.split(',').map(Number))
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+}
+
 /** Termini merged across regions: a point inside an overlap is reported twice,
  *  and points keyed by position union the route numbers that meet there. */
 function mergeTermini(ms) {
@@ -254,6 +316,7 @@ const min = (v) => v.filter(Boolean).sort()[0] || null;
 const max = (v) => v.filter(Boolean).sort().slice(-1)[0] || null;
 
 const combos = combinationsOf(features);
+const crossings = crossingsOf(features);
 const termini = mergeTermini(metas);
 const meta = {
   // Freshness is reported at its worst: the map is only as current as its
@@ -272,6 +335,9 @@ const meta = {
     maxzoom: MAXZOOM,
   },
   combinations: combos,
+  // 路線どうしの関わりのうち、組み合わせ表にも起終点にも出ないもの。詳細の箱
+  // が、いま見ている路線と交わる路線を並べるのに読む。
+  crossings,
   ...termini,
   decree,
 };
@@ -284,7 +350,8 @@ const routes = new Set(combos.flatMap((c) => c.refs));
 console.log(
   `combinations: ${combos.length.toLocaleString()} | routes: ${routes.size} | ` +
     `termini: ${termini.termini.length.toLocaleString()} ` +
-    `(shared ${termini.shared_termini.length.toLocaleString()})`,
+    `(shared ${termini.shared_termini.length.toLocaleString()}) | ` +
+    `crossings: ${crossings.length.toLocaleString()}`,
 );
 const located = decree.routes.filter(
   (r) => r.start.lat !== undefined && r.end.lat !== undefined,

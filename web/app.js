@@ -42,7 +42,7 @@
  */
 
 import { kindsFor, routesOf, statsFor } from './aggregate.mjs';
-import { decreeTerminiOf, detailHTML } from './detail.mjs';
+import { decreeTerminiOf, detailHTML, relatedRoutesOf } from './detail.mjs';
 import {
   baseStyle,
   buildFilter,
@@ -1051,6 +1051,7 @@ function openDetail(ref) {
     route,
     kinds: kindsFor(state.meta.combinations, new Set([ref])),
     termini: decreeTerminiOf(state.meta, ref),
+    related: relatedRoutesOf(state.meta, ref),
   });
   // 別の路線に開き直しただけなら、居場所は開いたときのままにしておく。
   // ここで取り直すと、動いた後に開き直した人が閉じたときに横へ滑る。
@@ -1092,6 +1093,9 @@ window.addEventListener('resize', () => {
  * 押される時点には残っていない。
  */
 document.addEventListener('click', (ev) => {
+  // 箱の中の「関わりのある国道」も同じ .shield-btn である。押せばその路線に
+  // 開き直る——箱は路線 1 本について述べる場所なので、隣の路線の話を同じ箱で
+  // 続けるのではなく、その路線の箱に入れ替わるのが筋である。
   const shieldBtn = ev.target.closest('.shield-btn');
   if (shieldBtn) {
     openDetail(Number(shieldBtn.dataset.ref));

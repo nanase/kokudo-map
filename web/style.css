@@ -644,6 +644,14 @@ input[type="search"]::placeholder { font-size: .82em; }
   font-family: ui-monospace, Consolas, monospace;
 }
 
+/* 関わりのある国道 --------------------------------------------------------
+   .detail-kinds と同じ組み方をする。見出し(.detail-sub)の下に中身を置く欄が
+   箱の中で三つ続くので、欄どうしの間隔は .detail-scroll の gap が持つ。 */
+.detail-rel { display: flex; flex-direction: column; gap: 5px; }
+/* 標識は折り返す。交差する路線は 31 まであり、一列には収まらない。行間は
+   標識の影(--shield-shadow)が下へ落ちるぶんだけ列の隙間より広く取る。 */
+.rel-shields { display: flex; flex-wrap: wrap; gap: 5px 3px; }
+
 /* share dialog ------------------------------------------------------------
    ネイティブの <dialog> を使う。表示状態を変更する口は無いので、独自の
    フォーカストラップやキー処理を書く理由が無い — showModal() 自身が Esc と
