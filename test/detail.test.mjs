@@ -8,7 +8,12 @@
  */
 import { describe, expect, test } from 'bun:test';
 
-import { decreeTerminiOf, detailHTML, wikipediaURL } from '../web/detail.mjs';
+import {
+  decreeTerminiOf,
+  detailHTML,
+  relatedRoutesOf,
+  wikipediaURL,
+} from '../web/detail.mjs';
 import { KIND_LABELS } from '../web/popup.mjs';
 
 const route = (over) => ({
@@ -248,5 +253,125 @@ describe('detailHTML — 起点・終点', () => {
     });
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).not.toContain('<img');
+  });
+});
+
+describe('relatedRoutesOf', () => {
+  /* `pipeline/pack_web.mjs` が書く三つの欄をそのまま写しています。
+   * 18 号を主役にして、重用(117)・起終点の共有(292)・交差(406)を一つずつと、
+   * 二つの関わりを同時に持つ相手(19)を置いてあります。 */
+  const meta = {
+    combinations: [
+      { refs: [18, 117], n: 2, km: 4.2 },
+      { refs: [18, 19], n: 2, km: 1.1 },
+      { refs: [19, 20], n: 2, km: 9.9 },
+      { refs: [18], n: 1, km: 300 },
+    ],
+    shared_termini: [
+      { lat: 36.6, lon: 138.1, refs: [18, 19, 292] },
+      { lat: 35.0, lon: 137.0, refs: [153, 248] },
+    ],
+    crossings: [
+      [18, 19],
+      [18, 292],
+      [18, 406],
+      [117, 406],
+    ],
+  };
+
+  const refsOfGroup = (key, ref = 18) =>
+    relatedRoutesOf(meta, ref).find((g) => g.key === key)?.refs;
+
+  test('重用は組み合わせ表から拾う', () => {
+    expect(refsOfGroup('conc')).toEqual([19, 117]);
+  });
+
+  test('起終点の共有は shared_termini から拾う', () => {
+    expect(refsOfGroup('termini')).toEqual([292]);
+  });
+
+  test('交差は crossings から拾う', () => {
+    expect(refsOfGroup('cross')).toEqual([406]);
+  });
+
+  test('同じ番号は最も強い関わりの節にだけ出す', () => {
+    // 19 は重用も起終点の共有も交差もしています。三つ全部に並べると、同じ
+    // 標識が三度出るだけで、読む人が知ることは増えません。
+    const groups = relatedRoutesOf(meta, 18);
+    const seen = groups.flatMap((g) => g.refs);
+    expect(seen.length).toBe(new Set(seen).size);
+    expect(refsOfGroup('conc')).toContain(19);
+    expect(refsOfGroup('termini')).not.toContain(19);
+    expect(refsOfGroup('cross')).not.toContain(19);
+    // 292 は起終点を共有し、かつ交差もしています。
+    expect(refsOfGroup('cross')).not.toContain(292);
+  });
+
+  test('自分自身は出さない', () => {
+    for (const g of relatedRoutesOf(meta, 18)) expect(g.refs).not.toContain(18);
+  });
+
+  test('番号の順に並べる', () => {
+    for (const g of relatedRoutesOf(meta, 18)) {
+      expect(g.refs).toEqual([...g.refs].sort((a, b) => a - b));
+    }
+  });
+
+  test('関わりの無い節は出さない', () => {
+    // 248 は起終点を共有するだけで、重用も交差もしていません。
+    expect(relatedRoutesOf(meta, 248).map((g) => g.key)).toEqual(['termini']);
+    expect(relatedRoutesOf(meta, 999)).toEqual([]);
+  });
+
+  test('欄そのものが無い meta でも落ちない', () => {
+    // crossings は後から入った欄です。それより前に作った web/data が配られた
+    // ままでも、交差の節が出ないだけで他の節は出ます。
+    const old = { ...meta, crossings: undefined };
+    expect(relatedRoutesOf(old, 18).map((g) => g.key)).toEqual([
+      'conc',
+      'termini',
+    ]);
+    expect(relatedRoutesOf({}, 18)).toEqual([]);
+    expect(relatedRoutesOf(undefined, 18)).toEqual([]);
+  });
+
+  test('番号は文字列で渡されても同じに答える', () => {
+    expect(relatedRoutesOf(meta, '18')).toEqual(relatedRoutesOf(meta, 18));
+  });
+});
+
+describe('detailHTML — 関わりのある国道', () => {
+  const related = [
+    { key: 'conc', label: '重用する国道', refs: [117] },
+    { key: 'cross', label: '交差する国道', refs: [406, 462] },
+  ];
+
+  test('関わりが無ければ欄ごと出さない', () => {
+    expect(detailHTML({ route: route() })).not.toContain('detail-rel');
+  });
+
+  test('節の見出しと標識を出す', () => {
+    const html = detailHTML({ route: route(), related });
+    expect(html).toContain('重用する国道');
+    expect(html).toContain('交差する国道');
+    expect(html).toContain('aria-label="国道117号"');
+    expect(html).toContain('aria-label="国道462号"');
+  });
+
+  test('標識はポップアップと同じ .shield-btn で、押せば開き直せる', () => {
+    // 受けるのは app.js の委譲です。ポップアップの見出しと同じ形にしてあるの
+    // で、配線は一つで足ります。
+    const html = detailHTML({ route: route(), related });
+    expect(html).toContain(
+      '<button type="button" class="shield-btn" data-ref="406" ' +
+        'title="国道406号の詳細">',
+    );
+  });
+
+  test('小さいほうの標識を使う', () => {
+    // 交差する路線は 35 まであります。見出しの 44px で並べると箱が埋まります。
+    expect(detailHTML({ route: route(), related })).toContain(
+      '<span class="shield sm">',
+    );
   });
 });

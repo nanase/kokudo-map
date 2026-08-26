@@ -53,6 +53,59 @@ export function decreeTerminiOf(meta, ref) {
     }));
 }
 
+/**
+ * いま見ている路線に関わる路線を、関わり方ごとに分けて返す。
+ *
+ * 三つの関わり方は、それぞれ meta の別の欄が述べている。
+ *
+ * | 節       | 読む欄           | 意味                             |
+ * | ---      | ---              | ---                              |
+ * | 重用     | `combinations`   | 同じ道を一緒に走っている         |
+ * | 起終点   | `shared_termini` | 路線の端が同じ地点にある         |
+ * | 交差     | `crossings`      | 別々の道が平面で交わる           |
+ *
+ * 同じ番号は一度しか出さない。重用する相手は重用の切れ目で必ず交差もするし、
+ * 起終点を共有する相手はその地点で必ず交わるので、そのまま並べると同じ標識が
+ * 二度も三度も出る。上の表の順に強い関わりから拾い、先に拾った番号は後の節へ
+ * 落とさない——「18 号とは重用している」と言った後に「18 号とは交差する」と
+ * 言い足しても、読む人が知ることは増えない。
+ *
+ * 欄を持たない meta では、その節ごと空になる。`crossings` は後から入った欄な
+ * ので、それより前に作った web/data を配ったままでも壊れない。
+ */
+export function relatedRoutesOf(meta, ref) {
+  const self = Number(ref);
+  const pick = (refs) => refs.filter((r) => r !== self);
+
+  const conc = new Set();
+  for (const c of meta?.combinations ?? []) {
+    if (c.n < 2 || !c.refs.includes(self)) continue;
+    for (const r of pick(c.refs)) conc.add(r);
+  }
+
+  const ends = new Set();
+  for (const t of meta?.shared_termini ?? []) {
+    if (!t.refs.includes(self)) continue;
+    for (const r of pick(t.refs)) if (!conc.has(r)) ends.add(r);
+  }
+
+  const cross = new Set();
+  for (const pair of meta?.crossings ?? []) {
+    if (!pair.includes(self)) continue;
+    for (const r of pick(pair)) if (!conc.has(r) && !ends.has(r)) cross.add(r);
+  }
+
+  // 番号の順に並べる。並びに意味を持たせるなら重用の長さや交差の回数で並べる
+  // 手もあるが、標識には番号しか書いていないので、その順の理由が画面から読め
+  // ない。番号順なら、探している番号がどこにあるかを見当だけで決められる。
+  const sorted = (s) => [...s].sort((a, b) => a - b);
+  return [
+    { key: 'conc', label: '重用する国道', refs: sorted(conc) },
+    { key: 'termini', label: '起終点を共有する国道', refs: sorted(ends) },
+    { key: 'cross', label: '交差する国道', refs: sorted(cross) },
+  ].filter((g) => g.refs.length);
+}
+
 /* 小数第 1 位まで。組み合わせ表の km がその桁で丸めてある。 */
 const fmtKm = (km) =>
   km.toLocaleString(undefined, {
@@ -123,13 +176,37 @@ const kindsHTML = (kinds) =>
         .join('')}</dl></div>`
     : '';
 
+/* 関わりのある路線を、標識を並べて述べる。
+ *
+ * 標識は押せる。ポップアップの見出しと同じ `.shield-btn` で、押せばその路線の
+ * 詳細に開き直る(受けるのは app.js の委譲)。標識そのものが路線の名前なので、
+ * 脇に「国道N号へ」と書いたボタンを足すより標識自体を的にするほうが短い。
+ *
+ * 数が多い節では 30 を超えることがある(国道4号の交差は 31 路線)。小さいほうの
+ * 標識で折り返す——箱の幅は決め打ちで、入り切らないぶんは .detail-scroll が
+ * 飲む。 */
+const relShieldHTML = (ref) =>
+  `<button type="button" class="shield-btn" data-ref="${ref}" ` +
+  `title="国道${ref}号の詳細">${shield(ref, true)}</button>`;
+
+const relatedHTML = (groups) =>
+  groups
+    .map(
+      (g) =>
+        `<div class="detail-rel"><div class="detail-sub">${g.label}</div>` +
+        `<div class="rel-shields">${g.refs.map(relShieldHTML).join('')}</div>` +
+        '</div>',
+    )
+    .join('');
+
 /**
  * 1 路線ぶんの詳細。
  *
  * `route` は aggregate.mjs の routesOf() が返す行、`kinds` は kindsFor() が返す
- * 内訳、`termini` は decreeTerminiOf() が返す起終点である。後ろの二つは meta が
- * その欄を持って初めて埋まる(区分別は issue #58、起終点は issue #59)。どちらが
- * 先に入っても壊れないよう、欄が無ければその欄ごと出さない。
+ * 内訳、`termini` は decreeTerminiOf() が返す起終点、`related` は
+ * relatedRoutesOf() が返す関わりのある路線である。後ろの三つは meta がその欄を
+ * 持って初めて埋まる(区分別は issue #58、起終点は issue #59、関わりのある路線は
+ * その後)。どれが先に入っても壊れないよう、欄が無ければその欄ごと出さない。
  *
  * 見出しは標識だけを出す。標識は番号を書いた路線の名前そのものなので、隣に
  * 「国道N号」と書き添えるのは同じことを二度言うことだった。空いた場所には、
@@ -137,7 +214,7 @@ const kindsHTML = (kinds) =>
  * ボタンで置く。名前は読み上げのために `h2` に残す(`.sr-only`)。箱の
  * `aria-labelledby` がそれを指している。
  */
-export function detailHTML({ route, kinds = [], termini = [] }) {
+export function detailHTML({ route, kinds = [], termini = [], related = [] }) {
   const { ref } = route;
   const name = `国道${ref}号`;
   return (
@@ -163,6 +240,7 @@ export function detailHTML({ route, kinds = [], termini = [] }) {
     row('最大重用数', route.max_n > 1 ? `${route.max_n} 重用` : '単独指定') +
     '</dl>' +
     kindsHTML(kinds) +
+    relatedHTML(related) +
     '</div>'
   );
 }

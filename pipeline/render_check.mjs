@@ -17,6 +17,11 @@ import { DATA, REGIONS, ROOT } from './_paths.mjs';
 const { GSI_TILES } = await import(
   pathToFileURL(join(ROOT, 'web', 'mapspec.mjs')).href
 );
+// Same reason: the box's three sections are a rule over three meta fields, and
+// a copy of that rule here would stop checking the one the page runs.
+const { relatedRoutesOf } = await import(
+  pathToFileURL(join(ROOT, 'web', 'detail.mjs')).href
+);
 const TILE_HOST = new URL(GSI_TILES).host;
 
 // Not named URL — that would shadow the global URL constructor used below.
@@ -588,6 +593,63 @@ if (!target) {
     `the box shows the decree termini the meta gave it ` +
       `(${wanted.join(' / ')}${missing.length ? `; missing ${missing.join(' / ')}` : ''})`,
   );
+
+  /* 関わりのある国道は、meta の三つの欄——組み合わせ表・起終点の共有・交差の
+   * 表——を突き合わせて出る。その読み方をここに書き写すと、写したほうを検査
+   * することになるので、画面が使う関数をそのまま呼んで突き合わせる。
+   *
+   * 交差の表(`crossings`)は pack_web.mjs が書く欄である。古い web/data には
+   * 無く、無ければ交差の節が出ないのが正しい振る舞いなので、meta がその欄を
+   * 持っていること自体もここで言う。 */
+  ok(
+    Array.isArray(meta.crossings) && meta.crossings.length > 0,
+    `the meta carries the crossing table (${meta.crossings?.length ?? 0} pairs)`,
+  );
+  const wantRel = relatedRoutesOf(meta, Number(ref));
+  const shownRel = await page.evaluate(() =>
+    [...document.querySelectorAll('.detail-rel')].map((el) => ({
+      label: el.querySelector('.detail-sub').textContent,
+      refs: [...el.querySelectorAll('.shield-btn')].map((b) =>
+        Number(b.dataset.ref),
+      ),
+    })),
+  );
+  const want = wantRel.map((g) => ({ label: g.label, refs: g.refs }));
+  ok(
+    JSON.stringify(shownRel) === JSON.stringify(want),
+    `the box lists the related routes the meta implies ` +
+      `(${want.map((g) => `${g.label} ${g.refs.length}`).join(', ') || 'none'})`,
+  );
+
+  /* 並べた標識は押せる。押せばその路線の箱に開き直る。
+   *
+   * 関わりは相互なので、開いた先には必ず元の路線の標識がある——重用も、起終点
+   * の共有も、交差も、どちらから見ても同じ関わりだからである。押して戻れる
+   * ことまで見て、この後の検査を元の路線の箱で続ける。 */
+  if (want.length) {
+    const other = want[0].refs[0];
+    await page.click(`.detail-rel .shield-btn[data-ref="${other}"]`);
+    await page.waitForTimeout(1200);
+    const switched = await page.evaluate(() =>
+      document.querySelector('#detail').innerText.replace(/\s+/g, ' '),
+    );
+    ok(
+      switched.includes(`国道${other}号`),
+      `pressing a related sign opens that route's box (国道${other}号)`,
+    );
+    const back = await page
+      .locator(`.detail-rel .shield-btn[data-ref="${ref}"]`)
+      .count();
+    ok(
+      back === 1,
+      `and that box lists the one we came from, because the relation goes ` +
+        `both ways (国道${ref}号)`,
+    );
+    if (back) {
+      await page.click(`.detail-rel .shield-btn[data-ref="${ref}"]`);
+      await page.waitForTimeout(1200);
+    }
+  }
 
   // Narrowing the map to one route moved into the box with #65.
   await page.click('.detail-only');

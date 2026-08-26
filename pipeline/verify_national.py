@@ -26,6 +26,7 @@ import json
 import math
 import sys
 from collections import Counter
+from itertools import combinations
 from datetime import datetime, timezone
 
 from pmtiles.reader import MmapSource, Reader
@@ -197,6 +198,34 @@ print(f"NOTE  decree termini located {located}/{len(sides)}, "
       f"both ends on {both}/{len(rows)} routes; "
       + ", ".join(f"{k} {sum(1 for _, s in sides if s['how'] == k)}"
                   for k in sorted(LOCATED | UNLOCATED)))
+
+# --- routes that cross each other --------------------------------------------
+# The detail box reads this to say which routes the one on screen meets, and
+# nothing else in the product can contradict it — it is the only table of
+# junctions. What can be checked is that it stays a table *of junctions*: two
+# different, real route numbers per row, each row once, and never a pair that
+# shares an arc. That last one is the whole distinction it exists to draw: a
+# pair on a common arc is 重用, which the combination table already states, and
+# the box shows in its own section. A row in both would be the same fact told
+# twice, in two places free to disagree.
+crossings = meta.get("crossings", [])
+check(bool(crossings), f"the crossing table is present and not empty ({len(crossings)} pairs)")
+check(all(len(p) == 2 and p[0] < p[1] for p in crossings),
+      "every crossing row is a sorted pair of two distinct routes")
+unknown = sorted({r for p in crossings for r in p} - set(routes))
+check(not unknown, f"every crossing names a route the map draws ({unknown})")
+repeats = len(crossings) - len({tuple(p) for p in crossings})
+check(not repeats, f"each crossing pair appears once ({repeats} duplicates)")
+
+concurrent_pairs = {
+    (a, b) for c in combos for a, b in combinations(c["refs"], 2)
+}
+both = sorted({tuple(p) for p in crossings} & concurrent_pairs)
+check(not both,
+      f"no pair is both concurrent and crossing ({len(both)}: {both[:5]})")
+crossing_routes = {r for p in crossings for r in p}
+print(f"NOTE  crossings {len(crossings):,} pairs over {len(crossing_routes)} routes; "
+      f"concurrent pairs {len(concurrent_pairs):,}")
 
 # --- freshness ---------------------------------------------------------------
 check(
