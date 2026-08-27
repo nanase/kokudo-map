@@ -465,7 +465,9 @@ function scan(text, startCwd, depth = 0) {
       cwd = subshells.pop();
       closing--;
     }
-    closing = (segment.text.match(/\)(\s|$)/g) ?? []).length;
+    /* `))` は 2 つである。後ろの一字を食う書き方だと 1 つに数えてしまう。
+     * 前の段の残りに足す——上で戻し切れなかったぶんは、まだ効いていない。 */
+    closing += (segment.text.match(/\)(?=[\s)]|$)/g) ?? []).length;
     /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
      * 離してから、括弧だけの語を落とす。閉じ括弧は消す先の語の末尾に付いた
      * まま残るが、そちらは toAbsParts が外す。
@@ -625,9 +627,9 @@ function scan(text, startCwd, depth = 0) {
      * `find build -type d -exec rm -rf {} +` の `{}` は場所ではない——
      * 場所は find の引数として前に書いてある。 */
     if (nameOf(verb) === 'find') {
-      const deletes =
-        rest.includes('-delete') ||
-        (at > 0 && words.slice(at + 1).some(RM_RECURSIVE));
+      /* `-exec rm -f {} +` も、find が再帰するので木の中身は全部消える。
+       * `find build -type f | xargs rm -f` を止めているのと同じ形である。 */
+      const deletes = rest.includes('-delete') || at > 0;
       if (!deletes) continue;
       const paths = [];
       for (const w of rest) {
@@ -647,7 +649,7 @@ function scan(text, startCwd, depth = 0) {
         .map((w, k) => (NAMES(w) ? rest[k + 1] : null))
         .filter((w) => w !== undefined && w !== null);
       if (rest.some(SELECTS)) {
-        if (words.slice(at + 1).some(RM_RECURSIVE)) {
+        if (at > 0 && words.slice(at + 1).some(RM_RECURSIVE)) {
           report(
             roots.flatMap((r) => patterns.map((pat) => `${r}/${pat}`)),
             cwd,

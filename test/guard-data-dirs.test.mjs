@@ -219,6 +219,8 @@ describe('木ごと消す形を止める', () => {
     ['find build -type f | xargs rm -f'],
     // 絞りを足すと壊す範囲が広がる形。当たる先そのものを見る。
     ['find . -type d -name build -exec rm -rf {} +'],
+    // find は再帰する。-exec の rm に -r が無くても木の中身は全部消える。
+    ['find build -exec rm -f {} +'],
     ['bash -lc "rm -rf build"'],
     ['powershell -Command "Remove-Item -Recurse build"'],
   ])('%s', denies);
@@ -266,6 +268,8 @@ describe('木ごと消す形を止める', () => {
     ['popd; rm -rf build'],
     // 部分 shell を出れば場所は戻る。括弧の外で走る rm はルートで走る。
     [`(cd ${AWAY} && ls); rm -rf build`],
+    // 入れ子の部分 shell。`))` は 2 つである。
+    ['(cd build && (ls)); rm -rf build'],
     ['cd build && rm -rf ../build/pbf'],
     ['cd web && rm -rf data'],
     ['cd build/pbf && rm -rf .'],
@@ -364,6 +368,8 @@ describe('後始末は通す', () => {
     ["find build -name '*.log' -print0 | xargs -0 rm -rf"],
     ["find build -name '*.log' -delete"],
     ['find build -mtime +30 -delete'],
+    // find 自身の -print を rm の旗と読み違えない。
+    ['find build -name pbf -print -delete'],
     ["find build -name '*.log' -exec rm -rf {} +"],
   ])('%s', allows);
 
