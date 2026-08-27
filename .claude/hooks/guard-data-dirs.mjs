@@ -157,8 +157,11 @@ function stripHeredocs(text) {
     out.push(lines[i]);
     const m = OPEN.exec(lines[i]);
     if (!m) continue;
-    /* `bash <<'EOF'` の中身は書き込む文章ではなく、走る命令である。 */
-    if (SHELLS.test(nameOf(lines[i].trim().split(/\s+/)[0] ?? ''))) continue;
+    /* `bash <<'EOF'` の中身は書き込む文章ではなく、走る命令である。
+     * `cat <<'EOF' | bash` も同じで、shell は行の後ろにも来る。 */
+    if (lines[i].split(/[\s|]+/).some((w) => w && SHELLS.test(nameOf(w)))) {
+      continue;
+    }
     let end = i + 1;
     while (end < lines.length && lines[end].trim() !== m[2]) end++;
     /* 閉じないまま終わったなら、それは札ではなかった。読み飛ばさない。 */
@@ -229,8 +232,8 @@ function toAbsParts(token, cwd) {
     /* 今いる場所を指す書き方。展開されないまま来るので、ここで解く。括弧を
      * 外すより先に済ませる——後にすると `$(pwd)` の `)` が先に落ちて、
      * この行が当たらなくなる。他の変数は中身が分からないので字として扱う。 */
-    .replace(/^\$\{?PWD\}?|^\$\(pwd\)|^`pwd`/i, '.')
-    .replace(/^\$\{?CLAUDE_PROJECT_DIR\}?/, ROOT)
+    .replace(/^\$(env:)?\{?PWD\}?|^\$\(pwd\)|^`pwd`/i, '.')
+    .replace(/^\$(env:)?\{?CLAUDE_PROJECT_DIR\}?/, ROOT)
     /* 引用符と、`(cd x && rm -rf build)` の丸括弧と波括弧を外す。 */
     .replace(/^[({'"]+|[)}'"]+$/g, '')
     .replace(/\\/g, '/')

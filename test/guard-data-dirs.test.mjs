@@ -74,6 +74,8 @@ function ask(command) {
 const D = '$';
 /* 改行。素の文字列の中に書けないので名前を付ける。 */
 const NL = String.fromCharCode(10);
+/* 円記号。素の文字列に書くと、続く字と組んで別の字になる。 */
+const BS = String.fromCharCode(92);
 
 const denies = (command) => expect(ask(command)).toContain('巻き込みます');
 const allows = (command) => expect(ask(command)).toBeNull();
@@ -201,6 +203,9 @@ describe('木ごと消す形を止める', () => {
     ['cmd /c rmdir /s /q build'],
     // shell に食わせるヒアドキュメントの中身は、書き込む文章ではなく命令。
     [["bash <<'EOF'", 'rm -rf build', 'EOF'].join(NL)],
+    // shell は行の後ろにも来る。
+    [["cat <<'EOF' | bash", 'rm -rf build', 'EOF'].join(NL)],
+    [["cat <<'EOF' | sh", 'rm -rf build', 'EOF'].join(NL)],
     // find は探す場所を先に書く。rm の後ろにあるのは `{}` である。
     ['find build -type d -exec rm -rf {} +'],
     ['find web/data -delete'],
@@ -231,6 +236,9 @@ describe('木ごと消す形を止める', () => {
     [`rm -rf ${D}{PWD}/build`],
     [`rm -rf ${D}(pwd)/build`],
     [`rm -rf ${D}CLAUDE_PROJECT_DIR/build`],
+    // PowerShell は環境変数を $env: で読む。
+    [`Remove-Item -Recurse -Force "${D}env:CLAUDE_PROJECT_DIR${BS}build"`],
+    [`Remove-Item -Recurse -Force ${D}env:PWD/build`],
   ])('%s', denies);
 
   // PowerShell は消す先を pipe でも読点でも渡す。どちらも 1 語では来ない。
