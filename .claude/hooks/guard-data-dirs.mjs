@@ -116,25 +116,45 @@ function tokenize(text) {
  * `rm -rf build` を載せている。
  */
 function stripHeredocs(text) {
+  /* 札は行の終わりに来る——`cat > notes.md <<'EOF'`。行の途中に現れる
+   * `<<EOF` は文章の中の文字列である。`<<<` (here-string) は札を取らない。 */
+  const OPEN = /(?:^|[^<])<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*$/;
+  const lines = text.split('\n');
   const out = [];
   let tag = null;
-  for (const line of text.split('\n')) {
+  let opened = -1;
+  for (const line of lines) {
     if (tag !== null) {
       if (line.trim() === tag) tag = null;
       continue;
     }
     out.push(line);
-    const m = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
-    if (m) tag = m[2];
+    const m = OPEN.exec(line);
+    if (m) {
+      tag = m[2];
+      opened = out.length;
+    }
   }
+  /* 閉じないまま終わったなら、それは札ではなかった。読んだ行を捨てない。 */
+  if (tag !== null) return [...out, ...lines.slice(opened)].join('\n');
   return out.join('\n');
 }
 
-/** 命令を段に割る。区切りも引用符の中では効かない。 */
+/**
+ * 命令を段に割る。区切りも引用符の中では効かない。手前の区切りが `|` 単体
+ * だったかを憶えておく——PowerShell は消す先を pipe で渡すので、その段には
+ * 旗しか無い。
+ */
 function segments(text) {
   const out = [];
   let cur = '';
   let quote = '';
+  let piped = false;
+  const push = (nextPiped) => {
+    out.push({ text: cur, piped });
+    cur = '';
+    piped = nextPiped;
+  };
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (quote) {
@@ -148,15 +168,15 @@ function segments(text) {
       continue;
     }
     if (ch === ';' || ch === '\n' || ch === '|' || ch === '&') {
-      out.push(cur);
-      cur = '';
       /* `&&` と `||` は 2 文字で 1 つの区切り。 */
-      if (text[i + 1] === ch) i++;
+      const doubled = text[i + 1] === ch;
+      push(ch === '|' && !doubled);
+      if (doubled) i++;
       continue;
     }
     cur += ch;
   }
-  out.push(cur);
+  push(false);
   return out;
 }
 
@@ -169,6 +189,10 @@ function toAbsParts(token, cwd) {
   let t = token
     /* 引用符と、`(cd x && rm -rf build)` の丸括弧を外す。 */
     .replace(/^[('"]+|[)'"]+$/g, '')
+    /* 今いる場所を指す書き方。展開されないまま来るので、ここで解く。
+     * これ以外の変数は中身が分からないので、そのまま字として扱う。 */
+    .replace(/^\$\{?PWD\}?|^\$\(pwd\)/i, '.')
+    .replace(/^\$\{?CLAUDE_PROJECT_DIR\}?/, ROOT)
     .replace(/\\/g, '/')
     /* 円記号を斜線に直すと `\\` が `//` になる。重なった斜線は畳む。 */
     .replace(/\/{2,}/g, '/');
@@ -296,13 +320,17 @@ function scan(text, startCwd, depth = 0) {
   let cwd = startCwd;
   if (depth > 3) return cwd;
 
+  let previous = [];
   for (const segment of segments(stripHeredocs(text))) {
     /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
      * 離してから、括弧だけの語を落とす。閉じ括弧は消す先の語の末尾に付いた
-     * まま残るが、そちらは toAbsParts が外す。 */
-    let words = tokenize(segment.replace(/[({]/g, ' $& ')).filter(
-      (w) => !/^[({)}]+$/.test(w),
-    );
+     * まま残るが、そちらは toAbsParts が外す。
+     *
+     * 離すのは語の頭に来た括弧だけである。どこでも離すと `${PWD}` や
+     * `$(pwd)` まで割れて、今いる場所を指す語が読めなくなる。 */
+    let words = tokenize(
+      segment.text.replace(/(^|\s)([({])/g, '$1 $2 '),
+    ).filter((w) => !/^[({)}]+$/.test(w));
     /* 前に付いた sudo・xargs・制御構文と、その旗を落とす。 */
     while (
       words.length > 1 &&
@@ -316,6 +344,8 @@ function scan(text, startCwd, depth = 0) {
     /* 頭の環境変数の代入も落とす。 */
     while (words.length > 1 && ASSIGNMENT.test(words[0]))
       words = words.slice(1);
+    const upstream = previous;
+    previous = words;
     if (words.length === 0) continue;
     const [verb, ...rest] = words;
 
@@ -375,11 +405,21 @@ function scan(text, startCwd, depth = 0) {
     const recursive =
       name === 'rm' ? args.some(RM_RECURSIVE) : args.some(PS_RECURSIVE);
     if (!recursive) continue;
+    /* `git rm -r --cached build` が触るのは索引だけで、ファイルは残る。 */
+    if (at > 0 && words[at - 1] === 'git' && args.includes('--cached'))
+      continue;
+
+    /* PowerShell は消す先を pipe で渡す——`gci build | Remove-Item -Recurse`。
+     * その段には旗しか無いので、手前の段の語を消す先として見る。
+     * `-Path build,web/data` のように読点で並べても 1 語で来る。 */
+    const targets = (
+      segment.piped && !args.some((w) => !isFlag(w)) ? upstream : args
+    ).flatMap((w) => w.split(','));
 
     /* 旗でない語を消す先の候補にする。どれが本当の引数かを正確に知るには
      * shell を実装することになるので、広く取る。 */
-    for (const word of args) {
-      if (isFlag(word)) continue;
+    for (const word of targets) {
+      if (!word || isFlag(word)) continue;
       const rel = underRoot(toAbsParts(word, cwd));
       if (rel === null) continue;
       const hit = hits(rel);

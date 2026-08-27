@@ -49,6 +49,10 @@ function ask(command) {
   return hookSpecificOutput.permissionDecisionReason;
 }
 
+/* 展開されないまま届く変数を書くための一字。素の文字列に `${` と書くと、
+ * 書き忘れたテンプレート文字列と区別が付かない。 */
+const D = '$';
+
 const denies = (command) => expect(ask(command)).toContain('巻き込みます');
 const allows = (command) => expect(ask(command)).toBeNull();
 
@@ -134,6 +138,27 @@ describe('木ごと消す形を止める', () => {
     ['powershell -Command "Remove-Item -Recurse build"'],
   ])('%s', denies);
 
+  // 今いる場所を指す書き方。展開されないまま番人に届く。
+  test.each([
+    [`rm -rf "${D}PWD/build"`],
+    [`rm -rf ${D}{PWD}/build`],
+    [`rm -rf ${D}(pwd)/build`],
+    [`rm -rf ${D}CLAUDE_PROJECT_DIR/build`],
+  ])('%s', denies);
+
+  // PowerShell は消す先を pipe でも読点でも渡す。どちらも 1 語では来ない。
+  test.each([
+    ['Remove-Item -Recurse -Force -Path build,web/data'],
+    ['Get-ChildItem build | Remove-Item -Recurse -Force'],
+    ['gci web/data | Remove-Item -Recurse -Force'],
+  ])('%s', denies);
+
+  // 木ごと消す形が、文章の後ろに続いていても読む。閉じない `<<EOF` で
+  // 後ろを捨てていた。
+  test('閉じない <<EOF の後ろも読む', () => {
+    denies(['echo "docs mention <<EOF style"', 'rm -rf build'].join('\n'));
+  });
+
   // 命令の中で場所が変わる。作業ディレクトリを追わないと、build/ の中から
   // 打たれた相対パスが素通りする。
   test.each([
@@ -211,6 +236,9 @@ describe('後始末は通す', () => {
   // POSIX の rmdir は空のディレクトリしか消せない。再帰の旗が無ければ、
   // build/ を名指ししていても何も起きない。
   test('rmdir build', () => allows('rmdir build'));
+
+  // git rm --cached が触るのは索引だけで、ファイルは残る。
+  test('git rm -r --cached build', () => allows('git rm -r --cached build'));
 
   // 消す命令ではない。cd の引数を rm の消す先と取り違えない。
   test.each([
