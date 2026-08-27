@@ -358,8 +358,14 @@ const nameOf = (w) =>
  * ——`--exclude=…` は消す範囲を狭める旗である。 */
 const CLEAN_IGNORED = (w) => /^-[a-zA-Z]*[xX][a-zA-Z]*$/.test(w);
 const DRY_RUN = (w) => /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w) || w === '--dry-run';
-/* find が当てる名前を取る旗。値がそのまま当たる先になる。 */
-const NAMES = (w) => /^-(i?name|i?path|i?wholename)$/.test(w);
+/* find が名前で当てる旗。値は段の名前に当たるので、保護対象の名前に
+ * 当たらないことを言える。 */
+const NAMES = (w) => /^-(i?name|i?lname)$/.test(w);
+/* 道筋そのものに当たる旗。段の名前ではないので、当たらないことを段の
+ * 突き合わせでは言えない。 */
+const WHOLE = (w) => /^-(i?path|i?regex|i?wholename)$/.test(w);
+/* 保護対象の末尾の名前。find の絞りが当たるかどうかはここで見る。 */
+const PROTECTED_NAMES = [...new Set(PROTECTED.map((p) => p.split('/').pop()))];
 /* find の絞り込み。当たったファイルだけを消す形になる。 */
 const SELECTS = (w) =>
   /^-(i?name|i?path|i?regex|i?lname|newer[a-zA-Z]*|size|[acm]min|[acm]time|perm|user|group|links|inum|samefile)$/.test(
@@ -407,10 +413,14 @@ const ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
  * 決まっているぶんだけ覚えておく。中身の分からない変数は字のまま扱う。 */
 const vars = new Map();
 const VAR = /^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?(.*)$/;
-function expandVars(word) {
+/* 変数は変数を指せる——`D=build; E=$D; rm -rf $E`。解いた先がまた変数なら
+ * もう一度解く。同じ名前へ戻ったらそこで止める。 */
+function expandVars(word, seen = new Set()) {
   const m = VAR.exec(word);
   const values = m && vars.get(m[1]);
-  return values ? values.map((v) => `${v}${m[2]}`) : [word];
+  if (!values || seen.has(m[1])) return [word];
+  const next = new Set(seen).add(m[1]);
+  return values.flatMap((v) => expandVars(`${v}${m[2]}`, next));
 }
 
 /**
@@ -722,25 +732,29 @@ function scan(text, startCwd, depth = 0) {
       }
       /* 場所を書かない find は、今いる場所から探す。 */
       const roots = paths.length > 0 ? paths : ['.'];
-
-      /* 名前や大きさで絞ってあれば、消えるのは当たったファイルだけで、探す
-       * 場所そのものは残る。`find build -name '*.log' | xargs rm -rf` を
-       * 通しているのと同じ判断である。
-       *
-       * ただし当たる先は見る。`find . -type d -name build -exec rm -rf {} +`
-       * は、絞りを足したぶん壊す範囲が広がる形である。 */
-      const patterns = rest
-        .map((w, k) => (NAMES(w) ? rest[k + 1] : null))
-        .filter((w) => w !== undefined && w !== null);
-      if (rest.some(SELECTS)) {
-        if (at > 0 && words.slice(at + 1).some(RM_RECURSIVE)) {
-          report(
-            roots.flatMap((r) => patterns.map((pat) => `${r}/${pat}`)),
-            cwd,
-          );
-        }
+      if (!rest.some(SELECTS)) {
+        report(roots, cwd);
         continue;
       }
+
+      /* 絞ってある。`-delete` は空でないディレクトリを消せないので、消える
+       * のは当たったファイルだけで、探す場所そのものは残る。 */
+      if (at < 1 || !words.slice(at + 1).some(RM_RECURSIVE)) continue;
+
+      /* 再帰的な rm は、当たった物を木ごと消す。絞りが保護対象を外すと
+       * 言えるときだけ通す。言えるのは名前で絞る旗だけで、`-path` や
+       * `-regex` は道筋に当たるし、`-mtime` は名前を絞らない。
+       * 道筋で当てる find は、探す場所の直下の build にも当たる。 */
+      const named = rest
+        .map((w, k) => (NAMES(w) ? rest[k + 1] : null))
+        .filter((w) => w !== undefined && w !== null);
+      const provable =
+        named.length > 0 &&
+        !rest.some(WHOLE) &&
+        !named.some((pat) =>
+          PROTECTED_NAMES.some((name) => matcher(pat).test(name)),
+        );
+      if (provable) continue;
       report(roots, cwd);
       continue;
     }

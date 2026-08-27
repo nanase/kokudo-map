@@ -77,7 +77,9 @@ const NL = String.fromCharCode(10);
 /* 円記号。素の文字列に書くと、続く字と組んで別の字になる。 */
 const BS = String.fromCharCode(92);
 
-const denies = (command) => expect(ask(command)).toContain('巻き込みます');
+/* 止まったことだけを見る。理由文を要求すると、同じ deny でも文面の違う
+ * git clean の側で落ちる——ask() が既に permissionDecision を検めている。 */
+const denies = (command) => expect(ask(command)).not.toBeNull();
 const allows = (command) => expect(ask(command)).toBeNull();
 
 describe('木ごと消す形を止める', () => {
@@ -117,6 +119,9 @@ describe('木ごと消す形を止める', () => {
     [`D=build && rm -rf ${D}{D}`],
     ['for d in build web/data; do rm -rf $d; done'],
     ['DIR=build; rm -rf $DIR/pbf'],
+    // 変数は変数を指せる。1 段だけ解いても届かない。
+    ['D=build; E=$D; rm -rf $E'],
+    ['A=build; B=$A; C=$B; rm -rf $C/pbf'],
     // PowerShell の書き方でも同じ。
     ["$d = 'build'; Remove-Item -Recurse -Force $d"],
     ["$d='build'; Remove-Item -Recurse -Force $d"],
@@ -231,6 +236,10 @@ describe('木ごと消す形を止める', () => {
     ['find build -type f | xargs rm -f'],
     // 絞りを足すと壊す範囲が広がる形。当たる先そのものを見る。
     ['find . -type d -name build -exec rm -rf {} +'],
+    // 道筋や正規表現で当てる絞りは、保護対象を外すと言えない。
+    ["find . -path '*/build' -exec rm -rf {} +"],
+    ["find build -regex '.*' -exec rm -rf {} +"],
+    ['find build -mtime +30 -exec rm -rf {} +'],
     // find は再帰する。-exec の rm に -r が無くても木の中身は全部消える。
     ['find build -exec rm -f {} +'],
     ['bash -lc "rm -rf build"'],

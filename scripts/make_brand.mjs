@@ -374,6 +374,12 @@ const card = `<!doctype html><meta charset="utf-8">
  * 見るのは形だけで、書けるかどうかは見ない。権限で弾かれる書き先は描き
  * 終えてから落ちる。そこまで確かめるには実際に書いてみるほかなく、
  * 書いてしまえば確かめる意味が無い。 */
+/* 末尾の区切りはディレクトリを指す書き方である。resolve がそれを落とすので、
+ * `--out build/social.png/` は `build/social.png` という名前のファイルとして
+ * 書かれてしまう。落とされる前に断る。 */
+if (/[\\/]$/.test(opt.out ?? '')) {
+  throw new Error(`--out はファイル名で渡す。ディレクトリである: ${opt.out}`);
+}
 const dest = opt.out ? resolve(opt.out) : join(WEB, 'og.png');
 /* 書き先は .png のファイル名でなければ断る。`--out build` も `--out build/`
  * も、書きたいのはディレクトリの中である。まだ build/ が無いと、resolve は
