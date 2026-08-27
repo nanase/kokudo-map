@@ -376,17 +376,30 @@ function scan(text, startCwd, depth = 0) {
   /* pushd が積んだ場所。popd で戻る。cd しか見ていなかったころ、
    * `pushd build && rm -rf pbf` が素通りしていた。 */
   const stack = [];
+  /* 部分 shell に入る前の場所。`(cd /tmp && ls); rm -rf build` の rm が
+   * 走るのは、括弧を出た後——つまりリポジトリのルートである。 */
+  const subshells = [];
   if (depth > 3) return cwd;
 
   let previous = [];
   const ready = joinContinuations(stripComments(stripHeredocs(text)));
+  /* 閉じ括弧は、その段の命令を読み終えてから効く。次の段の頭で戻す。 */
+  let closing = 0;
   for (const segment of segments(ready)) {
+    while (closing > 0 && subshells.length > 0) {
+      cwd = subshells.pop();
+      closing--;
+    }
+    closing = (segment.text.match(/\)(\s|$)/g) ?? []).length;
     /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
      * 離してから、括弧だけの語を落とす。閉じ括弧は消す先の語の末尾に付いた
      * まま残るが、そちらは toAbsParts が外す。
      *
      * 離すのは語の頭に来た括弧だけである。どこでも離すと `${PWD}` や
      * `$(pwd)` まで割れて、今いる場所を指す語が読めなくなる。 */
+    for (const _ of segment.text.match(/(^|\s)\(/g) ?? []) {
+      subshells.push(cwd);
+    }
     let words = tokenize(
       segment.text.replace(/(^|\s)([({])/g, '$1 $2 '),
     ).filter((w) => !/^[({)}]+$/.test(w));
@@ -427,17 +440,20 @@ function scan(text, startCwd, depth = 0) {
       /* 引数の無い cd/pushd、`cd -`、`cd ~` の行き先は分からない。
        * pushd は引数が無いと積んだ場所と入れ替えるが、そこまでは追わない。 */
       const to = rest.find((w) => !isFlag(w));
-      const moved =
-        to && to !== '-' && !to.startsWith('~') ? toAbsParts(to, cwd) : null;
-      /* 行き先が無ければ cd は失敗し、shell はその場に留まる。`cd nope;
-       * rm -rf build` は、リポジトリのルートで build/ を消す命令である。 */
-      if (moved !== null && !existsSync(moved.join('/'))) continue;
+      /* 行き先が読めないとき——引数が無い、`cd -`、`cd ~`——は動かさない。
+       * 「どこか分からない」で通すと、木の中に居るかもしれない命令を
+       * 見逃す。行き先が無いときも同じで、cd は失敗して shell はその場に
+       * 留まる。`cd nope; rm -rf build` はルートで build/ を消す命令である。 */
+      if (!to || to === '-' || to.startsWith('~')) continue;
+      const moved = toAbsParts(to, cwd);
+      if (moved === null || !existsSync(moved.join('/'))) continue;
       cwd = moved;
       continue;
     }
 
     if (/^(popd|pop-location)$/i.test(verb)) {
-      cwd = stack.length > 0 ? stack.pop() : null;
+      /* 積んでいなければ popd は失敗し、shell はその場に留まる。 */
+      if (stack.length > 0) cwd = stack.pop();
       continue;
     }
 
@@ -455,10 +471,20 @@ function scan(text, startCwd, depth = 0) {
       }
       const after = rest.slice(i + 1);
       const flags = after.filter((w) => w !== '--' && isFlag(w));
+      /* `-e <pattern>` と `--exclude <pattern>` は値を取る。その値を
+       * pathspec と読むと、範囲を絞った扱いになって素通りする。 */
+      const values = new Set();
+      after.forEach((w, k) => {
+        if (/^(-e|--exclude)$/.test(w) && after[k + 1] !== undefined) {
+          values.add(k + 1);
+        }
+      });
       /* 消す範囲を絞る引数。付いていれば、そこに保護対象が入るときだけ止める
        * ——理由文が「名指ししてください」と言うのに、名指しすると止まるのでは
        * 通り道が無い。 */
-      const paths = after.filter((w) => w !== '--' && !isFlag(w));
+      const paths = after.filter(
+        (w, k) => w !== '--' && !isFlag(w) && !values.has(k),
+      );
       const scoped =
         paths.length > 0 &&
         !paths.some((w) => {

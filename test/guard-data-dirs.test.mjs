@@ -208,6 +208,11 @@ describe('木ごと消す形を止める', () => {
     [`pushd ${AWAY} && popd && rm -rf build`],
     // 行き先が無ければ cd は失敗し、shell はルートに留まる。
     ['cd nope; rm -rf build'],
+    ['cd -; rm -rf build'],
+    // 積んでいなければ popd は失敗し、shell はその場に留まる。
+    ['popd; rm -rf build'],
+    // 部分 shell を出れば場所は戻る。括弧の外で走る rm はルートで走る。
+    [`(cd ${AWAY} && ls); rm -rf build`],
     ['cd build && rm -rf ../build/pbf'],
     ['cd web && rm -rf data'],
     ['cd build/pbf && rm -rf .'],
@@ -258,6 +263,10 @@ describe('木ごと消す形を止める', () => {
     // 範囲を絞る引数が保護対象を指していれば、絞っていても止める。
     ['git clean -xdf build'],
     ['git clean -xdf -- web/data'],
+    // 値を取る旗の値は pathspec ではない。範囲を絞った扱いにしない。
+    ['git clean -xdf -e node_modules'],
+    ['git clean -e foo -xdf'],
+    ['git clean --exclude foo -xdf'],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
