@@ -122,6 +122,26 @@ const OUT = size
   ? { w: Number(size[1]), h: Number(size[2]) }
   : { w: CARD.w, h: CARD.h };
 const SCALE = Math.max(OUT.w / CARD.w, OUT.h / CARD.h);
+
+/* 切れる量には限りがある。題字の左に空いているのは組みの 7.7%、右端の標識の
+ * 外は 4.5% しかない。縦横比が 1200:630 から離れるほど切る量は増え、どこかで
+ * 題字か標識が欠ける。1080x1080 を渡すと横を 47% 切り、題字は「道マップ」に
+ * なる——それでも終了コードは 0 になってしまう。
+ *
+ * 一辺 4%、両端で 8% を上限にする。1280x640 (2:1) で切るのは縦の 4.8% なので
+ * 収まる。超える寸法は、欠けた札を黙って書くより止めたほうがよい。 */
+const CROP_MAX = 0.08;
+const crop = {
+  w: 1 - OUT.w / (CARD.w * SCALE),
+  h: 1 - OUT.h / (CARD.h * SCALE),
+};
+if (crop.w > CROP_MAX || crop.h > CROP_MAX) {
+  const pct = (v) => `${(v * 100).toFixed(0)}%`;
+  throw new Error(
+    `--card ${opt.card} は ${CARD.w}:${CARD.h} から離れすぎている: ` +
+      `横 ${pct(crop.w)}・縦 ${pct(crop.h)} を切ることになり、題字か標識が欠ける`,
+  );
+}
 const GROUND = '#0B1826';
 const INK_2 = '#9CB8DC';
 /* 街路。地の色との差はここだけで決まる。 */
