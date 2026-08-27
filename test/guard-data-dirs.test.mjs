@@ -454,6 +454,10 @@ describe('後始末は通す', () => {
   // 引用符の中も、# の後ろも命令ではない。書き留めるだけの命令まで止めない。
   test.each([
     ['grep -rn "rm -rf build" docs/'],
+    // 引数を走らせず字として並べるだけの命令。引用符が無くても同じである。
+    ['echo rm -rf build >> notes.md'],
+    ['grep -rn rm -rf build .'],
+    ['printf "rm -rf build"'],
     ['ls build # rm -rf build はしない'],
     ['echo ok  # cd build && rm -rf pbf'],
     ['echo "後始末: ; rm -rf build" >> notes.md'],
@@ -493,6 +497,37 @@ describe('後始末は通す', () => {
     [`rm -rf ../${NAME}-worktree`],
     [`rm -rf ${PARENT}/${NAME}-worktree`],
   ])('%s', allows);
+});
+
+describe('木の名前に括弧があっても効く', () => {
+  /* glob の字の組として読むと `[wip]` は自分自身に当たらず、underRoot が
+   * 全部 null を返して番人が丸ごと効かなくなっていた。 */
+  const BRACKET = join(mkdtempSync(join(tmpdir(), 'guard-')), '[wip]', 'repo')
+    .split(BS)
+    .join('/');
+  beforeAll(() => {
+    for (const dir of ['build/pbf', 'web/data']) {
+      mkdirSync(join(BRACKET, dir), { recursive: true });
+    }
+  });
+  afterAll(() =>
+    rmSync(dirname(dirname(BRACKET)), { recursive: true, force: true }),
+  );
+
+  test.each([['rm -rf build'], ['rm -rf web/data'], ['rm -rf .']])(
+    '%s',
+    (command) => {
+      const out = execFileSync(NODE, [HOOK], {
+        input: JSON.stringify({
+          tool_name: 'Bash',
+          tool_input: { command },
+        }),
+        env: { ...process.env, CLAUDE_PROJECT_DIR: BRACKET },
+        encoding: 'utf8',
+      });
+      expect(out.trim()).not.toBe('');
+    },
+  );
 });
 
 describe('読めない入力で作業を止めない', () => {

@@ -293,14 +293,22 @@ function underRoot(parts) {
   if (parts.length === 1 && parts[0] === '') return [];
   const shared = Math.min(parts.length, ROOT_PARTS.length);
   for (let i = 0; i < shared; i++) {
-    /* ここも glob で見る。段ごとの突き合わせだけを glob にしていたので、
+    /* glob でも見る。段ごとの突き合わせだけを glob にしていたので、
      * `rm -rf ../NationalRouteMap*` がリポジトリごと持っていけた。 */
-    if (!matcher(parts[i]).test(ROOT_PARTS[i])) return null;
+    if (!same(parts[i], ROOT_PARTS[i])) return null;
   }
   return parts.length <= ROOT_PARTS.length
     ? []
     : parts.slice(ROOT_PARTS.length);
 }
+
+/**
+ * 段が同じ場所を指すか。まず字として比べる——`[wip]` のような括弧を含む
+ * 名前は、glob として読むと字の組になって自分自身に当たらない。リポジトリを
+ * そういう名前の下に置いた人の手元で、番人が丸ごと効かなくなっていた。
+ */
+const same = (a, b) =>
+  a.toLowerCase() === b.toLowerCase() || matcher(a).test(b);
 
 /**
  * その場所が保護対象を巻き込むか。保護対象そのものか、その上を指していれば
@@ -311,7 +319,7 @@ function hits(rel) {
   return PROTECTED.filter((p) => {
     const parts = p.split('/');
     if (rel.length > parts.length) return false;
-    return rel.every((seg, i) => matcher(seg).test(parts[i]));
+    return rel.every((seg, i) => same(seg, parts[i]));
   });
 }
 
@@ -376,6 +384,12 @@ const SELECTS = (w) =>
   );
 /* PowerShell の下見。git clean の -n にあたる。止めすぎると迂回される。 */
 const WHAT_IF = (w) => /^-wh(a(t(i(f)?)?)?)?$/i.test(w);
+
+/* 引数を走らせず、字として並べるだけの命令。ここに挟まった `rm` は書き
+ * 留められた字であって、走る命令ではない——`echo rm -rf build >> notes.md`
+ * や `grep -rn rm -rf build .` を止めないため。 */
+const PRINTS =
+  /^(echo|printf|grep|egrep|fgrep|rg|ag|ack|cat|sed|awk|diff|comm|curl|wget|write-output|write-host)$/i;
 
 /* 命令の前に付いて、後ろの命令をそのまま走らせるもの。剥がさないと
  * `sudo rm -rf build` の verb が sudo になって素通りする。 */
@@ -740,7 +754,9 @@ function scan(text, startCwd, depth = 0) {
     /* 消す命令は先頭とは限らない。`sudo -u me rm -rf build` の -u の値も、
      * `env FOO=1 rm …` の代入も、旗として落とし切れる形ではない。語の並びの
      * 中から探すほうが、包みの種類を数え上げるより確かである。 */
-    const at = words.findIndex((w) => REMOVE.test(nameOf(w)));
+    const at = PRINTS.test(nameOf(verb))
+      ? -1
+      : words.findIndex((w) => REMOVE.test(nameOf(w)));
 
     /* find は探す場所を先に書き、消す命令を後ろに置く。
      * `find build -type d -exec rm -rf {} +` の `{}` は場所ではない——
