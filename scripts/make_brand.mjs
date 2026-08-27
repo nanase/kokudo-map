@@ -37,7 +37,10 @@ const WEB = join(ROOT, 'web');
 const { values: opt } = parseArgs({
   options: { card: { type: 'string' }, out: { type: 'string' } },
 });
-if (Boolean(opt.card) !== Boolean(opt.out)) {
+if (
+  (opt.card !== undefined || opt.out !== undefined) &&
+  !(opt.card && opt.out)
+) {
   throw new Error(
     '--card と --out は揃えて渡す: --card 1280x640 --out build/social.png',
   );
@@ -111,7 +114,7 @@ const CARD = { w: 1200, h: 630 };
  * 覆うところまで拡大して、はみ出したぶんを切る。縁は地の色へ沈めてあり、
  * 見る物は中ほどに寄せてあるので、数十 px を切っても絵は欠けない。組みを
  * 寸法ごとに持つと、直した側と直し忘れた側ができる。 */
-const size = opt.card ? /^(\d+)x(\d+)$/.exec(opt.card) : null;
+const size = opt.card ? /^([1-9]\d*)x([1-9]\d*)$/.exec(opt.card) : null;
 if (opt.card && !size) {
   throw new Error(`--card は WxH で渡す (例: 1280x640): ${opt.card}`);
 }
