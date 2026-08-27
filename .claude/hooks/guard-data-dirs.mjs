@@ -459,6 +459,8 @@ function scan(text, startCwd, depth = 0) {
   /* 部分 shell に入る前の場所。`(cd /tmp && ls); rm -rf build` の rm が
    * 走るのは、括弧を出た後——つまりリポジトリのルートである。 */
   const subshells = [];
+  /* この命令が作る場所。フックが走る時点ではまだ無いが、cd の頃には在る。 */
+  const willExist = new Set();
   if (depth > 3) return cwd;
 
   let previous = [];
@@ -555,6 +557,17 @@ function scan(text, startCwd, depth = 0) {
       }
     }
 
+    /* `mkdir -p tmpwork && cd tmpwork && rm -rf ../build` の cd を、行き先が
+     * 無いからと数えないでいた。作るのは同じ命令の中である。 */
+    if (/^(mkdir|md|new-item)$/i.test(verb)) {
+      for (const w of rest) {
+        if (isFlag(w)) continue;
+        const made = toAbsParts(w, cwd);
+        if (made) willExist.add(made.join('/').toLowerCase());
+      }
+      continue;
+    }
+
     /* PowerShell は同じことを Set-Location と書く。cmd は chdir と書く。 */
     const moves = /^(cd|chdir|set-location|sl|pushd|push-location)$/i.test(
       verb,
@@ -570,7 +583,9 @@ function scan(text, startCwd, depth = 0) {
        * 留まる。`cd nope; rm -rf build` はルートで build/ を消す命令である。 */
       if (!to || to === '-' || to.startsWith('~')) continue;
       const moved = toAbsParts(to, cwd);
-      if (moved === null || !existsSync(moved.join('/'))) continue;
+      if (moved === null) continue;
+      const where = moved.join('/');
+      if (!existsSync(where) && !willExist.has(where.toLowerCase())) continue;
       cwd = moved;
       continue;
     }

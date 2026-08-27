@@ -284,6 +284,9 @@ describe('木ごと消す形を止める', () => {
     // 入れ子の部分 shell。`))` は 2 つである。
     ['(cd build && (ls)); rm -rf build'],
     ['cd build && rm -rf ../build/pbf'],
+    // 行き先は同じ命令の中で作られる。無いからと数えないと素通りする。
+    ['mkdir -p tmpwork && cd tmpwork && rm -rf ../build'],
+    ['mkdir -p build/tmp && cd build/tmp && rm -rf ../../build'],
     ['cd web && rm -rf data'],
     ['cd build/pbf && rm -rf .'],
     [`(cd ${REPO} && rm -rf build)`],
