@@ -31,9 +31,10 @@ import { chromium } from 'playwright';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const WEB = join(ROOT, 'web');
 
-/* --card WxH --out PATH で、札だけをその寸法で書き出す。GitHub の social
- * preview は 1280x640 を求め、リンクの札が期待する 1200x630 と合わない。
- * 二つ揃って初めて効く——片方だけだと web/og.png を違う寸法で潰しかねない。 */
+/* --card WxH --out PATH で、共有カードだけをその寸法で書き出す。GitHub の
+ * social preview は 1280x640 を求め、SNS が出すカードが期待する 1200x630 と
+ * 合わない。二つ揃って初めて効く——片方だけだと web/og.png を違う寸法で
+ * 潰しかねない。 */
 const { values: opt } = parseArgs({
   options: { card: { type: 'string' }, out: { type: 'string' } },
 });
@@ -71,12 +72,12 @@ const N_COLORS = ['#1B62C4', '#D98324', '#C2352B', '#7B3E9D'];
 const NUM_SIZE = 212.5;
 
 const TITLE = '国道マップ';
-/* 札が載せる一文。README の冒頭でも共有の札でも、絵の周りに説明文は無く、
- * 地図が何のためにあるかを述べるのはここだけになる。 */
+/* カードが載せる一文。README の冒頭でも共有カードでも、絵の周りに説明文は
+ * 無く、地図が何のためにあるかを述べるのはここだけになる。 */
 const TAGLINE = ['重用区間で番号を丸めない', '日本の国道地図'];
 
 /* ---------------------------------------------------------------- favicon --- */
-/* --card は札だけを求めている。favicon は寸法を持たないので、書き直して
+/* --card はカードだけを求めている。favicon は寸法を持たないので、書き直して
  * 何かが変わる場面が無い。 */
 if (!opt.card) {
   /* The sign sits on its own; there is no page behind it to blend into, so
@@ -129,7 +130,7 @@ const SCALE = Math.max(OUT.w / CARD.w, OUT.h / CARD.h);
  * なる——それでも終了コードは 0 になってしまう。
  *
  * 一辺 4%、両端で 8% を上限にする。1280x640 (2:1) で切るのは縦の 4.8% なので
- * 収まる。超える寸法は、欠けた札を黙って書くより止めたほうがよい。 */
+ * 収まる。超える寸法は、欠けたカードを黙って書くより止めたほうがよい。 */
 const CROP_MAX = 0.08;
 const crop = {
   w: 1 - OUT.w / (CARD.w * SCALE),
@@ -309,7 +310,7 @@ const card = `<!doctype html><meta charset="utf-8">
   .shield { display: block; height: 100%; }
   .shield svg { display: block; height: 100%; width: auto; }
   /* 縁は全幅を外へ出す。shield() は既定の塗り順のまま——載る先がパネルや
-     ポップアップで、縁がその地に溶けるのが狙いだから——だが、この札には
+     ポップアップで、縁がその地に溶けるのが狙いだから——だが、このカードには
      溶ける先が無く、内側へ食い込むと面がひと回り小さく見える
      (web/shield.mjs の SHIELD_STROKE_WIDTH の注記)。 */
   .shield path { fill: ${FACE}; stroke: ${EDGE}; paint-order: stroke; }
