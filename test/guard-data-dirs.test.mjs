@@ -119,6 +119,7 @@ describe('木ごと消す形を止める', () => {
     ['DIR=build; rm -rf $DIR/pbf'],
     // PowerShell の書き方でも同じ。
     ["$d = 'build'; Remove-Item -Recurse -Force $d"],
+    ["$d='build'; Remove-Item -Recurse -Force $d"],
     ["foreach ($d in 'build','web/data') { Remove-Item -Recurse -Force $d }"],
   ])('%s', denies);
 
@@ -229,6 +230,8 @@ describe('木ごと消す形を止める', () => {
     // find は再帰する。-exec の rm に -r が無くても木の中身は全部消える。
     ['find build -exec rm -f {} +'],
     ['bash -lc "rm -rf build"'],
+    ['eval "rm -rf build"'],
+    ['eval "cd build && rm -rf pbf"'],
     ['powershell -Command "Remove-Item -Recurse build"'],
   ])('%s', denies);
 

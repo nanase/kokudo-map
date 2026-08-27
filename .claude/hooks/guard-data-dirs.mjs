@@ -504,10 +504,16 @@ function scan(text, startCwd, depth = 0) {
         );
       }
     }
-    /* PowerShell の代入は `$d = 'build'`。等号の前後が離れて来る。 */
-    if (/^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$/.test(words[0] ?? '')) {
-      const key = words[0].replace(/^\$\{?|\}?$/g, '');
-      if (words[1] === '=' && words[2] !== undefined) vars.set(key, [words[2]]);
+    /* PowerShell の代入は `$d = 'build'` とも `$d='build'` とも書く。
+     * 前者は等号が離れて来て、後者は 1 語で来る。 */
+    const assign = /^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?(=(.*))?$/.exec(
+      words[0] ?? '',
+    );
+    if (assign) {
+      const [, key, joined, value] = assign;
+      if (joined) vars.set(key, [value]);
+      else if (words[1] === '=' && words[2] !== undefined)
+        vars.set(key, [words[2]]);
       else if (/^=/.test(words[1] ?? '')) vars.set(key, [words[1].slice(1)]);
     }
     /* 前に付いた sudo・xargs・制御構文と、その旗を落とす。 */
@@ -532,6 +538,12 @@ function scan(text, startCwd, depth = 0) {
     previous = words;
     if (words.length === 0) continue;
     const [verb, ...rest] = words;
+
+    /* `eval "rm -rf build"` の中身も命令である。 */
+    if (nameOf(verb) === 'eval' && rest.length > 0) {
+      scan(rest.join(' '), cwd, depth + 1);
+      continue;
+    }
 
     /* `bash -c "…"` や `cmd /c "…"` の中身も命令である。旗の後ろを全部
      * 渡す——`cmd /c rmdir /s /q build` は語が分かれて来る。 */

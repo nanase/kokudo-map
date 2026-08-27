@@ -382,7 +382,11 @@ if (!/\.png$/i.test(dest)) {
 /* 追跡している 2 枚は 1200x630 でしか作らない。別の寸法でそこへ書くと、
  * 揃えて渡す決まりが防いでいるはずのこと——og.png を違う寸法で潰す——が
  * そのまま起きる。 */
-if (opt.card && dest === join(WEB, 'og.png')) {
+if (
+  opt.card &&
+  /* Windows のファイル名は大小を区別しない。`web/OG.png` も同じ場所である。 */
+  dest.toLowerCase() === join(WEB, 'og.png').toLowerCase()
+) {
   throw new Error(
     `web/og.png は --card では書けない。引数なしで走らせる: ${opt.out}`,
   );
