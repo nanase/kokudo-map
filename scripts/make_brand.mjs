@@ -379,6 +379,14 @@ const dest = opt.out ? resolve(opt.out) : join(WEB, 'og.png');
 if (!/\.png$/i.test(dest)) {
   throw new Error(`--out は .png のファイル名で渡す: ${opt.out}`);
 }
+/* 追跡している 2 枚は 1200x630 でしか作らない。別の寸法でそこへ書くと、
+ * 揃えて渡す決まりが防いでいるはずのこと——og.png を違う寸法で潰す——が
+ * そのまま起きる。 */
+if (opt.card && dest === join(WEB, 'og.png')) {
+  throw new Error(
+    `web/og.png は --card では書けない。引数なしで走らせる: ${opt.out}`,
+  );
+}
 if (statSync(dest, { throwIfNoEntry: false })?.isDirectory()) {
   throw new Error(`--out はファイル名で渡す。ディレクトリである: ${opt.out}`);
 }

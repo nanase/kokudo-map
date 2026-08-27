@@ -229,7 +229,7 @@ function toAbsParts(token, cwd) {
     /* 今いる場所を指す書き方。展開されないまま来るので、ここで解く。括弧を
      * 外すより先に済ませる——後にすると `$(pwd)` の `)` が先に落ちて、
      * この行が当たらなくなる。他の変数は中身が分からないので字として扱う。 */
-    .replace(/^\$\{?PWD\}?|^\$\(pwd\)/i, '.')
+    .replace(/^\$\{?PWD\}?|^\$\(pwd\)|^`pwd`/i, '.')
     .replace(/^\$\{?CLAUDE_PROJECT_DIR\}?/, ROOT)
     /* 引用符と、`(cd x && rm -rf build)` の丸括弧と波括弧を外す。 */
     .replace(/^[({'"]+|[)}'"]+$/g, '')
@@ -387,7 +387,16 @@ const SHELLS = /^(ba|z|k|da|)sh$|^(pwsh|powershell|cmd)(\.exe)?$/i;
 const PAYLOAD_FLAG = (w) =>
   /^-[a-zA-Z]*c$/.test(w) || /^(-{1,2}|\/)(c|command)$/i.test(w);
 /* `FOO=1 rm -rf build` の頭に付く代入。 */
-const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
+/* 変数で受けた消す先。展開はされないまま届くので、同じ命令の中で値が
+ * 決まっているぶんだけ覚えておく。中身の分からない変数は字のまま扱う。 */
+const vars = new Map();
+const VAR = /^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?(.*)$/;
+function expandVars(word) {
+  const m = VAR.exec(word);
+  const values = m && vars.get(m[1]);
+  return values ? values.map((v) => `${v}${m[2]}`) : [word];
+}
 
 /**
  * 消す先の候補を保護対象と突き合わせ、当たれば止める。どれが本当の引数かを
@@ -408,6 +417,31 @@ function report(candidates, cwd) {
         '木ごと消すのが本当に目的なら、利用者に頼んでください。',
     );
   }
+}
+
+/**
+ * pipe の手前が並べている場所。並べているのが分かるものだけを返し、
+ * 分からなければ null——手前が読めないものを消す先と決めつけない。
+ */
+function pipedTargets(words) {
+  if (words.length === 0) return null;
+  const head = nameOf(words[0]);
+  const rest = words.slice(1);
+  if (head === 'find') {
+    /* 名前や大きさで絞ってあれば、並ぶのは当たったファイルだけである。 */
+    if (rest.some(SELECTS)) return null;
+    const paths = [];
+    for (const w of rest) {
+      if (w.startsWith('-')) break;
+      paths.push(w);
+    }
+    return paths.length > 0 ? paths : ['.'];
+  }
+  if (LISTING.test(head)) {
+    const paths = rest.filter((w) => !isFlag(w));
+    return paths.length > 0 ? paths : ['.'];
+  }
+  return null;
 }
 
 function scan(text, startCwd, depth = 0) {
@@ -446,6 +480,14 @@ function scan(text, startCwd, depth = 0) {
          * 離さない——離すと展開する前に割れる。 */
         .replace(/(^|\s)\{(?=\s)/g, '$1 { '),
     ).filter((w) => !/^[({)}]+$/.test(w));
+    /* `for d in build web/data; do …` の値を覚える。for と in は KEYWORDS に
+     * あるので、剥がす前に読まないと in の左右が分からなくなる。 */
+    if (words[0] === 'for' && words[2] === 'in' && words[1]) {
+      vars.set(
+        words[1],
+        words.slice(3).filter((w) => !isFlag(w)),
+      );
+    }
     /* 前に付いた sudo・xargs・制御構文と、その旗を落とす。 */
     while (
       words.length > 1 &&
@@ -456,9 +498,14 @@ function scan(text, startCwd, depth = 0) {
       words = words.slice(1);
       if (!keyword) while (words.length && isFlag(words[0])) words.shift();
     }
-    /* 頭の環境変数の代入も落とす。 */
-    while (words.length > 1 && ASSIGNMENT.test(words[0]))
+    /* 頭の環境変数の代入は落とす。落とす前に値を覚える——`D=build;
+     * rm -rf $D` の $D が何かを知っているのは、ここだけである。 */
+    while (words.length > 0 && ASSIGNMENT.test(words[0])) {
+      const [, key, value] = ASSIGNMENT.exec(words[0]);
+      vars.set(key, [value]);
+      if (words.length === 1) break;
       words = words.slice(1);
+    }
     const upstream = previous;
     previous = words;
     if (words.length === 0) continue;
@@ -593,28 +640,20 @@ function scan(text, startCwd, depth = 0) {
     if (at > 0 && nameOf(words[at - 1]) === 'git' && args.includes('--cached'))
       continue;
 
-    /* PowerShell は消す先を pipe で渡す——`gci build | Remove-Item -Recurse`。
-     * その段には旗しか無いので、手前の段の語を消す先として見る。
-     * `-Path build,web/data` のように読点で並べても 1 語で来る。
-     *
-     * rm では見ない。`find . -name '*.tmp' | xargs rm -rf` の手前にある `.`
-     * は探す場所であって、消す先ではない。 */
-    const fromPipe =
-      name !== 'rm' && segment.piped && !args.some((w) => !isFlag(w));
-    let source = fromPipe ? upstream.slice(1) : args;
-    /* `Get-ChildItem | Remove-Item -Recurse` のように手前にも引数が無ければ、
-     * 消えるのは今いる場所の中身である。`gci . | …` と書けば止まるのに
-     * こちらは通る、では書き方だけで答えが割れる。 */
-    if (
-      fromPipe &&
-      upstream.length > 0 &&
-      LISTING.test(nameOf(upstream[0])) &&
-      !source.some((w) => !isFlag(w))
-    ) {
-      source = ['.'];
+    /* 消す先は pipe でも渡る——`gci build | Remove-Item -Recurse` も
+     * `find build -type d | xargs rm -rf` も、消す段には旗しか無い。手前の
+     * 段が何を並べているかを読む。読めなければ何もしない。
+     * `-Path build,web/data` のように読点で並べても 1 語で来る。 */
+    let source = args;
+    if (segment.piped && !args.some((w) => !isFlag(w))) {
+      const piped = pipedTargets(upstream);
+      if (piped === null) continue;
+      source = piped;
     }
     const targets = source.flatMap((w) =>
-      expandBraces(w).flatMap((x) => x.split(',')),
+      expandVars(w).flatMap((v) =>
+        expandBraces(v).flatMap((x) => x.split(',')),
+      ),
     );
 
     report(targets, cwd);

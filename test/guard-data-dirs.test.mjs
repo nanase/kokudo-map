@@ -109,9 +109,18 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf build/pbf build/cache'],
   ])('%s', denies);
 
+  // 変数で受けた消す先。同じ命令の中で値が決まっているものは読む。
+  test.each([
+    ['D=build; rm -rf $D'],
+    [`D=build && rm -rf ${D}{D}`],
+    ['for d in build web/data; do rm -rf $d; done'],
+    ['DIR=build; rm -rf $DIR/pbf'],
+  ])('%s', denies);
+
   // 同じ場所の別の綴り。斜線の有無で答えを変えない。
   test.each([
     [`rm -rf ${D}(pwd)`],
+    ['rm -rf `pwd`/build'],
     [`rm -rf ${D}{PWD}`],
     [`rm -rf ${DRIVE}`],
     [`rm -rf ${DRIVE}/`],
@@ -195,6 +204,12 @@ describe('木ごと消す形を止める', () => {
     // 場所を書かない find は、今いる場所から探す。
     ['cd build; find -delete'],
     ['cd build && find -type d -exec rm -rf {} +'],
+    // pipe の先の rm も同じ。手前が絞らずに並べているなら、消えるのは木で
+    // ある。書き方だけで答えを変えない。
+    ['find build -type d | xargs rm -rf'],
+    ['find build -type d -print0 | xargs -0 rm -rf'],
+    ['find web/data | xargs rm -rf'],
+    ['ls | xargs rm -rf'],
     ['bash -lc "rm -rf build"'],
     ['powershell -Command "Remove-Item -Recurse build"'],
   ])('%s', denies);
