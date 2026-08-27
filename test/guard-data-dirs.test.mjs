@@ -192,6 +192,9 @@ describe('木ごと消す形を止める', () => {
     // find は探す場所を先に書く。rm の後ろにあるのは `{}` である。
     ['find build -type d -exec rm -rf {} +'],
     ['find web/data -delete'],
+    // 場所を書かない find は、今いる場所から探す。
+    ['cd build; find -delete'],
+    ['cd build && find -type d -exec rm -rf {} +'],
     ['bash -lc "rm -rf build"'],
     ['powershell -Command "Remove-Item -Recurse build"'],
   ])('%s', denies);
@@ -293,6 +296,8 @@ describe('木ごと消す形を止める', () => {
     ['git clean -xdf -e node_modules'],
     ['git clean -e foo -xdf'],
     ['git clean --exclude foo -xdf'],
+    // 短い旗は束ねられる。末尾の e も値を取る。
+    ['git clean -xdfe node_modules'],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
@@ -327,10 +332,14 @@ describe('後始末は通す', () => {
     ['git -C docs clean -xdf'],
   ])('%s', allows);
 
-  // pipe の手前は、rm にとっては探す場所であって消す先ではない。
+  // pipe の手前は、rm にとっては探す場所であって消す先ではない。名前で
+  // 絞ってあれば、消えるのは当たったファイルだけで木は残る。-delete でも
+  // 答えは同じでなければならない。
   test.each([
     ["find . -name '*.tmp' | xargs rm -rf"],
     ["find build -name '*.log' -print0 | xargs -0 rm -rf"],
+    ["find build -name '*.log' -delete"],
+    ['find build -mtime +30 -delete'],
   ])('%s', allows);
 
   // PowerShell の下見。git clean の -n と同じで、何も消さない。

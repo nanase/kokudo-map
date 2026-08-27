@@ -345,6 +345,11 @@ const nameOf = (w) =>
  * ——`--exclude=…` は消す範囲を狭める旗である。 */
 const CLEAN_IGNORED = (w) => /^-[a-zA-Z]*[xX][a-zA-Z]*$/.test(w);
 const DRY_RUN = (w) => /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w) || w === '--dry-run';
+/* find の絞り込み。当たったファイルだけを消す形になる。 */
+const SELECTS = (w) =>
+  /^-(i?name|i?path|i?regex|i?lname|newer[a-zA-Z]*|size|[acm]min|[acm]time|perm|user|group|links|inum|samefile)$/.test(
+    w,
+  );
 /* PowerShell の下見。git clean の -n にあたる。止めすぎると迂回される。 */
 const WHAT_IF = (w) => /^-wh(a(t(i(f)?)?)?)?$/i.test(w);
 
@@ -510,12 +515,12 @@ function scan(text, startCwd, depth = 0) {
       const after = rest.slice(i + 1);
       const flags = after.filter((w) => w !== '--' && isFlag(w));
       /* `-e <pattern>` と `--exclude <pattern>` は値を取る。その値を
-       * pathspec と読むと、範囲を絞った扱いになって素通りする。 */
+       * pathspec と読むと、範囲を絞った扱いになって素通りする。短い旗は
+       * 束ねられるので、`-xdfe node_modules` の e も同じである。 */
       const values = new Set();
       after.forEach((w, k) => {
-        if (/^(-e|--exclude)$/.test(w) && after[k + 1] !== undefined) {
-          values.add(k + 1);
-        }
+        const takesValue = /^-[a-zA-Z]*e$/.test(w) || w === '--exclude';
+        if (takesValue && after[k + 1] !== undefined) values.add(k + 1);
       });
       /* 消す範囲を絞る引数。付いていれば、そこに保護対象が入るときだけ止める
        * ——理由文が「名指ししてください」と言うのに、名指しすると止まるのでは
@@ -561,13 +566,18 @@ function scan(text, startCwd, depth = 0) {
       const deletes =
         rest.includes('-delete') ||
         (at > 0 && words.slice(at + 1).some(RM_RECURSIVE));
-      if (!deletes) continue;
+      /* 名前や大きさで絞ってあれば、消えるのは当たったファイルだけで、木は
+       * 残る。`find build -name '*.log' | xargs rm -rf` を通しているのと
+       * 同じ判断である。絞りが無ければ、探す場所そのものが当たる。 */
+      const selective = rest.some(SELECTS);
+      if (!deletes || selective) continue;
       const paths = [];
       for (const w of rest) {
         if (w.startsWith('-')) break;
         paths.push(w);
       }
-      report(paths, cwd);
+      /* 場所を書かない find は、今いる場所から探す。 */
+      report(paths.length > 0 ? paths : ['.'], cwd);
       continue;
     }
 
