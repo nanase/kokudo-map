@@ -265,15 +265,23 @@ function toAbsParts(token, cwd) {
   return parts;
 }
 
-/** glob を含む段を、その段に当たるかどうかの検査に変える。 */
-const matcher = (part) =>
-  new RegExp(
-    `^${part
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.')}$`,
-    'i',
-  );
+/**
+ * glob を含む段を、その段に当たるかどうかの検査に変える。`[bw]*` のような
+ * 字の組も glob である——`b*` を止めて `[bw]*` を通すのでは、書き方だけで
+ * 答えが割れる。角括弧はそのまま正規表現の字の組として通し、組み損ねて
+ * いれば字として扱う。
+ */
+function matcher(part) {
+  const glob = part
+    .replace(/[.+^${}()|\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+    .replace(/\?/g, '.');
+  try {
+    return new RegExp(`^${glob}$`, 'i');
+  } catch {
+    return new RegExp(`^${part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+  }
+}
 
 /**
  * 絶対パスをリポジトリからの相対にする。ルートそのものと、その祖先は

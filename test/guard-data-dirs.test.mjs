@@ -174,6 +174,10 @@ describe('木ごと消す形を止める', () => {
   test.each([
     ['rm -rf build*'],
     ['rm -rf b*'],
+    // 字の組も glob である。`b*` を止めて `[bw]*` を通さない。
+    ['rm -rf [bw]*'],
+    ['rm -rf build/[pc]*'],
+    ['rm -rf buil?'],
     ['rm -rf web/*'],
     [`rm -rf ../${NAME}*`],
     [`rm -rf ${PARENT}/${NAME}*`],
@@ -356,6 +360,8 @@ describe('後始末は通す', () => {
     ['rm -rf build/brand'],
     ['rm -rf node_modules'],
     ['rm -rf web/vendor'],
+    // 組み損ねた角括弧は字である。落ちずに、当たらないままにする。
+    ['rm -rf [broken'],
     ['cd build && rm social.png'],
   ])('%s', allows);
 
