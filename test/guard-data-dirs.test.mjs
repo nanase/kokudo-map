@@ -115,6 +115,9 @@ describe('木ごと消す形を止める', () => {
     [`D=build && rm -rf ${D}{D}`],
     ['for d in build web/data; do rm -rf $d; done'],
     ['DIR=build; rm -rf $DIR/pbf'],
+    // PowerShell の書き方でも同じ。
+    ["$d = 'build'; Remove-Item -Recurse -Force $d"],
+    ["foreach ($d in 'build','web/data') { Remove-Item -Recurse -Force $d }"],
   ])('%s', denies);
 
   // 同じ場所の別の綴り。斜線の有無で答えを変えない。
@@ -210,6 +213,12 @@ describe('木ごと消す形を止める', () => {
     ['find build -type d -print0 | xargs -0 rm -rf'],
     ['find web/data | xargs rm -rf'],
     ['ls | xargs rm -rf'],
+    // 再帰は手前の段にも書ける。
+    ['Get-ChildItem build -Recurse | Remove-Item -Force'],
+    ['gci -Path build -Recurse | ri -Force'],
+    ['find build -type f | xargs rm -f'],
+    // 絞りを足すと壊す範囲が広がる形。当たる先そのものを見る。
+    ['find . -type d -name build -exec rm -rf {} +'],
     ['bash -lc "rm -rf build"'],
     ['powershell -Command "Remove-Item -Recurse build"'],
   ])('%s', denies);
@@ -355,6 +364,7 @@ describe('後始末は通す', () => {
     ["find build -name '*.log' -print0 | xargs -0 rm -rf"],
     ["find build -name '*.log' -delete"],
     ['find build -mtime +30 -delete'],
+    ["find build -name '*.log' -exec rm -rf {} +"],
   ])('%s', allows);
 
   // PowerShell の下見。git clean の -n と同じで、何も消さない。

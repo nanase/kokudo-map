@@ -345,6 +345,8 @@ const nameOf = (w) =>
  * ——`--exclude=…` は消す範囲を狭める旗である。 */
 const CLEAN_IGNORED = (w) => /^-[a-zA-Z]*[xX][a-zA-Z]*$/.test(w);
 const DRY_RUN = (w) => /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w) || w === '--dry-run';
+/* find が当てる名前を取る旗。値がそのまま当たる先になる。 */
+const NAMES = (w) => /^-(i?name|i?path|i?wholename)$/.test(w);
 /* find の絞り込み。当たったファイルだけを消す形になる。 */
 const SELECTS = (w) =>
   /^-(i?name|i?path|i?regex|i?lname|newer[a-zA-Z]*|size|[acm]min|[acm]time|perm|user|group|links|inum|samefile)$/.test(
@@ -480,13 +482,26 @@ function scan(text, startCwd, depth = 0) {
          * 離さない——離すと展開する前に割れる。 */
         .replace(/(^|\s)\{(?=\s)/g, '$1 { '),
     ).filter((w) => !/^[({)}]+$/.test(w));
-    /* `for d in build web/data; do …` の値を覚える。for と in は KEYWORDS に
-     * あるので、剥がす前に読まないと in の左右が分からなくなる。 */
-    if (words[0] === 'for' && words[2] === 'in' && words[1]) {
-      vars.set(
-        words[1],
-        words.slice(3).filter((w) => !isFlag(w)),
-      );
+    /* `for d in build web/data; do …` と `foreach ($d in 'build','web/data')`
+     * の値を覚える。for と in は KEYWORDS にあるので、剥がす前に読まないと
+     * in の左右が分からなくなる。 */
+    if (/^(for|foreach)$/i.test(words[0] ?? '') && words[2] === 'in') {
+      const key = (words[1] ?? '').replace(/^\$\{?|\}?$/g, '');
+      if (key) {
+        vars.set(
+          key,
+          words
+            .slice(3)
+            .filter((w) => !isFlag(w))
+            .flatMap((w) => w.split(',')),
+        );
+      }
+    }
+    /* PowerShell の代入は `$d = 'build'`。等号の前後が離れて来る。 */
+    if (/^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$/.test(words[0] ?? '')) {
+      const key = words[0].replace(/^\$\{?|\}?$/g, '');
+      if (words[1] === '=' && words[2] !== undefined) vars.set(key, [words[2]]);
+      else if (/^=/.test(words[1] ?? '')) vars.set(key, [words[1].slice(1)]);
     }
     /* 前に付いた sudo・xargs・制御構文と、その旗を落とす。 */
     while (
@@ -613,26 +628,48 @@ function scan(text, startCwd, depth = 0) {
       const deletes =
         rest.includes('-delete') ||
         (at > 0 && words.slice(at + 1).some(RM_RECURSIVE));
-      /* 名前や大きさで絞ってあれば、消えるのは当たったファイルだけで、木は
-       * 残る。`find build -name '*.log' | xargs rm -rf` を通しているのと
-       * 同じ判断である。絞りが無ければ、探す場所そのものが当たる。 */
-      const selective = rest.some(SELECTS);
-      if (!deletes || selective) continue;
+      if (!deletes) continue;
       const paths = [];
       for (const w of rest) {
         if (w.startsWith('-')) break;
         paths.push(w);
       }
       /* 場所を書かない find は、今いる場所から探す。 */
-      report(paths.length > 0 ? paths : ['.'], cwd);
+      const roots = paths.length > 0 ? paths : ['.'];
+
+      /* 名前や大きさで絞ってあれば、消えるのは当たったファイルだけで、探す
+       * 場所そのものは残る。`find build -name '*.log' | xargs rm -rf` を
+       * 通しているのと同じ判断である。
+       *
+       * ただし当たる先は見る。`find . -type d -name build -exec rm -rf {} +`
+       * は、絞りを足したぶん壊す範囲が広がる形である。 */
+      const patterns = rest
+        .map((w, k) => (NAMES(w) ? rest[k + 1] : null))
+        .filter((w) => w !== undefined && w !== null);
+      if (rest.some(SELECTS)) {
+        if (words.slice(at + 1).some(RM_RECURSIVE)) {
+          report(
+            roots.flatMap((r) => patterns.map((pat) => `${r}/${pat}`)),
+            cwd,
+          );
+        }
+        continue;
+      }
+      report(roots, cwd);
       continue;
     }
 
     if (at === -1) continue;
     const name = nameOf(words[at]);
     const args = words.slice(at + 1);
+    /* 再帰は手前の段にも書ける——`gci build -Recurse | ri -Force` も
+     * `find build -type f | xargs rm -f` も、消えるのは木の中身である。 */
+    const deep =
+      segment.piped &&
+      (upstream.some(PS_RECURSIVE) || nameOf(upstream[0] ?? '') === 'find');
     const recursive =
-      name === 'rm' ? args.some(RM_RECURSIVE) : args.some(PS_RECURSIVE);
+      deep ||
+      (name === 'rm' ? args.some(RM_RECURSIVE) : args.some(PS_RECURSIVE));
     if (!recursive) continue;
     /* 下見は何も消さない。 */
     if (name !== 'rm' && args.some(WHAT_IF)) continue;
