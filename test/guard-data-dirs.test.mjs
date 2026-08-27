@@ -121,6 +121,17 @@ describe('木ごと消す形を止める', () => {
     ['{ rm -rf build; }'],
     ['if true; then rm -rf build; fi'],
     ['for d in a b; do rm -rf build; done'],
+    // 旗の値も代入も、旗として落とし切れる形ではない。
+    ['sudo -u me rm -rf build'],
+    ['env FOO=1 rm -rf build'],
+    ['FOO=1 rm -rf build'],
+    // 命令の綴りは名前だけとは限らない。
+    ['/usr/bin/rm -rf build'],
+    ['/bin/rm -rf build'],
+    // -c の後ろは一語とは限らないし、旗の綴りも一通りではない。
+    ['cmd /c rmdir /s /q build'],
+    ['bash -lc "rm -rf build"'],
+    ['powershell -Command "Remove-Item -Recurse build"'],
   ])('%s', denies);
 
   // 命令の中で場所が変わる。作業ディレクトリを追わないと、build/ の中から
@@ -159,7 +170,8 @@ describe('木ごと消す形を止める', () => {
   ])('%s', denies);
 
   // 名指ししていなくても、無視されているファイルを消せば build/ が対象に入る。
-  // git 自身の旗の先にある clean も読む。`-C` は走る場所を変える。
+  // git 自身の旗の先にある clean も読む。`-C` は走る場所を変える。旗の値
+  // (`-c k=v` の k=v)で読み取りを打ち切らない。
   test.each([
     ['git clean -xdf'],
     ['git clean -fdx'],
@@ -167,6 +179,9 @@ describe('木ごと消す形を止める', () => {
     ['git -C . clean -xdf'],
     [`git -C ${REPO} clean -xdf`],
     ['cd build && git clean -xdf'],
+    ['git -c core.autocrlf=false clean -xdf'],
+    ['git --git-dir .git clean -xdf'],
+    ['git --work-tree . clean -xdf'],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
@@ -214,6 +229,16 @@ describe('後始末は通す', () => {
     ['echo "後始末: ; rm -rf build" >> notes.md'],
     ["git commit -m 'rm -rf build をやめた'"],
   ])('%s', allows);
+
+  // ヒアドキュメントの中身も書き込む文章であって命令ではない。改行で段に
+  // 割ると、中の一行が命令に見える。
+  test('ヒアドキュメントの中身は読まない', () => {
+    allows(
+      ["cat > notes.md <<'EOF'", '後始末は rm -rf build ではない', 'EOF'].join(
+        '\n',
+      ),
+    );
+  });
 
   // この木の外は番人の持ち場ではない。
   test.each([

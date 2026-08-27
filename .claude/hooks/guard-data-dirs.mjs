@@ -110,6 +110,26 @@ function tokenize(text) {
   return out;
 }
 
+/**
+ * ヒアドキュメントの中身を落とす。書き込む文章であって命令ではないのに、
+ * 改行で段に割ると中の一行が命令に見える。docs がまさにその形で
+ * `rm -rf build` を載せている。
+ */
+function stripHeredocs(text) {
+  const out = [];
+  let tag = null;
+  for (const line of text.split('\n')) {
+    if (tag !== null) {
+      if (line.trim() === tag) tag = null;
+      continue;
+    }
+    out.push(line);
+    const m = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/.exec(line);
+    if (m) tag = m[2];
+  }
+  return out.join('\n');
+}
+
 /** 命令を段に割る。区切りも引用符の中では効かない。 */
 function segments(text) {
   const out = [];
@@ -227,7 +247,9 @@ const RM_RECURSIVE = (w) =>
  * 始まるのは -Recurse だけなので、`-r` も `-recu` も同じ意味になる。 */
 const PS_RECURSIVE = (w) =>
   /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i.test(w) || /^\/s$/i.test(w);
-const PS_REMOVE = /^(remove-item|ri|rd|rmdir|del|erase)$/i;
+const REMOVE = /^(rm|remove-item|ri|rd|rmdir|del|erase)$/i;
+/* `/usr/bin/rm` も rm である。 */
+const nameOf = (w) => w.replace(/\\/g, '/').split('/').pop().toLowerCase();
 
 /* `git clean -x` は無視されているファイルを消す。長い旗の中の x は数えない
  * ——`--exclude=…` は消す範囲を狭める旗である。 */
@@ -263,12 +285,18 @@ const KEYWORDS = new Set([
 ]);
 /* -c に続く文字列を命令として走らせるもの。中をもう一度読む。 */
 const SHELLS = /^(ba|z|k|da|)sh$|^(pwsh|powershell|cmd)(\.exe)?$/i;
+/* その後ろが命令になる旗。`-lc` のように束ねて書かれることも、
+ * `-Command` と綴り切られることもある。 */
+const PAYLOAD_FLAG = (w) =>
+  /^-[a-zA-Z]*c$/.test(w) || /^(-{1,2}|\/)(c|command)$/i.test(w);
+/* `FOO=1 rm -rf build` の頭に付く代入。 */
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 function scan(text, startCwd, depth = 0) {
   let cwd = startCwd;
   if (depth > 3) return cwd;
 
-  for (const segment of segments(text)) {
+  for (const segment of segments(stripHeredocs(text))) {
     /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
      * 離してから、括弧だけの語を落とす。閉じ括弧は消す先の語の末尾に付いた
      * まま残るが、そちらは toAbsParts が外す。 */
@@ -285,14 +313,18 @@ function scan(text, startCwd, depth = 0) {
       words = words.slice(1);
       if (!keyword) while (words.length && isFlag(words[0])) words.shift();
     }
+    /* 頭の環境変数の代入も落とす。 */
+    while (words.length > 1 && ASSIGNMENT.test(words[0]))
+      words = words.slice(1);
     if (words.length === 0) continue;
     const [verb, ...rest] = words;
 
-    /* `bash -c "…"` の中身も命令である。 */
-    if (SHELLS.test(verb)) {
-      const i = rest.findIndex((w) => /^([-/])c$/i.test(w));
-      if (i !== -1 && rest[i + 1] !== undefined) {
-        scan(rest[i + 1], cwd, depth + 1);
+    /* `bash -c "…"` や `cmd /c "…"` の中身も命令である。旗の後ろを全部
+     * 渡す——`cmd /c rmdir /s /q build` は語が分かれて来る。 */
+    if (SHELLS.test(nameOf(verb))) {
+      const i = rest.findIndex(PAYLOAD_FLAG);
+      if (i !== -1 && rest.length > i + 1) {
+        scan(rest.slice(i + 1).join(' '), cwd, depth + 1);
         continue;
       }
     }
@@ -308,17 +340,18 @@ function scan(text, startCwd, depth = 0) {
     if (verb === 'git' && rest.includes('clean')) {
       /* git 自身の旗を読み飛ばして clean を探す。`-C <dir>` は走る場所を
        * 変えるので、そこも見る。 */
+      /* 旗の値(`-c k=v` の k=v、`--git-dir .git` の .git)で打ち切らない。
+       * clean そのものを探し、その手前に `-C <dir>` があれば走る場所を移す。 */
+      const i = rest.indexOf('clean');
       let at = cwd;
-      let i = 0;
-      for (; i < rest.length && rest[i] !== 'clean'; i++) {
-        if (rest[i] === '-C' && rest[i + 1] !== undefined) {
-          at = toAbsParts(rest[++i], at);
-        } else if (!isFlag(rest[i])) break;
+      for (let j = 0; j < i; j++) {
+        if (rest[j] === '-C' && rest[j + 1] !== undefined) {
+          at = toAbsParts(rest[++j], at);
+        }
       }
       const flags = rest.slice(i + 1);
       /* 木の外で走る git clean は、この repo の生成物を消さない。 */
       if (
-        rest[i] === 'clean' &&
         underRoot(at) !== null &&
         flags.some(CLEAN_IGNORED) &&
         !flags.some(DRY_RUN)
@@ -332,14 +365,20 @@ function scan(text, startCwd, depth = 0) {
       continue;
     }
 
+    /* 消す命令は先頭とは限らない。`sudo -u me rm -rf build` の -u の値も、
+     * `env FOO=1 rm …` の代入も、旗として落とし切れる形ではない。語の並びの
+     * 中から探すほうが、包みの種類を数え上げるより確かである。 */
+    const at = words.findIndex((w) => REMOVE.test(nameOf(w)));
+    if (at === -1) continue;
+    const name = nameOf(words[at]);
+    const args = words.slice(at + 1);
     const recursive =
-      (verb === 'rm' && rest.some(RM_RECURSIVE)) ||
-      (PS_REMOVE.test(verb) && rest.some(PS_RECURSIVE));
+      name === 'rm' ? args.some(RM_RECURSIVE) : args.some(PS_RECURSIVE);
     if (!recursive) continue;
 
     /* 旗でない語を消す先の候補にする。どれが本当の引数かを正確に知るには
      * shell を実装することになるので、広く取る。 */
-    for (const word of rest) {
+    for (const word of args) {
       if (isFlag(word)) continue;
       const rel = underRoot(toAbsParts(word, cwd));
       if (rel === null) continue;
