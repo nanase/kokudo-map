@@ -290,6 +290,9 @@ describe('木ごと消す形を止める', () => {
     ['cd build && rm -rf ../build/pbf'],
     // 行き先は同じ命令の中で作られる。無いからと数えないと素通りする。
     ['mkdir -p tmpwork && cd tmpwork && rm -rf ../build'],
+    // 行き先も変数で受けられる。消す側だけ展開していた。
+    ['d=build; cd $d; rm -rf pbf'],
+    ['$d = "build"; Set-Location $d; Remove-Item -Recurse -Force pbf'],
     ['mkdir -p build/tmp && cd build/tmp && rm -rf ../../build'],
     ['cd web && rm -rf data'],
     ['cd build/pbf && rm -rf .'],

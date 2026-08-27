@@ -594,10 +594,18 @@ function scan(text, startCwd, depth = 0) {
        * 見逃す。行き先が無いときも同じで、cd は失敗して shell はその場に
        * 留まる。`cd nope; rm -rf build` はルートで build/ を消す命令である。 */
       if (!to || to === '-' || to.startsWith('~')) continue;
-      const moved = toAbsParts(to, cwd);
+      /* 行き先も変数で受けられる。`d=build; cd $d; rm -rf pbf` は、消す側
+       * だけを展開していたころ素通りしていた。 */
+      let moved = null;
+      for (const candidate of expandVars(to)) {
+        const parts = toAbsParts(candidate, cwd);
+        if (parts === null) continue;
+        const where = parts.join('/');
+        if (!existsSync(where) && !willExist.has(where.toLowerCase())) continue;
+        moved = parts;
+        break;
+      }
       if (moved === null) continue;
-      const where = moved.join('/');
-      if (!existsSync(where) && !willExist.has(where.toLowerCase())) continue;
       cwd = moved;
       continue;
     }
