@@ -19,15 +19,29 @@
  * or every run would show up as a diff.
  *
  * Usage:  node scripts/make_brand.mjs
+ *         node scripts/make_brand.mjs --card 1280x640 --out social.png
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 import { chromium } from 'playwright';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const WEB = join(ROOT, 'web');
+
+/* --card WxH --out PATH で、札だけをその寸法で書き出す。GitHub の social
+ * preview は 1280x640 を求め、リンクの札が期待する 1200x630 と合わない。
+ * 二つ揃って初めて効く——片方だけだと web/og.png を違う寸法で潰しかねない。 */
+const { values: opt } = parseArgs({
+  options: { card: { type: 'string' }, out: { type: 'string' } },
+});
+if (Boolean(opt.card) !== Boolean(opt.out)) {
+  throw new Error(
+    '--card と --out は揃えて渡す: --card 1280x640 --out social.png',
+  );
+}
 
 const {
   SHIELD_PATH,
@@ -59,19 +73,23 @@ const TITLE = '国道マップ';
 const TAGLINE = ['重用区間で番号を丸めない', '日本の国道地図'];
 
 /* ---------------------------------------------------------------- favicon --- */
-/* The sign sits on its own; there is no page behind it to blend into, so
- * `paint-order="stroke"` paints the fill over the stroke's inward half.
- * Without it the default paint order (stroke over fill) eats the border's
- * full width into the face, and the face reads as visibly smaller. */
-const favicon = [
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ICON_VIEWBOX}">`,
-  `<path d="${SHIELD_PATH}" fill="${FACE}" stroke="${EDGE}"`,
-  ` stroke-width="${SHIELD_ICON_STROKE_WIDTH}" stroke-linejoin="round"`,
-  ' paint-order="stroke"/>',
-  '</svg>',
-].join('');
-writeFileSync(join(WEB, 'favicon.svg'), `${favicon}\n`, 'utf8');
-console.log(`  favicon.svg  ${favicon.length} B`);
+/* --card は札だけを求めている。favicon は寸法を持たないので、書き直して
+ * 何かが変わる場面が無い。 */
+if (!opt.card) {
+  /* The sign sits on its own; there is no page behind it to blend into, so
+   * `paint-order="stroke"` paints the fill over the stroke's inward half.
+   * Without it the default paint order (stroke over fill) eats the border's
+   * full width into the face, and the face reads as visibly smaller. */
+  const favicon = [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ICON_VIEWBOX}">`,
+    `<path d="${SHIELD_PATH}" fill="${FACE}" stroke="${EDGE}"`,
+    ` stroke-width="${SHIELD_ICON_STROKE_WIDTH}" stroke-linejoin="round"`,
+    ' paint-order="stroke"/>',
+    '</svg>',
+  ].join('');
+  writeFileSync(join(WEB, 'favicon.svg'), `${favicon}\n`, 'utf8');
+  console.log(`  favicon.svg  ${favicon.length} B`);
+}
 
 /* ------------------------------------------------------------------- card ---
  *
@@ -88,6 +106,19 @@ console.log(`  favicon.svg  ${favicon.length} B`);
  * concurrency, and the drawing is free to be composed rather than surveyed.
  */
 const CARD = { w: 1200, h: 630 };
+
+/* 別の寸法を求められても絵は組み直さない。CARD の組みのまま、求められた枠を
+ * 覆うところまで拡大して、はみ出したぶんを切る。縁は地の色へ沈めてあり、
+ * 見る物は中ほどに寄せてあるので、数十 px を切っても絵は欠けない。組みを
+ * 寸法ごとに持つと、直した側と直し忘れた側ができる。 */
+const size = opt.card ? /^(\d+)x(\d+)$/.exec(opt.card) : null;
+if (opt.card && !size) {
+  throw new Error(`--card は WxH で渡す (例: 1280x640): ${opt.card}`);
+}
+const OUT = size
+  ? { w: Number(size[1]), h: Number(size[2]) }
+  : { w: CARD.w, h: CARD.h };
+const SCALE = Math.max(OUT.w / CARD.w, OUT.h / CARD.h);
 const GROUND = '#0B1826';
 const INK_2 = '#9CB8DC';
 /* 街路。地の色との差はここだけで決まる。 */
@@ -226,8 +257,15 @@ const card = `<!doctype html><meta charset="utf-8">
   }
   * { margin: 0; box-sizing: border-box; }
   body {
-    width: ${CARD.w}px; height: ${CARD.h}px; position: relative; overflow: hidden;
-    background: ${GROUND}; color: #FFFFFF;
+    width: ${OUT.w}px; height: ${OUT.h}px; position: relative; overflow: hidden;
+    background: ${GROUND};
+  }
+  /* 組みは常に CARD の寸法。求められた枠の中央に置き、覆うまで拡大する。 */
+  .card {
+    position: absolute; left: 50%; top: 50%;
+    width: ${CARD.w}px; height: ${CARD.h}px;
+    transform: translate(-50%, -50%) scale(${SCALE});
+    color: #FFFFFF;
     font-family: "Noto Sans JP", "Yu Gothic UI", sans-serif;
   }
   .map { position: absolute; inset: 0; }
@@ -254,15 +292,17 @@ const card = `<!doctype html><meta charset="utf-8">
   .shield path { fill: ${FACE}; stroke: ${EDGE}; paint-order: stroke; }
   .shield text { fill: ${EDGE}; font-family: Roboto; font-weight: 700; font-size: ${NUM_SIZE}px; }
 </style>
-<div class="map">${map}${signs([73], 232, 86)}${signs([73, 110], 430, 118)}${signs([73, 110, 215], 790, 158)}</div>
-<div class="text">
-  <h1>${TITLE}</h1>
-  <p>${TAGLINE.join('<br>')}</p>
+<div class="card">
+  <div class="map">${map}${signs([73], 232, 86)}${signs([73, 110], 430, 118)}${signs([73, 110, 215], 790, 158)}</div>
+  <div class="text">
+    <h1>${TITLE}</h1>
+    <p>${TAGLINE.join('<br>')}</p>
+  </div>
 </div>`;
 
 const browser = await chromium.launch();
 const page = await browser.newPage({
-  viewport: { width: CARD.w, height: CARD.h },
+  viewport: { width: OUT.w, height: OUT.h },
   deviceScaleFactor: 1,
 });
 await page.setContent(card);
@@ -270,6 +310,7 @@ await page.evaluate(() => document.fonts.ready);
 const png = await page.screenshot({ type: 'png' });
 await browser.close();
 
-writeFileSync(join(WEB, 'og.png'), png);
+const dest = opt.out ? resolve(opt.out) : join(WEB, 'og.png');
+writeFileSync(dest, png);
 const kb = (png.length / 1024).toFixed(1);
-console.log(`  og.png  ${CARD.w}x${CARD.h}  ${kb} kB`);
+console.log(`  ${basename(dest)}  ${OUT.w}x${OUT.h}  ${kb} kB`);

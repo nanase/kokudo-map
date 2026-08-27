@@ -72,6 +72,10 @@ mise run serve        # http://localhost:8000/
 | `bun run glyphs` | `web/glyphs/` — ラベルの SDF グリフ |
 | `bun run brand` | `web/favicon.svg` と `web/og.png` |
 
+札は寸法を選べます。`bun run brand -- --card 1280x640 --out social.png` は、その寸法の札だけをそこへ書きます。GitHub の Social preview がこれで、リンクの札が期待する 1200x630 とは合いません。追跡はしません。設定画面に上げたら捨ててください。
+
+絵は寸法ごとに組み直しません。1200x630 の組みを、求められた枠を覆うまで拡大して、はみ出したぶんを切ります。
+
 グリフは 11 字しかありません。ラベルは路線番号を `・` で繋いだ物だけなので、日本語フォント一式は要りません。2 ファイル 5 kB で足ります。
 
 ```sh
