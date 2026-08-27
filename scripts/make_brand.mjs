@@ -21,7 +21,7 @@
  * Usage:  node scripts/make_brand.mjs
  *         node scripts/make_brand.mjs --card 1280x640 --out build/social.png
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -324,10 +324,16 @@ const card = `<!doctype html><meta charset="utf-8">
   </div>
 </div>`;
 
-/* 書き先は Chromium を起動する前に決めて、無ければ作る。docs が案内する
- * build/ は .gitignore にあるので、clone した直後には無い。描き終えてから
- * ENOENT で落ちると、1 秒ぶんの描画がまるごと無駄になる。 */
+/* 書き先は Chromium を起動する前に決めて、書けることまで確かめる。docs が
+ * 案内する build/ は .gitignore にあるので clone した直後には無く、`--out
+ * build/` のように既にあるディレクトリを渡されることもある。描き終えてから
+ * ENOENT や EISDIR で落ちると、1 秒ぶんの描画がまるごと無駄になる。
+ * 確かめるほうを mkdir より先に置くのは、書けない書き先のために空の
+ * ディレクトリを残さないためである。 */
 const dest = opt.out ? resolve(opt.out) : join(WEB, 'og.png');
+if (statSync(dest, { throwIfNoEntry: false })?.isDirectory()) {
+  throw new Error(`--out はファイル名で渡す。ディレクトリである: ${opt.out}`);
+}
 mkdirSync(dirname(dest), { recursive: true });
 
 const browser = await chromium.launch();

@@ -14,7 +14,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -32,6 +32,8 @@ const REPO_POSIX = REPO.replace(/^([a-zA-Z]):/, '/$1');
 const REPO_BACKSLASH = REPO.replace(/\//g, '\\');
 /* この木の外。隣に同じ名前の物があっても番人の持ち場ではない。 */
 const OUTSIDE = `${REPO}-other`;
+/* リポジトリを含む上のディレクトリ。ここを消せば当然巻き込む。 */
+const PARENT = dirname(REPO).replace(/\\/g, '/');
 
 /** 番人に命令を渡し、止めたなら理由を、通したなら null を返す。 */
 function ask(command) {
@@ -85,6 +87,26 @@ describe('木ごと消す形を止める', () => {
     [`rm -rf ${REPO}/build`],
     [`rm -rf ${REPO_POSIX}/build`],
     [`rm -rf "${REPO_BACKSLASH}\\build"`],
+  ])('%s', denies);
+
+  // リポジトリごと、あるいはその上ごと。相対で書けば止まるのに絶対で書けば
+  // 通る、という食い違いがあった。書き方が違うだけの同じ命令である。
+  test.each([
+    [`rm -rf ${REPO}`],
+    [`rm -rf ${PARENT}`],
+    [`cd ${PARENT} && rm -rf ${basename(REPO)}`],
+  ])('%s', denies);
+
+  // 前方一致の glob。リポジトリのルートで `build*` は build に展開される。
+  test.each([['rm -rf build*'], ['rm -rf b*'], ['rm -rf web/*']])('%s', denies);
+
+  // 前に付いた命令に隠れる。verb を段の先頭語だけで見ると素通りする。
+  test.each([
+    ['sudo rm -rf build'],
+    ['xargs rm -rf build'],
+    ['nohup rm -rf build'],
+    ['bash -c "rm -rf build"'],
+    ["sh -c 'cd build && rm -rf pbf'"],
   ])('%s', denies);
 
   // 命令の中で場所が変わる。作業ディレクトリを追わないと、build/ の中から
@@ -181,6 +203,10 @@ describe('後始末は通す', () => {
     [`rm -rf ${OUTSIDE}/build`],
     ['rm -rf /tmp/claude/scratch'],
     ['cd /tmp && rm -rf build'],
+    // 隣に置いた worktree の後始末。木の上へ出て別の枝へ降りるので、
+    // `..` に潰して全部に当てると、事実でない理由で止めることになる。
+    ['rm -rf ../NationalRouteMap-worktree'],
+    [`rm -rf ${PARENT}/NationalRouteMap-worktree`],
   ])('%s', allows);
 });
 
