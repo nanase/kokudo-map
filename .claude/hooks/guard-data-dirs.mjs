@@ -463,6 +463,40 @@ function pipedTargets(words) {
   return null;
 }
 
+/**
+ * 段の中の、組みの括弧の数。`$(date)` と `arr=(a b)` の括弧は組みではない
+ * ので数えない——数えると、閉じだけが余って、後の本物の部分 shell が
+ * 一段早く閉じたことになる。
+ */
+function grouping(text) {
+  let opens = 0;
+  let closes = 0;
+  let subst = 0;
+  let quote = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (ch === '(') {
+      /* 語の頭に来た括弧だけが組みである。 */
+      if (i === 0 || /\s/.test(text[i - 1])) opens++;
+      else subst++;
+      continue;
+    }
+    if (ch === ')') {
+      if (subst > 0) subst--;
+      else closes++;
+    }
+  }
+  return { opens, closes };
+}
+
 function scan(text, startCwd, depth = 0) {
   let cwd = startCwd;
   /* pushd が積んだ場所。popd で戻る。cd しか見ていなかったころ、
@@ -484,18 +518,16 @@ function scan(text, startCwd, depth = 0) {
       cwd = subshells.pop();
       closing--;
     }
-    /* `))` は 2 つである。後ろの一字を食う書き方だと 1 つに数えてしまう。
-     * 前の段の残りに足す——上で戻し切れなかったぶんは、まだ効いていない。 */
-    closing += (segment.text.match(/\)(?=[\s)]|$)/g) ?? []).length;
+    /* 前の段の残りに足す——上で戻し切れなかったぶんは、まだ効いていない。 */
+    const paren = grouping(segment.text);
+    closing += paren.closes;
     /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
      * 離してから、括弧だけの語を落とす。閉じ括弧は消す先の語の末尾に付いた
      * まま残るが、そちらは toAbsParts が外す。
      *
      * 離すのは語の頭に来た括弧だけである。どこでも離すと `${PWD}` や
      * `$(pwd)` まで割れて、今いる場所を指す語が読めなくなる。 */
-    for (const _ of segment.text.match(/(^|\s)\(/g) ?? []) {
-      subshells.push(cwd);
-    }
+    for (let k = 0; k < paren.opens; k++) subshells.push(cwd);
     let words = tokenize(
       segment.text
         .replace(/(^|\s)\(/g, '$1 ( ')
