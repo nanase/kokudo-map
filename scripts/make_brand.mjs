@@ -242,16 +242,27 @@ const map =
 /* 標識は本線の上に載る。持ち上げ幅を高さの 42% にしてあるので、大きさが
  * 変わってもどれも同じだけ線に食い込む。重なりは幅の 2 割弱で、左が手前。 */
 const SIGN_W = (h) => (h * vw) / vh;
-function signs(refs, x0, h) {
+
+/**
+ * 標識の一枚一枚が、地図を倒した後どこに載るか。描く側も、切り落としの
+ * 上限を測る側も、ここだけを読む。位置の式を二度書くと、片方だけ動かせて
+ * しまう——検査が読むのが写しなら、それは検査ではない。
+ */
+function placements(refs, x0, h) {
   const step = Math.round(SIGN_W(h) * 0.83);
-  return refs
-    .map((ref, i) => {
-      const [x, y] = rot(x0 + i * step, ROAD_Y - h * 0.42);
-      return (
-        `<span class="pin" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px` +
-        `;height:${h}px;z-index:${refs.length - i}">${shield(ref)}</span>`
-      );
-    })
+  return refs.map((ref, i) => {
+    const [x, y] = rot(x0 + i * step, ROAD_Y - h * 0.42);
+    return { ref, x, y, w: SIGN_W(h), h, z: refs.length - i };
+  });
+}
+
+function signs(refs, x0, h) {
+  return placements(refs, x0, h)
+    .map(
+      (s) =>
+        `<span class="pin" style="left:${s.x.toFixed(1)}px;top:${s.y.toFixed(1)}px` +
+        `;height:${s.h}px;z-index:${s.z}">${shield(s.ref)}</span>`,
+    )
     .join('');
 }
 
@@ -274,15 +285,13 @@ const TEXT_INSET = { top: 66, left: 92 };
  *
  * 切ってよい量は、絵の中で最も外に出る物との隙間で決まる。横で最も外に出る
  * のは右端の標識で、地図ごと 4 度倒してあるぶん、倒す前より外へ出ている。
- * 手で 4.5% と書いていたのは倒す前の値で、実際の隙間はそれより狭い。ここで
- * measure する。
+ * 手で 4.5% と書いていたのは倒す前の値で、実際の隙間はそれより狭い。
+ * placements() に載る場所を訊いて測る。
  */
 const rightmost = Math.max(
-  ...GROUPS.map(({ refs, x0, h }) => {
-    const step = Math.round(SIGN_W(h) * 0.83);
-    const [x] = rot(x0 + (refs.length - 1) * step, ROAD_Y - h * 0.42);
-    return x + SIGN_W(h) / 2;
-  }),
+  ...GROUPS.flatMap(({ refs, x0, h }) =>
+    placements(refs, x0, h).map((s) => s.x + s.w / 2),
+  ),
 );
 /* 両端で切るので、隙間の 2 倍まで許せる。 */
 const CROP_MAX = {

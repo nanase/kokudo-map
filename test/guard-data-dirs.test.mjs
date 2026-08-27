@@ -187,6 +187,10 @@ describe('木ごと消す形を止める', () => {
     ['Remove-Item -Recurse -Force -Path build,web/data'],
     ['Get-ChildItem build | Remove-Item -Recurse -Force'],
     ['gci web/data | Remove-Item -Recurse -Force'],
+    // 手前にも引数が無ければ、消えるのは今いる場所の中身である。
+    ['Get-ChildItem | Remove-Item -Recurse -Force'],
+    ['ls | ri -Recurse -Force'],
+    ['gci . | ri -r -Force'],
   ])('%s', denies);
 
   // 木ごと消す形が、文章の後ろに続いていても読む。閉じない `<<EOF` で

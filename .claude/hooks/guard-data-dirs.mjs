@@ -321,6 +321,9 @@ const RM_RECURSIVE = (w) =>
 const PS_RECURSIVE = (w) =>
   /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i.test(w) || /^\/s$/i.test(w);
 const REMOVE = /^(rm|remove-item|ri|rd|rmdir|del|erase)$/i;
+/* pipe の手前で中身を並べるもの。引数が無ければ、並べるのは今いる場所の
+ * 中身である。 */
+const LISTING = /^(get-childitem|gci|ls|dir|get-item|gi)$/i;
 /* `/usr/bin/rm` も rm である。 */
 const nameOf = (w) =>
   w
@@ -533,7 +536,19 @@ function scan(text, startCwd, depth = 0) {
      * は探す場所であって、消す先ではない。 */
     const fromPipe =
       name !== 'rm' && segment.piped && !args.some((w) => !isFlag(w));
-    const targets = (fromPipe ? upstream : args).flatMap((w) =>
+    let source = fromPipe ? upstream.slice(1) : args;
+    /* `Get-ChildItem | Remove-Item -Recurse` のように手前にも引数が無ければ、
+     * 消えるのは今いる場所の中身である。`gci . | …` と書けば止まるのに
+     * こちらは通る、では書き方だけで答えが割れる。 */
+    if (
+      fromPipe &&
+      upstream.length > 0 &&
+      LISTING.test(nameOf(upstream[0])) &&
+      !source.some((w) => !isFlag(w))
+    ) {
+      source = ['.'];
+    }
+    const targets = source.flatMap((w) =>
       expandBraces(w).flatMap((x) => x.split(',')),
     );
 
