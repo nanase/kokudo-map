@@ -128,6 +128,8 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf `pwd`/build'],
     [`rm -rf ${D}{PWD}`],
     [`rm -rf ${DRIVE}`],
+    // cmd の旗と同じ字の drive も、根を指していれば同じである。
+    [`rm -rf ${DRIVE.toLowerCase()}`],
     [`rm -rf ${DRIVE}/`],
     ['rm -rf /'],
   ])('%s', denies);

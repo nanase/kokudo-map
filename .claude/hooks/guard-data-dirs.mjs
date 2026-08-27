@@ -321,10 +321,12 @@ function expandBraces(word, depth = 0) {
 
 /* --------------------------------------------------------- 消す形を読む --- */
 
-/* cmd の旗は `/s` `/q` のように斜線で始まる。落とすのは消す命令が実際に
- * 取る字だけにする——`/d` を旗と読むと、Git Bash が drive の根を指して
- * 書く `rm -rf /d` が検査から外れる。 */
-const isFlag = (w) => w.startsWith('-') || /^\/[sqfaSQFA]$/.test(w);
+/* cmd の旗 `/s` `/q` は落とさない。Git Bash が drive の根を指して書く
+ * `/f` と見分けが付かないためで、落とすと F: に clone したときだけ穴が
+ * 開く。旗として残しても、消す先として読んでも、行き着く先は同じである
+ * ——`/s` は `s:/` になり、この木の外として無視される。再帰かどうかは
+ * PS_RECURSIVE が別に見ているので、`rd /s /q build` は止まったままである。 */
+const isFlag = (w) => w.startsWith('-');
 const RM_RECURSIVE = (w) =>
   /^-[a-zA-Z]*[rR][a-zA-Z]*$/.test(w) || w === '--recursive';
 /* PowerShell の旗は前方一致で省略できる。Remove-Item の引数で `-r` から
