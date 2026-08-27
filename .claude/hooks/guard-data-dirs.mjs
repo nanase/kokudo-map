@@ -491,9 +491,13 @@ function scan(text, startCwd, depth = 0) {
           const rel = underRoot(toAbsParts(w, at));
           return rel !== null && hits(rel).length > 0;
         });
-      /* 木の外で走る git clean は、この repo の生成物を消さない。 */
+      /* git clean が歩くのは、走った場所から下だけである。木の外はもちろん、
+       * docs/ の中で走っても build/ には届かない。走る場所が保護対象を
+       * 含むときだけ止める。 */
+      const reach = underRoot(at);
       if (
-        underRoot(at) !== null &&
+        reach !== null &&
+        hits(reach).length > 0 &&
         !scoped &&
         flags.some(CLEAN_IGNORED) &&
         !flags.some(DRY_RUN)

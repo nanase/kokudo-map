@@ -124,25 +124,12 @@ const OUT = size
   : { w: CARD.w, h: CARD.h };
 const SCALE = Math.max(OUT.w / CARD.w, OUT.h / CARD.h);
 
-/* 切れる量には限りがある。題字の左に空いているのは組みの 7.7%、右端の標識の
- * 外は 4.5% しかない。縦横比が 1200:630 から離れるほど切る量は増え、どこかで
- * 題字か標識が欠ける。1080x1080 を渡すと横を 48% 切り、題字は「道マップ」に
- * なる——それでも終了コードは 0 になってしまう。
- *
- * 一辺 4%、両端で 8% を上限にする。1280x640 (2:1) で切るのは縦の 4.8% なので
- * 収まる。超える寸法は、欠けたカードを黙って書くより止めたほうがよい。 */
-const CROP_MAX = 0.08;
+/* 切り落としの上限は、絵の中で最も外に出る物との隙間から決める。組みが
+ * 決まった後でしか測れないので、検査は下の「切り落とし」節にある。 */
 const crop = {
   w: 1 - OUT.w / (CARD.w * SCALE),
   h: 1 - OUT.h / (CARD.h * SCALE),
 };
-if (crop.w > CROP_MAX || crop.h > CROP_MAX) {
-  const pct = (v) => `${(v * 100).toFixed(0)}%`;
-  throw new Error(
-    `--card ${opt.card} は ${CARD.w}:${CARD.h} から離れすぎている: ` +
-      `横 ${pct(crop.w)}・縦 ${pct(crop.h)} を切ることになり、題字か標識が欠ける`,
-  );
-}
 const GROUND = '#0B1826';
 const INK_2 = '#9CB8DC';
 /* 街路。地の色との差はここだけで決まる。 */
@@ -268,6 +255,50 @@ function signs(refs, x0, h) {
     .join('');
 }
 
+/* 標識の三つの組。単独 → 二重用 → 三重用。深いほど大きく、右へ寄る。 */
+const GROUPS = [
+  { refs: [73], x0: 232, h: 86 },
+  { refs: [73, 110], x0: 430, h: 118 },
+  { refs: [73, 110, 215], x0: 790, h: 158 },
+];
+
+/* 題字の左上。style.css ではなくここが述べる——下の隙間の計算が読む。 */
+const TEXT_INSET = { top: 66, left: 92 };
+
+/* ------------------------------------------------------------ 切り落とし ---
+ *
+ * 求められた枠を覆うまで拡大して、はみ出したぶんを切る作りなので、縦横比が
+ * 1200:630 から離れるほど切る量が増える。どこかで題字か標識が欠ける。
+ * 1080x1080 を渡すと横を 48% 切り、題字は「道マップ」になる——それでも
+ * 終了コードは 0 になってしまう。
+ *
+ * 切ってよい量は、絵の中で最も外に出る物との隙間で決まる。横で最も外に出る
+ * のは右端の標識で、地図ごと 4 度倒してあるぶん、倒す前より外へ出ている。
+ * 手で 4.5% と書いていたのは倒す前の値で、実際の隙間はそれより狭い。ここで
+ * measure する。
+ */
+const rightmost = Math.max(
+  ...GROUPS.map(({ refs, x0, h }) => {
+    const step = Math.round(SIGN_W(h) * 0.83);
+    const [x] = rot(x0 + (refs.length - 1) * step, ROAD_Y - h * 0.42);
+    return x + SIGN_W(h) / 2;
+  }),
+);
+/* 両端で切るので、隙間の 2 倍まで許せる。 */
+const CROP_MAX = {
+  w: (2 * Math.min(TEXT_INSET.left, CARD.w - rightmost)) / CARD.w,
+  h: (2 * Math.min(TEXT_INSET.top, CARD.h - ROAD_Y)) / CARD.h,
+};
+if (crop.w > CROP_MAX.w || crop.h > CROP_MAX.h) {
+  const pct = (v) => `${(v * 100).toFixed(1)}%`;
+  throw new Error(
+    `--card ${opt.card} は ${CARD.w}:${CARD.h} から離れすぎている: ` +
+      `横 ${pct(crop.w)}・縦 ${pct(crop.h)} を切ることになり、` +
+      `上限 (横 ${pct(CROP_MAX.w)}・縦 ${pct(CROP_MAX.h)}) を超える。` +
+      '題字か標識が欠ける',
+  );
+}
+
 /* Roboto は番号だけに使う。style.css と同じ vendor の woff2 を埋め込むので、
  * この機械に何が入っているかに関わらず、番号は画面の標識と同じ字形になる。 */
 const ROBOTO = join(WEB, 'vendor', 'roboto-latin-700-normal.woff2');
@@ -297,7 +328,8 @@ const card = `<!doctype html><meta charset="utf-8">
   /* 名前は説明文の 2.5 倍以上に取る。縮めて出されたとき、最後まで残るのは
      ここだけなので。900 は Noto Sans JP が入っている機械でしか出ない。 */
   .text {
-    position: absolute; inset: 66px auto auto 0; padding-left: 92px; width: 700px;
+    position: absolute; inset: ${TEXT_INSET.top}px auto auto 0;
+    padding-left: ${TEXT_INSET.left}px; width: 700px;
     display: flex; flex-direction: column; gap: 26px;
   }
   h1 { font-size: 108px; font-weight: 900; line-height: 1.05; letter-spacing: .02em; }
@@ -317,7 +349,7 @@ const card = `<!doctype html><meta charset="utf-8">
   .shield text { fill: ${EDGE}; font-family: Roboto; font-weight: 700; font-size: ${NUM_SIZE}px; }
 </style>
 <div class="card">
-  <div class="map">${map}${signs([73], 232, 86)}${signs([73, 110], 430, 118)}${signs([73, 110, 215], 790, 158)}</div>
+  <div class="map">${map}${GROUPS.map((g) => signs(g.refs, g.x0, g.h)).join('')}</div>
   <div class="text">
     <h1>${TITLE}</h1>
     <p>${TAGLINE.join('<br>')}</p>

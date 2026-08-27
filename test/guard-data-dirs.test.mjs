@@ -31,7 +31,7 @@ const NODE = 'node';
 /* 仮の木。守る場所と同じ形だけを作る。 */
 const REPO = mkdtempSync(join(tmpdir(), 'guard-')).replace(/\\/g, '/');
 beforeAll(() => {
-  for (const dir of ['build/pbf', 'build/cache', 'web/data']) {
+  for (const dir of ['build/pbf', 'build/cache', 'web/data', 'docs']) {
     mkdirSync(join(REPO, dir), { recursive: true });
   }
 });
@@ -295,6 +295,10 @@ describe('後始末は通す', () => {
     // ください」と言うのだから、名指しした先は通らなければならない。
     ['git clean -xdf web/vendor'],
     ['git clean -xdf -- docs'],
+    // git clean が歩くのは走った場所から下だけ。docs/ からは build/ に
+    // 届かない。
+    ['cd docs && git clean -xdf'],
+    ['git -C docs clean -xdf'],
   ])('%s', allows);
 
   // pipe の手前は、rm にとっては探す場所であって消す先ではない。
