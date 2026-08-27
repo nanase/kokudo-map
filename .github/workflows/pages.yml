@@ -78,7 +78,7 @@ jobs:
         run: |
           echo "url=$(echo '${{ steps.pages.outputs.base_url }}' | sed 's|^http://|https://|')" >> "$GITHUB_OUTPUT"
 
-      # 共有されたときの札は絶対 URL でないと読まれません。その URL を述べるのは
+      # 共有されたときのカードは絶対 URL でないと読まれません。その URL を述べるのは
       # ここだけです。index.html は %SITE_URL% と書いて待っています。
       - name: 公開 URL を埋める
         run: |

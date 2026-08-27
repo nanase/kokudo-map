@@ -66,12 +66,16 @@ const ROOT = (process.env.CLAUDE_PROJECT_DIR ?? process.cwd())
 
 function normalize(token) {
   let t = token
-    .replace(/^['"]|['"]$/g, '')
+    /* 引用符と、`(cd x && rm -rf build)` の丸括弧を外す。 */
+    .replace(/^[('"]+|[)'"]+$/g, '')
     .replace(/\\/g, '/')
     /* 円記号を斜線に直すと `\\` が `//` になる。`build//pbf` も同じ場所を
      * 指しているので、重なった斜線はここで畳む。 */
     .replace(/\/{2,}/g, '/');
   if (!t) return '';
+  /* Git Bash の絶対パスは `/d/nanase/…`。同じ場所が `d:/nanase/…` とも
+   * `D:\nanase\…` とも書かれるので、ここで一つの形に寄せる。 */
+  t = t.replace(/^\/([a-zA-Z])\//, '$1:/');
   const lower = t.toLowerCase();
   if (lower.startsWith(`${ROOT}/`)) t = t.slice(ROOT.length + 1);
   else if (lower === ROOT) t = '.';
@@ -81,12 +85,17 @@ function normalize(token) {
   return t;
 }
 
-/* その語が保護対象を巻き込むか。保護対象そのものと、その上位——`.` や
- * リポジトリのルート——を巻き込む形の両方を見る。 */
+/* 今いる場所ごと、あるいはその上ごと消す形。どこで打たれたかはフックには
+ * 分からないので、この形は保護対象を巻き込みうるものとして扱う。`*` を
+ * 通していたせいで、事故と同じ結果になる `rm -rf *` が素通りしていた。 */
+const SWEEPS_CWD = new Set(['', '.', '*', '..']);
+
+/* その語が保護対象を巻き込むか。保護対象そのものと、その上位を巻き込む形の
+ * 両方を見る。 */
 const hits = (t) =>
-  PROTECTED.filter(
-    (p) => t === p || p.startsWith(`${t}/`) || t === '.' || t === '',
-  );
+  SWEEPS_CWD.has(t) || t.startsWith('../')
+    ? [...PROTECTED]
+    : PROTECTED.filter((p) => t === p || p.startsWith(`${t}/`));
 
 /* 再帰的に消す形。rm の旗は -rf でも -f -r でも --recursive でも来るので、
  * 旗が何個続いても、そのどれかに r があれば拾う。長い旗を短い旗と分けて
@@ -95,8 +104,10 @@ const RM_FLAG = '(?:-[a-zA-Z]*|--[a-z][a-z-]*)';
 const RECURSIVE_RM = new RegExp(
   `^\\s*rm\\s+(?:${RM_FLAG}\\s+)*(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)(\\s|$)`,
 );
+/* PowerShell の旗は前方一致で省略できる。Remove-Item の引数で `-r` から
+ * 始まるのは -Recurse だけなので、`-r` も `-recu` も同じ意味になる。 */
 const REMOVE_ITEM =
-  /^\s*(remove-item|ri|rd|rmdir|del|erase)\b.*?(-recurse\b|\/s\b)/i;
+  /^\s*(remove-item|ri|rd|rmdir|del|erase)\b.*?(-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?\b|\/s\b)/i;
 const RMDIR = /^\s*rmdir\s/;
 /* 無視されているファイルを消す。build/ を名指ししていなくても対象に入る。 */
 const GIT_CLEAN = /^\s*git\s+clean\b.*\s-\S*[xX]/;
@@ -128,7 +139,9 @@ for (const segment of segments) {
     .trim()
     .split(/\s+/)
     .slice(1)
-    .filter((w) => w && !w.startsWith('-') && !w.startsWith('/'));
+    /* 旗を落とす。斜線で始まる語は cmd の `/s` `/q` だけを落とす——
+     * `/d/nanase/…/build` は Git Bash の絶対パスであって旗ではない。 */
+    .filter((w) => w && !w.startsWith('-') && !/^\/[a-zA-Z]$/.test(w));
 
   for (const word of words) {
     const hit = hits(normalize(word));

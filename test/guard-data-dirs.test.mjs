@@ -17,9 +17,14 @@ import { fileURLToPath } from 'node:url';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const HOOK = join(ROOT, '.claude', 'hooks', 'guard-data-dirs.mjs');
 
+/* .claude/settings.json は番人を node で起動する。bun test の
+ * process.execPath は bun なので、それで検査すると本番と違う処理系を
+ * 見ることになる。 */
+const NODE = 'node';
+
 /** 番人に命令を渡し、止めたなら理由を、通したなら null を返す。 */
 function ask(command) {
-  const out = execFileSync(process.execPath, [HOOK], {
+  const out = execFileSync(NODE, [HOOK], {
     input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
     env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT.replace(/\\/g, '/') },
     encoding: 'utf8',
@@ -48,6 +53,32 @@ describe('木ごと消す形を止める', () => {
     expect(ask(command)).toContain('巻き込みます');
   });
 
+  // 今いる場所ごと、あるいはその上ごと。どこで打たれたかは番人には分からない
+  // ので、巻き込みうる形として扱う。`rm -rf *` は事故と同じ結果になる。
+  test.each([
+    ['rm -rf *'],
+    ['rm -rf ./*'],
+    ['rm -rf */'],
+    ['rm -rf ..'],
+    ['rm -rf ../NationalRouteMap'],
+  ])('%s', (command) => {
+    expect(ask(command)).toContain('巻き込みます');
+  });
+
+  // 同じ場所が三通りの書き方で来る。Git Bash の絶対パスは `/d/…` で始まる。
+  test.each([
+    [`rm -rf ${REPO}/build`],
+    ['rm -rf /d/nanase/Documents/script/NationalRouteMap/build'],
+    ['rm -rf "D:\\nanase\\Documents\\script\\NationalRouteMap\\build"'],
+  ])('%s', (command) => {
+    expect(ask(command)).toContain('巻き込みます');
+  });
+
+  // 部分命令の括弧が語に付く。
+  test('(cd /tmp && rm -rf build)', () => {
+    expect(ask('(cd /tmp && rm -rf build)')).toContain('巻き込みます');
+  });
+
   // 旗は一続きとは限らない。--force に r が入っているので、長い旗を短い旗と
   // 同じ形で見ると `rm --force x` まで再帰扱いになる。
   test.each([['rm -f -r build'], ['rm -r -f build'], ['rm --recursive build']])(
@@ -69,9 +100,12 @@ describe('木ごと消す形を止める', () => {
   });
 
   // PowerShell と cmd の言い方でも同じ物が消える。
+  // PowerShell の旗は前方一致で省略できる。-r は -Recurse である。
   test.each([
     ['Remove-Item -Recurse -Force build'],
     ['Remove-Item -Force -Recurse build'],
+    ['Remove-Item -r -Force build'],
+    ['Remove-Item -Recu build'],
     ['rmdir /s /q build'],
   ])('%s', (command) => {
     expect(ask(command)).toContain('巻き込みます');
@@ -115,16 +149,20 @@ describe('後始末は通す', () => {
     expect(ask(command)).toBeNull();
   });
 
-  // この木の外は番人の持ち場ではない。
-  test('リポジトリの外は見ない', () => {
-    expect(ask('rm -rf /c/temp/scratch')).toBeNull();
+  // この木の外は番人の持ち場ではない。Git Bash の絶対パスでも同じ。
+  test.each([
+    ['rm -rf /c/temp/scratch'],
+    ['rm -rf /d/nanase/Documents/script/other/build'],
+    ['rm -rf /tmp/claude/scratch'],
+  ])('%s', (command) => {
+    expect(ask(command)).toBeNull();
   });
 });
 
 describe('読めない入力で作業を止めない', () => {
   // 番人が落ちて命令まで通らなくなるのは行き過ぎである。通して構わない。
   test.each([[''], ['{'], ['{"tool_input":{}}'], ['null']])('%p', (payload) => {
-    const out = execFileSync(process.execPath, [HOOK], {
+    const out = execFileSync(NODE, [HOOK], {
       input: payload,
       env: { ...process.env, CLAUDE_PROJECT_DIR: REPO },
       encoding: 'utf8',
