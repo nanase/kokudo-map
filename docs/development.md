@@ -112,6 +112,7 @@ uvx ruff check pipeline      # Python の静的検査
 | `docs/` | この文書から辿る詳細文書 |
 | `.github/workflows/` | 検査と GitHub Pages への配信 |
 | `.claude/skills/national-route-data/` | 生成と品質管理の手順、判定ルール |
+| `.claude/hooks/guard-data-dirs.mjs` | build/ と web/data/ を木ごと消す命令を手前で止める |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |
 
 ## 関連文書

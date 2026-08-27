@@ -12,5 +12,20 @@
     "readable@nanase": true,
     "flow@nanase": true,
     "ui@nanase": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/guard-data-dirs.mjs\"",
+            "timeout": 10,
+            "statusMessage": "生成物を消す命令か見ています"
+          }
+        ]
+      }
+    ]
   }
 }
