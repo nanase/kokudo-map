@@ -7,6 +7,9 @@
  *
  * だからここで検査するのは境目である。番人そのものを子プロセスとして起動して、
  * 本物の判定を通す。判定の写しを検査しても検証にはならない。
+ *
+ * 場所は必ず REPO から組み立てる。手元の絶対パスを書き写すと、CI の
+ * ubuntu では同じ命令が木の外を指すことになり、そこだけ落ちる。
  */
 
 import { describe, expect, test } from 'bun:test';
@@ -22,11 +25,19 @@ const HOOK = join(ROOT, '.claude', 'hooks', 'guard-data-dirs.mjs');
  * 見ることになる。 */
 const NODE = 'node';
 
+const REPO = ROOT.replace(/\\/g, '/');
+/* 同じ場所の別の書き方。Windows の `d:/…` は Git Bash では `/d/…` になる。
+ * ubuntu には drive letter が無いので、その場合は元のままになる。 */
+const REPO_POSIX = REPO.replace(/^([a-zA-Z]):/, '/$1');
+const REPO_BACKSLASH = REPO.replace(/\//g, '\\');
+/* この木の外。隣に同じ名前の物があっても番人の持ち場ではない。 */
+const OUTSIDE = `${REPO}-other`;
+
 /** 番人に命令を渡し、止めたなら理由を、通したなら null を返す。 */
 function ask(command) {
   const out = execFileSync(NODE, [HOOK], {
     input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
-    env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT.replace(/\\/g, '/') },
+    env: { ...process.env, CLAUDE_PROJECT_DIR: REPO },
     encoding: 'utf8',
   });
   if (!out.trim()) return null;
@@ -36,7 +47,8 @@ function ask(command) {
   return hookSpecificOutput.permissionDecisionReason;
 }
 
-const REPO = ROOT.replace(/\\/g, '/');
+const denies = (command) => expect(ask(command)).toContain('巻き込みます');
+const allows = (command) => expect(ask(command)).toBeNull();
 
 describe('木ごと消す形を止める', () => {
   // 2026-08-27 に実際に打たれ、build/ を全部消した命令がこれ。
@@ -45,13 +57,18 @@ describe('木ごと消す形を止める', () => {
     [`cd ${REPO} && rm -rf build`],
     ['rm -rf build/'],
     ['rm -rf ./build'],
-    ['rm -rf build/*'],
-    [`rm -rf ${REPO}/build`],
     ['ls && rm -rf build && echo done'],
     ['rm -rf .'],
-  ])('%s', (command) => {
-    expect(ask(command)).toContain('巻き込みます');
-  });
+  ])('%s', denies);
+
+  // 末尾の glob は「その中身ぜんぶ」で、親を消すのと同じ結果になる。
+  // `*` だけを剥がしていたので、globstar の形が素通りしていた。
+  test.each([
+    ['rm -rf build/*'],
+    ['rm -rf build/**'],
+    ['rm -rf build/**/*'],
+    ['rm -rf build/.'],
+  ])('%s', denies);
 
   // 今いる場所ごと、あるいはその上ごと。どこで打たれたかは番人には分からない
   // ので、巻き込みうる形として扱う。`rm -rf *` は事故と同じ結果になる。
@@ -61,31 +78,29 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf */'],
     ['rm -rf ..'],
     ['rm -rf ../NationalRouteMap'],
-  ])('%s', (command) => {
-    expect(ask(command)).toContain('巻き込みます');
-  });
+  ])('%s', denies);
 
-  // 同じ場所が三通りの書き方で来る。Git Bash の絶対パスは `/d/…` で始まる。
+  // 同じ場所が三通りの書き方で来る。
   test.each([
     [`rm -rf ${REPO}/build`],
-    ['rm -rf /d/nanase/Documents/script/NationalRouteMap/build'],
-    ['rm -rf "D:\\nanase\\Documents\\script\\NationalRouteMap\\build"'],
-  ])('%s', (command) => {
-    expect(ask(command)).toContain('巻き込みます');
-  });
+    [`rm -rf ${REPO_POSIX}/build`],
+    [`rm -rf "${REPO_BACKSLASH}\\build"`],
+  ])('%s', denies);
 
-  // 部分命令の括弧が語に付く。
-  test('(cd /tmp && rm -rf build)', () => {
-    expect(ask('(cd /tmp && rm -rf build)')).toContain('巻き込みます');
-  });
+  // 命令の中で場所が変わる。作業ディレクトリを追わないと、build/ の中から
+  // 打たれた相対パスが素通りする。
+  test.each([
+    ['cd build && rm -rf pbf'],
+    ['cd web && rm -rf data'],
+    ['cd build/pbf && rm -rf .'],
+    [`(cd ${REPO} && rm -rf build)`],
+  ])('%s', denies);
 
   // 旗は一続きとは限らない。--force に r が入っているので、長い旗を短い旗と
   // 同じ形で見ると `rm --force x` まで再帰扱いになる。
   test.each([['rm -f -r build'], ['rm -r -f build'], ['rm --recursive build']])(
     '%s',
-    (command) => {
-      expect(ask(command)).toContain('巻き込みます');
-    },
+    denies,
   );
 
   // build/ の下も、消えれば取り直しになるものは同じく止める。
@@ -95,21 +110,17 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf build/n03'],
     ['rm -rf build/overpass-baseline'],
     ['rm -rf web/data'],
-  ])('%s', (command) => {
-    expect(ask(command)).toContain('巻き込みます');
-  });
+  ])('%s', denies);
 
-  // PowerShell と cmd の言い方でも同じ物が消える。
-  // PowerShell の旗は前方一致で省略できる。-r は -Recurse である。
+  // PowerShell と cmd の言い方でも同じ物が消える。PowerShell の旗は
+  // 前方一致で省略できるので、-r は -Recurse である。
   test.each([
     ['Remove-Item -Recurse -Force build'],
     ['Remove-Item -Force -Recurse build'],
     ['Remove-Item -r -Force build'],
     ['Remove-Item -Recu build'],
     ['rmdir /s /q build'],
-  ])('%s', (command) => {
-    expect(ask(command)).toContain('巻き込みます');
-  });
+  ])('%s', denies);
 
   // 名指ししていなくても、無視されているファイルを消せば build/ が対象に入る。
   test.each([
@@ -130,10 +141,21 @@ describe('後始末は通す', () => {
     ['rm -rf build/brand'],
     ['rm -rf node_modules'],
     ['rm -rf web/vendor'],
+    ['cd build && rm social.png'],
+  ])('%s', allows);
+
+  // 何も消さない下見と、消す範囲を狭める旗。--exclude の x を -x と
+  // 読み違えない。
+  test.each([
     ['git clean -fd'],
-  ])('%s', (command) => {
-    expect(ask(command)).toBeNull();
-  });
+    ['git clean -ndx'],
+    ['git clean --dry-run -x'],
+    ['git clean --exclude=foo.txt -fd'],
+  ])('%s', allows);
+
+  // POSIX の rmdir は空のディレクトリしか消せない。再帰の旗が無ければ、
+  // build/ を名指ししていても何も起きない。
+  test('rmdir build', () => allows('rmdir build'));
 
   // 消す命令ではない。cd の引数を rm の消す先と取り違えない。
   test.each([
@@ -144,19 +166,22 @@ describe('後始末は通す', () => {
     ['git status'],
     ['mise run pack'],
     ['node scripts/make_brand.mjs --card 1280x640 --out build/social.png'],
-    ['grep -rn "rm -rf build" docs/'],
-  ])('%s', (command) => {
-    expect(ask(command)).toBeNull();
-  });
+  ])('%s', allows);
 
-  // この木の外は番人の持ち場ではない。Git Bash の絶対パスでも同じ。
+  // 引用符の中は命令ではない。書き留めるだけの命令まで止めない。
+  test.each([
+    ['grep -rn "rm -rf build" docs/'],
+    ['echo "後始末: ; rm -rf build" >> notes.md'],
+    ["git commit -m 'rm -rf build をやめた'"],
+  ])('%s', allows);
+
+  // この木の外は番人の持ち場ではない。
   test.each([
     ['rm -rf /c/temp/scratch'],
-    ['rm -rf /d/nanase/Documents/script/other/build'],
+    [`rm -rf ${OUTSIDE}/build`],
     ['rm -rf /tmp/claude/scratch'],
-  ])('%s', (command) => {
-    expect(ask(command)).toBeNull();
-  });
+    ['cd /tmp && rm -rf build'],
+  ])('%s', allows);
 });
 
 describe('読めない入力で作業を止めない', () => {

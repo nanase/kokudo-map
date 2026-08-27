@@ -13,10 +13,17 @@
  * 止めるのは「木ごと」消す形だけである。中の 1 ファイルを消すこと
  * (`rm build/social.png`)、保護対象でない下位ディレクトリを消すこと
  * (`rm -rf build/brand`) は通す。後始末そのものを塞ぐと、迂回されて意味が
- * 無くなる。
+ * 無くなる。`git clean -x` は無視されているファイルを消す命令なので、
+ * build/ を名指ししていなくても止める——ただし `-n` の下見は通す。
  *
- * `git clean -xdf` も止める。無視されているファイルを消す命令なので、
- * 名指ししていなくても build/ と web/data/ がまるごと対象に入る。
+ * 判定は近似である。命令文字列を正しく解釈するには shell を実装することに
+ * なるので、消す形かどうかと、消す先がどこかを、形で見ている。境目は
+ * test/guard-data-dirs.test.mjs が検査する。
+ *
+ * 見えないもの: Bash ツールの作業ディレクトリは呼び出しをまたいで残るが、
+ * フックには渡らない。命令の中の `cd` は追うので `cd build && rm -rf pbf`
+ * は止まるが、前の呼び出しで build/ に入ったままの `rm -rf pbf` は
+ * 素通りする。木の外で打たれた相対パスを片端から止めるほうが害が大きい。
  */
 import { readFileSync } from 'node:fs';
 
@@ -57,94 +64,182 @@ try {
 }
 if (!command.trim()) process.exit(0);
 
-/* 引用符と ./ と末尾の / を落として、リポジトリ相対の形に揃える。Windows の
- * 円記号と、絶対パスの前半も落とす——同じ場所が三通りの書き方で来る。 */
 const ROOT = (process.env.CLAUDE_PROJECT_DIR ?? process.cwd())
   .replace(/\\/g, '/')
   .replace(/\/+$/, '')
   .toLowerCase();
 
-function normalize(token) {
+/* ------------------------------------------------------------- 場所を読む --- */
+
+/**
+ * 段を語に割る。引用符の中では区切らない——`echo "…; rm -rf build"` の
+ * 中身を命令と読むと、書き留めるだけの命令まで止めてしまう。
+ */
+function tokenize(text) {
+  const out = [];
+  let word = '';
+  let quote = '';
+  for (const ch of text) {
+    if (quote) {
+      if (ch === quote) quote = '';
+      else word += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      if (word) out.push(word);
+      word = '';
+      continue;
+    }
+    word += ch;
+  }
+  if (word) out.push(word);
+  return out;
+}
+
+/** 命令を段に割る。区切りも引用符の中では効かない。 */
+function segments(text) {
+  const out = [];
+  let cur = '';
+  let quote = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote) {
+      cur += ch;
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      cur += ch;
+      continue;
+    }
+    if (ch === ';' || ch === '\n' || ch === '|' || ch === '&') {
+      out.push(cur);
+      cur = '';
+      /* `&&` と `||` は 2 文字で 1 つの区切り。 */
+      if (text[i + 1] === ch) i++;
+      continue;
+    }
+    cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+/**
+ * パスの段を畳む。末尾の `*` `**` `.` は「その中身ぜんぶ」を指すので、
+ * 親そのものを指しているのと同じに扱う——`build/*` も `build/**` も
+ * `rm -rf build` と同じ結果になる。
+ */
+function tidy(path) {
+  const parts = [];
+  for (const part of path.split('/')) {
+    if (part === '' || part === '.') continue;
+    /* リポジトリより上へ出た。何が入っているか分からないので、
+     * 巻き込みうる形として扱う。 */
+    if (part === '..') {
+      if (parts.length === 0) return '..';
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+  while (parts.length && /^\*+$/.test(parts[parts.length - 1])) parts.pop();
+  return parts.join('/');
+}
+
+/**
+ * 語をリポジトリ相対の形にする。この木の外を指していれば null。
+ * 相対パスは cwd から解く。cwd 自体が木の外なら、その先も外である。
+ */
+function toRepoPath(token, cwd) {
   let t = token
     /* 引用符と、`(cd x && rm -rf build)` の丸括弧を外す。 */
     .replace(/^[('"]+|[)'"]+$/g, '')
     .replace(/\\/g, '/')
-    /* 円記号を斜線に直すと `\\` が `//` になる。`build//pbf` も同じ場所を
-     * 指しているので、重なった斜線はここで畳む。 */
+    /* 円記号を斜線に直すと `\\` が `//` になる。重なった斜線は畳む。 */
     .replace(/\/{2,}/g, '/');
-  if (!t) return '';
+  if (!t) return null;
   /* Git Bash の絶対パスは `/d/nanase/…`。同じ場所が `d:/nanase/…` とも
    * `D:\nanase\…` とも書かれるので、ここで一つの形に寄せる。 */
   t = t.replace(/^\/([a-zA-Z])\//, '$1:/');
-  const lower = t.toLowerCase();
-  if (lower.startsWith(`${ROOT}/`)) t = t.slice(ROOT.length + 1);
-  else if (lower === ROOT) t = '.';
-  t = t.replace(/^\.\//, '').replace(/\/+$/, '');
-  /* `build/*` と `build/.` は build/ を消すのと同じことを指す。 */
-  t = t.replace(/\/(\*|\.)$/, '');
-  return t;
+
+  if (/^[a-zA-Z]:\//.test(t) || t.startsWith('/')) {
+    const lower = t.toLowerCase();
+    if (lower === ROOT) return '';
+    if (lower.startsWith(`${ROOT}/`)) return tidy(t.slice(ROOT.length + 1));
+    return null;
+  }
+  if (cwd === null) return null;
+  return tidy(cwd ? `${cwd}/${t}` : t);
 }
 
-/* 今いる場所ごと、あるいはその上ごと消す形。どこで打たれたかはフックには
- * 分からないので、この形は保護対象を巻き込みうるものとして扱う。`*` を
- * 通していたせいで、事故と同じ結果になる `rm -rf *` が素通りしていた。 */
-const SWEEPS_CWD = new Set(['', '.', '*', '..']);
-
-/* その語が保護対象を巻き込むか。保護対象そのものと、その上位を巻き込む形の
- * 両方を見る。 */
-const hits = (t) =>
-  SWEEPS_CWD.has(t) || t.startsWith('../')
+/**
+ * その場所が保護対象を巻き込むか。`''`(リポジトリのルート)と `..` は
+ * 全部を巻き込む。
+ */
+const hits = (path) =>
+  path === '' || path === '..'
     ? [...PROTECTED]
-    : PROTECTED.filter((p) => t === p || p.startsWith(`${t}/`));
+    : PROTECTED.filter((p) => path === p || p.startsWith(`${path}/`));
 
-/* 再帰的に消す形。rm の旗は -rf でも -f -r でも --recursive でも来るので、
- * 旗が何個続いても、そのどれかに r があれば拾う。長い旗を短い旗と分けて
- * 見るのは、--force に r が入っているためである。 */
-const RM_FLAG = '(?:-[a-zA-Z]*|--[a-z][a-z-]*)';
-const RECURSIVE_RM = new RegExp(
-  `^\\s*rm\\s+(?:${RM_FLAG}\\s+)*(?:-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)(\\s|$)`,
-);
+/* --------------------------------------------------------- 消す形を読む --- */
+
+const isFlag = (w) => w.startsWith('-') || /^\/[a-zA-Z]$/.test(w);
+const RM_RECURSIVE = (w) =>
+  /^-[a-zA-Z]*[rR][a-zA-Z]*$/.test(w) || w === '--recursive';
 /* PowerShell の旗は前方一致で省略できる。Remove-Item の引数で `-r` から
  * 始まるのは -Recurse だけなので、`-r` も `-recu` も同じ意味になる。 */
-const REMOVE_ITEM =
-  /^\s*(remove-item|ri|rd|rmdir|del|erase)\b.*?(-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?\b|\/s\b)/i;
-const RMDIR = /^\s*rmdir\s/;
-/* 無視されているファイルを消す。build/ を名指ししていなくても対象に入る。 */
-const GIT_CLEAN = /^\s*git\s+clean\b.*\s-\S*[xX]/;
+const PS_RECURSIVE = (w) =>
+  /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i.test(w) || /^\/s$/i.test(w);
+const PS_REMOVE = /^(remove-item|ri|rd|rmdir|del|erase)$/i;
 
-/* 命令を段に割る。`cd <repo> && rm -rf node_modules` の cd の引数を rm の
- * 消す先と取り違えないよう、突き合わせるのは消す命令の段だけにする。 */
-const segments = command.split(/(?:\|\||&&|[;|&\n])+/);
+/* `git clean -x` は無視されているファイルを消す。長い旗の中の x は数えない
+ * ——`--exclude=…` は消す範囲を狭める旗である。 */
+const CLEAN_IGNORED = (w) => /^-[a-zA-Z]*[xX][a-zA-Z]*$/.test(w);
+const DRY_RUN = (w) => /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w) || w === '--dry-run';
 
-for (const segment of segments) {
-  if (GIT_CLEAN.test(segment)) {
-    deny(
-      'git clean -x は無視されているファイルを消すので、build/ と web/data/ が' +
-        'まるごと対象に入ります。作り直しに何時間もかかります。' +
-        '消したい物を名指ししてください。',
-    );
-  }
+let cwd = '';
+for (const segment of segments(command)) {
+  const words = tokenize(segment);
+  if (words.length === 0) continue;
+  const [verb, ...rest] = words;
 
-  if (
-    !RECURSIVE_RM.test(segment) &&
-    !REMOVE_ITEM.test(segment) &&
-    !RMDIR.test(segment)
-  ) {
+  if (verb === 'cd') {
+    /* 引数の無い cd、`cd -`、`cd ~` の行き先は分からない。 */
+    const to = rest.find((w) => !isFlag(w));
+    cwd = to && to !== '-' && !to.startsWith('~') ? toRepoPath(to, cwd) : null;
     continue;
   }
 
-  /* 命令の名前を落とし、残った旗でない語を消す先の候補にする。どれが本当の
-   * 引数かを正確に知るには shell を実装することになるので、広く取る。 */
-  const words = segment
-    .trim()
-    .split(/\s+/)
-    .slice(1)
-    /* 旗を落とす。斜線で始まる語は cmd の `/s` `/q` だけを落とす——
-     * `/d/nanase/…/build` は Git Bash の絶対パスであって旗ではない。 */
-    .filter((w) => w && !w.startsWith('-') && !/^\/[a-zA-Z]$/.test(w));
+  if (verb === 'git' && rest[0] === 'clean') {
+    const flags = rest.slice(1);
+    if (flags.some(CLEAN_IGNORED) && !flags.some(DRY_RUN)) {
+      deny(
+        'git clean -x は無視されているファイルを消すので、build/ と web/data/ が' +
+          'まるごと対象に入ります。取り直しと再生成に何時間もかかります。' +
+          '消したい物を名指しするか、まず -n で下見してください。',
+      );
+    }
+    continue;
+  }
 
-  for (const word of words) {
-    const hit = hits(normalize(word));
+  const recursive =
+    (verb === 'rm' && rest.some(RM_RECURSIVE)) ||
+    (PS_REMOVE.test(verb) && rest.some(PS_RECURSIVE));
+  if (!recursive) continue;
+
+  /* 旗でない語を消す先の候補にする。どれが本当の引数かを正確に知るには
+   * shell を実装することになるので、広く取る。 */
+  for (const word of rest) {
+    if (isFlag(word)) continue;
+    const path = toRepoPath(word, cwd);
+    if (path === null) continue;
+    const hit = hits(path);
     if (hit.length === 0) continue;
     deny(
       `${word} を再帰的に消すと ${hit.join('・')} を巻き込みます。` +
