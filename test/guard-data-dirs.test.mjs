@@ -232,6 +232,9 @@ describe('木ごと消す形を止める', () => {
     ['ls | xargs rm -rf'],
     // 再帰は手前の段にも書ける。
     ['Get-ChildItem build -Recurse | Remove-Item -Force'],
+    // 段は何段でも挟まる。挟まった段は並べる場所を変えない。
+    ['find build -type d | sort | xargs rm -rf'],
+    ['gci build -Recurse | Where-Object { $_.Name } | Remove-Item -Force'],
     ['gci -Path build -Recurse | ri -Force'],
     ['find build -type f | xargs rm -f'],
     // 絞りを足すと壊す範囲が広がる形。当たる先そのものを見る。
@@ -336,6 +339,12 @@ describe('木ごと消す形を止める', () => {
     ['Remove-Item -r -Force build'],
     ['Remove-Item -Recu build'],
     ['rmdir /s /q build'],
+    // cmd の旗は束ねて書ける。
+    ['rd /s/q build'],
+    ['rd /q/s build'],
+    ['cmd /c rd /s/q build'],
+    // PowerShell は旗と値を `:` でも繋ぐ。
+    ['Remove-Item -Path:build -Recurse -Force'],
   ])('%s', denies);
 
   // 名指ししていなくても、無視されているファイルを消せば build/ が対象に入る。
@@ -406,6 +415,8 @@ describe('後始末は通す', () => {
   test.each([
     ["find . -name '*.tmp' | xargs rm -rf"],
     ["find build -name '*.log' -print0 | xargs -0 rm -rf"],
+    // 手前が読めない段なら、消す先と決めつけない。
+    ['echo build | xargs rm -rf'],
     ["find build -name '*.log' -delete"],
     ['find build -mtime +30 -delete'],
     // find 自身の -print を rm の旗と読み違えない。

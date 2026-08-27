@@ -340,7 +340,10 @@ const RM_RECURSIVE = (w) =>
 /* PowerShell の旗は前方一致で省略できる。Remove-Item の引数で `-r` から
  * 始まるのは -Recurse だけなので、`-r` も `-recu` も同じ意味になる。 */
 const PS_RECURSIVE = (w) =>
-  /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i.test(w) || /^\/s$/i.test(w);
+  /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i.test(w) ||
+  /* cmd の旗は `/s/q` と束ねて書ける。字ごとに見る——`/usr/share` のような
+   * 道筋を旗と読まないため。 */
+  (w.startsWith('/') && w.slice(1).toLowerCase().split('/').includes('s'));
 const REMOVE = /^(rm|remove-item|ri|rd|rmdir|del|erase)$/i;
 /* pipe の手前で中身を並べるもの。引数が無ければ、並べるのは今いる場所の
  * 中身である。 */
@@ -427,8 +430,13 @@ function expandVars(word, seen = new Set()) {
  * 消す先の候補を保護対象と突き合わせ、当たれば止める。どれが本当の引数かを
  * 正確に知るには shell を実装することになるので、候補は広く取る。
  */
+/* PowerShell は旗と値を `-Path:build` とも書ける。旗として落とすと、
+ * 値ごと検査から外れる。 */
+const flagValue = (w) => (/^-[A-Za-z]+:(.+)$/.exec(w) ?? [])[1];
+
 function report(candidates, cwd) {
-  for (const word of candidates) {
+  for (const candidate of candidates) {
+    const word = flagValue(candidate) ?? candidate;
     if (!word || isFlag(word)) continue;
     const rel = underRoot(toAbsParts(word, cwd));
     if (rel === null) continue;
@@ -447,9 +455,24 @@ function report(candidates, cwd) {
 /**
  * pipe の手前が並べている場所。並べているのが分かるものだけを返し、
  * 分からなければ null——手前が読めないものを消す先と決めつけない。
+ *
+ * 段は何段でも挟まる。`find build -type d | sort | xargs rm -rf` の sort も
+ * `gci build | Where-Object {…} | ri` の Where-Object も、並べている場所を
+ * 変えはしない。読める段に当たるまで手前へ辿る。絞る段が挟まっていても
+ * 手前を見るのは、何が残るか読めないからで、find の -regex を通さないのと
+ * 同じ判断である。
  */
-function pipedTargets(words) {
-  if (words.length === 0) return null;
+function pipedTargets(chain) {
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const found = listedBy(chain[i]);
+    if (found !== undefined) return found;
+  }
+  return null;
+}
+
+/** その段が場所を並べているなら、その場所。読めない段なら undefined。 */
+function listedBy(words) {
+  if (words.length === 0) return undefined;
   const head = nameOf(words[0]);
   const rest = words.slice(1);
   if (head === 'find') {
@@ -470,7 +493,7 @@ function pipedTargets(words) {
     const paths = rest.filter((w) => !isFlag(w));
     return paths.length > 0 ? paths : ['.'];
   }
-  return null;
+  return undefined;
 }
 
 /**
@@ -519,7 +542,9 @@ function scan(text, startCwd, depth = 0) {
   const willExist = new Set();
   if (depth > 3) return cwd;
 
-  let previous = [];
+  /* いま繋がっている pipe の段。`|` で来た段は後ろに足し、そうでなければ
+   * そこから新しく始める。 */
+  let chain = [];
   const ready = joinContinuations(stripComments(stripHeredocs(text)));
   /* 閉じ括弧は、その段の命令を読み終えてから効く。次の段の頭で戻す。 */
   let closing = 0;
@@ -590,8 +615,8 @@ function scan(text, startCwd, depth = 0) {
       if (words.length === 1) break;
       words = words.slice(1);
     }
-    const upstream = previous;
-    previous = words;
+    const upstream = segment.piped ? chain : [];
+    chain = segment.piped ? [...chain, words] : [words];
     if (words.length === 0) continue;
     const [verb, ...rest] = words;
 
@@ -766,7 +791,10 @@ function scan(text, startCwd, depth = 0) {
      * `find build -type f | xargs rm -f` も、消えるのは木の中身である。 */
     const deep =
       segment.piped &&
-      (upstream.some(PS_RECURSIVE) || nameOf(upstream[0] ?? '') === 'find');
+      upstream.some(
+        (stage) =>
+          stage.some(PS_RECURSIVE) || nameOf(stage[0] ?? '') === 'find',
+      );
     const recursive =
       deep ||
       (name === 'rm' ? args.some(RM_RECURSIVE) : args.some(PS_RECURSIVE));
