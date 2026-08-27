@@ -52,6 +52,8 @@ const AWAY = mkdtempSync(join(tmpdir(), 'away-')).replace(/\\/g, '/');
 const PARENT = dirname(REPO).replace(/\\/g, '/');
 /* 仮の木の名前。命令の中に書くときは必ずここから取る。 */
 const NAME = basename(REPO);
+/* 仮の木が載っている drive の根。Git Bash では `/c` とも `/c/` とも書く。 */
+const DRIVE = REPO.replace(/^([a-zA-Z]):.*$/, '/$1');
 
 /** 番人に命令を渡し、止めたなら理由を、通したなら null を返す。 */
 function ask(command) {
@@ -98,7 +100,20 @@ describe('木ごと消す形を止める', () => {
   test.each([
     ['rm -rf build/{pbf,cache}'],
     ['rm -rf {build,web/data}'],
+    // 保護対象が後ろに来る組み。語の頭の `{` を組みの括弧として離すと、
+    // 展開する前に割れて素通りしていた。
+    ['rm -rf {node_modules,build}'],
+    ['rm -rf ./{node_modules,build}'],
     ['rm -rf build/pbf build/cache'],
+  ])('%s', denies);
+
+  // 同じ場所の別の綴り。斜線の有無で答えを変えない。
+  test.each([
+    [`rm -rf ${D}(pwd)`],
+    [`rm -rf ${D}{PWD}`],
+    [`rm -rf ${DRIVE}`],
+    [`rm -rf ${DRIVE}/`],
+    ['rm -rf /'],
   ])('%s', denies);
 
   // 末尾の glob は「その中身ぜんぶ」で、親を消すのと同じ結果になる。

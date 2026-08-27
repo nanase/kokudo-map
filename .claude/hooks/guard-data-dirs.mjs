@@ -224,19 +224,20 @@ function segments(text) {
  */
 function toAbsParts(token, cwd) {
   let t = token
-    /* 引用符と、`(cd x && rm -rf build)` の丸括弧を外す。 */
-    .replace(/^[('"]+|[)'"]+$/g, '')
-    /* 今いる場所を指す書き方。展開されないまま来るので、ここで解く。
-     * これ以外の変数は中身が分からないので、そのまま字として扱う。 */
+    /* 今いる場所を指す書き方。展開されないまま来るので、ここで解く。括弧を
+     * 外すより先に済ませる——後にすると `$(pwd)` の `)` が先に落ちて、
+     * この行が当たらなくなる。他の変数は中身が分からないので字として扱う。 */
     .replace(/^\$\{?PWD\}?|^\$\(pwd\)/i, '.')
     .replace(/^\$\{?CLAUDE_PROJECT_DIR\}?/, ROOT)
+    /* 引用符と、`(cd x && rm -rf build)` の丸括弧と波括弧を外す。 */
+    .replace(/^[({'"]+|[)}'"]+$/g, '')
     .replace(/\\/g, '/')
     /* 円記号を斜線に直すと `\\` が `//` になる。重なった斜線は畳む。 */
     .replace(/\/{2,}/g, '/');
   if (!t) return null;
   /* Git Bash の絶対パスは `/d/nanase/…`。同じ場所が `d:/nanase/…` とも
    * `D:\nanase\…` とも書かれるので、ここで一つの形に寄せる。 */
-  t = t.replace(/^\/([a-zA-Z])\//, '$1:/');
+  t = t.replace(/^\/([a-zA-Z])(\/|$)/, '$1:/');
 
   let abs;
   if (/^[a-zA-Z]:\//.test(t) || t.startsWith('/')) abs = t;
@@ -275,6 +276,8 @@ const matcher = (part) =>
  */
 function underRoot(parts) {
   if (parts === null) return null;
+  /* POSIX の根。この下に無い物は無い。 */
+  if (parts.length === 1 && parts[0] === '') return [];
   const shared = Math.min(parts.length, ROOT_PARTS.length);
   for (let i = 0; i < shared; i++) {
     /* ここも glob で見る。段ごとの突き合わせだけを glob にしていたので、
@@ -313,7 +316,10 @@ function expandBraces(word, depth = 0) {
 
 /* --------------------------------------------------------- 消す形を読む --- */
 
-const isFlag = (w) => w.startsWith('-') || /^\/[a-zA-Z]$/.test(w);
+/* cmd の旗は `/s` `/q` のように斜線で始まる。落とすのは消す命令が実際に
+ * 取る字だけにする——`/d` を旗と読むと、Git Bash が drive の根を指して
+ * 書く `rm -rf /d` が検査から外れる。 */
+const isFlag = (w) => w.startsWith('-') || /^\/[sqfaSQFA]$/.test(w);
 const RM_RECURSIVE = (w) =>
   /^-[a-zA-Z]*[rR][a-zA-Z]*$/.test(w) || w === '--recursive';
 /* PowerShell の旗は前方一致で省略できる。Remove-Item の引数で `-r` から
@@ -404,7 +410,11 @@ function scan(text, startCwd, depth = 0) {
       subshells.push(cwd);
     }
     let words = tokenize(
-      segment.text.replace(/(^|\s)([({])/g, '$1 $2 '),
+      segment.text
+        .replace(/(^|\s)\(/g, '$1 ( ')
+        /* 組みの `{` は後ろに空白が続く。`{a,b}` の `{` は語の一部なので
+         * 離さない——離すと展開する前に割れる。 */
+        .replace(/(^|\s)\{(?=\s)/g, '$1 { '),
     ).filter((w) => !/^[({)}]+$/.test(w));
     /* 前に付いた sudo・xargs・制御構文と、その旗を落とす。 */
     while (

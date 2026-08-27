@@ -288,15 +288,14 @@ const TEXT_INSET = { top: 66, left: 92 };
  * 手で 4.5% と書いていたのは倒す前の値で、実際の隙間はそれより狭い。
  * placements() に載る場所を訊いて測る。
  */
-const rightmost = Math.max(
-  ...GROUPS.flatMap(({ refs, x0, h }) =>
-    placements(refs, x0, h).map((s) => s.x + s.w / 2),
-  ),
-);
-/* 両端で切るので、隙間の 2 倍まで許せる。 */
+const placed = GROUPS.flatMap(({ refs, x0, h }) => placements(refs, x0, h));
+const rightmost = Math.max(...placed.map((s) => s.x + s.w / 2));
+const lowest = Math.max(...placed.map((s) => s.y + s.h / 2));
+/* 両端で切るので、隙間の 2 倍まで許せる。縦も標識の実際の下端から測る——
+ * 本線の高さ (ROAD_Y) は標識が載る前の値で、下端はそこより上にある。 */
 const CROP_MAX = {
   w: (2 * Math.min(TEXT_INSET.left, CARD.w - rightmost)) / CARD.w,
-  h: (2 * Math.min(TEXT_INSET.top, CARD.h - ROAD_Y)) / CARD.h,
+  h: (2 * Math.min(TEXT_INSET.top, CARD.h - lowest)) / CARD.h,
 };
 if (crop.w > CROP_MAX.w || crop.h > CROP_MAX.h) {
   const pct = (v) => `${(v * 100).toFixed(1)}%`;
