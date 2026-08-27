@@ -72,6 +72,8 @@ function ask(command) {
 /* 展開されないまま届く変数を書くための一字。素の文字列に `${` と書くと、
  * 書き忘れたテンプレート文字列と区別が付かない。 */
 const D = '$';
+/* 改行。素の文字列の中に書けないので名前を付ける。 */
+const NL = String.fromCharCode(10);
 
 const denies = (command) => expect(ask(command)).toContain('巻き込みます');
 const allows = (command) => expect(ask(command)).toBeNull();
@@ -185,6 +187,11 @@ describe('木ごと消す形を止める', () => {
     ['rm.exe -rf build'],
     // -c の後ろは一語とは限らないし、旗の綴りも一通りではない。
     ['cmd /c rmdir /s /q build'],
+    // shell に食わせるヒアドキュメントの中身は、書き込む文章ではなく命令。
+    [["bash <<'EOF'", 'rm -rf build', 'EOF'].join(NL)],
+    // find は探す場所を先に書く。rm の後ろにあるのは `{}` である。
+    ['find build -type d -exec rm -rf {} +'],
+    ['find web/data -delete'],
     ['bash -lc "rm -rf build"'],
     ['powershell -Command "Remove-Item -Recurse build"'],
   ])('%s', denies);
@@ -324,6 +331,12 @@ describe('後始末は通す', () => {
   test.each([
     ["find . -name '*.tmp' | xargs rm -rf"],
     ["find build -name '*.log' -print0 | xargs -0 rm -rf"],
+  ])('%s', allows);
+
+  // PowerShell の下見。git clean の -n と同じで、何も消さない。
+  test.each([
+    ['Remove-Item build -Recurse -WhatIf'],
+    ['Remove-Item -Recurse -Force -WhatIf build'],
   ])('%s', allows);
 
   // POSIX の rmdir は空のディレクトリしか消せない。再帰の旗が無ければ、

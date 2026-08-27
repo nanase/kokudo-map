@@ -157,6 +157,8 @@ function stripHeredocs(text) {
     out.push(lines[i]);
     const m = OPEN.exec(lines[i]);
     if (!m) continue;
+    /* `bash <<'EOF'` の中身は書き込む文章ではなく、走る命令である。 */
+    if (SHELLS.test(nameOf(lines[i].trim().split(/\s+/)[0] ?? ''))) continue;
     let end = i + 1;
     while (end < lines.length && lines[end].trim() !== m[2]) end++;
     /* 閉じないまま終わったなら、それは札ではなかった。読み飛ばさない。 */
@@ -343,6 +345,8 @@ const nameOf = (w) =>
  * ——`--exclude=…` は消す範囲を狭める旗である。 */
 const CLEAN_IGNORED = (w) => /^-[a-zA-Z]*[xX][a-zA-Z]*$/.test(w);
 const DRY_RUN = (w) => /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w) || w === '--dry-run';
+/* PowerShell の下見。git clean の -n にあたる。止めすぎると迂回される。 */
+const WHAT_IF = (w) => /^-wh(a(t(i(f)?)?)?)?$/i.test(w);
 
 /* 命令の前に付いて、後ろの命令をそのまま走らせるもの。剥がさないと
  * `sudo rm -rf build` の verb が sudo になって素通りする。 */
@@ -379,6 +383,27 @@ const PAYLOAD_FLAG = (w) =>
   /^-[a-zA-Z]*c$/.test(w) || /^(-{1,2}|\/)(c|command)$/i.test(w);
 /* `FOO=1 rm -rf build` の頭に付く代入。 */
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+/**
+ * 消す先の候補を保護対象と突き合わせ、当たれば止める。どれが本当の引数かを
+ * 正確に知るには shell を実装することになるので、候補は広く取る。
+ */
+function report(candidates, cwd) {
+  for (const word of candidates) {
+    if (!word || isFlag(word)) continue;
+    const rel = underRoot(toAbsParts(word, cwd));
+    if (rel === null) continue;
+    const hit = hits(rel);
+    if (hit.length === 0) continue;
+    deny(
+      `${word} を再帰的に消すと ${hit.join('・')} を巻き込みます。` +
+        'これらは .gitignore にあり、git では戻りません。中身は pbf 2.5 GB と' +
+        '47 都道府県ぶんの生成物で、取り直しと再生成に何時間もかかります。' +
+        '消したいのが 1 ファイルなら、そのファイルを名指ししてください。' +
+        '木ごと消すのが本当に目的なら、利用者に頼んでください。',
+    );
+  }
+}
 
 function scan(text, startCwd, depth = 0) {
   let cwd = startCwd;
@@ -528,12 +553,32 @@ function scan(text, startCwd, depth = 0) {
      * `env FOO=1 rm …` の代入も、旗として落とし切れる形ではない。語の並びの
      * 中から探すほうが、包みの種類を数え上げるより確かである。 */
     const at = words.findIndex((w) => REMOVE.test(nameOf(w)));
+
+    /* find は探す場所を先に書き、消す命令を後ろに置く。
+     * `find build -type d -exec rm -rf {} +` の `{}` は場所ではない——
+     * 場所は find の引数として前に書いてある。 */
+    if (nameOf(verb) === 'find') {
+      const deletes =
+        rest.includes('-delete') ||
+        (at > 0 && words.slice(at + 1).some(RM_RECURSIVE));
+      if (!deletes) continue;
+      const paths = [];
+      for (const w of rest) {
+        if (w.startsWith('-')) break;
+        paths.push(w);
+      }
+      report(paths, cwd);
+      continue;
+    }
+
     if (at === -1) continue;
     const name = nameOf(words[at]);
     const args = words.slice(at + 1);
     const recursive =
       name === 'rm' ? args.some(RM_RECURSIVE) : args.some(PS_RECURSIVE);
     if (!recursive) continue;
+    /* 下見は何も消さない。 */
+    if (name !== 'rm' && args.some(WHAT_IF)) continue;
     /* `git rm -r --cached build` が触るのは索引だけで、ファイルは残る。 */
     if (at > 0 && nameOf(words[at - 1]) === 'git' && args.includes('--cached'))
       continue;
@@ -562,22 +607,7 @@ function scan(text, startCwd, depth = 0) {
       expandBraces(w).flatMap((x) => x.split(',')),
     );
 
-    /* 旗でない語を消す先の候補にする。どれが本当の引数かを正確に知るには
-     * shell を実装することになるので、広く取る。 */
-    for (const word of targets) {
-      if (!word || isFlag(word)) continue;
-      const rel = underRoot(toAbsParts(word, cwd));
-      if (rel === null) continue;
-      const hit = hits(rel);
-      if (hit.length === 0) continue;
-      deny(
-        `${word} を再帰的に消すと ${hit.join('・')} を巻き込みます。` +
-          'これらは .gitignore にあり、git では戻りません。中身は pbf 2.5 GB と' +
-          '47 都道府県ぶんの生成物で、取り直しと再生成に何時間もかかります。' +
-          '消したいのが 1 ファイルなら、そのファイルを名指ししてください。' +
-          '木ごと消すのが本当に目的なら、利用者に頼んでください。',
-      );
-    }
+    report(targets, cwd);
   }
   return cwd;
 }
