@@ -393,6 +393,9 @@ describe('後始末は通す', () => {
     // find 自身の -print を rm の旗と読み違えない。
     ['find build -name pbf -print -delete'],
     ["find build -name '*.log' -exec rm -rf {} +"],
+    // PowerShell の絞り込みも同じ。`-Filter` の値は場所ではない。
+    ['Get-ChildItem build -Recurse -Filter *.log | Remove-Item -Force'],
+    ['Get-ChildItem docs -Recurse -Filter build* | Remove-Item -Force'],
   ])('%s', allows);
 
   // PowerShell の下見。git clean の -n と同じで、何も消さない。

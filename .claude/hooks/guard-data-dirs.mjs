@@ -453,6 +453,10 @@ function pipedTargets(words) {
     return paths.length > 0 ? paths : ['.'];
   }
   if (LISTING.test(head)) {
+    /* 名前で絞ってあれば、並ぶのは当たったものだけで木は残る。find の
+     * -name と同じ扱いにする——`gci build -Filter *.log | ri` と
+     * `find build -name '*.log' | xargs rm` で答えを変えない。 */
+    if (rest.some((w) => /^-(filter|include|exclude)$/i.test(w))) return null;
     const paths = rest.filter((w) => !isFlag(w));
     return paths.length > 0 ? paths : ['.'];
   }
