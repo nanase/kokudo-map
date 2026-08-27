@@ -1,15 +1,16 @@
 {
+  "extraKnownMarketplaces": {
+    "nanase": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/nanase/claude-skills.git"
+      },
+      "autoUpdate": true
+    }
+  },
   "enabledPlugins": {
     "readable@nanase": true,
     "flow@nanase": true,
     "ui@nanase": true
-  },
-  "extraKnownMarketplaces": {
-    "nanase": {
-      "source": {
-        "source": "url",
-        "url": "https://github.com/nanase/claude-skills.git"
-      }
-    }
   }
 }
