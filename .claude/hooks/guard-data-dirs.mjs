@@ -178,21 +178,6 @@ function toAbsParts(token, cwd) {
   return parts;
 }
 
-/**
- * 絶対パスをリポジトリからの相対にする。ルートそのものと、その祖先は
- * 空配列——保護対象を全部巻き込む。木の外なら null。
- */
-function underRoot(parts) {
-  if (parts === null) return null;
-  const shared = Math.min(parts.length, ROOT_PARTS.length);
-  for (let i = 0; i < shared; i++) {
-    if (parts[i].toLowerCase() !== ROOT_PARTS[i]) return null;
-  }
-  return parts.length <= ROOT_PARTS.length
-    ? []
-    : parts.slice(ROOT_PARTS.length);
-}
-
 /** glob を含む段を、その段に当たるかどうかの検査に変える。 */
 const matcher = (part) =>
   new RegExp(
@@ -202,6 +187,23 @@ const matcher = (part) =>
       .replace(/\?/g, '.')}$`,
     'i',
   );
+
+/**
+ * 絶対パスをリポジトリからの相対にする。ルートそのものと、その祖先は
+ * 空配列——保護対象を全部巻き込む。木の外なら null。
+ */
+function underRoot(parts) {
+  if (parts === null) return null;
+  const shared = Math.min(parts.length, ROOT_PARTS.length);
+  for (let i = 0; i < shared; i++) {
+    /* ここも glob で見る。段ごとの突き合わせだけを glob にしていたので、
+     * `rm -rf ../NationalRouteMap*` がリポジトリごと持っていけた。 */
+    if (!matcher(parts[i]).test(ROOT_PARTS[i])) return null;
+  }
+  return parts.length <= ROOT_PARTS.length
+    ? []
+    : parts.slice(ROOT_PARTS.length);
+}
 
 /**
  * その場所が保護対象を巻き込むか。保護対象そのものか、その上を指していれば
@@ -244,6 +246,21 @@ const WRAPPERS = new Set([
   'xargs',
   'nice',
 ]);
+/* shell の組みと制御構文。これも剥がさないと `(rm -rf build)` や
+ * `if true; then rm -rf build; fi` の verb が `(` や `then` になる。 */
+const KEYWORDS = new Set([
+  'if',
+  'then',
+  'else',
+  'elif',
+  'while',
+  'until',
+  'do',
+  'for',
+  'case',
+  'in',
+  '!',
+]);
 /* -c に続く文字列を命令として走らせるもの。中をもう一度読む。 */
 const SHELLS = /^(ba|z|k|da|)sh$|^(pwsh|powershell|cmd)(\.exe)?$/i;
 
@@ -252,11 +269,21 @@ function scan(text, startCwd, depth = 0) {
   if (depth > 3) return cwd;
 
   for (const segment of segments(text)) {
-    let words = tokenize(segment);
-    /* 前に付いた sudo や xargs と、その旗を落とす。 */
-    while (words.length > 1 && WRAPPERS.has(words[0].toLowerCase())) {
+    /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
+     * 離してから、括弧だけの語を落とす。閉じ括弧は消す先の語の末尾に付いた
+     * まま残るが、そちらは toAbsParts が外す。 */
+    let words = tokenize(segment.replace(/[({]/g, ' $& ')).filter(
+      (w) => !/^[({)}]+$/.test(w),
+    );
+    /* 前に付いた sudo・xargs・制御構文と、その旗を落とす。 */
+    while (
+      words.length > 1 &&
+      (WRAPPERS.has(words[0].toLowerCase()) ||
+        KEYWORDS.has(words[0].toLowerCase()))
+    ) {
+      const keyword = KEYWORDS.has(words[0].toLowerCase());
       words = words.slice(1);
-      while (words.length && isFlag(words[0])) words = words.slice(1);
+      if (!keyword) while (words.length && isFlag(words[0])) words.shift();
     }
     if (words.length === 0) continue;
     const [verb, ...rest] = words;
@@ -278,9 +305,24 @@ function scan(text, startCwd, depth = 0) {
       continue;
     }
 
-    if (verb === 'git' && rest[0] === 'clean') {
-      const flags = rest.slice(1);
-      if (flags.some(CLEAN_IGNORED) && !flags.some(DRY_RUN)) {
+    if (verb === 'git' && rest.includes('clean')) {
+      /* git 自身の旗を読み飛ばして clean を探す。`-C <dir>` は走る場所を
+       * 変えるので、そこも見る。 */
+      let at = cwd;
+      let i = 0;
+      for (; i < rest.length && rest[i] !== 'clean'; i++) {
+        if (rest[i] === '-C' && rest[i + 1] !== undefined) {
+          at = toAbsParts(rest[++i], at);
+        } else if (!isFlag(rest[i])) break;
+      }
+      const flags = rest.slice(i + 1);
+      /* 木の外で走る git clean は、この repo の生成物を消さない。 */
+      if (
+        rest[i] === 'clean' &&
+        underRoot(at) !== null &&
+        flags.some(CLEAN_IGNORED) &&
+        !flags.some(DRY_RUN)
+      ) {
         deny(
           'git clean -x は無視されているファイルを消すので、build/ と web/data/ が' +
             'まるごと対象に入ります。取り直しと再生成に何時間もかかります。' +

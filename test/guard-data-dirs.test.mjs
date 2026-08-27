@@ -98,15 +98,29 @@ describe('木ごと消す形を止める', () => {
   ])('%s', denies);
 
   // 前方一致の glob。リポジトリのルートで `build*` は build に展開される。
-  test.each([['rm -rf build*'], ['rm -rf b*'], ['rm -rf web/*']])('%s', denies);
+  // ルートの段に当たる glob も同じ——リポジトリごと持っていく。
+  test.each([
+    ['rm -rf build*'],
+    ['rm -rf b*'],
+    ['rm -rf web/*'],
+    ['rm -rf ../NationalRouteMap*'],
+    [`rm -rf ${PARENT}/NationalRouteMap*`],
+  ])('%s', denies);
 
-  // 前に付いた命令に隠れる。verb を段の先頭語だけで見ると素通りする。
+  // 前に付いた命令や組みに隠れる。verb を段の先頭語だけで見ると素通りする。
+  // 部分 shell は、作業ディレクトリを持ち帰らせないための自然な書き方なので
+  // 当たりやすい。
   test.each([
     ['sudo rm -rf build'],
     ['xargs rm -rf build'],
     ['nohup rm -rf build'],
     ['bash -c "rm -rf build"'],
     ["sh -c 'cd build && rm -rf pbf'"],
+    ['(rm -rf build)'],
+    ['(cd build && rm -rf pbf)'],
+    ['{ rm -rf build; }'],
+    ['if true; then rm -rf build; fi'],
+    ['for d in a b; do rm -rf build; done'],
   ])('%s', denies);
 
   // 命令の中で場所が変わる。作業ディレクトリを追わないと、build/ の中から
@@ -145,10 +159,14 @@ describe('木ごと消す形を止める', () => {
   ])('%s', denies);
 
   // 名指ししていなくても、無視されているファイルを消せば build/ が対象に入る。
+  // git 自身の旗の先にある clean も読む。`-C` は走る場所を変える。
   test.each([
     ['git clean -xdf'],
     ['git clean -fdx'],
     [`cd ${REPO} && git clean -xdf`],
+    ['git -C . clean -xdf'],
+    [`git -C ${REPO} clean -xdf`],
+    ['cd build && git clean -xdf'],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
@@ -203,6 +221,10 @@ describe('後始末は通す', () => {
     [`rm -rf ${OUTSIDE}/build`],
     ['rm -rf /tmp/claude/scratch'],
     ['cd /tmp && rm -rf build'],
+    // 括弧を付けても答えは変わらない。書き方が違うだけの同じ命令である。
+    ['(cd /tmp && rm -rf build)'],
+    ['cd /tmp && git clean -xdf'],
+    [`rm -rf ${PARENT}/other*`],
     // 隣に置いた worktree の後始末。木の上へ出て別の枝へ降りるので、
     // `..` に潰して全部に当てると、事実でない理由で止めることになる。
     ['rm -rf ../NationalRouteMap-worktree'],

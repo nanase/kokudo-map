@@ -331,7 +331,13 @@ const card = `<!doctype html><meta charset="utf-8">
  * 確かめるほうを mkdir より先に置くのは、書けない書き先のために空の
  * ディレクトリを残さないためである。 */
 const dest = opt.out ? resolve(opt.out) : join(WEB, 'og.png');
-if (statSync(dest, { throwIfNoEntry: false })?.isDirectory()) {
+/* 末尾の区切りはディレクトリを指す書き方である。resolve はそれを落とすので、
+ * まだ無ければ `build` という名前の PNG が生まれ、以後の mkdir が全部
+ * 転ぶ。ここで断る。 */
+if (
+  /[\\/]$/.test(opt.out ?? '') ||
+  statSync(dest, { throwIfNoEntry: false })?.isDirectory()
+) {
   throw new Error(`--out はファイル名で渡す。ディレクトリである: ${opt.out}`);
 }
 mkdirSync(dirname(dest), { recursive: true });
