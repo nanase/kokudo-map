@@ -444,6 +444,13 @@ function expandVars(word, seen = new Set()) {
  * 消す先の候補を保護対象と突き合わせ、当たれば止める。どれが本当の引数かを
  * 正確に知るには shell を実装することになるので、候補は広く取る。
  */
+/* pipe から渡る物の置き場所。ここに場所は書かれていない。 */
+const PLACEHOLDER = (w) => /^(\{\}|%|\$_(\..+)?)$/.test(w);
+/* 値を取るが、その値は場所ではない旗。`-ErrorAction SilentlyContinue` の
+ * SilentlyContinue を消す先と数えると、pipe の手前を見に行かなくなる。 */
+const NOT_A_PATH =
+  /^-(erroraction|warningaction|informationaction|confirm|verbose|debug|whatif|outbuffer|outvariable|errorvariable|warningvariable|informationvariable|pipelinevariable|depth|stream|encoding|force)$/i;
+
 /* PowerShell は旗と値を `-Path:build` とも書ける。旗として落とすと、
  * 値ごと検査から外れる。 */
 const flagValue = (w) => (/^-[A-Za-z]+:(.+)$/.exec(w) ?? [])[1];
@@ -855,8 +862,16 @@ function scan(text, startCwd, depth = 0) {
      * `find build -type d | xargs rm -rf` も、消す段には旗しか無い。手前の
      * 段が何を並べているかを読む。読めなければ何もしない。
      * `-Path build,web/data` のように読点で並べても 1 語で来る。 */
+    /* この段が自分で名指ししている消す先。旗の値と、pipe の置き場所は
+     * 数えない——数えると、手前の段を見に行かなくなる。 */
+    const named = args.filter(
+      (w, i) =>
+        !isFlag(w) &&
+        !PLACEHOLDER(w) &&
+        !(i > 0 && NOT_A_PATH.test(args[i - 1])),
+    );
     let source = args;
-    if (segment.piped && !args.some((w) => !isFlag(w))) {
+    if (segment.piped && named.length === 0) {
       const piped = pipedTargets(upstream);
       if (piped === null) continue;
       source = piped;

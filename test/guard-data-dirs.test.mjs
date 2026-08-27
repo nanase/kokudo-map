@@ -235,6 +235,15 @@ describe('木ごと消す形を止める', () => {
     // 段は何段でも挟まる。挟まった段は並べる場所を変えない。
     ['find build -type d | sort | xargs rm -rf'],
     ['gci build -Recurse | Where-Object { $_.Name } | Remove-Item -Force'],
+    // 旗の値と pipe の置き場所は、この段が名指しした消す先ではない。
+    // 数えると手前の段を見に行かなくなる。
+    [
+      'Get-ChildItem build | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue',
+    ],
+    ['Get-ChildItem build | ForEach-Object { Remove-Item $_ -Recurse -Force }'],
+    ['gci build | % { ri $_.FullName -Recurse -Force }'],
+    ['find build -type d | xargs -I % rm -rf %'],
+    ['find build -type d | xargs -I{} rm -rf {}'],
     ['gci -Path build -Recurse | ri -Force'],
     ['find build -type f | xargs rm -f'],
     // 絞りを足すと壊す範囲が広がる形。当たる先そのものを見る。
@@ -425,6 +434,8 @@ describe('後始末は通す', () => {
     ["find build -name '*.log' -print0 | xargs -0 rm -rf"],
     // 手前が読めない段なら、消す先と決めつけない。
     ['echo build | xargs rm -rf'],
+    // 自分で名指ししているなら、手前は見ない。
+    ['ls | rm -rf node_modules'],
     ["find build -name '*.log' -delete"],
     ['find build -mtime +30 -delete'],
     // find 自身の -print を rm の旗と読み違えない。
