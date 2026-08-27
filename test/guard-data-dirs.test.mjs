@@ -162,9 +162,12 @@ describe('木ごと消す形を止める', () => {
   });
 
   // 命令の中で場所が変わる。作業ディレクトリを追わないと、build/ の中から
-  // 打たれた相対パスが素通りする。
+  // 打たれた相対パスが素通りする。場所を変えるのは cd だけではない。
   test.each([
     ['cd build && rm -rf pbf'],
+    ['pushd build && rm -rf pbf'],
+    ['pushd build && rm -rf pbf && popd'],
+    ['pushd /tmp && popd && rm -rf build'],
     ['cd web && rm -rf data'],
     ['cd build/pbf && rm -rf .'],
     [`(cd ${REPO} && rm -rf build)`],
@@ -255,9 +258,11 @@ describe('後始末は通す', () => {
     ['node scripts/make_brand.mjs --card 1280x640 --out build/social.png'],
   ])('%s', allows);
 
-  // 引用符の中は命令ではない。書き留めるだけの命令まで止めない。
+  // 引用符の中も、# の後ろも命令ではない。書き留めるだけの命令まで止めない。
   test.each([
     ['grep -rn "rm -rf build" docs/'],
+    ['ls build # rm -rf build はしない'],
+    ['echo ok  # cd build && rm -rf pbf'],
     ['echo "後始末: ; rm -rf build" >> notes.md'],
     ["git commit -m 'rm -rf build をやめた'"],
   ])('%s', allows);

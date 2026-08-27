@@ -111,6 +111,36 @@ function tokenize(text) {
 }
 
 /**
+ * 注記を落とす。`ls build # rm -rf build はしない` の後ろ半分は書いてある
+ * だけで、走らない。引用符の中の `#` は字である。
+ */
+function stripComments(text) {
+  const out = [];
+  for (const line of text.split('\n')) {
+    let quote = '';
+    let cut = -1;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (quote) {
+        if (ch === quote) quote = '';
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        continue;
+      }
+      /* 語の頭に来た `#` だけが注記を開く。`a#b` は 1 語である。 */
+      if (ch === '#' && (i === 0 || /\s/.test(line[i - 1]))) {
+        cut = i;
+        break;
+      }
+    }
+    out.push(cut === -1 ? line : line.slice(0, cut));
+  }
+  return out.join('\n');
+}
+
+/**
  * ヒアドキュメントの中身を落とす。書き込む文章であって命令ではないのに、
  * 改行で段に割ると中の一行が命令に見える。docs がまさにその形で
  * `rm -rf build` を載せている。
@@ -320,10 +350,13 @@ const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
 function scan(text, startCwd, depth = 0) {
   let cwd = startCwd;
+  /* pushd が積んだ場所。popd で戻る。cd しか見ていなかったころ、
+   * `pushd build && rm -rf pbf` が素通りしていた。 */
+  const stack = [];
   if (depth > 3) return cwd;
 
   let previous = [];
-  for (const segment of segments(stripHeredocs(text))) {
+  for (const segment of segments(stripComments(stripHeredocs(text)))) {
     /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
      * 離してから、括弧だけの語を落とす。閉じ括弧は消す先の語の末尾に付いた
      * まま残るが、そちらは toAbsParts が外す。
@@ -361,11 +394,18 @@ function scan(text, startCwd, depth = 0) {
       }
     }
 
-    if (verb === 'cd') {
-      /* 引数の無い cd、`cd -`、`cd ~` の行き先は分からない。 */
+    if (verb === 'cd' || verb === 'pushd') {
+      if (verb === 'pushd') stack.push(cwd);
+      /* 引数の無い cd/pushd、`cd -`、`cd ~` の行き先は分からない。
+       * pushd は引数が無いと積んだ場所と入れ替えるが、そこまでは追わない。 */
       const to = rest.find((w) => !isFlag(w));
       cwd =
         to && to !== '-' && !to.startsWith('~') ? toAbsParts(to, cwd) : null;
+      continue;
+    }
+
+    if (verb === 'popd') {
+      cwd = stack.length > 0 ? stack.pop() : null;
       continue;
     }
 
