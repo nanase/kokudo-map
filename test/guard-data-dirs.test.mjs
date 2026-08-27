@@ -14,6 +14,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,6 +33,9 @@ const REPO_POSIX = REPO.replace(/^([a-zA-Z]):/, '/$1');
 const REPO_BACKSLASH = REPO.replace(/\//g, '\\');
 /* この木の外。隣に同じ名前の物があっても番人の持ち場ではない。 */
 const OUTSIDE = `${REPO}-other`;
+/* 実在する、この木の外の場所。行き先が無ければ cd は失敗する扱いなので、
+ * 「外へ移ってから消す」を試すには実在する場所が要る。 */
+const AWAY = tmpdir().replace(/\\/g, '/');
 /* リポジトリを含む上のディレクトリ。ここを消せば当然巻き込む。 */
 const PARENT = dirname(REPO).replace(/\\/g, '/');
 
@@ -65,6 +69,22 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf ./build'],
     ['ls && rm -rf build && echo done'],
     ['rm -rf .'],
+  ])('%s', denies);
+
+  // 行を続ける書き方。改行を区切りと数えると、消す先だけが命令の無い段に
+  // 落ちる。
+  test.each([
+    [['rm -rf \\', 'build']],
+    [['rm -rf \\', 'build/pbf \\', 'build/cache']],
+    [['Get-ChildItem build |', 'Remove-Item -Recurse -Force']],
+    [['Remove-Item -Recurse -Force `', 'build']],
+  ])('%s', (lines) => denies(lines.join('\n')));
+
+  // 波括弧は開く。同じ物を消す命令が、波括弧の位置だけで答えを変えない。
+  test.each([
+    ['rm -rf build/{pbf,cache}'],
+    ['rm -rf {build,web/data}'],
+    ['rm -rf build/pbf build/cache'],
   ])('%s', denies);
 
   // 末尾の glob は「その中身ぜんぶ」で、親を消すのと同じ結果になる。
@@ -167,7 +187,10 @@ describe('木ごと消す形を止める', () => {
     ['cd build && rm -rf pbf'],
     ['pushd build && rm -rf pbf'],
     ['pushd build && rm -rf pbf && popd'],
-    ['pushd /tmp && popd && rm -rf build'],
+    [`pushd ${AWAY} && popd && rm -rf build`],
+    // 行き先が無ければ cd は失敗し、shell はルートに留まる。
+    ['cd nope; rm -rf build'],
+    ['cd build && rm -rf ../build/pbf'],
     ['cd web && rm -rf data'],
     ['cd build/pbf && rm -rf .'],
     [`(cd ${REPO} && rm -rf build)`],
@@ -290,10 +313,10 @@ describe('後始末は通す', () => {
     ['rm -rf /c/temp/scratch'],
     [`rm -rf ${OUTSIDE}/build`],
     ['rm -rf /tmp/claude/scratch'],
-    ['cd /tmp && rm -rf build'],
+    [`cd ${AWAY} && rm -rf build`],
     // 括弧を付けても答えは変わらない。書き方が違うだけの同じ命令である。
-    ['(cd /tmp && rm -rf build)'],
-    ['cd /tmp && git clean -xdf'],
+    [`(cd ${AWAY} && rm -rf build)`],
+    [`cd ${AWAY} && git clean -xdf`],
     [`rm -rf ${PARENT}/other*`],
     // 隣に置いた worktree の後始末。木の上へ出て別の枝へ降りるので、
     // `..` に潰して全部に当てると、事実でない理由で止めることになる。

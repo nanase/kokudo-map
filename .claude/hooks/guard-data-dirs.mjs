@@ -31,7 +31,7 @@
  * は止まるが、前の呼び出しで build/ に入ったままの `rm -rf pbf` は
  * 素通りする。木の外で打たれた相対パスを片端から止めるほうが害が大きい。
  */
-import { readFileSync, writeSync } from 'node:fs';
+import { existsSync, readFileSync, writeSync } from 'node:fs';
 
 /* 木ごと消されては困る場所。リポジトリのルートからの相対で述べる。 */
 const PROTECTED = [
@@ -167,6 +167,17 @@ function stripHeredocs(text) {
 }
 
 /**
+ * 続く行をつなぐ。行末の `\` (bash) と `` ` `` (PowerShell) と `|` は、
+ * そこで命令が終わらないことを言っている。改行を区切りとして数えると、
+ * 消す先だけが命令の無い段に落ちて素通りする。
+ */
+const joinContinuations = (text) =>
+  text
+    .replace(/\\\r?\n/g, ' ')
+    .replace(/`\r?\n/g, ' ')
+    .replace(/\|[ \t]*\r?\n/g, ' | ');
+
+/**
  * 命令を段に割る。区切りも引用符の中では効かない。手前の区切りが `|` 単体
  * だったかを憶えておく——PowerShell は消す先を pipe で渡すので、その段には
  * 旗しか無い。
@@ -288,6 +299,18 @@ function hits(rel) {
   });
 }
 
+/**
+ * `build/{pbf,cache}` を `build/pbf` と `build/cache` に開く。開かないと、
+ * 同じ物を消す命令が、波括弧の位置だけで通ったり止まったりする。
+ */
+function expandBraces(word, depth = 0) {
+  const m = depth > 4 ? null : /^(.*?)\{([^{}]*)\}(.*)$/.exec(word);
+  if (!m) return [word];
+  return m[2]
+    .split(',')
+    .flatMap((alt) => expandBraces(`${m[1]}${alt}${m[3]}`, depth + 1));
+}
+
 /* --------------------------------------------------------- 消す形を読む --- */
 
 const isFlag = (w) => w.startsWith('-') || /^\/[a-zA-Z]$/.test(w);
@@ -356,7 +379,8 @@ function scan(text, startCwd, depth = 0) {
   if (depth > 3) return cwd;
 
   let previous = [];
-  for (const segment of segments(stripComments(stripHeredocs(text)))) {
+  const ready = joinContinuations(stripComments(stripHeredocs(text)));
+  for (const segment of segments(ready)) {
     /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
      * 離してから、括弧だけの語を落とす。閉じ括弧は消す先の語の末尾に付いた
      * まま残るが、そちらは toAbsParts が外す。
@@ -399,8 +423,12 @@ function scan(text, startCwd, depth = 0) {
       /* 引数の無い cd/pushd、`cd -`、`cd ~` の行き先は分からない。
        * pushd は引数が無いと積んだ場所と入れ替えるが、そこまでは追わない。 */
       const to = rest.find((w) => !isFlag(w));
-      cwd =
+      const moved =
         to && to !== '-' && !to.startsWith('~') ? toAbsParts(to, cwd) : null;
+      /* 行き先が無ければ cd は失敗し、shell はその場に留まる。`cd nope;
+       * rm -rf build` は、リポジトリのルートで build/ を消す命令である。 */
+      if (moved !== null && !existsSync(moved.join('/'))) continue;
+      cwd = moved;
       continue;
     }
 
@@ -456,7 +484,7 @@ function scan(text, startCwd, depth = 0) {
      * `-Path build,web/data` のように読点で並べても 1 語で来る。 */
     const targets = (
       segment.piped && !args.some((w) => !isFlag(w)) ? upstream : args
-    ).flatMap((w) => w.split(','));
+    ).flatMap((w) => expandBraces(w).flatMap((x) => x.split(',')));
 
     /* 旗でない語を消す先の候補にする。どれが本当の引数かを正確に知るには
      * shell を実装することになるので、広く取る。 */
