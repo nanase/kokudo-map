@@ -6,7 +6,11 @@
 
 国道データに触るなら `.claude/skills/national-route-data/` を読んでください。取得手順、判定ルール、不具合の切り分け、過去の判断は、すべてそこにあります。判定ルールは実データの計測に基づいて決めてあるので、思いつきで変えないでください。
 
-文書を書くときは `.claude/skills/` の readable-docs、readable-japanese、readable-skill に従ってください。利用者は長い文章を読むのが苦手です。
+文書を書くときは readable-docs、readable-japanese、readable-skill に従ってください。利用者は長い文章を読むのが苦手です。
+
+これらを含む汎用スキルは [nanase/claude-skills](https://github.com/nanase/claude-skills) から入ります。対話セッションでこのリポジトリを信頼した時点で有効になります。ここに置いてあるのは national-route-data だけです。
+
+`claude -p` などの非対話セッションでは登録が走りません。CI で回すなら、先に `claude plugin marketplace add https://github.com/nanase/claude-skills.git` が要ります。
 
 ## コマンド
 
