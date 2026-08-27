@@ -129,9 +129,11 @@ describe('木ごと消す形を止める', () => {
     ['sudo -u me rm -rf build'],
     ['env FOO=1 rm -rf build'],
     ['FOO=1 rm -rf build'],
-    // 命令の綴りは名前だけとは限らない。
+    // 命令の綴りは名前だけとは限らない。git も同じで、rm 側だけ名前で
+    // 見ていたので `/usr/bin/git clean -xdf` が素通りしていた。
     ['/usr/bin/rm -rf build'],
     ['/bin/rm -rf build'],
+    ['rm.exe -rf build'],
     // -c の後ろは一語とは限らないし、旗の綴りも一通りではない。
     ['cmd /c rmdir /s /q build'],
     ['bash -lc "rm -rf build"'],
@@ -207,6 +209,8 @@ describe('木ごと消す形を止める', () => {
     ['git -c core.autocrlf=false clean -xdf'],
     ['git --git-dir .git clean -xdf'],
     ['git --work-tree . clean -xdf'],
+    ['/usr/bin/git clean -xdf'],
+    ['git.exe clean -xdf'],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
@@ -259,14 +263,22 @@ describe('後始末は通す', () => {
   ])('%s', allows);
 
   // ヒアドキュメントの中身も書き込む文章であって命令ではない。改行で段に
-  // 割ると、中の一行が命令に見える。
-  test('ヒアドキュメントの中身は読まない', () => {
-    allows(
-      ["cat > notes.md <<'EOF'", '後始末は rm -rf build ではない', 'EOF'].join(
-        '\n',
-      ),
-    );
-  });
+  // 割ると、中の一行が命令に見える。向き先は札の前にも後にも書ける。
+  test.each([
+    [["cat > notes.md <<'EOF'", '後始末は rm -rf build ではない', 'EOF']],
+    [["cat <<'EOF' > notes.md", '後始末は rm -rf build ではない', 'EOF']],
+    // 札が二つ。閉じた行を数え違えると、二つめの中身が命令として戻る。
+    [
+      [
+        "cat > a.md <<'EOF'",
+        'rm -rf build と書いてある',
+        'EOF',
+        "cat > b.md <<'EOF'",
+        'ここにも rm -rf build と書いてある',
+        'EOF',
+      ],
+    ],
+  ])('%s', (lines) => allows(lines.join('\n')));
 
   // この木の外は番人の持ち場ではない。
   test.each([

@@ -331,13 +331,15 @@ const card = `<!doctype html><meta charset="utf-8">
  * 確かめるほうを mkdir より先に置くのは、書けない書き先のために空の
  * ディレクトリを残さないためである。 */
 const dest = opt.out ? resolve(opt.out) : join(WEB, 'og.png');
-/* 末尾の区切りはディレクトリを指す書き方である。resolve はそれを落とすので、
- * まだ無ければ `build` という名前の PNG が生まれ、以後の mkdir が全部
- * 転ぶ。ここで断る。 */
-if (
-  /[\\/]$/.test(opt.out ?? '') ||
-  statSync(dest, { throwIfNoEntry: false })?.isDirectory()
-) {
+/* 書き先は .png のファイル名でなければ断る。`--out build` も `--out build/`
+ * も、書きたいのはディレクトリの中である。まだ build/ が無いと、resolve は
+ * それを `<root>/build` という 1 つのファイル名として返し、PNG がその名前で
+ * 生まれて、以後の mkdir が全部転ぶ。書く物は PNG しかないので、拡張子で
+ * 見分けるのがいちばん狭い。 */
+if (!/\.png$/i.test(dest)) {
+  throw new Error(`--out は .png のファイル名で渡す: ${opt.out}`);
+}
+if (statSync(dest, { throwIfNoEntry: false })?.isDirectory()) {
   throw new Error(`--out はファイル名で渡す。ディレクトリである: ${opt.out}`);
 }
 mkdirSync(dirname(dest), { recursive: true });

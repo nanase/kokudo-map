@@ -116,27 +116,23 @@ function tokenize(text) {
  * `rm -rf build` を載せている。
  */
 function stripHeredocs(text) {
-  /* 札は行の終わりに来る——`cat > notes.md <<'EOF'`。行の途中に現れる
-   * `<<EOF` は文章の中の文字列である。`<<<` (here-string) は札を取らない。 */
-  const OPEN = /(?:^|[^<])<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*$/;
+  /* 札は行の終わりに来る——`cat > notes.md <<'EOF'`。後ろに向き先が続く
+   * `cat <<'EOF' > notes.md` も同じ形である。行の途中に現れる `<<EOF` は
+   * 文章の中の文字列で、`<<<` (here-string) は札を取らない。 */
+  const OPEN =
+    /(?:^|[^<])<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*(?:[<>|]+\s*\S+\s*)*$/;
   const lines = text.split('\n');
   const out = [];
-  let tag = null;
-  let opened = -1;
-  for (const line of lines) {
-    if (tag !== null) {
-      if (line.trim() === tag) tag = null;
-      continue;
-    }
-    out.push(line);
-    const m = OPEN.exec(line);
-    if (m) {
-      tag = m[2];
-      opened = out.length;
-    }
+  for (let i = 0; i < lines.length; i++) {
+    out.push(lines[i]);
+    const m = OPEN.exec(lines[i]);
+    if (!m) continue;
+    let end = i + 1;
+    while (end < lines.length && lines[end].trim() !== m[2]) end++;
+    /* 閉じないまま終わったなら、それは札ではなかった。読み飛ばさない。 */
+    if (end >= lines.length) continue;
+    i = end;
   }
-  /* 閉じないまま終わったなら、それは札ではなかった。読んだ行を捨てない。 */
-  if (tag !== null) return [...out, ...lines.slice(opened)].join('\n');
   return out.join('\n');
 }
 
@@ -273,7 +269,13 @@ const PS_RECURSIVE = (w) =>
   /^-r(?:e(?:c(?:u(?:r(?:s(?:e)?)?)?)?)?)?$/i.test(w) || /^\/s$/i.test(w);
 const REMOVE = /^(rm|remove-item|ri|rd|rmdir|del|erase)$/i;
 /* `/usr/bin/rm` も rm である。 */
-const nameOf = (w) => w.replace(/\\/g, '/').split('/').pop().toLowerCase();
+const nameOf = (w) =>
+  w
+    .replace(/\\/g, '/')
+    .split('/')
+    .pop()
+    .toLowerCase()
+    .replace(/\.(exe|cmd|bat)$/, '');
 
 /* `git clean -x` は無視されているファイルを消す。長い旗の中の x は数えない
  * ——`--exclude=…` は消す範囲を狭める旗である。 */
@@ -367,7 +369,7 @@ function scan(text, startCwd, depth = 0) {
       continue;
     }
 
-    if (verb === 'git' && rest.includes('clean')) {
+    if (nameOf(verb) === 'git' && rest.includes('clean')) {
       /* git 自身の旗を読み飛ばして clean を探す。`-C <dir>` は走る場所を
        * 変えるので、そこも見る。 */
       /* 旗の値(`-c k=v` の k=v、`--git-dir .git` の .git)で打ち切らない。
@@ -406,7 +408,7 @@ function scan(text, startCwd, depth = 0) {
       name === 'rm' ? args.some(RM_RECURSIVE) : args.some(PS_RECURSIVE);
     if (!recursive) continue;
     /* `git rm -r --cached build` が触るのは索引だけで、ファイルは残る。 */
-    if (at > 0 && words[at - 1] === 'git' && args.includes('--cached'))
+    if (at > 0 && nameOf(words[at - 1]) === 'git' && args.includes('--cached'))
       continue;
 
     /* PowerShell は消す先を pipe で渡す——`gci build | Remove-Item -Recurse`。
