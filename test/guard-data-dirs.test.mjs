@@ -248,6 +248,10 @@ describe('木ごと消す形を止める', () => {
     ['bash -lc "rm -rf build"'],
     ['eval "rm -rf build"'],
     ['eval "cd build && rm -rf pbf"'],
+    // 命令置換の中身も走る命令である。
+    ['echo $(rm -rf build)'],
+    ['x=$(rm -rf build)'],
+    ['echo `rm -rf build`'],
     ['powershell -Command "Remove-Item -Recurse build"'],
   ])('%s', denies);
 
@@ -303,6 +307,10 @@ describe('木ごと消す形を止める', () => {
     // 一段早く閉じたことになる。
     ['echo $(date) ; (cd build && rm -rf pbf)'],
     ['arr=(a b); (cd build && rm -rf pbf)'],
+    // 命令置換は段をまたぐ。数えかけを持ち越さないと、部分 shell が
+    // 一段早く閉じたことになる。
+    ['(cd build; echo $(ls | head -1); rm -rf pbf)'],
+    ['(cd build && echo $(ls | head -1) && rm -rf pbf)'],
     ['cd build && rm -rf ../build/pbf'],
     // 行き先は同じ命令の中で作られる。無いからと数えないと素通りする。
     ['mkdir -p tmpwork && cd tmpwork && rm -rf ../build'],

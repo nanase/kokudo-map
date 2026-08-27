@@ -511,14 +511,39 @@ function listedBy(words) {
 }
 
 /**
+ * `$( … )` と `` ` … ` `` の中身。書かれているのは走る命令である——
+ * `echo $(rm -rf build)` は build/ を消す。
+ */
+function substitutions(text) {
+  const out = [];
+  for (let i = 0; i < text.length - 1; i++) {
+    if (text[i] !== '$' || text[i + 1] !== '(') continue;
+    let depth = 1;
+    let j = i + 2;
+    for (; j < text.length && depth > 0; j++) {
+      if (text[j] === '(') depth++;
+      else if (text[j] === ')') depth--;
+    }
+    if (depth === 0) out.push(text.slice(i + 2, j - 1));
+    i = j - 1;
+  }
+  const ticks = text.split('`');
+  for (let i = 1; i < ticks.length; i += 2) out.push(ticks[i]);
+  return out;
+}
+
+/**
  * 段の中の、組みの括弧の数。`$(date)` と `arr=(a b)` の括弧は組みではない
  * ので数えない——数えると、閉じだけが余って、後の本物の部分 shell が
  * 一段早く閉じたことになる。
+ *
+ * 命令置換は段をまたぐ——`$(ls | head -1)` の中に区切りがある。閉じない
+ * まま段が終わったら、その数を次の段へ持ち越す。
  */
-function grouping(text) {
+function grouping(text, carried = 0) {
   let opens = 0;
   let closes = 0;
-  let subst = 0;
+  let subst = carried;
   let quote = '';
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
@@ -541,7 +566,7 @@ function grouping(text) {
       else closes++;
     }
   }
-  return { opens, closes };
+  return { opens, closes, subst };
 }
 
 function scan(text, startCwd, depth = 0) {
@@ -560,15 +585,20 @@ function scan(text, startCwd, depth = 0) {
    * そこから新しく始める。 */
   let chain = [];
   const ready = joinContinuations(stripComments(stripHeredocs(text)));
+  /* 命令置換の中身を先に読む。走る命令であることに変わりはない。 */
+  for (const inner of substitutions(ready)) scan(inner, cwd, depth + 1);
   /* 閉じ括弧は、その段の命令を読み終えてから効く。次の段の頭で戻す。 */
   let closing = 0;
+  /* 閉じないまま段が終わった命令置換の深さ。 */
+  let substDepth = 0;
   for (const segment of segments(ready)) {
     while (closing > 0 && subshells.length > 0) {
       cwd = subshells.pop();
       closing--;
     }
     /* 前の段の残りに足す——上で戻し切れなかったぶんは、まだ効いていない。 */
-    const paren = grouping(segment.text);
+    const paren = grouping(segment.text, substDepth);
+    substDepth = paren.subst;
     closing += paren.closes;
     /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
      * 離してから、括弧だけの語を落とす。閉じ括弧は消す先の語の末尾に付いた
