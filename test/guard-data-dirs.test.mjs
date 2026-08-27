@@ -8,12 +8,14 @@
  * だからここで検査するのは境目である。番人そのものを子プロセスとして起動して、
  * 本物の判定を通す。判定の写しを検査しても検証にはならない。
  *
- * 場所は必ず REPO から組み立てる。手元の絶対パスを書き写すと、CI の
- * ubuntu では同じ命令が木の外を指すことになり、そこだけ落ちる。
+ * 番人に渡すリポジトリは、この repo 自身ではなく仮の木にする。番人は
+ * `cd` の行き先が実在するかを見るので、この repo を渡すと判定が手元の
+ * build/ の有無に左右される。build/ は .gitignore にあり、CI には無い。
  */
 
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +28,16 @@ const HOOK = join(ROOT, '.claude', 'hooks', 'guard-data-dirs.mjs');
  * 見ることになる。 */
 const NODE = 'node';
 
-const REPO = ROOT.replace(/\\/g, '/');
+/* 仮の木。守る場所と同じ形だけを作る。 */
+const REPO = mkdtempSync(join(tmpdir(), 'guard-')).replace(/\\/g, '/');
+beforeAll(() => {
+  for (const dir of ['build/pbf', 'build/cache', 'web/data']) {
+    mkdirSync(join(REPO, dir), { recursive: true });
+  }
+});
+afterAll(() => {
+  for (const dir of [REPO, AWAY]) rmSync(dir, { recursive: true, force: true });
+});
 /* 同じ場所の別の書き方。Windows の `d:/…` は Git Bash では `/d/…` になる。
  * ubuntu には drive letter が無いので、その場合は元のままになる。 */
 const REPO_POSIX = REPO.replace(/^([a-zA-Z]):/, '/$1');
@@ -34,10 +45,13 @@ const REPO_BACKSLASH = REPO.replace(/\//g, '\\');
 /* この木の外。隣に同じ名前の物があっても番人の持ち場ではない。 */
 const OUTSIDE = `${REPO}-other`;
 /* 実在する、この木の外の場所。行き先が無ければ cd は失敗する扱いなので、
- * 「外へ移ってから消す」を試すには実在する場所が要る。 */
-const AWAY = tmpdir().replace(/\\/g, '/');
+ * 「外へ移ってから消す」を試すには実在する場所が要る。仮の木の隣に作る
+ * ——上に置くと祖先になり、そこを消せば当然巻き込む。 */
+const AWAY = mkdtempSync(join(tmpdir(), 'away-')).replace(/\\/g, '/');
 /* リポジトリを含む上のディレクトリ。ここを消せば当然巻き込む。 */
 const PARENT = dirname(REPO).replace(/\\/g, '/');
+/* 仮の木の名前。命令の中に書くときは必ずここから取る。 */
+const NAME = basename(REPO);
 
 /** 番人に命令を渡し、止めたなら理由を、通したなら null を返す。 */
 function ask(command) {
@@ -103,7 +117,7 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf ./*'],
     ['rm -rf */'],
     ['rm -rf ..'],
-    ['rm -rf ../NationalRouteMap'],
+    [`rm -rf ../${NAME}`],
   ])('%s', denies);
 
   // 同じ場所が三通りの書き方で来る。
@@ -127,8 +141,8 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf build*'],
     ['rm -rf b*'],
     ['rm -rf web/*'],
-    ['rm -rf ../NationalRouteMap*'],
-    [`rm -rf ${PARENT}/NationalRouteMap*`],
+    [`rm -rf ../${NAME}*`],
+    [`rm -rf ${PARENT}/${NAME}*`],
   ])('%s', denies);
 
   // 前に付いた命令や組みに隠れる。verb を段の先頭語だけで見ると素通りする。
@@ -186,6 +200,10 @@ describe('木ごと消す形を止める', () => {
   test.each([
     ['cd build && rm -rf pbf'],
     ['pushd build && rm -rf pbf'],
+    // PowerShell と cmd は同じことを別の名前で書く。
+    ['Set-Location build; Remove-Item -Recurse -Force pbf'],
+    ['sl build; Remove-Item -Recurse -Force pbf'],
+    ['chdir build && rm -rf pbf'],
     ['pushd build && rm -rf pbf && popd'],
     [`pushd ${AWAY} && popd && rm -rf build`],
     // 行き先が無ければ cd は失敗し、shell はルートに留まる。
@@ -237,6 +255,9 @@ describe('木ごと消す形を止める', () => {
     ['git --work-tree . clean -xdf'],
     ['/usr/bin/git clean -xdf'],
     ['git.exe clean -xdf'],
+    // 範囲を絞る引数が保護対象を指していれば、絞っていても止める。
+    ['git clean -xdf build'],
+    ['git clean -xdf -- web/data'],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
@@ -261,6 +282,16 @@ describe('後始末は通す', () => {
     ['git clean -ndx'],
     ['git clean --dry-run -x'],
     ['git clean --exclude=foo.txt -fd'],
+    // 範囲を絞ってあり、そこに保護対象が入らない。理由文が「名指しして
+    // ください」と言うのだから、名指しした先は通らなければならない。
+    ['git clean -xdf web/vendor'],
+    ['git clean -xdf -- docs'],
+  ])('%s', allows);
+
+  // pipe の手前は、rm にとっては探す場所であって消す先ではない。
+  test.each([
+    ["find . -name '*.tmp' | xargs rm -rf"],
+    ["find build -name '*.log' -print0 | xargs -0 rm -rf"],
   ])('%s', allows);
 
   // POSIX の rmdir は空のディレクトリしか消せない。再帰の旗が無ければ、
@@ -320,8 +351,8 @@ describe('後始末は通す', () => {
     [`rm -rf ${PARENT}/other*`],
     // 隣に置いた worktree の後始末。木の上へ出て別の枝へ降りるので、
     // `..` に潰して全部に当てると、事実でない理由で止めることになる。
-    ['rm -rf ../NationalRouteMap-worktree'],
-    [`rm -rf ${PARENT}/NationalRouteMap-worktree`],
+    [`rm -rf ../${NAME}-worktree`],
+    [`rm -rf ${PARENT}/${NAME}-worktree`],
   ])('%s', allows);
 });
 

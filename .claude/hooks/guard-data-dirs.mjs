@@ -418,8 +418,12 @@ function scan(text, startCwd, depth = 0) {
       }
     }
 
-    if (verb === 'cd' || verb === 'pushd') {
-      if (verb === 'pushd') stack.push(cwd);
+    /* PowerShell は同じことを Set-Location と書く。cmd は chdir と書く。 */
+    const moves = /^(cd|chdir|set-location|sl|pushd|push-location)$/i.test(
+      verb,
+    );
+    if (moves) {
+      if (/^(pushd|push-location)$/i.test(verb)) stack.push(cwd);
       /* 引数の無い cd/pushd、`cd -`、`cd ~` の行き先は分からない。
        * pushd は引数が無いと積んだ場所と入れ替えるが、そこまでは追わない。 */
       const to = rest.find((w) => !isFlag(w));
@@ -432,7 +436,7 @@ function scan(text, startCwd, depth = 0) {
       continue;
     }
 
-    if (verb === 'popd') {
+    if (/^(popd|pop-location)$/i.test(verb)) {
       cwd = stack.length > 0 ? stack.pop() : null;
       continue;
     }
@@ -449,10 +453,22 @@ function scan(text, startCwd, depth = 0) {
           at = toAbsParts(rest[++j], at);
         }
       }
-      const flags = rest.slice(i + 1);
+      const after = rest.slice(i + 1);
+      const flags = after.filter((w) => w !== '--' && isFlag(w));
+      /* 消す範囲を絞る引数。付いていれば、そこに保護対象が入るときだけ止める
+       * ——理由文が「名指ししてください」と言うのに、名指しすると止まるのでは
+       * 通り道が無い。 */
+      const paths = after.filter((w) => w !== '--' && !isFlag(w));
+      const scoped =
+        paths.length > 0 &&
+        !paths.some((w) => {
+          const rel = underRoot(toAbsParts(w, at));
+          return rel !== null && hits(rel).length > 0;
+        });
       /* 木の外で走る git clean は、この repo の生成物を消さない。 */
       if (
         underRoot(at) !== null &&
+        !scoped &&
         flags.some(CLEAN_IGNORED) &&
         !flags.some(DRY_RUN)
       ) {
@@ -481,10 +497,15 @@ function scan(text, startCwd, depth = 0) {
 
     /* PowerShell は消す先を pipe で渡す——`gci build | Remove-Item -Recurse`。
      * その段には旗しか無いので、手前の段の語を消す先として見る。
-     * `-Path build,web/data` のように読点で並べても 1 語で来る。 */
-    const targets = (
-      segment.piped && !args.some((w) => !isFlag(w)) ? upstream : args
-    ).flatMap((w) => expandBraces(w).flatMap((x) => x.split(',')));
+     * `-Path build,web/data` のように読点で並べても 1 語で来る。
+     *
+     * rm では見ない。`find . -name '*.tmp' | xargs rm -rf` の手前にある `.`
+     * は探す場所であって、消す先ではない。 */
+    const fromPipe =
+      name !== 'rm' && segment.piped && !args.some((w) => !isFlag(w));
+    const targets = (fromPipe ? upstream : args).flatMap((w) =>
+      expandBraces(w).flatMap((x) => x.split(',')),
+    );
 
     /* 旗でない語を消す先の候補にする。どれが本当の引数かを正確に知るには
      * shell を実装することになるので、広く取る。 */
