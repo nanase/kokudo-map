@@ -21,7 +21,7 @@
  * Usage:  node scripts/make_brand.mjs
  *         node scripts/make_brand.mjs --card 1280x640 --out build/social.png
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -300,6 +300,12 @@ const card = `<!doctype html><meta charset="utf-8">
   </div>
 </div>`;
 
+/* 書き先は Chromium を起動する前に決めて、無ければ作る。docs が案内する
+ * build/ は .gitignore にあるので、clone した直後には無い。描き終えてから
+ * ENOENT で落ちると、1 秒ぶんの描画がまるごと無駄になる。 */
+const dest = opt.out ? resolve(opt.out) : join(WEB, 'og.png');
+mkdirSync(dirname(dest), { recursive: true });
+
 const browser = await chromium.launch();
 const page = await browser.newPage({
   viewport: { width: OUT.w, height: OUT.h },
@@ -310,7 +316,6 @@ await page.evaluate(() => document.fonts.ready);
 const png = await page.screenshot({ type: 'png' });
 await browser.close();
 
-const dest = opt.out ? resolve(opt.out) : join(WEB, 'og.png');
 writeFileSync(dest, png);
 const kb = (png.length / 1024).toFixed(1);
 console.log(`  ${basename(dest)}  ${OUT.w}x${OUT.h}  ${kb} kB`);
