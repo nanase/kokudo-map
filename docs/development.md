@@ -72,7 +72,7 @@ mise run serve        # http://localhost:8000/
 | `bun run glyphs` | `web/glyphs/` — ラベルの SDF グリフ |
 | `bun run brand` | `web/favicon.svg` と `web/og.png` |
 
-札は寸法を選べます。`bun run brand -- --card 1280x640 --out social.png` は、その寸法の札だけをそこへ書きます。GitHub の Social preview がこれで、リンクの札が期待する 1200x630 とは合いません。追跡はしません。設定画面に上げたら捨ててください。
+札は寸法を選べます。`bun run brand -- --card 1280x640 --out build/social.png` は、その寸法の札だけをそこへ書きます。GitHub の Social preview がこれで、リンクの札が期待する 1200x630 とは合いません。設定画面に上げたら捨ててください。書き先を `build/` にしてあるのは、この画像を追跡しないためです。追跡する木の中に置くと `git add -A` が拾います。
 
 絵は寸法ごとに組み直しません。1200x630 の組みを、求められた枠を覆うまで拡大して、はみ出したぶんを切ります。
 

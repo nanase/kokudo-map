@@ -19,7 +19,7 @@
  * or every run would show up as a diff.
  *
  * Usage:  node scripts/make_brand.mjs
- *         node scripts/make_brand.mjs --card 1280x640 --out social.png
+ *         node scripts/make_brand.mjs --card 1280x640 --out build/social.png
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -39,7 +39,7 @@ const { values: opt } = parseArgs({
 });
 if (Boolean(opt.card) !== Boolean(opt.out)) {
   throw new Error(
-    '--card と --out は揃えて渡す: --card 1280x640 --out social.png',
+    '--card と --out は揃えて渡す: --card 1280x640 --out build/social.png',
   );
 }
 
