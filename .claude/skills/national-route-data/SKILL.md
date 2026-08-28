@@ -92,6 +92,7 @@ way 自身が主張する番号は、同じ地域の国道リレーションが�
 
 ## 参照する文書
 
+- 公開データを作り直して上げる手順 → [UPDATE.md](UPDATE.md)
 - 国道かどうか、何号かの判定 → [RULES.md](RULES.md)
 - 不具合の検出と切り分け → [TRIAGE.md](TRIAGE.md)
 - 過去に見つけた不具合と判断 → [CASES.md](CASES.md)
