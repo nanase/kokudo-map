@@ -56,9 +56,9 @@ const NAME = basename(REPO);
 const DRIVE = REPO.replace(/^([a-zA-Z]):.*$/, '/$1');
 
 /** 番人に命令を渡し、止めたなら理由を、通したなら null を返す。 */
-function ask(command) {
+function ask(command, toolName = 'Bash') {
   const out = execFileSync(NODE, [HOOK], {
-    input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
+    input: JSON.stringify({ tool_name: toolName, tool_input: { command } }),
     env: { ...process.env, CLAUDE_PROJECT_DIR: REPO },
     encoding: 'utf8',
   });
@@ -68,6 +68,9 @@ function ask(command) {
   expect(hookSpecificOutput.permissionDecision).toBe('deny');
   return hookSpecificOutput.permissionDecisionReason;
 }
+
+/** PowerShell を呼んだ体で番人に命令を渡す。 */
+const askPowerShell = (command) => ask(command, 'PowerShell');
 
 /* 展開されないまま届く変数を書くための一字。素の文字列に `${` と書くと、
  * 書き忘れたテンプレート文字列と区別が付かない。 */
@@ -262,6 +265,16 @@ describe('木ごと消す形を止める', () => {
     ['x=$(rm -rf build)'],
     ['echo `rm -rf build`'],
     ['powershell -Command "Remove-Item -Recurse build"'],
+    // 引用符の中の `\"` を引用符の閉じと数えると、閉じたことにされた先の
+    // `&& rm -rf build` が地の命令として読まれてしまう。sed は PRINTS に
+    // 入っているので、`\"` を正しく読めば全体が 1 引数のままで済む。
+    [`sed -i "s/${BS}"/'/g" f.txt && rm -rf build`],
+    // 逆斜線の連なりは左から対で読む。二重引用符の直前に逆斜線が偶数個
+    // 並ぶと、それらは互いに対になって消え、直後の引用符は普通に閉じる
+    // ——`"a\\"` は bash では普通に閉じる二重引用符である。1 字先だけを
+    // 見て `\"` かどうかを判定すると、この偶奇を数え違えて閉じたはずの
+    // 引用符が開いたままになり、後ろの `&& rm -rf build` を呑み込む。
+    [`echo "a${BS}${BS}" && rm -rf build`],
   ])('%s', denies);
 
   // 今いる場所を指す書き方。展開されないまま番人に届く。
@@ -393,6 +406,15 @@ describe('木ごと消す形を止める', () => {
     ['git clean -xdfe node_modules'],
     // 外した先が保護対象を覆っていなければ、残りは消える。
     ['git clean -xdf -e node_modules'],
+    // 根に解ける除外は「全部外した」ではなく「何も外していない」。git の
+    // `-e` が取るのは gitignore の型で、`.` は何も外さない。
+    ['git clean -xdf -e .'],
+    ['git clean -xdf -e ..'],
+    // `\*` は git 自身には「`*` という名前のファイル」としか読めず、
+    // build/ も web/data/ も外れない。逆斜線を斜線に読み替えて道筋として
+    // 根に解くと、`*` だけの除外と区別が付かなくなり、実際には何も外して
+    // いないのに通してしまう。
+    [String.raw`git clean -xdf -e '\*'`],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
@@ -427,6 +449,12 @@ describe('後始末は通す', () => {
     // 名指しした先は通らなければならない。
     ['git clean -xdf -e build -e web/data'],
     ['git clean -xdf --exclude=build --exclude=web/data'],
+    // `*` や `**` だけの除外は、パスとしては根に解けるが `.`・`..` とは
+    // 違う——gitignore の型としては本当に全部へ当たるので、無害である。
+    // 根に解けたことだけを見て「何も外していない」と決めると、この安全な
+    // 指定まで止めてしまう。
+    ["git clean -xdf -e '*'"],
+    ["git clean -xdf -e '**'"],
     // git clean が歩くのは走った場所から下だけ。docs/ からは build/ に
     // 届かない。
     ['cd docs && git clean -xdf'],
@@ -490,6 +518,14 @@ describe('後始末は通す', () => {
     ['echo ok  # cd build && rm -rf pbf'],
     ['echo "後始末: ; rm -rf build" >> notes.md'],
     ["git commit -m 'rm -rf build をやめた'"],
+    // 引用符の中の `\"` を引用符の閉じと数えると、二重引用符の中身が
+    // 空白で複数語に割れて `rm` が地の語として現れる。node は PRINTS に
+    // 無いが、正しく読めば全体が 1 引数のままで割れない。
+    [`node -e "console.log(${BS}"rm -rf build${BS}")"`],
+    // 逆斜線が奇数個並んで引用符を字として読ませると、そこから先は
+    // 閉じていない引用符の中身になる。bash では文が終わるまで閉じない
+    // 引用符は構文エラーで、何も走らない。
+    [`echo "a${BS}${BS}${BS}" rm -rf build`],
   ])('%s', allows);
 
   // ヒアドキュメントの中身も書き込む文章であって命令ではない。改行で段に
@@ -556,6 +592,38 @@ describe('木の名前に括弧があっても効く', () => {
       expect(out.trim()).not.toBe('');
     },
   );
+});
+
+describe('PowerShell の二重引用符に逆斜線は逃げ字ではない', () => {
+  // 番人は Bash と PowerShell の両方を見る。bash の綴りをそのまま当てると、
+  // 閉じたはずの引用符が開いたままになり、後ろに続く生きた命令を呑み込む。
+  test('PowerShell を名指しした呼び出しでは逆斜線が引用符を閉じさせる', () => {
+    expect(
+      askPowerShell(
+        `Remove-Item -Recurse "C:${BS}somewhere${BS}" ; Remove-Item -Recurse -Force build`,
+      ),
+    ).not.toBeNull();
+  });
+
+  // 逆斜線の綴りが変わっても、木ごと消す形はそのまま止まる。
+  test('PowerShell の普通の再帰削除は変わらず止まる', () => {
+    expect(askPowerShell('Remove-Item -Recurse -Force build')).not.toBeNull();
+  });
+
+  // 逆斜線を引用符の閉じと数えなくても、安全な命令まで止めてはいけない。
+  test('末尾が逆斜線の道筋だけなら通す', () => {
+    expect(askPowerShell(`Get-ChildItem "C:${BS}temp${BS}"`)).toBeNull();
+  });
+
+  // 呼ばれた側の shell の綴りへ切り替える。Bash から PowerShell を呼んだ
+  // 命令の中身は PowerShell の綴りで読む。
+  test('Bash から呼んだ powershell -Command の中身は PowerShell の綴りで読む', () => {
+    expect(
+      ask(
+        `powershell -Command "Remove-Item -Recurse ${BS}"C:${BS}x${BS}" ; Remove-Item -Recurse -Force build"`,
+      ),
+    ).not.toBeNull();
+  });
 });
 
 describe('読めない入力で作業を止めない', () => {
