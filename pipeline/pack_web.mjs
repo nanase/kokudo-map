@@ -26,7 +26,14 @@
  *
  * Usage:  node pipeline/pack_web.mjs [--maxzoom 14]
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import geojsonvt from 'geojson-vt';
 import vtpbf from 'vt-pbf';
@@ -399,9 +406,27 @@ const fc = (feats) => ({
   })),
 });
 
-const chunks = [];
+/* タイルは切ったそばから書き出す。
+ *
+ * 全部を配列に溜めてから Buffer.concat で 1 本にしていた。tiles.bin は
+ * 98.8 MB なので、繋ぐ瞬間だけ同じ物が 2 つ、約 200 MB 生きる。47 県ぶんの
+ * GeoJSON と結合済みの弧も同時に載っているところで、これが
+ * `node --max-old-space-size=6144` を要求している一因だった。
+ *
+ * 索引は書いた順・書いた位置をそのまま並べるので、溜めてから数えるのと
+ * 同じ物になる。つまり出来上がる 2 ファイルは 1 バイトも変わらない。 */
+mkdirSync(TILEDIR, { recursive: true });
+const binFd = openSync(join(TILEDIR, 'tiles.bin'), 'w');
+const idxRows = [];
 let total = 0;
 let bytes = 0;
+
+/* writeSync は部分書き込みを返しうる。返り値を捨てると、その 1 タイルだけが
+ * 短いまま索引には全長が載り、archive が静かに壊れる。書き切るまで回す。 */
+function writeAll(fd, buf) {
+  let at = 0;
+  while (at < buf.length) at += writeSync(fd, buf, at, buf.length - at);
+}
 
 function emit(z, x, y, tile) {
   if (!tile?.features.length) return;
@@ -409,7 +434,8 @@ function emit(z, x, y, tile) {
     { routes: tile },
     { version: 2, extent: EXTENT },
   );
-  chunks.push({ z, x, y, buf: Buffer.from(buf) });
+  idxRows.push([z, x, y, bytes, buf.length]);
+  writeAll(binFd, buf);
   total++;
   bytes += buf.length;
 }
@@ -472,18 +498,9 @@ for (const [cx, cy] of cells) {
 process.stdout.write('\n');
 
 /* The packer takes one blob and one index rather than a hundred thousand small
- * files, which Windows would spend longer creating than we spent tiling. */
-mkdirSync(TILEDIR, { recursive: true });
-const idxRows = [];
-let offset = 0;
-for (const c of chunks) {
-  idxRows.push([c.z, c.x, c.y, offset, c.buf.length]);
-  offset += c.buf.length;
-}
-writeFileSync(
-  join(TILEDIR, 'tiles.bin'),
-  Buffer.concat(chunks.map((c) => c.buf)),
-);
+ * files, which Windows would spend longer creating than we spent tiling. The
+ * blob is already on disk (see emit); only the index is left. */
+closeSync(binFd);
 writeFileSync(
   join(TILEDIR, 'tiles.json'),
   JSON.stringify({
