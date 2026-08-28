@@ -1,0 +1,16 @@
+{
+  "name": "国道マップ",
+  "short_name": "国道マップ",
+  "description": "日本の一般国道459路線を全国1枚で表示する地図。重用区間で番号を丸めない、縮尺で番号を省略しない。",
+  "lang": "ja",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#00449E",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

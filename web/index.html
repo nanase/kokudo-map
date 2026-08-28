@@ -7,6 +7,18 @@
 <meta name="description" content="日本の一般国道 459 路線を全国 1 枚で表示する地図。重用区間では重なるすべての番号を出し、縮尺を引いても番号を省略しない。出典は OpenStreetMap。">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
+<!-- ホーム画面に追加したときの表示。manifest が名前・アイコン・単独起動
+     (display: standalone)を述べる。theme-color はアイコンの地の色と同じ
+     標識の青で、ステータスバーや最近使ったアプリの帯に出る。
+     apple-touch-icon は iOS 側の同義語——Safari は manifest の icons を
+     ほぼ見ないので、これが無いと角の透けた不格好なアイコンになる。 -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#00449E">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="国道マップ">
+
 <!-- 共有されたときに出るカード。%SITE_URL% は配信時に Actions が実際の URL に
      差し替える。GitHub Pages の URL を述べるのはそこだけである。 -->
 <meta property="og:type" content="website">

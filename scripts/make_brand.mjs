@@ -1,22 +1,26 @@
-/* Draw the site's own two images: the tab icon and the card link previews show.
+/* Draw the site's own images: the tab icon, the home-screen icon manifest.
+ * webmanifest points at, and the card link previews show.
  *
- * Both are the 国道番号標識, because that is what the map is about — and both
- * are drawn from `SHIELD_PATH` in web/shield.mjs, the same outline the panel
- * and the popups use. Tracing the triangle a second time here would be a
- * second answer to what the sign looks like.
+ * All three are the 国道番号標識, because that is what the map is about — and
+ * all are drawn from `SHIELD_PATH` in web/shield.mjs, the same outline the
+ * panel and the popups use. Tracing the triangle a second time here would be
+ * a second answer to what the sign looks like.
  *
  * The favicon is SVG: one file, no sizes to keep in step, and the sign is a
  * flat shape that loses nothing by being drawn rather than sampled. It carries
  * no number — at 16 px a number is a smudge, and the map is about all of them.
  *
- * The card is a PNG because that is what link scrapers accept, rendered at the
- * 1200x630 they expect. It is drawn in the Chromium already here for the
- * render check rather than by a drawing library.
+ * The home-screen icon and the card are PNG, both rendered in the Chromium
+ * already here rather than by a drawing library. The icon is a cropped-square
+ * telling of the same scene the card tells wide: three signs standing on a
+ * road that deepens in colour as more routes join it. It reuses the real
+ * `shield()` function — not a hand-drawn number — so a numbered sign never
+ * has two answers for what it looks like.
  *
- * Both are committed: a few tens of kB that change only when the sign or the
- * wording does. That is why the street grid below is drawn from a seeded
- * generator rather than a live random: two runs must produce the same bytes,
- * or every run would show up as a diff.
+ * All of them are committed: a few tens of kB that change only when the sign
+ * or the wording does. That is why the street grid below is drawn from a
+ * seeded generator rather than a live random: two runs must produce the same
+ * bytes, or every run would show up as a diff.
  *
  * Usage:  node scripts/make_brand.mjs
  *         node scripts/make_brand.mjs --card 1280x640 --out build/social.png
@@ -70,15 +74,53 @@ const EDGE = '#FFFFFF';
 const N_COLORS = ['#1B62C4', '#D98324', '#C2352B', '#7B3E9D'];
 /* 標識の番号の大きさ。style.css の `.shield text` と同じ値である。 */
 const NUM_SIZE = 212.5;
+/* 地の色。ホーム画面アイコンと共有カードの両方が使う——地図の画面自体は
+ * 明暗を切り替えるが、これらは常にこの一色である。 */
+const GROUND = '#0B1826';
 
 const TITLE = '国道マップ';
 /* カードが載せる一文。README の冒頭でも共有カードでも、絵の周りに説明文は
  * 無く、地図が何のためにあるかを述べるのはここだけになる。 */
 const TAGLINE = ['重用区間で番号を丸めない', '日本の国道地図'];
 
+/* 地図(アイコン・カード共通)だけを少し倒す。街も国道も同じだけ倒れるので、
+ * 交わりは直角のまま右肩上がりに見える。標識と文字は倒さない——地図の注記は
+ * 水平に置く。 */
+const TILT = -4;
+
+/* (cx,cy) を中心に deg 度だけ回した (x,y) を返す関数を作る。アイコン・
+ * カードは大きさが違う別々のキャンバスなので、中心もそれぞれ持つ——同じ式を
+ * 中心だけ変えて使い回す。 */
+function makeRot(cx, cy, deg) {
+  const rad = (deg * Math.PI) / 180;
+  const [cos, sin] = [Math.cos(rad), Math.sin(rad)];
+  return (x, y) => {
+    const [dx, dy] = [x - cx, y - cy];
+    return [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos];
+  };
+}
+
+/* 国道の線・街路。区間ごとに 1 本、縦か横だけ——交わりは直角だけである。 */
+const line = (x1, y1, x2, y2, color, w) =>
+  `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"` +
+  ` stroke="${color}" stroke-width="${w}" stroke-linecap="butt"/>`;
+
+/* Roboto は番号だけに使う。style.css と同じ vendor の woff2 を埋め込むので、
+ * この機械に何が入っているかに関わらず、番号は画面の標識と同じ字形になる。
+ * アイコンとカードの両方が要るので、どちらより先に読む。 */
+const ROBOTO = join(WEB, 'vendor', 'roboto-latin-700-normal.woff2');
+const roboto = readFileSync(ROBOTO).toString('base64');
+const fontFace =
+  '@font-face { font-family: Roboto; font-weight: 700; font-style: normal;' +
+  ` src: url(data:font/woff2;base64,${roboto}) format('woff2'); }`;
+
+/* favicon・ホーム画面アイコン・カードは PNG に焼く必要があるので、まとめて
+ * ブラウザを起こす。起動・終了を繰り返す理由が無い。 */
+const browser = await chromium.launch();
+
 /* ---------------------------------------------------------------- favicon --- */
-/* --card はカードだけを求めている。favicon は寸法を持たないので、書き直して
- * 何かが変わる場面が無い。 */
+/* --card はカードだけを求めている。favicon・アイコンは寸法を持たないので、
+ * 書き直して何かが変わる場面が無い。 */
 if (!opt.card) {
   /* The sign sits on its own; there is no page behind it to blend into, so
    * `paint-order="stroke"` paints the fill over the stroke's inward half.
@@ -93,6 +135,146 @@ if (!opt.card) {
   ].join('');
   writeFileSync(join(WEB, 'favicon.svg'), `${favicon}\n`, 'utf8');
   console.log(`  favicon.svg  ${favicon.length} B`);
+}
+
+/* ---------------------------------------------------------- home icon --- *
+ *
+ * ホーム画面に追加したときのアイコン(manifest.webmanifest が参照する)。
+ * favicon(標識1枚だけ)ではなく、共有カードの一番深い区間——単独指定→
+ * 二重用→三重用——を正方形に切り出した絵にする。標識1枚だけでは一般的な
+ * 道路標識アプリに見え、重用区間という着想が伝わらない。
+ *
+ * 視点は左から右へ動くので、若い番号(73)を左・手前・大きく、大きい番号
+ * (215)を右・奥・小さく置く。道の色も揃える——若い番号だけの区間が青、
+ * 合流するたびに濃くなって右端が赤になる。
+ *
+ * 標識は shield() をそのまま使う。番号入りの標識をどう描くかの答えは
+ * shield.mjs 側に既にあり、太さ違いの縁をここで新たに作ると、番号付き標識の
+ * 見た目に二つ目の答えを持つことになる。 */
+if (!opt.card) {
+  const ICON = 512;
+  const iconRot = makeRot(ICON / 2, ICON / 2, TILT);
+
+  /* 標識の並び。底辺(ICON_BASE)を揃えて道の上に立たせ、大きさで奥行きを
+   * 出す。z は描く順——奥(215)を先に、手前(73)を最後に描いて一番上に乗せる。 */
+  const ICON_BASE = 350;
+  const SIGNS = [
+    { ref: 73, x: 195, h: 252, z: 3 },
+    { ref: 110, x: 315, h: 196, z: 2 },
+    { ref: 215, x: 415, h: 150, z: 1 },
+  ];
+  const ROAD = { y0: 328, y1: 368, b1: 265, b2: 385 };
+  const GRID_LINES = [
+    [-60, 118, 600, 118],
+    [-60, 300, 600, 300],
+    [140, -60, 140, 600],
+    [380, -60, 380, 600],
+  ];
+
+  const mapSvg =
+    `<svg viewBox="0 0 ${ICON} ${ICON}" width="${ICON}" height="${ICON}">` +
+    `<rect width="100%" height="100%" fill="${GROUND}"/>` +
+    `<g transform="rotate(${TILT} ${ICON / 2} ${ICON / 2})">` +
+    `<g stroke="#22374E" stroke-width="4" opacity=".85" fill="none">` +
+    GRID_LINES.map(
+      ([x1, y1, x2, y2]) =>
+        `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`,
+    ).join('') +
+    '</g>' +
+    [
+      [-100, ROAD.b1, N_COLORS[0]],
+      [ROAD.b1, ROAD.b2, N_COLORS[1]],
+      [ROAD.b2, ICON + 100, N_COLORS[2]],
+    ]
+      .map(
+        ([x0, x1, c]) =>
+          `<rect x="${x0}" y="${ROAD.y0}" width="${x1 - x0}" height="${ROAD.y1 - ROAD.y0}" fill="${c}"/>`,
+      )
+      .join('') +
+    '</g>' +
+    '<rect width="100%" height="100%" fill="url(#iv)"/>' +
+    '<defs><radialGradient id="iv" cx=".5" cy=".5" r=".82">' +
+    `<stop offset=".3" stop-color="${GROUND}" stop-opacity="0"/>` +
+    `<stop offset="1" stop-color="${GROUND}" stop-opacity=".55"/>` +
+    '</radialGradient></defs>' +
+    '</svg>';
+
+  const pins = SIGNS.map((s) => {
+    const [x, y] = iconRot(s.x, ICON_BASE - s.h / 2);
+    return (
+      `<span class="pin" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px` +
+      `;height:${s.h}px;z-index:${s.z}">${shield(s.ref)}</span>`
+    );
+  }).join('');
+
+  /* 実際に書き出す大きさ(outSize)へは、512 単位で組んだ絵を CSS の scale
+   * で縮める——カードが CARD の組みを OUT の枠へ拡大縮小するのと同じやり方。
+   * safeZoneScale は maskable 専用の追加縮小(下記)。 */
+  const iconHtml = (
+    outSize,
+    safeZoneScale = 1,
+  ) => `<!doctype html><meta charset="utf-8">
+<style>
+  ${fontFace}
+  * { margin: 0; box-sizing: border-box; }
+  body { width: ${outSize}px; height: ${outSize}px; overflow: hidden; background: ${GROUND}; }
+  .icon {
+    position: absolute; left: 50%; top: 50%; width: ${ICON}px; height: ${ICON}px;
+    transform: translate(-50%, -50%) scale(${((outSize / ICON) * safeZoneScale).toFixed(6)});
+  }
+  .map { position: absolute; inset: 0; }
+  .map svg { display: block; }
+  .pin { position: absolute; transform: translate(-50%, -50%);
+    filter: drop-shadow(0 5px 10px rgba(0, 0, 0, .6)); }
+  .shield { display: block; height: 100%; }
+  .shield svg { display: block; height: 100%; width: auto; }
+  .shield path { fill: ${FACE}; stroke: ${EDGE}; paint-order: stroke; }
+  .shield text { fill: ${EDGE}; font-family: Roboto; font-weight: 700; font-size: ${NUM_SIZE}px; }
+</style>
+<div class="icon"><div class="map">${mapSvg}</div>${pins}</div>`;
+
+  const iconDir = join(WEB, 'icons');
+  mkdirSync(iconDir, { recursive: true });
+
+  const renderIconPng = async (html, outSize) => {
+    const page = await browser.newPage({
+      viewport: { width: outSize, height: outSize },
+      deviceScaleFactor: 1,
+    });
+    await page.setContent(html);
+    await page.evaluate(() => document.fonts.ready);
+    const png = await page.screenshot({ type: 'png' });
+    await page.close();
+    return png;
+  };
+
+  for (const outSize of [192, 512]) {
+    const png = await renderIconPng(iconHtml(outSize), outSize);
+    const name = `icon-${outSize}.png`;
+    writeFileSync(join(iconDir, name), png);
+    console.log(
+      `  icons/${name}  ${outSize}x${outSize}  ${(png.length / 1024).toFixed(1)} kB`,
+    );
+  }
+
+  /* maskable: OS 側が任意の輪郭(丸・角丸四角など)でくり抜く前提の版。
+   * 安全域(直径 80% の中心円)に収まるよう、絵全体をさらに 0.8 倍へ縮めて
+   * 中央へ置く。地(GROUND)が全面を覆っているので、縮めた分の余白は
+   * 継ぎ目なく地に溶ける。 */
+  const maskable = await renderIconPng(iconHtml(512, 0.8), 512);
+  writeFileSync(join(iconDir, 'icon-512-maskable.png'), maskable);
+  console.log(
+    `  icons/icon-512-maskable.png  512x512  ${(maskable.length / 1024).toFixed(1)} kB`,
+  );
+
+  /* iOS の「ホーム画面に追加」は manifest.webmanifest をほぼ見ず、この
+   * ファイルだけを見る。角を自動で丸めるだけで任意形にはくり抜かないので、
+   * maskable の安全域は要らない——他の 2 枚と同じ絵をそのまま縮小する。 */
+  const apple = await renderIconPng(iconHtml(180), 180);
+  writeFileSync(join(iconDir, 'apple-touch-icon.png'), apple);
+  console.log(
+    `  icons/apple-touch-icon.png  180x180  ${(apple.length / 1024).toFixed(1)} kB`,
+  );
 }
 
 /* ------------------------------------------------------------------- card ---
@@ -130,21 +312,12 @@ const crop = {
   w: 1 - OUT.w / (CARD.w * SCALE),
   h: 1 - OUT.h / (CARD.h * SCALE),
 };
-const GROUND = '#0B1826';
 const INK_2 = '#9CB8DC';
 /* 街路。地の色との差はここだけで決まる。 */
 const STREET = '#22374E';
 const STREET_MAJOR = '#31506F';
 
-/* 地図だけを少し倒す。街も国道も同じだけ倒れるので、交わりは直角のまま
- * 右肩上がりに見える。標識と文字は倒さない——地図の注記は水平に置く。 */
-const TILT = -4;
-const RAD = (TILT * Math.PI) / 180;
-const [COS, SIN] = [Math.cos(RAD), Math.sin(RAD)];
-const rot = (x, y) => {
-  const [dx, dy] = [x - CARD.w / 2, y - CARD.h / 2];
-  return [CARD.w / 2 + dx * COS - dy * SIN, CARD.h / 2 + dx * SIN + dy * COS];
-};
+const rot = makeRot(CARD.w / 2, CARD.h / 2, TILT);
 
 /* 倒したぶん四隅が空くので、絵の外まで広く敷く。国道の線も同じ範囲まで
  * 引き、枠の内側で始まったり終わったりしないようにする。 */
@@ -200,11 +373,6 @@ function streets(seed) {
     `<g stroke="${STREET_MAJOR}" stroke-width="3.6" fill="none"><path d="${thick.join(' ')}"/></g>`
   );
 }
-
-/* 国道の線。区間ごとに 1 本、縦か横だけ——交わりは直角だけである。 */
-const line = (x1, y1, x2, y2, color, w) =>
-  `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"` +
-  ` stroke="${color}" stroke-width="${w}" stroke-linecap="butt"/>`;
 
 /* 本線の高さと、二本が突き当たる位置。ここを動かすと標識も一緒に動く。 */
 const ROAD_Y = 516;
@@ -307,17 +475,9 @@ if (crop.w > CROP_MAX.w || crop.h > CROP_MAX.h) {
   );
 }
 
-/* Roboto は番号だけに使う。style.css と同じ vendor の woff2 を埋め込むので、
- * この機械に何が入っているかに関わらず、番号は画面の標識と同じ字形になる。 */
-const ROBOTO = join(WEB, 'vendor', 'roboto-latin-700-normal.woff2');
-const roboto = readFileSync(ROBOTO).toString('base64');
-
 const card = `<!doctype html><meta charset="utf-8">
 <style>
-  @font-face {
-    font-family: Roboto; font-weight: 700; font-style: normal;
-    src: url(data:font/woff2;base64,${roboto}) format('woff2');
-  }
+  ${fontFace}
   * { margin: 0; box-sizing: border-box; }
   body {
     width: ${OUT.w}px; height: ${OUT.h}px; position: relative; overflow: hidden;
@@ -406,7 +566,6 @@ if (statSync(dest, { throwIfNoEntry: false })?.isDirectory()) {
 }
 mkdirSync(dirname(dest), { recursive: true });
 
-const browser = await chromium.launch();
 const page = await browser.newPage({
   viewport: { width: OUT.w, height: OUT.h },
   deviceScaleFactor: 1,
