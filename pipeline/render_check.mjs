@@ -102,18 +102,31 @@ const settle = () =>
     (cap) =>
       new Promise((resolve) => {
         const m = window.map;
+        /* 地図が無ければ待つ相手がいない。手前の isStyleLoaded 待ちは
+         * `.catch(() => {})` で握りつぶすので、地図が起動しなかった回は
+         * そのままここへ来る。待たずに戻り、後の検査に失敗させる——
+         * page.evaluate に時限は無いので、ここで止まると何も報告されない
+         * まま固まる。 */
+        if (!m) {
+          resolve();
+          return;
+        }
+        const check = () => {
+          if (!m.loaded() || m.isMoving()) return;
+          clearTimeout(timer);
+          resolve();
+          m.off('idle', check);
+          m.off('render', check);
+        };
+        /* 上限は rAF の外で張る。中で張ると、画面が伏せられて
+         * requestAnimationFrame が回らない回に上限そのものが動かない。 */
+        const timer = setTimeout(() => {
+          resolve();
+          m.off('idle', check);
+          m.off('render', check);
+        }, cap);
         requestAnimationFrame(() =>
           requestAnimationFrame(() => {
-            const done = () => {
-              clearTimeout(timer);
-              m.off('idle', check);
-              m.off('render', check);
-              resolve();
-            };
-            const check = () => {
-              if (m.loaded() && !m.isMoving()) done();
-            };
-            const timer = setTimeout(done, cap);
             m.on('idle', check);
             m.on('render', check);
             check();
