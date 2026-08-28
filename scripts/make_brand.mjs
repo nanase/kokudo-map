@@ -19,15 +19,33 @@
  * or every run would show up as a diff.
  *
  * Usage:  node scripts/make_brand.mjs
+ *         node scripts/make_brand.mjs --card 1280x640 --out build/social.png
  */
-import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 import { chromium } from 'playwright';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const WEB = join(ROOT, 'web');
+
+/* --card WxH --out PATH で、共有カードだけをその寸法で書き出す。GitHub の
+ * social preview は 1280x640 を求め、SNS が出すカードが期待する 1200x630 と
+ * 合わない。二つ揃って初めて効く——片方だけだと web/og.png を違う寸法で
+ * 潰しかねない。 */
+const { values: opt } = parseArgs({
+  options: { card: { type: 'string' }, out: { type: 'string' } },
+});
+if (
+  (opt.card !== undefined || opt.out !== undefined) &&
+  !(opt.card && opt.out)
+) {
+  throw new Error(
+    '--card と --out は揃えて渡す: --card 1280x640 --out build/social.png',
+  );
+}
 
 const {
   SHIELD_PATH,
@@ -54,23 +72,28 @@ const N_COLORS = ['#1B62C4', '#D98324', '#C2352B', '#7B3E9D'];
 const NUM_SIZE = 212.5;
 
 const TITLE = '国道マップ';
-/* index.html の <title> の後半と同じ一文。札とページで別のことを述べない。 */
+/* カードが載せる一文。README の冒頭でも共有カードでも、絵の周りに説明文は
+ * 無く、地図が何のためにあるかを述べるのはここだけになる。 */
 const TAGLINE = ['重用区間で番号を丸めない', '日本の国道地図'];
 
 /* ---------------------------------------------------------------- favicon --- */
-/* The sign sits on its own; there is no page behind it to blend into, so
- * `paint-order="stroke"` paints the fill over the stroke's inward half.
- * Without it the default paint order (stroke over fill) eats the border's
- * full width into the face, and the face reads as visibly smaller. */
-const favicon = [
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ICON_VIEWBOX}">`,
-  `<path d="${SHIELD_PATH}" fill="${FACE}" stroke="${EDGE}"`,
-  ` stroke-width="${SHIELD_ICON_STROKE_WIDTH}" stroke-linejoin="round"`,
-  ' paint-order="stroke"/>',
-  '</svg>',
-].join('');
-writeFileSync(join(WEB, 'favicon.svg'), `${favicon}\n`, 'utf8');
-console.log(`  favicon.svg  ${favicon.length} B`);
+/* --card はカードだけを求めている。favicon は寸法を持たないので、書き直して
+ * 何かが変わる場面が無い。 */
+if (!opt.card) {
+  /* The sign sits on its own; there is no page behind it to blend into, so
+   * `paint-order="stroke"` paints the fill over the stroke's inward half.
+   * Without it the default paint order (stroke over fill) eats the border's
+   * full width into the face, and the face reads as visibly smaller. */
+  const favicon = [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ICON_VIEWBOX}">`,
+    `<path d="${SHIELD_PATH}" fill="${FACE}" stroke="${EDGE}"`,
+    ` stroke-width="${SHIELD_ICON_STROKE_WIDTH}" stroke-linejoin="round"`,
+    ' paint-order="stroke"/>',
+    '</svg>',
+  ].join('');
+  writeFileSync(join(WEB, 'favicon.svg'), `${favicon}\n`, 'utf8');
+  console.log(`  favicon.svg  ${favicon.length} B`);
+}
 
 /* ------------------------------------------------------------------- card ---
  *
@@ -87,6 +110,26 @@ console.log(`  favicon.svg  ${favicon.length} B`);
  * concurrency, and the drawing is free to be composed rather than surveyed.
  */
 const CARD = { w: 1200, h: 630 };
+
+/* 別の寸法を求められても絵は組み直さない。CARD の組みのまま、求められた枠を
+ * 覆うところまで拡大して、はみ出したぶんを切る。縁は地の色へ沈めてあり、
+ * 見る物は中ほどに寄せてあるので、数十 px を切っても絵は欠けない。組みを
+ * 寸法ごとに持つと、直した側と直し忘れた側ができる。 */
+const size = opt.card ? /^([1-9]\d*)x([1-9]\d*)$/.exec(opt.card) : null;
+if (opt.card && !size) {
+  throw new Error(`--card は WxH で渡す (例: 1280x640): ${opt.card}`);
+}
+const OUT = size
+  ? { w: Number(size[1]), h: Number(size[2]) }
+  : { w: CARD.w, h: CARD.h };
+const SCALE = Math.max(OUT.w / CARD.w, OUT.h / CARD.h);
+
+/* 切り落としの上限は、絵の中で最も外に出る物との隙間から決める。組みが
+ * 決まった後でしか測れないので、検査は下の「切り落とし」節にある。 */
+const crop = {
+  w: 1 - OUT.w / (CARD.w * SCALE),
+  h: 1 - OUT.h / (CARD.h * SCALE),
+};
 const GROUND = '#0B1826';
 const INK_2 = '#9CB8DC';
 /* 街路。地の色との差はここだけで決まる。 */
@@ -199,17 +242,69 @@ const map =
 /* 標識は本線の上に載る。持ち上げ幅を高さの 42% にしてあるので、大きさが
  * 変わってもどれも同じだけ線に食い込む。重なりは幅の 2 割弱で、左が手前。 */
 const SIGN_W = (h) => (h * vw) / vh;
-function signs(refs, x0, h) {
+
+/**
+ * 標識の一枚一枚が、地図を倒した後どこに載るか。描く側も、切り落としの
+ * 上限を測る側も、ここだけを読む。位置の式を二度書くと、片方だけ動かせて
+ * しまう——検査が読むのが写しなら、それは検査ではない。
+ */
+function placements(refs, x0, h) {
   const step = Math.round(SIGN_W(h) * 0.83);
-  return refs
-    .map((ref, i) => {
-      const [x, y] = rot(x0 + i * step, ROAD_Y - h * 0.42);
-      return (
-        `<span class="pin" style="left:${x.toFixed(1)}px;top:${y.toFixed(1)}px` +
-        `;height:${h}px;z-index:${refs.length - i}">${shield(ref)}</span>`
-      );
-    })
+  return refs.map((ref, i) => {
+    const [x, y] = rot(x0 + i * step, ROAD_Y - h * 0.42);
+    return { ref, x, y, w: SIGN_W(h), h, z: refs.length - i };
+  });
+}
+
+function signs(refs, x0, h) {
+  return placements(refs, x0, h)
+    .map(
+      (s) =>
+        `<span class="pin" style="left:${s.x.toFixed(1)}px;top:${s.y.toFixed(1)}px` +
+        `;height:${s.h}px;z-index:${s.z}">${shield(s.ref)}</span>`,
+    )
     .join('');
+}
+
+/* 標識の三つの組。単独 → 二重用 → 三重用。深いほど大きく、右へ寄る。 */
+const GROUPS = [
+  { refs: [73], x0: 232, h: 86 },
+  { refs: [73, 110], x0: 430, h: 118 },
+  { refs: [73, 110, 215], x0: 790, h: 158 },
+];
+
+/* 題字の左上。style.css ではなくここが述べる——下の隙間の計算が読む。 */
+const TEXT_INSET = { top: 66, left: 92 };
+
+/* ------------------------------------------------------------ 切り落とし ---
+ *
+ * 求められた枠を覆うまで拡大して、はみ出したぶんを切る作りなので、縦横比が
+ * 1200:630 から離れるほど切る量が増える。どこかで題字か標識が欠ける。
+ * 1080x1080 を渡すと横を 48% 切り、題字は「道マップ」になる——それでも
+ * 終了コードは 0 になってしまう。
+ *
+ * 切ってよい量は、絵の中で最も外に出る物との隙間で決まる。横で最も外に出る
+ * のは右端の標識で、地図ごと 4 度倒してあるぶん、倒す前より外へ出ている。
+ * 手で 4.5% と書いていたのは倒す前の値で、実際の隙間はそれより狭い。
+ * placements() に載る場所を訊いて測る。
+ */
+const placed = GROUPS.flatMap(({ refs, x0, h }) => placements(refs, x0, h));
+const rightmost = Math.max(...placed.map((s) => s.x + s.w / 2));
+const lowest = Math.max(...placed.map((s) => s.y + s.h / 2));
+/* 両端で切るので、隙間の 2 倍まで許せる。縦も標識の実際の下端から測る——
+ * 本線の高さ (ROAD_Y) は標識が載る前の値で、下端はそこより上にある。 */
+const CROP_MAX = {
+  w: (2 * Math.min(TEXT_INSET.left, CARD.w - rightmost)) / CARD.w,
+  h: (2 * Math.min(TEXT_INSET.top, CARD.h - lowest)) / CARD.h,
+};
+if (crop.w > CROP_MAX.w || crop.h > CROP_MAX.h) {
+  const pct = (v) => `${(v * 100).toFixed(1)}%`;
+  throw new Error(
+    `--card ${opt.card} は ${CARD.w}:${CARD.h} から離れすぎている: ` +
+      `横 ${pct(crop.w)}・縦 ${pct(crop.h)} を切ることになり、` +
+      `上限 (横 ${pct(CROP_MAX.w)}・縦 ${pct(CROP_MAX.h)}) を超える。` +
+      '題字か標識が欠ける',
+  );
 }
 
 /* Roboto は番号だけに使う。style.css と同じ vendor の woff2 を埋め込むので、
@@ -225,8 +320,15 @@ const card = `<!doctype html><meta charset="utf-8">
   }
   * { margin: 0; box-sizing: border-box; }
   body {
-    width: ${CARD.w}px; height: ${CARD.h}px; position: relative; overflow: hidden;
-    background: ${GROUND}; color: #FFFFFF;
+    width: ${OUT.w}px; height: ${OUT.h}px; position: relative; overflow: hidden;
+    background: ${GROUND};
+  }
+  /* 組みは常に CARD の寸法。求められた枠の中央に置き、覆うまで拡大する。 */
+  .card {
+    position: absolute; left: 50%; top: 50%;
+    width: ${CARD.w}px; height: ${CARD.h}px;
+    transform: translate(-50%, -50%) scale(${SCALE});
+    color: #FFFFFF;
     font-family: "Noto Sans JP", "Yu Gothic UI", sans-serif;
   }
   .map { position: absolute; inset: 0; }
@@ -234,7 +336,8 @@ const card = `<!doctype html><meta charset="utf-8">
   /* 名前は説明文の 2.5 倍以上に取る。縮めて出されたとき、最後まで残るのは
      ここだけなので。900 は Noto Sans JP が入っている機械でしか出ない。 */
   .text {
-    position: absolute; inset: 66px auto auto 0; padding-left: 92px; width: 700px;
+    position: absolute; inset: ${TEXT_INSET.top}px auto auto 0;
+    padding-left: ${TEXT_INSET.left}px; width: 700px;
     display: flex; flex-direction: column; gap: 26px;
   }
   h1 { font-size: 108px; font-weight: 900; line-height: 1.05; letter-spacing: .02em; }
@@ -247,21 +350,65 @@ const card = `<!doctype html><meta charset="utf-8">
   .shield { display: block; height: 100%; }
   .shield svg { display: block; height: 100%; width: auto; }
   /* 縁は全幅を外へ出す。shield() は既定の塗り順のまま——載る先がパネルや
-     ポップアップで、縁がその地に溶けるのが狙いだから——だが、この札には
+     ポップアップで、縁がその地に溶けるのが狙いだから——だが、このカードには
      溶ける先が無く、内側へ食い込むと面がひと回り小さく見える
      (web/shield.mjs の SHIELD_STROKE_WIDTH の注記)。 */
   .shield path { fill: ${FACE}; stroke: ${EDGE}; paint-order: stroke; }
   .shield text { fill: ${EDGE}; font-family: Roboto; font-weight: 700; font-size: ${NUM_SIZE}px; }
 </style>
-<div class="map">${map}${signs([73], 232, 86)}${signs([73, 110], 430, 118)}${signs([73, 110, 215], 790, 158)}</div>
-<div class="text">
-  <h1>${TITLE}</h1>
-  <p>${TAGLINE.join('<br>')}</p>
+<div class="card">
+  <div class="map">${map}${GROUPS.map((g) => signs(g.refs, g.x0, g.h)).join('')}</div>
+  <div class="text">
+    <h1>${TITLE}</h1>
+    <p>${TAGLINE.join('<br>')}</p>
+  </div>
 </div>`;
+
+/* 書き先は Chromium を起動する前に決めて、形だけ確かめる。docs が案内する
+ * build/ は .gitignore にあるので clone した直後には無く、`--out build/` の
+ * ように既にあるディレクトリを渡されることもある。描き終えてから ENOENT や
+ * EISDIR で落ちると、1 秒ぶんの描画がまるごと無駄になる。確かめるほうを
+ * mkdir より先に置くのは、断る書き先のために空のディレクトリを残さない
+ * ためである。
+ *
+ * 見るのは形だけで、書けるかどうかは見ない。権限で弾かれる書き先は描き
+ * 終えてから落ちる。そこまで確かめるには実際に書いてみるほかなく、
+ * 書いてしまえば確かめる意味が無い。 */
+/* 末尾の区切りはディレクトリを指す書き方である。resolve がそれを落とすので、
+ * `--out build/social.png/` は `build/social.png` という名前のファイルとして
+ * 書かれてしまう。落とされる前に断る。 */
+if (/[\\/]$/.test(opt.out ?? '')) {
+  throw new Error(`--out はファイル名で渡す。ディレクトリである: ${opt.out}`);
+}
+const dest = opt.out ? resolve(opt.out) : join(WEB, 'og.png');
+/* 書き先は .png のファイル名でなければ断る。`--out build` も `--out build/`
+ * も、書きたいのはディレクトリの中である。まだ build/ が無いと、resolve は
+ * それを `<root>/build` という 1 つのファイル名として返し、PNG がその名前で
+ * 生まれて、以後の mkdir が全部転ぶ。書く物は PNG しかないので、拡張子で
+ * 見分けるのがいちばん狭い。 */
+if (!/\.png$/i.test(dest)) {
+  throw new Error(`--out は .png のファイル名で渡す: ${opt.out}`);
+}
+/* 追跡している 2 枚は 1200x630 でしか作らない。別の寸法でそこへ書くと、
+ * 揃えて渡す決まりが防いでいるはずのこと——og.png を違う寸法で潰す——が
+ * そのまま起きる。 */
+if (
+  opt.card &&
+  /* Windows のファイル名は大小を区別しない。`web/OG.png` も同じ場所である。 */
+  dest.toLowerCase() === join(WEB, 'og.png').toLowerCase()
+) {
+  throw new Error(
+    `web/og.png は --card では書けない。引数なしで走らせる: ${opt.out}`,
+  );
+}
+if (statSync(dest, { throwIfNoEntry: false })?.isDirectory()) {
+  throw new Error(`--out はファイル名で渡す。ディレクトリである: ${opt.out}`);
+}
+mkdirSync(dirname(dest), { recursive: true });
 
 const browser = await chromium.launch();
 const page = await browser.newPage({
-  viewport: { width: CARD.w, height: CARD.h },
+  viewport: { width: OUT.w, height: OUT.h },
   deviceScaleFactor: 1,
 });
 await page.setContent(card);
@@ -269,6 +416,6 @@ await page.evaluate(() => document.fonts.ready);
 const png = await page.screenshot({ type: 'png' });
 await browser.close();
 
-writeFileSync(join(WEB, 'og.png'), png);
+writeFileSync(dest, png);
 const kb = (png.length / 1024).toFixed(1);
-console.log(`  og.png  ${CARD.w}x${CARD.h}  ${kb} kB`);
+console.log(`  ${basename(dest)}  ${OUT.w}x${OUT.h}  ${kb} kB`);

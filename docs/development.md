@@ -72,6 +72,10 @@ mise run serve        # http://localhost:8000/
 | `bun run glyphs` | `web/glyphs/` — ラベルの SDF グリフ |
 | `bun run brand` | `web/favicon.svg` と `web/og.png` |
 
+共有カードは寸法を選べます。`bun run brand -- --card 1280x640 --out build/social.png` は、その寸法のカードだけをそこへ書きます。GitHub の Social preview がこれで、SNS が出すカードが期待する 1200x630 とは合いません。設定画面に上げたら捨ててください。書き先を `build/` にしてあるのは、この画像を追跡しないためです。追跡する木の中に置くと `git add -A` が拾います。
+
+絵は寸法ごとに組み直しません。1200x630 の組みを、求められた枠を覆うまで拡大して、はみ出したぶんを切ります。そのため選べるのは 1200:630 に近い縦横比だけです。離れた寸法は切る量が題字や標識に届くので、書かずに止まります。
+
 グリフは 11 字しかありません。ラベルは路線番号を `・` で繋いだ物だけなので、日本語フォント一式は要りません。2 ファイル 5 kB で足ります。
 
 ```sh
@@ -108,6 +112,7 @@ uvx ruff check pipeline      # Python の静的検査
 | `docs/` | この文書から辿る詳細文書 |
 | `.github/workflows/` | 検査と GitHub Pages への配信 |
 | `.claude/skills/national-route-data/` | 生成と品質管理の手順、判定ルール |
+| `.claude/hooks/guard-data-dirs.mjs` | build/ と web/data/ を木ごと消す命令を手前で止める |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |
 
 ## 関連文書
