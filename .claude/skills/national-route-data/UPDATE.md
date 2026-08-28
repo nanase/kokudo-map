@@ -16,7 +16,11 @@
 | 突き合わせ | 次節 | 数分 |
 | 公開 | `mise run publish-data` | 数分 |
 
-取得から生成の終わりまでを 7 日以内に収めてください。全国検証が pbf の基準時刻を見ており、8 日以上になると最後の段で落ちます。あれは更新頻度の門ではなく、「古い pbf から作ってしまった」を止める門です。
+取得の前に `build/pbf/japan-latest.osm.pbf` を消してください。`fetch-pbf` は `curl -C -` で続きから取ります。Geofabrik は毎日別の中身に差し替えるので、前回の pbf が残っていると、続きは前回の続きになりません。
+
+生成は pbf の基準時刻から 7 日以内に終えてください。数え始めるのは取得した時ではありません。Geofabrik が切り出した時刻を pbf 自身が持っており、`extract` がそれを `osm_timestamp` として引き継ぎます。落とした時点で既に 1 日ほど古いので、手元で使えるのは実質 6 日です。
+
+8 日以上になると、地域ごとの検証が 47 県すべてで落ちます。最初の県で分かるので 4.8 時間は待ちませんが、`rebuild` も同じ門を通るため県を直す道はありません。pbf の取り直しからやり直します。この門は更新頻度の数字ではなく、「古い pbf から作ってしまった」を止める門です。
 
 `build-all` は 47 都道府県の判定と検証から、台帳・結合・タイル化・全国検証までを通します。1 県でも落ちれば配信データは作られません。落ちた県だけを直したら、`mise run rebuild <地域>` で作り直し、`mise run pack` で結合から再開できます。
 
@@ -25,8 +29,10 @@
 公開中の meta と、いま作った meta を比べます。
 
 ```sh
-curl -s https://data.nanase.cc/national.meta.json -o build/published.meta.json
+curl -fsS https://data.nanase.cc/national.meta.json -o build/published.meta.json
 ```
+
+`-f` が要ります。付けないと、R2 が落ちているときにエラーページが `build/published.meta.json` になり、比べる相手を黙って失います。
 
 次のどれかに触れたら、公開せずに理由を確かめます。
 
@@ -52,8 +58,6 @@ curl -s https://data.nanase.cc/national.meta.json -o build/published.meta.json
 | Geofabrik | `japan-latest.osm.pbf` のパスとミラーが変わりうる |
 | wrangler のログイン | 期限切れは `publish-data` の入口で判明する。4.8 時間の生成が終わった後になる |
 | mise が入れる道具 | node 26・python 3.14・bun 1.3・uv 0.12。版が動けば `mise install` からやり直す |
-
-取り直す前に `build/pbf/japan-latest.osm.pbf` を消してください。`fetch-pbf` は `curl -C -` で続きから取ります。Geofabrik は毎日別の中身に差し替えるので、前回の pbf が残っていると、続きは前回の続きではありません。
 
 ## 更新しない選択
 
