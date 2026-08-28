@@ -262,6 +262,10 @@ describe('木ごと消す形を止める', () => {
     ['x=$(rm -rf build)'],
     ['echo `rm -rf build`'],
     ['powershell -Command "Remove-Item -Recurse build"'],
+    // 引用符の中の `\"` を引用符の閉じと数えると、閉じたことにされた先の
+    // `&& rm -rf build` が地の命令として読まれてしまう。sed は PRINTS に
+    // 入っているので、`\"` を正しく読めば全体が 1 引数のままで済む。
+    [`sed -i "s/${BS}"/'/g" f.txt && rm -rf build`],
   ])('%s', denies);
 
   // 今いる場所を指す書き方。展開されないまま番人に届く。
@@ -393,6 +397,11 @@ describe('木ごと消す形を止める', () => {
     ['git clean -xdfe node_modules'],
     // 外した先が保護対象を覆っていなければ、残りは消える。
     ['git clean -xdf -e node_modules'],
+    // 根に解ける除外は「全部外した」ではなく「何も外していない」。git の
+    // `-e` が取るのは gitignore の型で、`.` は何も外さない。
+    ['git clean -xdf -e .'],
+    ['git clean -xdf --exclude=.'],
+    ['git clean -xdf -e ..'],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
@@ -490,6 +499,11 @@ describe('後始末は通す', () => {
     ['echo ok  # cd build && rm -rf pbf'],
     ['echo "後始末: ; rm -rf build" >> notes.md'],
     ["git commit -m 'rm -rf build をやめた'"],
+    // 引用符の中の `\"` を引用符の閉じと数えると、二重引用符の中身が
+    // 空白で複数語に割れて `rm` が地の語として現れる。node と jq は
+    // PRINTS に無いが、正しく読めば全体が 1 引数のままで割れない。
+    [`node -e "console.log(${BS}"rm -rf build${BS}")"`],
+    [`jq -n "{cmd: ${BS}"rm -rf build${BS}"}"`],
   ])('%s', allows);
 
   // ヒアドキュメントの中身も書き込む文章であって命令ではない。改行で段に

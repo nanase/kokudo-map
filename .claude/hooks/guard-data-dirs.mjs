@@ -89,8 +89,17 @@ function tokenize(text) {
   const out = [];
   let word = '';
   let quote = '';
-  for (const ch of text) {
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (quote) {
+      /* 二重引用符の中の `\"` は引用符を閉じない。bash は二重引用符の中で
+       * `\` の次が `"` のときだけそれを字として読み、それ以外の `\X` は
+       * 逆斜線ごと残す——`C:\Users` を `CUsers` にしてはいけない。単一引用符
+       * の中では逆斜線に意味が無く、`\'` はそのまま引用符を閉じる。 */
+      if (quote === '"' && ch === '\\' && text[i + 1] === '"') {
+        word += text[++i];
+        continue;
+      }
       if (ch === quote) quote = '';
       else word += ch;
       continue;
@@ -122,6 +131,12 @@ function stripComments(text) {
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (quote) {
+        /* 二重引用符の中の `\"` は引用符を閉じない。単一引用符の中では
+         * 逆斜線に意味が無い。 */
+        if (quote === '"' && ch === '\\' && line[i + 1] === '"') {
+          i++;
+          continue;
+        }
         if (ch === quote) quote = '';
         continue;
       }
@@ -200,6 +215,13 @@ function segments(text) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (quote) {
+      /* 二重引用符の中の `\"` は引用符を閉じない。単一引用符の中では
+       * 逆斜線に意味が無い。 */
+      if (quote === '"' && ch === '\\' && text[i + 1] === '"') {
+        cur += ch + text[i + 1];
+        i++;
+        continue;
+      }
       cur += ch;
       if (ch === quote) quote = '';
       continue;
@@ -558,6 +580,12 @@ function grouping(text, carried = 0) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (quote) {
+      /* 二重引用符の中の `\"` は引用符を閉じない。単一引用符の中では
+       * 逆斜線に意味が無い。 */
+      if (quote === '"' && ch === '\\' && text[i + 1] === '"') {
+        i++;
+        continue;
+      }
       if (ch === quote) quote = '';
       continue;
     }
@@ -783,17 +811,21 @@ function scan(text, startCwd, depth = 0) {
         risk = risk.filter((protectedPath) => inScope.includes(protectedPath));
       }
       /* 外してあるものは消えない。理由文が「名指ししてください」と言うのに、
-       * 名指しして外しても止まるのでは、通り道が無い。 */
+       * 名指しして外しても止まるのでは、通り道が無い。
+       *
+       * ただし根に解ける除外(`-e .`、`-e ..` など)は「全部外した」ではなく
+       * 「何も外していない」と数える。git の `-e` が取るのは gitignore の
+       * 型で、`.` は何も外さない。prefix === '' を全部外した扱いにすると、
+       * `git clean -xdf -e .` が保護対象を素通りさせてしまう。 */
       risk = risk.filter(
         (protectedPath) =>
           !excludes.some((e) => {
             const rel = underRoot(toAbsParts(e, at));
             if (rel === null) return false;
             const prefix = rel.join('/');
+            if (prefix === '') return false;
             return (
-              prefix === '' ||
-              protectedPath === prefix ||
-              protectedPath.startsWith(`${prefix}/`)
+              protectedPath === prefix || protectedPath.startsWith(`${prefix}/`)
             );
           }),
       );
