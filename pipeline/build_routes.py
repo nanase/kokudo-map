@@ -37,12 +37,12 @@ Usage:  uv run pipeline/build_routes.py [region]
 from __future__ import annotations
 
 import json
-import math
 import re
 import sys
 from collections import Counter, defaultdict
 
 from _paths import CACHE, REGIONS as OUT
+from geo import haversine, line_length
 from regions import for_region
 
 # Route numbers a general national route can legally have: 1-58 and 101-507,
@@ -74,21 +74,6 @@ EDGE_TOL = 0.02
 # routes that meet there scatter over the intersection rather than coinciding.
 # decree.py reads this too, to tell a legal terminus from an OSM break.
 TERMINI_CLUSTER_M = 150
-
-
-# ---------------------------------------------------------------- geometry ---
-def haversine(a: tuple[float, float], b: tuple[float, float]) -> float:
-    """Metres between two (lat, lon) pairs."""
-    r = 6371008.8
-    p1, p2 = math.radians(a[0]), math.radians(b[0])
-    dp = p2 - p1
-    dl = math.radians(b[1] - a[1])
-    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(h))
-
-
-def line_length(coords: list[tuple[float, float]]) -> float:
-    return sum(haversine(coords[i], coords[i + 1]) for i in range(len(coords) - 1))
 
 
 # ------------------------------------------------------------ designations ---
