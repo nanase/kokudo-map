@@ -82,6 +82,24 @@ const ROOT_PARTS = ROOT.toLowerCase().split('/');
 /* ------------------------------------------------------------- 場所を読む --- */
 
 /**
+ * 位置 i の逆斜線が、二重引用符の中で次の一字を字として読ませるか。bash は
+ * 二重引用符の中で `\` の次が `"` か `\` のときだけそれを字として読み、
+ * それ以外の `\X` は逆斜線ごと残す——`C:\Users` を `CUsers` にしてはいけない。
+ * 単一引用符の中では逆斜線に意味が無く、`\'` はそのまま引用符を閉じる。
+ *
+ * `\\"` のように逆斜線が連なるときは、左から順に対で読む。ここでは
+ * 1 文字ずつしか見ないが、`\\` を対として消費してから次の文字へ進む形に
+ * すれば、連なりの偶奇は自然に保たれる——`\\"` は `\\` が対になって消え、
+ * 残った `"` は引用符を閉じる。`\\\"` は `\\` が対になったあと `\"` が
+ * 残り、そちらは字として読む。1 文字だけ見て `\"` かどうかを判定すると、
+ * 連なりの数を数え違えて偶奇が崩れる。
+ */
+const escapesNext = (text, i, quote) =>
+  quote === '"' &&
+  text[i] === '\\' &&
+  (text[i + 1] === '"' || text[i + 1] === '\\');
+
+/**
  * 文字を語に割る。引用符の中では区切らない——`echo "…; rm -rf build"` の
  * 中身を命令と読むと、書き留めるだけの命令まで止めてしまう。
  */
@@ -92,11 +110,7 @@ function tokenize(text) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (quote) {
-      /* 二重引用符の中の `\"` は引用符を閉じない。bash は二重引用符の中で
-       * `\` の次が `"` のときだけそれを字として読み、それ以外の `\X` は
-       * 逆斜線ごと残す——`C:\Users` を `CUsers` にしてはいけない。単一引用符
-       * の中では逆斜線に意味が無く、`\'` はそのまま引用符を閉じる。 */
-      if (quote === '"' && ch === '\\' && text[i + 1] === '"') {
+      if (escapesNext(text, i, quote)) {
         word += text[++i];
         continue;
       }
@@ -131,9 +145,7 @@ function stripComments(text) {
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (quote) {
-        /* 二重引用符の中の `\"` は引用符を閉じない。単一引用符の中では
-         * 逆斜線に意味が無い。 */
-        if (quote === '"' && ch === '\\' && line[i + 1] === '"') {
+        if (escapesNext(line, i, quote)) {
           i++;
           continue;
         }
@@ -215,9 +227,7 @@ function segments(text) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (quote) {
-      /* 二重引用符の中の `\"` は引用符を閉じない。単一引用符の中では
-       * 逆斜線に意味が無い。 */
-      if (quote === '"' && ch === '\\' && text[i + 1] === '"') {
+      if (escapesNext(text, i, quote)) {
         cur += ch + text[i + 1];
         i++;
         continue;
@@ -391,6 +401,19 @@ const nameOf = (w) =>
  * ——`--exclude=…` は消す範囲を狭める旗である。 */
 const CLEAN_IGNORED = (w) => /^-[a-zA-Z]*[xX][a-zA-Z]*$/.test(w);
 const DRY_RUN = (w) => /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w) || w === '--dry-run';
+/* 除外の値を根まで解いたとき、それが本当に全部へ当たる語だったかどうか。
+ * `*` と `**` だけの段でできた語(`*`、`**`、段を重ねた `*` と `**` の組)は
+ * gitignore の型として全部に当たるので、除外は「全部外した」のままでよい。
+ * `.` や `..` のような移動だけの語は、根に解けても同じではない——`.` は
+ * 何も外さない。段が空(先頭・末尾の `/`)なのは構わないが、段が 1 つも
+ * 無い(値が空)のは除外にならない。 */
+const EXCLUDES_EVERYTHING = (token) => {
+  const segs = token.replace(/\\/g, '/').split('/');
+  return (
+    segs.some((seg) => seg !== '') &&
+    segs.every((seg) => seg === '' || /^\*+$/.test(seg))
+  );
+};
 /* find が名前で当てる旗。値は段の名前に当たるので、保護対象の名前に
  * 当たらないことを言える。 */
 const NAMES = (w) => /^-(i?name|i?lname)$/.test(w);
@@ -580,9 +603,7 @@ function grouping(text, carried = 0) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (quote) {
-      /* 二重引用符の中の `\"` は引用符を閉じない。単一引用符の中では
-       * 逆斜線に意味が無い。 */
-      if (quote === '"' && ch === '\\' && text[i + 1] === '"') {
+      if (escapesNext(text, i, quote)) {
         i++;
         continue;
       }
@@ -813,17 +834,20 @@ function scan(text, startCwd, depth = 0) {
       /* 外してあるものは消えない。理由文が「名指ししてください」と言うのに、
        * 名指しして外しても止まるのでは、通り道が無い。
        *
-       * ただし根に解ける除外(`-e .`、`-e ..` など)は「全部外した」ではなく
-       * 「何も外していない」と数える。git の `-e` が取るのは gitignore の
-       * 型で、`.` は何も外さない。prefix === '' を全部外した扱いにすると、
-       * `git clean -xdf -e .` が保護対象を素通りさせてしまう。 */
+       * 根に解ける除外は、その語が本当に全部へ当たるときだけ「全部外した」
+       * と数える。`*` や `**` はそうだが、`-e .`・`-e ..` は違う——git の
+       * `-e` が取るのは gitignore の型で、`.` は何も外さない。両方とも
+       * パスとして解けば根になるが、パスとして同じでも語として同じではない。
+       * prefix === '' を無条件に全部外した扱いにすると `-e .` が保護対象を
+       * 素通りさせ、無条件に何も外していない扱いにすると `-e '*'` という
+       * 無害な指定まで止めてしまう。 */
       risk = risk.filter(
         (protectedPath) =>
           !excludes.some((e) => {
             const rel = underRoot(toAbsParts(e, at));
             if (rel === null) return false;
             const prefix = rel.join('/');
-            if (prefix === '') return false;
+            if (prefix === '') return EXCLUDES_EVERYTHING(e);
             return (
               protectedPath === prefix || protectedPath.startsWith(`${prefix}/`)
             );
