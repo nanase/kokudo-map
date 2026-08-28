@@ -70,7 +70,7 @@ mise run serve        # http://localhost:8000/
 | コマンド | 作る物 |
 | --- | --- |
 | `bun run glyphs` | `web/glyphs/` — ラベルの SDF グリフ |
-| `bun run brand` | `web/favicon.svg` と `web/og.png` |
+| `bun run brand` | `web/favicon.svg`・`web/og.png`・`web/icons/` — ホーム画面アイコン一式 |
 
 共有カードは寸法を選べます。`bun run brand -- --card 1280x640 --out build/social.png` は、その寸法のカードだけをそこへ書きます。GitHub の Social preview がこれで、SNS が出すカードが期待する 1200x630 とは合いません。設定画面に上げたら捨ててください。書き先を `build/` にしてあるのは、この画像を追跡しないためです。追跡する木の中に置くと `git add -A` が拾います。
 
