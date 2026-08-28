@@ -18,6 +18,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  concurrencies,
   formerKmFor,
   kindsFor,
   routesOf,
@@ -161,6 +162,50 @@ describe('二つの読み方が食い違わない', () => {
     for (const r of routesOf(COMBOS)) {
       const picked = statsFor(COMBOS, new Set([r.ref]));
       expect(picked.km).toBeGreaterThanOrEqual(r.km);
+    }
+  });
+});
+
+describe('concurrencies', () => {
+  /* 重用ランキングが並べる行。panel.mjs から移しました。選択で組み合わせ表を
+   * 絞る規則は statsFor・kindsFor と同じ `touched` なので、規則の写しではなく
+   * 同じものを見ていることが、この場所に置いてある意味です。 */
+  const ROWS = [
+    row([7], 100, 1000),
+    row([7, 8], 10, 100),
+    row([17, 49], 5, 50),
+  ];
+
+  test('単独指定は重用ではない', () => {
+    expect(concurrencies(ROWS, new Set())).toHaveLength(2);
+  });
+
+  test('選択はどれを並べるかだけを絞る', () => {
+    // 重用かどうかは道路の性質であって、選択の結果ではありません。
+    const picked = concurrencies(ROWS, new Set([7]));
+    expect(picked).toHaveLength(1);
+    expect(picked[0].refs).toEqual([7, 8]);
+  });
+
+  test('選ばれた番号が重用の片側にあれば残る', () => {
+    expect(concurrencies(ROWS, new Set([49]))[0].refs).toEqual([17, 49]);
+  });
+
+  test('該当が無ければ空になる', () => {
+    expect(concurrencies(ROWS, new Set([999]))).toEqual([]);
+  });
+
+  test('絞り方は statsFor と同じである', () => {
+    // 同じ選択に対して、重用行を数え上げた結果が両者で一致します。写しを持って
+    // いたころは、ここが黙ってずれる余地がありました。
+    for (const sel of [
+      new Set(),
+      new Set([7]),
+      new Set([49]),
+      new Set([999]),
+    ]) {
+      const arcs = concurrencies(COMBOS, sel).reduce((a, c) => a + c.arcs, 0);
+      expect(arcs).toBe(statsFor(COMBOS, sel).conc);
     }
   });
 });
