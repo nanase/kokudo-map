@@ -410,6 +410,11 @@ describe('木ごと消す形を止める', () => {
     // `-e` が取るのは gitignore の型で、`.` は何も外さない。
     ['git clean -xdf -e .'],
     ['git clean -xdf -e ..'],
+    // `\*` は git 自身には「`*` という名前のファイル」としか読めず、
+    // build/ も web/data/ も外れない。逆斜線を斜線に読み替えて道筋として
+    // 根に解くと、`*` だけの除外と区別が付かなくなり、実際には何も外して
+    // いないのに通してしまう。
+    [String.raw`git clean -xdf -e '\*'`],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });

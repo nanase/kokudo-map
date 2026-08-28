@@ -420,9 +420,15 @@ const DRY_RUN = (w) => /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w) || w === '--dry-run';
  * gitignore の型として全部に当たるので、除外は「全部外した」のままでよい。
  * `.` や `..` のような移動だけの語は、根に解けても同じではない——`.` は
  * 何も外さない。段が空(先頭・末尾の `/`)なのは構わないが、段が 1 つも
- * 無い(値が空)のは除外にならない。 */
+ * 無い(値が空)のは除外にならない。
+ *
+ * ここでは逆斜線を斜線に読み替えない——toAbsParts と違い、この値は場所では
+ * なく gitignore の型で、逆斜線はそちらでは次の一字を字として読ませる
+ * escape である。読み替えると `-e '\*'`(git 自身は「`*` という名前の
+ * ファイル」としか読まない)を `/*` という道筋に見せかけてしまい、全部外した
+ * 扱いにして通してしまう——実際には build/ も web/data/ も外れない。 */
 const EXCLUDES_EVERYTHING = (token) => {
-  const segs = token.replace(/\\/g, '/').split('/');
+  const segs = token.split('/');
   return (
     segs.some((seg) => seg !== '') &&
     segs.every((seg) => seg === '' || /^\*+$/.test(seg))
