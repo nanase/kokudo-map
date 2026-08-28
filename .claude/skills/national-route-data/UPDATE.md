@@ -41,7 +41,7 @@ curl -fsS https://data.nanase.cc/national.meta.json -o build/published.meta.json
 | 総延長 | `total_km` | ±0.5 % |
 | 単一路線の延長 | その路線を含む `combinations` の `km` の和 | ±30 km |
 | 指定の組み合わせ | `combinations` の要素数 | ±2 % |
-| 路線数 | `combinations` の `refs` を集めた集合の大きさ | 459 を割る |
+| 路線数 | `combinations` の `refs` を集めた集合の大きさ | 459 でない |
 
 前回の記録は要りません。公開中の meta がその記録そのものです。
 
