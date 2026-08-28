@@ -31,6 +31,8 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  renameSync,
+  rmSync,
   writeFileSync,
   writeSync,
 } from 'node:fs';
@@ -414,9 +416,18 @@ const fc = (feats) => ({
  * `node --max-old-space-size=6144` を要求している一因だった。
  *
  * 索引は書いた順・書いた位置をそのまま並べるので、溜めてから数えるのと
- * 同じ物になる。つまり出来上がる 2 ファイルは 1 バイトも変わらない。 */
+ * 同じ物になる。つまり出来上がる 2 ファイルは 1 バイトも変わらない。
+ *
+ * 書く先は仮の名前にする。tiles.bin と tiles.json は対でなければ意味が無い
+ * ——pack_pmtiles.py は索引の言う位置で blob を切るだけなので、短い bin と
+ * 前回の json が残ると、範囲外の切り出しが空を返し、静かに壊れた PMTiles が
+ * できる。本物を頭で truncate してしまうと、途中で落ちた回にその状態が残る。
+ * 仮に書いておけば、落ちた回は前回の対がそのまま残る。 */
 mkdirSync(TILEDIR, { recursive: true });
-const binFd = openSync(join(TILEDIR, 'tiles.bin'), 'w');
+const BIN = join(TILEDIR, 'tiles.bin');
+const IDX = join(TILEDIR, 'tiles.json');
+const BIN_PART = `${BIN}.part`;
+const binFd = openSync(BIN_PART, 'w');
 const idxRows = [];
 let total = 0;
 let bytes = 0;
@@ -538,10 +549,17 @@ process.stdout.write('\n');
 
 /* The packer takes one blob and one index rather than a hundred thousand small
  * files, which Windows would spend longer creating than we spent tiling. The
- * blob is already on disk (see emit); only the index is left. */
+ * blob is already on disk (see emit); only the index is left.
+ *
+ * 古い索引を先に落としてから、blob を本物の名前へ移し、最後に索引を書く。
+ * この順なら、どこで落ちても残るのは「前回の対」か「索引の無い blob」の
+ * どちらかで、食い違う対にはならない。索引が無ければ pack_pmtiles.py は
+ * 読めずに落ちる——静かに壊れた PMTiles よりそちらがよい。 */
 closeSync(binFd);
+rmSync(IDX, { force: true });
+renameSync(BIN_PART, BIN);
 writeFileSync(
-  join(TILEDIR, 'tiles.json'),
+  IDX,
   JSON.stringify({
     minzoom: 0,
     maxzoom: MAXZOOM,
