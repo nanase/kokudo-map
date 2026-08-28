@@ -31,13 +31,13 @@ Usage:  uv run pipeline/audit.py [region] [--route N ...] [--all]
 from __future__ import annotations
 
 import json
-import math
 import re
 import sys
 from collections import Counter, defaultdict
 
 from _paths import CACHE, REGIONS as DATA
 from build_routes import resolve_competing_claims
+from geo import haversine
 
 NODE_GAP_M = 50
 LINK_GAP_M = 2000
@@ -45,15 +45,6 @@ EDGE_TOL = 0.02
 
 NAME_NUM = re.compile(r"国道\s*(\d+)\s*号")
 NATIONAL_GRADE = {"trunk", "motorway", "construction"}
-
-
-def haversine(a, b):
-    r = 6371008.8
-    p1, p2 = math.radians(a[0]), math.radians(b[0])
-    dp = p2 - p1
-    dl = math.radians(b[1] - a[1])
-    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(h))
 
 
 class DSU:

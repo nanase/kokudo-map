@@ -70,17 +70,8 @@ export const selectionLabel = (selectedCount, totalRoutes) =>
     : `すべて（${totalRoutes} 路線）`;
 
 /* -------------------------------------------------------------- 重用一覧 --- */
-/**
- * The concurrent sections a selection is asking about.
- *
- * Concurrency is a property of the road, so `n >= 2` is asked of the arc and
- * not of the selection; the selection only narrows which of those sections are
- * listed. An empty selection lists them all.
- */
-export const concurrencies = (combos, selected) =>
-  combos.filter(
-    (e) => e.n >= 2 && (!selected.size || e.refs.some((r) => selected.has(r))),
-  );
+/* 並べる行を選ぶのは aggregate.mjs の concurrencies() である。組み合わせ表を
+   選択で絞る規則はそこに一度だけ書いてある。 */
 
 /** "25 / 1,237 組" on the folded tab, or nothing when there is nothing. */
 export const countLabel = (shown, total, unit) =>

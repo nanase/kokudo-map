@@ -10,6 +10,7 @@
     "includes": [
       "web/**/*.{js,mjs}",
       ".claude/**/*.{js,mjs}",
+      "pipeline/**/*.{js,mjs}",
       "scripts/**/*.{js,mjs}",
       "test/**/*.{js,mjs}",
       "*.{js,mjs}",

@@ -26,7 +26,16 @@
  *
  * Usage:  node pipeline/pack_web.mjs [--maxzoom 14]
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+  writeSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import geojsonvt from 'geojson-vt';
 import vtpbf from 'vt-pbf';
@@ -304,9 +313,7 @@ function mergeTermini(ms) {
  * It is a column beside the endpoints, not a replacement: the endpoints say
  * where a route's arcs stop, this says where the route legally begins. Routes
  * whose coordinate could not be found keep their place name and say why. */
-const decree = JSON.parse(
-  readFileSync(join(DECREE, 'decree.json'), 'utf8'),
-);
+const decree = JSON.parse(readFileSync(join(DECREE, 'decree.json'), 'utf8'));
 if (decree.routes.length !== 459)
   throw new Error(
     `build/decree/decree.json has ${decree.routes.length} routes, not 459`,
@@ -401,9 +408,36 @@ const fc = (feats) => ({
   })),
 });
 
-const chunks = [];
+/* タイルは切ったそばから書き出す。
+ *
+ * 全部を配列に溜めてから Buffer.concat で 1 本にしていた。tiles.bin は
+ * 98.8 MB なので、繋ぐ瞬間だけ同じ物が 2 つ、約 200 MB 生きる。47 県ぶんの
+ * GeoJSON と結合済みの弧も同時に載っているところで、これが
+ * `node --max-old-space-size=6144` を要求している一因だった。
+ *
+ * 索引は書いた順・書いた位置をそのまま並べるので、溜めてから数えるのと
+ * 同じ物になる。つまり出来上がる 2 ファイルは 1 バイトも変わらない。
+ *
+ * 書く先は仮の名前にする。tiles.bin と tiles.json は対でなければ意味が無い
+ * ——pack_pmtiles.py は索引の言う位置で blob を切るだけなので、短い bin と
+ * 前回の json が残ると、範囲外の切り出しが空を返し、静かに壊れた PMTiles が
+ * できる。本物を頭で truncate してしまうと、途中で落ちた回にその状態が残る。
+ * 仮に書いておけば、落ちた回は前回の対がそのまま残る。 */
+mkdirSync(TILEDIR, { recursive: true });
+const BIN = join(TILEDIR, 'tiles.bin');
+const IDX = join(TILEDIR, 'tiles.json');
+const BIN_PART = `${BIN}.part`;
+const binFd = openSync(BIN_PART, 'w');
+const idxRows = [];
 let total = 0;
 let bytes = 0;
+
+/* writeSync は部分書き込みを返しうる。返り値を捨てると、その 1 タイルだけが
+ * 短いまま索引には全長が載り、archive が静かに壊れる。書き切るまで回す。 */
+function writeAll(fd, buf) {
+  let at = 0;
+  while (at < buf.length) at += writeSync(fd, buf, at, buf.length - at);
+}
 
 function emit(z, x, y, tile) {
   if (!tile?.features.length) return;
@@ -411,7 +445,8 @@ function emit(z, x, y, tile) {
     { routes: tile },
     { version: 2, extent: EXTENT },
   );
-  chunks.push({ z, x, y, buf: Buffer.from(buf) });
+  idxRows.push([z, x, y, bytes, buf.length]);
+  writeAll(binFd, buf);
   total++;
   bytes += buf.length;
 }
@@ -442,14 +477,53 @@ const cells = [];
 for (let x = r8.x0; x <= r8.x1; x++) {
   for (let y = r8.y0; y <= r8.y1; y++) cells.push([x, y]);
 }
-console.log(`tiling z${SPLIT}-${MAXZOOM} in ${cells.length} cells`);
+
+/** セルが取り込む範囲。中身を切らないための余白ぶん、セルより広い。 */
+const cellBox = (x, y) => {
+  const b = tileBounds(SPLIT, x, y);
+  const margin = (b[2] - b[0]) * 0.05;
+  return [b[0] - margin, b[1] - margin, b[2] + margin, b[3] + margin];
+};
+
+/* どのセルがどの弧を要るかを、先に一度だけ振り分ける。
+ *
+ * セルごとに features を端から見ていた。日本は z8 で 16×20 の 320 セルに
+ * 収まり、うち弧があるのは 70 だけである。つまり 130,000 件の走査を 320 回、
+ * 4,160 万回の判定をして、その 8 割は 1 件も拾わないセルのために回っていた。
+ *
+ * 弧の側から見れば、1 本が跨ぐセルは普通 1 つ、多くて数個である。弧の
+ * bbox を余白ぶん広げて z8 の索引に落とせば、当たりうるセルはその周りだけに
+ * 絞れる。絞ったうえで、判定そのものは元と同じ overlaps を使う——低い側の
+ * 端がちょうどセルの境に乗る場合まで含めて同じ答えにするため、候補は
+ * 1 セルぶん広く取ってから本当の判定にかける。 */
+const bucket = new Map();
+const CELL_SPAN = 360 / 2 ** SPLIT;
+const MARGIN = CELL_SPAN * 0.05;
+for (const f of features) {
+  const grown = [
+    f.bbox[0] - MARGIN,
+    f.bbox[1] - MARGIN,
+    f.bbox[2] + MARGIN,
+    f.bbox[3] + MARGIN,
+  ];
+  const r = tileRange(grown, SPLIT);
+  for (let x = Math.max(r8.x0, r.x0 - 1); x <= Math.min(r8.x1, r.x1); x++) {
+    for (let y = Math.max(r8.y0, r.y0 - 1); y <= Math.min(r8.y1, r.y1); y++) {
+      if (!overlaps(f.bbox, cellBox(x, y))) continue;
+      const key = `${x},${y}`;
+      const list = bucket.get(key);
+      if (list) list.push(f);
+      else bucket.set(key, [f]);
+    }
+  }
+}
+console.log(
+  `tiling z${SPLIT}-${MAXZOOM} in ${cells.length} cells (${bucket.size} with arcs)`,
+);
 
 let done = 0;
 for (const [cx, cy] of cells) {
-  const b = tileBounds(SPLIT, cx, cy);
-  const margin = (b[2] - b[0]) * 0.05;
-  const box = [b[0] - margin, b[1] - margin, b[2] + margin, b[3] + margin];
-  const sub = features.filter((f) => overlaps(f.bbox, box));
+  const sub = bucket.get(`${cx},${cy}`) ?? [];
   done++;
   if (!sub.length) continue;
   const idx = geojsonvt(fc(sub), {
@@ -474,20 +548,18 @@ for (const [cx, cy] of cells) {
 process.stdout.write('\n');
 
 /* The packer takes one blob and one index rather than a hundred thousand small
- * files, which Windows would spend longer creating than we spent tiling. */
-mkdirSync(TILEDIR, { recursive: true });
-const idxRows = [];
-let offset = 0;
-for (const c of chunks) {
-  idxRows.push([c.z, c.x, c.y, offset, c.buf.length]);
-  offset += c.buf.length;
-}
+ * files, which Windows would spend longer creating than we spent tiling. The
+ * blob is already on disk (see emit); only the index is left.
+ *
+ * 古い索引を先に落としてから、blob を本物の名前へ移し、最後に索引を書く。
+ * この順なら、どこで落ちても残るのは「前回の対」か「索引の無い blob」の
+ * どちらかで、食い違う対にはならない。索引が無ければ pack_pmtiles.py は
+ * 読めずに落ちる——静かに壊れた PMTiles よりそちらがよい。 */
+closeSync(binFd);
+rmSync(IDX, { force: true });
+renameSync(BIN_PART, BIN);
 writeFileSync(
-  join(TILEDIR, 'tiles.bin'),
-  Buffer.concat(chunks.map((c) => c.buf)),
-);
-writeFileSync(
-  join(TILEDIR, 'tiles.json'),
+  IDX,
   JSON.stringify({
     minzoom: 0,
     maxzoom: MAXZOOM,

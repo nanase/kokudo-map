@@ -27,7 +27,12 @@ const all = (text, re) => [...text.matchAll(re)].map((m) => m[1]);
 const list = (names) => [...names].sort().join(', ') || '(なし)';
 
 const fails = [];
+/* 検査の数は数える。末尾の「合格: 9/9」の 9 を書いていたころ、検査を足すか
+ * 減らすかしたときに、その 1 行だけが黙って古くなる経路が残っていた。
+ * これはこの検査そのものが防ごうとしている形である。 */
+let checks = 0;
 const ok = (cond, msg) => {
+  checks++;
   if (cond) console.log(`PASS  ${msg}`);
   else fails.push(`FAIL  ${msg}`);
 };
@@ -134,5 +139,7 @@ const gone = [...inUpdateDoc].filter((t) => !miseTasks.has(t));
 ok(gone.length === 0, `mise に無いのに UPDATE.md が挙げている: ${list(gone)}`);
 
 console.log(fails.length ? `\n${fails.join('\n')}` : '');
-console.log(`\n${fails.length ? '失敗' : '合格'}: ${9 - fails.length}/9`);
+console.log(
+  `\n${fails.length ? '失敗' : '合格'}: ${checks - fails.length}/${checks}`,
+);
 process.exit(fails.length ? 1 : 0);

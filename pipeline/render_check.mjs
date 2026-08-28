@@ -80,6 +80,59 @@ const fails = [];
 const ok = (cond, msg) =>
   cond ? console.log(`PASS  ${msg}`) : fails.push(`FAIL  ${msg}`);
 
+/* 地図が落ち着くまで待つ。
+ *
+ * ここは以前、押すたびに `waitForTimeout` で決め打ちの秒数を数えていた。
+ * 27 か所で合計 69 秒。数はどれも「たぶんこれだけあれば足りる」であって、
+ * 何かが終わったことを述べてはいない。遅い日には足りずに偽の失敗を出し、
+ * 速い日には待ちすぎる。
+ *
+ * MapLibre は落ち着いたときにそう言う。待つのは `idle` だけである。
+ *
+ * `idle` は _render の最後で、汚れが一つも残っておらず、動いてもいないとき
+ * にだけ出る。この「汚れ」には symbol の配置(_placementDirty)も入る。
+ * `loaded() && !isMoving()` は同じ条件ではない——配置が済んでいなくても
+ * その二つは真になりうるので、`render` を合図にしてこの式で判定すると、
+ * ラベルがまだ置かれていない絵を数えることがある。だから `render` は聞かず、
+ * MapLibre 自身の判断だけを待つ。
+ *
+ * 代わりに triggerRepaint() で描画を 1 回促す。`idle` は状態ではなく出来事
+ * なので、何も変わっていない回に待つだけでは二度と来ない——サイドバーの
+ * 折りたたみのように地図を触らない操作がそれである。促せば、次の描画で
+ * 「汚れが無い」と分かってその場で出る。
+ *
+ * 上限は残す。タイルが 1 枚返ってこないだけで検査が止まるより、待つのを
+ * やめて、その後の検査に失敗させるほうがよい——それが本当に見たい失敗である。
+ * requestAnimationFrame は使わない。画面が伏せられて rAF が止まる回に、
+ * 上限そのものが動かなくなる。
+ */
+const SETTLE_CAP_MS = 30000;
+const settle = () =>
+  page.evaluate(
+    (cap) =>
+      new Promise((resolve) => {
+        const m = window.map;
+        /* 地図が無ければ待つ相手がいない。手前の isStyleLoaded 待ちは
+         * `.catch(() => {})` で握りつぶすので、地図が起動しなかった回は
+         * そのままここへ来る。待たずに戻り、後の検査に失敗させる——
+         * page.evaluate に時限は無いので、ここで止まると何も報告されない
+         * まま固まる。 */
+        if (!m) {
+          resolve();
+          return;
+        }
+        const done = () => {
+          clearTimeout(timer);
+          resolve();
+          m.off('idle', done);
+        };
+        const timer = setTimeout(done, cap);
+        m.on('idle', done);
+        m.triggerRepaint();
+      }),
+    SETTLE_CAP_MS,
+  );
+
 // 国土地理院 serves no raster tile where there is nothing to draw, so panning
 // out over open sea answers 404. That is the basemap working as designed, and
 // the ferry checks go there deliberately. Every *other* failed request is a
@@ -114,7 +167,7 @@ await page
     timeout: 90000,
   })
   .catch(() => {});
-await page.waitForTimeout(6000);
+await settle();
 
 const report = await page.evaluate(() => {
   const m = window.map;
@@ -211,18 +264,39 @@ const folding = await page.evaluate(async () => {
     Math.round(
       document.querySelector('#map canvas').getBoundingClientRect().width,
     );
-  const settle = () => new Promise((r) => setTimeout(r, 900));
+  /* 幅が変わるまで待つ。canvas を動かすのは MapLibre の ResizeObserver
+   * なので、押した瞬間はまだ古い幅である。決め打ちの 900 ms を数えていた
+   * ——遅ければ足りず、速ければ待ちすぎる。上限を置いて、変わらなければ
+   * 変わらないまま返す。下の ok() がそれを失敗として述べる。
+   *
+   * 上限は setTimeout で張る。rAF の中で時刻を見ていたころ、画面が伏せられて
+   * Chromium が rAF を止めた回には、上限を見る所そのものが動かなかった。
+   * page.evaluate に時限は無いので、そうなると検査が終わらない。 */
+  const widthChanges = (from) =>
+    new Promise((resolve) => {
+      let frame = 0;
+      const finish = () => {
+        clearTimeout(timer);
+        cancelAnimationFrame(frame);
+        resolve(width());
+      };
+      const timer = setTimeout(finish, 5000);
+      const step = () => {
+        if (width() !== from) finish();
+        else frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
+    });
   const btn = document.querySelector('#panel-toggle');
   const open = width();
   btn.click();
-  await settle();
+  const foldedWidth = await widthChanges(open);
   const folded = {
-    width: width(),
+    width: foldedWidth,
     inert: document.querySelector('#panel').inert,
   };
   btn.click();
-  await settle();
-  return { open, folded, back: width() };
+  return { open, folded, back: await widthChanges(foldedWidth) };
 });
 ok(
   folding.folded.width > folding.open,
@@ -253,14 +327,14 @@ ok(
   `with nothing picked the clear button is unavailable ("${idle.text}", disabled=${idle.disabled})`,
 );
 await page.locator('#route-list input').first().check();
-await page.waitForTimeout(1500);
+await settle();
 const one = await clearBtn();
 ok(
   !one.disabled && one.text === '1 路線を選択解除',
   `the clear button states how much it would undo ("${one.text}")`,
 );
 await page.click('#sel-none');
-await page.waitForTimeout(1500);
+await settle();
 const back = await clearBtn();
 ok(
   back.disabled &&
@@ -279,7 +353,7 @@ await page.screenshot({ path: shot('1-all') });
 
 // --- switch to "concurrent sections only" -----------------------------------
 await page.click('input[name=conc][value=all]');
-await page.waitForTimeout(3500);
+await settle();
 const concStats = await page.evaluate(() => ({
   roads: window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
   stats: [...document.querySelectorAll('#stats dd')]
@@ -292,7 +366,7 @@ await page.screenshot({ path: shot('2-concurrent') });
 // --- unfold the ranking and click its deepest row ---------------------------
 await page.click('input[name=conc][value=off]');
 await page.click('#ranking-block > summary');
-await page.waitForTimeout(500);
+await settle();
 ok(
   await page.evaluate(() => document.querySelector('#ranking-block').open),
   'the ranking unfolds when its summary is clicked',
@@ -310,11 +384,11 @@ const before = await page.evaluate(() => {
   };
 });
 await page.click('#ranking .row');
-await page.waitForTimeout(400);
+await settle();
 await page
   .waitForFunction(() => !window.map.isMoving(), null, { timeout: 30000 })
   .catch(() => {});
-await page.waitForTimeout(3500);
+await settle();
 const jumped = await page.evaluate(() => ({
   center: window.map.getCenter().toArray(),
   zoom: window.map.getZoom(),
@@ -372,7 +446,7 @@ console.log(
     `${JSON.stringify(deepest.properties.refs_list)} — ${deepest.properties.name}`,
 );
 await page.evaluate((c) => window.map.jumpTo({ center: c, zoom: 12.4 }), at);
-await page.waitForTimeout(6000);
+await settle();
 const labelled = await page.evaluate(() => {
   const m = window.map;
   const feats = m.queryRenderedFeatures({ layers: ['route-labels'] });
@@ -431,7 +505,7 @@ if (!target) {
   fails.push('FAIL  no arc under the canvas centre to click');
 } else {
   await page.mouse.click(target.x, target.y);
-  await page.waitForTimeout(1500);
+  await settle();
   const opened = await page.evaluate(() => {
     const el = document.querySelector('.maplibregl-popup-content');
     return {
@@ -536,7 +610,7 @@ if (!target) {
   // Closing the popup has to take the shadow with it, or the map keeps a dark
   // smear over a road nothing is describing any more.
   await page.click('.maplibregl-popup-close-button');
-  await page.waitForTimeout(1200);
+  await settle();
   const closed = await page.evaluate(
     () => window.map.queryRenderedFeatures({ layers: ['picked'] }).length,
   );
@@ -545,7 +619,7 @@ if (!target) {
   // 同じアークをもう一度開く。ここから先は標識を押して箱を出すところを見るが、
   // 箱を出すこと自体がポップアップを閉じるので、開き直さないと押す標識が無い。
   await page.mouse.click(target.x, target.y);
-  await page.waitForTimeout(1500);
+  await settle();
 
   // The sign is the button: pressing it opens the box that talks about that one
   // route. It used to narrow the selection instead, and this check still said
@@ -553,7 +627,7 @@ if (!target) {
   // changed and the check had not, so it failed on a page that was working.
   const ref = target.refs[0];
   await page.click('.shield-btn');
-  await page.waitForTimeout(1800);
+  await settle();
   const box = await page.evaluate(() => {
     const el = document.querySelector('#detail');
     return {
@@ -629,7 +703,7 @@ if (!target) {
   if (want.length) {
     const other = want[0].refs[0];
     await page.click(`.detail-rel .shield-btn[data-ref="${other}"]`);
-    await page.waitForTimeout(1200);
+    await settle();
     const switched = await page.evaluate(() =>
       document.querySelector('#detail').innerText.replace(/\s+/g, ' '),
     );
@@ -647,13 +721,13 @@ if (!target) {
     );
     if (back) {
       await page.click(`.detail-rel .shield-btn[data-ref="${ref}"]`);
-      await page.waitForTimeout(1200);
+      await settle();
     }
   }
 
   // Narrowing the map to one route moved into the box with #65.
   await page.click('.detail-only');
-  await page.waitForTimeout(2500);
+  await settle();
   const narrowed = await page.evaluate(() =>
     [...document.querySelectorAll('#route-list input:checked')].map(
       (i) => i.value,
@@ -679,11 +753,14 @@ if (!target) {
       return [p.lng, p.lat];
     });
   const apart = (from, to) =>
-    page.evaluate(([from, to]) => {
-      const a = window.map.project(from);
-      const b = window.map.project(to);
-      return Math.round(Math.hypot(a.x - b.x, a.y - b.y));
-    }, [from, to]);
+    page.evaluate(
+      ([from, to]) => {
+        const a = window.map.project(from);
+        const b = window.map.project(to);
+        return Math.round(Math.hypot(a.x - b.x, a.y - b.y));
+      },
+      [from, to],
+    );
 
   const canvasBox = await page.locator('#map').boundingBox();
   const at = (fx, fy) => [
@@ -694,10 +771,10 @@ if (!target) {
   await page.mouse.down();
   await page.mouse.move(...at(0.55, 0.45), { steps: 12 });
   await page.mouse.up();
-  await page.waitForTimeout(1200);
+  await settle();
   const before = await midpoint();
   await page.click('#detail-close');
-  await page.waitForTimeout(1200);
+  await settle();
   const slid = await apart(before, await midpoint());
   ok(
     slid === 0,
@@ -719,7 +796,7 @@ await page.evaluate(() => {
     cb.dispatchEvent(new Event('change', { bubbles: true }));
   }
 });
-await page.waitForTimeout(1500);
+await settle();
 
 // --- 点線国道 / 工事中: locate them from the data instead of guessing -------
 const midOf = (f) =>
@@ -740,7 +817,7 @@ for (const [kind, layer, caption] of [
   }
   const at = midOf(f);
   await page.evaluate((c) => window.map.jumpTo({ center: c, zoom: 13.5 }), at);
-  await page.waitForTimeout(5000);
+  await settle();
   const seen = await page.evaluate(
     (id) =>
       window.map.queryRenderedFeatures({ layers: [id] }).map((x) => ({
@@ -776,17 +853,17 @@ if (expresswayArc) {
     (c) => window.map.jumpTo({ center: c, zoom: 13.5 }),
     midOf(expresswayArc),
   );
-  await page.waitForTimeout(3000);
+  await settle();
   const expressways = () =>
     page.evaluate(
       () => window.map.queryRenderedFeatures({ layers: ['expressway'] }).length,
     );
   const shown = await expressways();
   await page.uncheck('#t-expressway');
-  await page.waitForTimeout(3000);
+  await settle();
   const hidden = await expressways();
   await page.check('#t-expressway');
-  await page.waitForTimeout(3000);
+  await settle();
   const back = await expressways();
   ok(
     shown > 0 && hidden === 0 && back === shown,
@@ -809,17 +886,17 @@ if (ferryArc) {
     (c) => window.map.jumpTo({ center: c, zoom: 13.5 }),
     midOf(ferryArc),
   );
-  await page.waitForTimeout(3000);
+  await settle();
   const ferries = () =>
     page.evaluate(
       () => window.map.queryRenderedFeatures({ layers: ['ferry'] }).length,
     );
   const shown = await ferries();
   await page.uncheck('#t-ferry');
-  await page.waitForTimeout(3000);
+  await settle();
   const hidden = await ferries();
   await page.check('#t-ferry');
-  await page.waitForTimeout(3000);
+  await settle();
   const back = await ferries();
   ok(
     shown > 0 && hidden === 0 && back === shown,
@@ -843,7 +920,7 @@ for (const r of index) {
       [e, n],
     ],
   );
-  await page.waitForTimeout(2500);
+  await settle();
   const roads = await page.evaluate(
     () => window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
   );
@@ -871,7 +948,7 @@ await page.evaluate(
     ),
   meta.bbox,
 );
-await page.waitForTimeout(6000);
+await settle();
 const wide = await page.evaluate(
   () => window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
 );

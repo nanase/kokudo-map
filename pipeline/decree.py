@@ -71,6 +71,7 @@ import shapefile
 
 from _paths import DECREE, N03, REGIONS
 from build_routes import TERMINI_CLUSTER_M, VALID
+from geo import haversine
 
 # 一般国道の路線を指定する政令(昭和40年政令第58号). e-Gov 法令検索 API v1 hands
 # back the whole law as XML, 別表 included, at a stable id.
@@ -301,15 +302,6 @@ def contains(rings: list, lat: float, lon: float) -> bool:
 
 
 # ------------------------------------------------------------------ termini ---
-def haversine(a: tuple[float, float], b: tuple[float, float]) -> float:
-    r = 6371008.8
-    p1, p2 = math.radians(a[0]), math.radians(b[0])
-    dp = p2 - p1
-    dl = math.radians(b[1] - a[1])
-    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(h))
-
-
 def endpoints_by_route() -> dict[int, list[tuple[float, float]]]:
     """Every region's termini, unioned. Boxes overlap, so a node on a shared
     border is reported by both neighbours as the identical pair of numbers."""

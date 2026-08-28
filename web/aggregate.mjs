@@ -15,8 +15,8 @@
 const round1 = (km) => Math.round(km * 10) / 10;
 
 /* 選択が問うている行かどうか。選択が空なら全部——それが地図の見せている
- * ものである。下の三つの合計は同じ絞り方をするので、規則はここに一度だけ
- * 書く。写しを持つと、延長と内訳が別の道の話を始める。 */
+ * ものである。下の合計と一覧はどれも同じ絞り方をするので、規則はここに
+ * 一度だけ書く。写しを持つと、延長と内訳が別の道の話を始める。 */
 const touched = (c, selected) =>
   !selected.size || c.refs.some((r) => selected.has(r));
 
@@ -70,6 +70,21 @@ export function statsFor(combos, selected) {
   }
   return { arcs, km, conc };
 }
+
+/**
+ * The concurrent sections a selection is asking about.
+ *
+ * Concurrency is a property of the road, so `n >= 2` is asked of the arc and
+ * not of the selection; the selection only narrows which of those sections are
+ * listed. An empty selection lists them all — the same reading of an empty
+ * selection the three sums above take, because it is the same `touched`.
+ *
+ * A row, not a number, but it is still a read of the combination table under
+ * the same rule, so it belongs beside the sums rather than beside the markup
+ * that lays it out (panel.mjs's rankingHTML).
+ */
+export const concurrencies = (combos, selected) =>
+  combos.filter((c) => c.n >= 2 && touched(c, selected));
 
 /**
  * 選択が触れる組み合わせの、区分(`kind`)ごとの距離。km の大きい順。

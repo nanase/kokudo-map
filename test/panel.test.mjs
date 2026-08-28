@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 
 import {
   clearLabel,
-  concurrencies,
   countLabel,
   freshnessHTML,
   legendKindHTML,
@@ -104,33 +103,6 @@ describe('selectionLabel', () => {
 
   test('選択があれば全体に対する数を言う', () => {
     expect(selectionLabel(3, 459)).toBe('3 / 459 路線');
-  });
-});
-
-describe('concurrencies', () => {
-  const combos = [
-    combo([7], 100, 1000),
-    combo([7, 8], 10, 100),
-    combo([17, 49], 5, 50),
-  ];
-
-  test('単独指定は重用ではない', () => {
-    expect(concurrencies(combos, new Set())).toHaveLength(2);
-  });
-
-  test('選択はどれを並べるかだけを絞る', () => {
-    // 重用かどうかは道路の性質であって、選択の結果ではありません。
-    const picked = concurrencies(combos, new Set([7]));
-    expect(picked).toHaveLength(1);
-    expect(picked[0].refs).toEqual([7, 8]);
-  });
-
-  test('選ばれた番号が重用の片側にあれば残る', () => {
-    expect(concurrencies(combos, new Set([49]))[0].refs).toEqual([17, 49]);
-  });
-
-  test('該当が無ければ空になる', () => {
-    expect(concurrencies(combos, new Set([999]))).toEqual([]);
   });
 });
 

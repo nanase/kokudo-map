@@ -41,7 +41,7 @@
  *   wiring.mjs     index.html の要素と state の対応づけ
  */
 
-import { kindsFor, routesOf, statsFor } from './aggregate.mjs';
+import { concurrencies, kindsFor, routesOf, statsFor } from './aggregate.mjs';
 import { decreeTerminiOf, detailHTML, relatedRoutesOf } from './detail.mjs';
 import {
   baseStyle,
@@ -66,7 +66,6 @@ import {
 } from './mapspec.mjs';
 import {
   clearLabel,
-  concurrencies,
   countLabel,
   freshnessHTML,
   RANKING_ROWS,

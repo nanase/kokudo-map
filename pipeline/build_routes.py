@@ -37,12 +37,12 @@ Usage:  uv run pipeline/build_routes.py [region]
 from __future__ import annotations
 
 import json
-import math
 import re
 import sys
 from collections import Counter, defaultdict
 
 from _paths import CACHE, REGIONS as OUT
+from geo import haversine, line_length
 from regions import for_region
 
 # Route numbers a general national route can legally have: 1-58 and 101-507,
@@ -74,21 +74,6 @@ EDGE_TOL = 0.02
 # routes that meet there scatter over the intersection rather than coinciding.
 # decree.py reads this too, to tell a legal terminus from an OSM break.
 TERMINI_CLUSTER_M = 150
-
-
-# ---------------------------------------------------------------- geometry ---
-def haversine(a: tuple[float, float], b: tuple[float, float]) -> float:
-    """Metres between two (lat, lon) pairs."""
-    r = 6371008.8
-    p1, p2 = math.radians(a[0]), math.radians(b[0])
-    dp = p2 - p1
-    dl = math.radians(b[1] - a[1])
-    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(h))
-
-
-def line_length(coords: list[tuple[float, float]]) -> float:
-    return sum(haversine(coords[i], coords[i + 1]) for i in range(len(coords) - 1))
 
 
 # ------------------------------------------------------------ designations ---
@@ -562,15 +547,29 @@ def main() -> None:
             or east - lon < EDGE_TOL
         )
 
+    # How many arc ends of each route meet at each point. A point touched once
+    # is where that route's chain stops; touched twice or more, the chain runs
+    # through it.
+    #
+    # One pass over the arcs, not one pass per route. The route loop used to sit
+    # outside and re-read all 13,000 arcs to skip the 12,000 that are not its
+    # own — the arc already names the routes it belongs to, so it can be handed
+    # to all of them as it goes by. The rounding, the order the ends are counted
+    # in, and the order the routes come out in are all unchanged, so this builds
+    # the same list.
+    ends_of: dict[int, Counter] = defaultdict(Counter)
+    for a in arcs:
+        ends = [
+            (round(p[0], 7), round(p[1], 7))
+            for p in (a["coords"][0], a["coords"][-1])
+        ]
+        for r in a["refs"]:
+            for p in ends:
+                ends_of[r][p] += 1
+
     endpoints = []
     for r in sorted(routes):
-        deg: Counter = Counter()
-        for a in arcs:
-            if r not in a["refs"]:
-                continue
-            for p in (a["coords"][0], a["coords"][-1]):
-                deg[(round(p[0], 7), round(p[1], 7))] += 1
-        for (lat, lon), d in deg.items():
+        for (lat, lon), d in ends_of[r].items():
             if d == 1 and not on_edge(lat, lon):
                 endpoints.append({"ref": r, "lat": lat, "lon": lon})
 

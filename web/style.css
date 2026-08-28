@@ -6,12 +6,11 @@
   color-scheme: light;
 
   --sign-blue: #00449E;
-  --sign-blue-lt: #1E6FD9;
 
-  --n1: #1B62C4;  /* 単独指定 */
-  --n2: #D98324;  /* 二重用 */
-  --n3: #C2352B;  /* 三重用 */
-  --n4: #7B3E9D;  /* 四重用以上 */
+  /* 重用の深さの色（単独指定・二重用・三重用・四重用以上）はここに無い。
+     地図の線も凡例の見本もその色を web/mapspec.mjs の N_COLORS から取る
+     ので、CSS に写しを置くと二箇所になる。実際、写しを持っていたころは
+     暗い配色の側だけが N_COLORS と食い違ったまま誰にも使われずにいた。 */
 
   --panel: #FFFFFF;
   --panel-2: #F2F5F9;
@@ -66,10 +65,6 @@
     --ink: #E6EDF6;
     --ink-2: #B2C1D3;
     --ink-3: #8799AE;
-    --n1: #5C9BEE;
-    --n2: #E7A951;
-    --n3: #E8756A;
-    --n4: #B183D6;
     --sign-blue: #79AEF7;
     --focus: #79AEF7;
     --success: #4ADE80;

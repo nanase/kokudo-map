@@ -5,8 +5,18 @@
  * 「消す形か」「消す先か」を近似して見ている。近似は、通しすぎても止めすぎても
  * 役に立たない——通せば取り直しに何時間もかかる物が消え、止めれば迂回される。
  *
- * だからここで検査するのは境目である。番人そのものを子プロセスとして起動して、
- * 本物の判定を通す。判定の写しを検査しても検証にはならない。
+ * だからここで検査するのは境目である。番人の判定そのもの——decide()——を
+ * import して呼ぶ。判定の写しを検査しても検証にはならないので、呼ぶのは
+ * .claude/settings.json が起動するのと同じ関数である。
+ *
+ * 境目は 250 例を超える。以前はその 1 例ごとに node を子プロセスとして
+ * 起こしていて、1 回 85 ms、このファイルだけでテスト全体の 21 秒を使って
+ * いた。決めているのは文字列の読み方なので、プロセスを跨ぐ必要は無い。
+ *
+ * 跨ぐ必要があるものだけは、下の「取り決め」で子プロセスのまま残す——
+ * stdin の読み方、deny の JSON の形、そして .claude/settings.json が使う
+ * node で同じ答えが返ること。bun test は bun で走るので、そこだけは
+ * 処理系そのものが検査の対象になる。
  *
  * 番人に渡すリポジトリは、この repo 自身ではなく仮の木にする。番人は
  * `cd` の行き先が実在するかを見るので、この repo を渡すと判定が手元の
@@ -20,12 +30,14 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { decide } from '../.claude/hooks/guard-data-dirs.mjs';
+
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const HOOK = join(ROOT, '.claude', 'hooks', 'guard-data-dirs.mjs');
 
 /* .claude/settings.json は番人を node で起動する。bun test の
  * process.execPath は bun なので、それで検査すると本番と違う処理系を
- * 見ることになる。 */
+ * 見ることになる。下の「取り決め」だけがこれを使う。 */
 const NODE = 'node';
 
 /* 仮の木。守る場所と同じ形だけを作る。 */
@@ -56,21 +68,22 @@ const NAME = basename(REPO);
 const DRIVE = REPO.replace(/^([a-zA-Z]):.*$/, '/$1');
 
 /** 番人に命令を渡し、止めたなら理由を、通したなら null を返す。 */
-function ask(command, toolName = 'Bash') {
-  const out = execFileSync(NODE, [HOOK], {
-    input: JSON.stringify({ tool_name: toolName, tool_input: { command } }),
-    env: { ...process.env, CLAUDE_PROJECT_DIR: REPO },
-    encoding: 'utf8',
-  });
-  if (!out.trim()) return null;
-  const { hookSpecificOutput } = JSON.parse(out);
-  expect(hookSpecificOutput.hookEventName).toBe('PreToolUse');
-  expect(hookSpecificOutput.permissionDecision).toBe('deny');
-  return hookSpecificOutput.permissionDecisionReason;
-}
+const ask = (command, toolName = 'Bash') =>
+  decide({ command, toolName, root: REPO });
 
 /** PowerShell を呼んだ体で番人に命令を渡す。 */
 const askPowerShell = (command) => ask(command, 'PowerShell');
+
+/** 同じ問いを、settings.json と同じ道——node の子プロセス、stdin、標準出力
+ *  ——で通す。下の「取り決め」だけが使う。 */
+function askViaProcess(command, { toolName = 'Bash', root = REPO } = {}) {
+  const out = execFileSync(NODE, [HOOK], {
+    input: JSON.stringify({ tool_name: toolName, tool_input: { command } }),
+    env: { ...process.env, CLAUDE_PROJECT_DIR: root },
+    encoding: 'utf8',
+  });
+  return out.trim();
+}
 
 /* 展開されないまま届く変数を書くための一字。素の文字列に `${` と書くと、
  * 書き忘れたテンプレート文字列と区別が付かない。 */
@@ -581,15 +594,9 @@ describe('木の名前に括弧があっても効く', () => {
   test.each([['rm -rf build'], ['rm -rf web/data'], ['rm -rf .']])(
     '%s',
     (command) => {
-      const out = execFileSync(NODE, [HOOK], {
-        input: JSON.stringify({
-          tool_name: 'Bash',
-          tool_input: { command },
-        }),
-        env: { ...process.env, CLAUDE_PROJECT_DIR: BRACKET },
-        encoding: 'utf8',
-      });
-      expect(out.trim()).not.toBe('');
+      expect(
+        decide({ command, toolName: 'Bash', root: BRACKET }),
+      ).not.toBeNull();
     },
   );
 });
@@ -626,6 +633,12 @@ describe('PowerShell の二重引用符に逆斜線は逃げ字ではない', ()
   });
 });
 
+/* ------------------------------------------------------------- 取り決め --- */
+/* ここから下だけが子プロセスを起こす。上の 250 例が見ているのは判定であって、
+ * 判定の運ばれ方ではない。運ばれ方——stdin の読み方、deny の JSON の形、
+ * settings.json が使う node で同じ答えが返ること——はプロセスを跨がないと
+ * 検査できないので、その 3 つだけをここに置く。 */
+
 describe('読めない入力で作業を止めない', () => {
   // 番人が落ちて命令まで通らなくなるのは行き過ぎである。通して構わない。
   test.each([[''], ['{'], ['{"tool_input":{}}'], ['null']])('%p', (payload) => {
@@ -635,5 +648,41 @@ describe('読めない入力で作業を止めない', () => {
       encoding: 'utf8',
     });
     expect(out.trim()).toBe('');
+  });
+});
+
+describe('deny は PreToolUse の取り決めどおりに返る', () => {
+  test('止めるときは deny の JSON を書く', () => {
+    const { hookSpecificOutput } = JSON.parse(askViaProcess('rm -rf build'));
+    expect(hookSpecificOutput.hookEventName).toBe('PreToolUse');
+    expect(hookSpecificOutput.permissionDecision).toBe('deny');
+    expect(hookSpecificOutput.permissionDecisionReason).toContain('build');
+  });
+
+  test('通すときは何も書かない', () => {
+    expect(askViaProcess('rm build/social.png')).toBe('');
+  });
+});
+
+describe('node で起動しても同じ答えを返す', () => {
+  /* 上の 250 例は bun の中で decide() を呼ぶ。本番は node が起動する。
+   * 判定は文字列と正規表現しか使わないので処理系で変わらないはずだが、
+   * 「はず」を検査に変えておく。境目の代表を両方の道で通し、答えが一致する
+   * ことだけを見る。 */
+  test.each([
+    ['rm -rf build'],
+    ['rm -rf web/data'],
+    ['git clean -xdf'],
+    ['rm build/social.png'],
+    ['rm -rf build/brand'],
+    [`rm -rf ${AWAY}`],
+  ])('%s', (command) => {
+    const viaProcess = askViaProcess(command);
+    const inProcess = ask(command);
+    expect(
+      viaProcess === ''
+        ? null
+        : JSON.parse(viaProcess).hookSpecificOutput.permissionDecisionReason,
+    ).toBe(inProcess);
   });
 });

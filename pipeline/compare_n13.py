@@ -91,7 +91,8 @@ import requests
 import shapefile
 
 from _paths import N13, REGIONS as DATA
-from audit import DSU, claims, haversine, load_cache, why_excluded
+from audit import DSU, claims, load_cache, why_excluded
+from geo import EARTH_RADIUS_M, haversine
 from regions import REGIONS as PREFECTURES
 
 # https://nlftp.mlit.go.jp/ksj/gml/data/N13/N13-24/N13-24_<mesh>_SHP.zip serves
@@ -328,17 +329,16 @@ def load_kokudo_raw(mesh: str, refresh: bool) -> list[list[tuple[float, float]]]
 
 
 # ---------------------------------------------------------------- geometry ---
-# haversine and DSU are audit.py's own — imported rather than restated, so a
-# fix to either propagates here instead of the two copies quietly diverging.
+# haversine と地球半径は geo.py の、DSU は audit.py のものである。写さずに
+# import しているので、直せばこちらへ伝わる。
 def point_segment_distance_m(p, a, b) -> float:
     """Distance from p to segment a-b, via a local equirectangular projection
     centred on p. Accurate to centimetres at the scale of one arc (tens of
     metres to a few km) — no need for anything heavier."""
-    r = 6371008.8
 
     def xy(pt):
-        x = math.radians(pt[1] - p[1]) * math.cos(math.radians(p[0])) * r
-        y = math.radians(pt[0] - p[0]) * r
+        x = math.radians(pt[1] - p[1]) * math.cos(math.radians(p[0])) * EARTH_RADIUS_M
+        y = math.radians(pt[0] - p[0]) * EARTH_RADIUS_M
         return x, y
 
     ax, ay = xy(a)
