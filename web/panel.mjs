@@ -25,9 +25,6 @@ import { shieldRow } from './shield.mjs';
 export const RANKING_ROWS = 25;
 export const SHARED_ROWS = 20;
 
-/** 7 日を超えたら、最近の開通が入っていない可能性を述べる。 */
-export const STALE_DAYS = 7;
-
 /* ------------------------------------------------------------------ 路線 --- */
 /** The checkbox list of every route the data contains. */
 export const routeListHTML = (routes) =>
@@ -217,23 +214,25 @@ const utc = (d) =>
  *
  * `now` is a parameter so that "how old is this" has one input rather than a
  * hidden one.
+ *
+ * There is no staleness warning. No update interval is promised, so such a
+ * warning would be lit permanently, and one that is always on is background
+ * rather than information. The panel says the thing that is true instead —
+ * the interval is irregular — and leaves the judgement to the reader.
  */
 export function freshnessHTML(meta, now = Date.now()) {
   const base = new Date(meta.osm_timestamp);
   const ageDays = Math.floor((now - base.getTime()) / 86400000);
   const ageText =
     ageDays <= 0 ? '当日' : ageDays === 1 ? '1 日前' : `${ageDays} 日前`;
-  const stale = ageDays > STALE_DAYS;
-
   return (
     '<dt>データ基準</dt>' +
-    `<dd class="${stale ? 'warn' : ''}">${utc(base)}（${ageText}）</dd>` +
+    `<dd>${utc(base)}（${ageText}）</dd>` +
+    '<dt>更新の間隔</dt>' +
+    '<dd>不定期</dd>' +
     '<dt>区間の更新</dt>' +
     `<dd>${esc(meta.oldest_edit)} 〜 ${esc(meta.newest_edit)}</dd>` +
     '<dt>OSM 取得元</dt>' +
-    `<dd>${esc(meta.endpoints.join(' / '))}</dd>` +
-    (stale
-      ? '<dt></dt><dd class="warn">最近の開通は反映されていない可能性があります</dd>'
-      : '')
+    `<dd>${esc(meta.endpoints.join(' / '))}</dd>`
   );
 }

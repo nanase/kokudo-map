@@ -122,6 +122,17 @@ ok(
   `実在しないのに development.md の構成表が挙げている web/*.mjs: ${list(extraMjs)}`,
 );
 
+/* ---- 7. 更新手順が挙げる mise タスクが実在する --------------------------- */
+// UPDATE.md は development.md の表とは別の問いに答える(どの順で、どれだけ
+// かかるか)ので、タスク名は重なる。重なる以上、改名したとき development.md
+// だけが上の 2 に叱られて直り、こちらは実在しない名前を指したまま黙って
+// 古くなる経路が残る。手順書は間が空いてから読む物なので、その頃には誰も
+// 覚えていない。
+const updateDoc = read('.claude/skills/national-route-data/UPDATE.md');
+const inUpdateDoc = new Set(all(updateDoc, /`mise run ([\w-]+)/g));
+const gone = [...inUpdateDoc].filter((t) => !miseTasks.has(t));
+ok(gone.length === 0, `mise に無いのに UPDATE.md が挙げている: ${list(gone)}`);
+
 console.log(fails.length ? `\n${fails.join('\n')}` : '');
-console.log(`\n${fails.length ? '失敗' : '合格'}: ${8 - fails.length}/8`);
+console.log(`\n${fails.length ? '失敗' : '合格'}: ${9 - fails.length}/9`);
 process.exit(fails.length ? 1 : 0);
