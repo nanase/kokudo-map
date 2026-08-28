@@ -129,7 +129,7 @@ ok(
 // 古くなる経路が残る。手順書は間が空いてから読む物なので、その頃には誰も
 // 覚えていない。
 const updateDoc = read('.claude/skills/national-route-data/UPDATE.md');
-const inUpdateDoc = new Set(all(updateDoc, /`mise run ([a-z0-9-]+)/g));
+const inUpdateDoc = new Set(all(updateDoc, /`mise run ([\w-]+)/g));
 const gone = [...inUpdateDoc].filter((t) => !miseTasks.has(t));
 ok(gone.length === 0, `mise に無いのに UPDATE.md が挙げている: ${list(gone)}`);
 
