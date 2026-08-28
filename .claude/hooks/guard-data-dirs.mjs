@@ -643,7 +643,11 @@ function grouping(text, carried, posix) {
   return { opens, closes, subst };
 }
 
-function scan(text, startCwd, depth = 0, posix = POSIX_START) {
+/* posix に既定値は置かない。綴りの流儀は命令ごとに decide() が決めるもので、
+ * このファイルが持てる値ではない。既定値を置いていたころ、その値は module
+ * scope の POSIX_START を指していた——判定と入出力が同じ所に混ざっていた頃の
+ * 名残である。 */
+function scan(text, startCwd, depth, posix) {
   let cwd = startCwd;
   /* pushd が積んだ場所。popd で戻る。cd しか見ていなかったころ、
    * `pushd build && rm -rf pbf` が素通りしていた。 */
