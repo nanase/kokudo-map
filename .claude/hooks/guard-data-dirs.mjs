@@ -26,12 +26,17 @@
  * なるので、消す形かどうかを形で見ている。境目は
  * test/guard-data-dirs.test.mjs が検査する。
  *
+ * 判定そのものは decide() が持ち、stdin と標準出力は main() が持つ(どちらも
+ * このファイルの末尾)。分けてあるのはテストのためである——判定に入出力が
+ * 混ざっていたころ、境目を 1 例見るのに node を 1 回起こす必要があった。
+ *
  * 見えないもの: Bash ツールの作業ディレクトリは呼び出しをまたいで残るが、
  * フックには渡らない。命令の中の `cd` は追うので `cd build && rm -rf pbf`
  * は止まるが、前の呼び出しで build/ に入ったままの `rm -rf pbf` は
  * 素通りする。木の外で打たれた相対パスを片端から止めるほうが害が大きい。
  */
 import { existsSync, readFileSync, writeSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 /* 木ごと消されては困る場所。リポジトリのルートからの相対で述べる。 */
 const PROTECTED = [
@@ -47,45 +52,31 @@ const PROTECTED = [
   'web/data',
 ];
 
+/**
+ * 止める、と決まった。
+ *
+ * scan() は語を辿りながら深いところで当たりに気付くので、見つけた時点で
+ * 投げて入口まで一息に戻す。以前ここは deny の JSON を書いて
+ * process.exit(0) を呼んでいた——判定と、判定を伝える手段が同じ 1 行に
+ * 入っていたので、判定だけを取り出して呼ぶことができなかった。
+ */
+class Denied extends Error {
+  constructor(reason) {
+    super(reason);
+    this.name = 'Denied';
+    this.reason = reason;
+  }
+}
+
 const deny = (reason) => {
-  /* writeSync で書き切ってから終わる。process.stdout.write は Windows の
-   * pipe では非同期なので、直後に exit すると deny が届かないまま——
-   * つまり黙って通す側に倒れたまま——終わりうる。 */
-  writeSync(
-    1,
-    JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'deny',
-        permissionDecisionReason: reason,
-      },
-    }),
-  );
-  process.exit(0);
+  throw new Denied(reason);
 };
 
-/* 読めなければ黙って通す。番人が落ちて作業まで止まるのは行き過ぎである。 */
-let command = '';
-let toolName = '';
-try {
-  const input = JSON.parse(readFileSync(0, 'utf8'));
-  command = String(input?.tool_input?.command ?? '');
-  toolName = String(input?.tool_name ?? '');
-} catch {
-  process.exit(0);
-}
-if (!command.trim()) process.exit(0);
-
-const ROOT = (process.env.CLAUDE_PROJECT_DIR ?? process.cwd())
-  .replace(/\\/g, '/')
-  .replace(/\/+$/, '');
-const ROOT_PARTS = ROOT.toLowerCase().split('/');
-
-/* 番人は Bash と PowerShell の両方の命令を見る(.claude/settings.json の
- * matcher)。二重引用符の中で逆斜線が字を逃がすのは bash の話で、PowerShell
- * には無い——PowerShell が逃がす字は `` ` `` である。呼んだ道具の名前で
- * どちらの綴りとして読むかを決める。 */
-const POSIX_START = !/^powershell$/i.test(toolName);
+/* 判定のあいだだけ据えるリポジトリの場所。decide() が入口で書き換える。
+ * 下の関数群がこれを直に読むので、段を辿るたびに持ち回らずに済む。
+ * 番人は 1 回の呼び出しで 1 つの命令しか見ない。 */
+let ROOT = '';
+let ROOT_PARTS = [];
 
 /* ------------------------------------------------------------- 場所を読む --- */
 
@@ -1000,4 +991,80 @@ function scan(text, startCwd, depth = 0, posix = POSIX_START) {
   return cwd;
 }
 
-scan(command, ROOT.split('/'));
+/* ------------------------------------------------------------------ 判定 --- */
+/**
+ * 命令 1 つを判定する。止めるなら理由を、通すなら null を返す。
+ *
+ * 番人の判定はここから下の scan() が全部持つ。stdin も標準出力も終了コード
+ * もこの関数には無いので、test/guard-data-dirs.test.mjs はこれを import
+ * して繰り返し呼べる。1 例ごとに node を起こしていたころ、その 1 ファイル
+ * だけでテスト全体の 21 秒を使っていた。
+ *
+ * 検査されるのは写しではなく本物である。.claude/settings.json が起動する
+ * のも、下の main() を経てこの同じ関数だからである。
+ */
+export function decide({ command, toolName, root }) {
+  if (!command.trim()) return null;
+  ROOT = String(root).replace(/\\/g, '/').replace(/\/+$/, '');
+  ROOT_PARTS = ROOT.toLowerCase().split('/');
+  /* 前の命令が覚えた変数を持ち越さない。1 命令ごとにプロセスごと捨てて
+   * いたころは、考える必要が無かった。 */
+  vars.clear();
+  /* 番人は Bash と PowerShell の両方の命令を見る(.claude/settings.json の
+   * matcher)。二重引用符の中で逆斜線が字を逃がすのは bash の話で、PowerShell
+   * には無い——PowerShell が逃がす字は `` ` `` である。呼んだ道具の名前で
+   * どちらの綴りとして読むかを決める。 */
+  const posix = !/^powershell$/i.test(toolName);
+  try {
+    scan(command, ROOT.split('/'), 0, posix);
+  } catch (err) {
+    if (err instanceof Denied) return err.reason;
+    /* 番人自身の不具合は握りつぶさない。黙って通すのは、命令が読めなかった
+     * ときだけの振る舞いである(main を見よ)。 */
+    throw err;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ 入口 --- */
+/**
+ * stdin に届く PreToolUse を読み、止めるなら deny を書いて終わる。
+ *
+ * 読めなければ黙って通す。番人が落ちて作業まで止まるのは行き過ぎである。
+ */
+function main() {
+  let input;
+  try {
+    input = JSON.parse(readFileSync(0, 'utf8'));
+  } catch {
+    return;
+  }
+  const reason = decide({
+    command: String(input?.tool_input?.command ?? ''),
+    toolName: String(input?.tool_name ?? ''),
+    root: process.env.CLAUDE_PROJECT_DIR ?? process.cwd(),
+  });
+  if (reason === null) return;
+  /* writeSync で書き切ってから終わる。process.stdout.write は Windows の
+   * pipe では非同期なので、直後に exit すると deny が届かないまま——
+   * つまり黙って通す側に倒れたまま——終わりうる。 */
+  writeSync(
+    1,
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: reason,
+      },
+    }),
+  );
+}
+
+/* node が直に起動したときだけ stdin を読む。import されたときは何もしない
+ * ——テストはここを通らず decide() を直に呼ぶ。 */
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  main();
+}
