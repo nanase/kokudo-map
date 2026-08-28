@@ -304,9 +304,7 @@ function mergeTermini(ms) {
  * It is a column beside the endpoints, not a replacement: the endpoints say
  * where a route's arcs stop, this says where the route legally begins. Routes
  * whose coordinate could not be found keep their place name and say why. */
-const decree = JSON.parse(
-  readFileSync(join(DECREE, 'decree.json'), 'utf8'),
-);
+const decree = JSON.parse(readFileSync(join(DECREE, 'decree.json'), 'utf8'));
 if (decree.routes.length !== 459)
   throw new Error(
     `build/decree/decree.json has ${decree.routes.length} routes, not 459`,

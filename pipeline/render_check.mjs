@@ -679,11 +679,14 @@ if (!target) {
       return [p.lng, p.lat];
     });
   const apart = (from, to) =>
-    page.evaluate(([from, to]) => {
-      const a = window.map.project(from);
-      const b = window.map.project(to);
-      return Math.round(Math.hypot(a.x - b.x, a.y - b.y));
-    }, [from, to]);
+    page.evaluate(
+      ([from, to]) => {
+        const a = window.map.project(from);
+        const b = window.map.project(to);
+        return Math.round(Math.hypot(a.x - b.x, a.y - b.y));
+      },
+      [from, to],
+    );
 
   const canvasBox = await page.locator('#map').boundingBox();
   const at = (fx, fy) => [
