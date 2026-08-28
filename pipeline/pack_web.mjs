@@ -466,14 +466,53 @@ const cells = [];
 for (let x = r8.x0; x <= r8.x1; x++) {
   for (let y = r8.y0; y <= r8.y1; y++) cells.push([x, y]);
 }
-console.log(`tiling z${SPLIT}-${MAXZOOM} in ${cells.length} cells`);
+
+/** セルが取り込む範囲。中身を切らないための余白ぶん、セルより広い。 */
+const cellBox = (x, y) => {
+  const b = tileBounds(SPLIT, x, y);
+  const margin = (b[2] - b[0]) * 0.05;
+  return [b[0] - margin, b[1] - margin, b[2] + margin, b[3] + margin];
+};
+
+/* どのセルがどの弧を要るかを、先に一度だけ振り分ける。
+ *
+ * セルごとに features を端から見ていた。日本は z8 で 16×20 の 320 セルに
+ * 収まり、うち弧があるのは 70 だけである。つまり 130,000 件の走査を 320 回、
+ * 4,160 万回の判定をして、その 8 割は 1 件も拾わないセルのために回っていた。
+ *
+ * 弧の側から見れば、1 本が跨ぐセルは普通 1 つ、多くて数個である。弧の
+ * bbox を余白ぶん広げて z8 の索引に落とせば、当たりうるセルはその周りだけに
+ * 絞れる。絞ったうえで、判定そのものは元と同じ overlaps を使う——低い側の
+ * 端がちょうどセルの境に乗る場合まで含めて同じ答えにするため、候補は
+ * 1 セルぶん広く取ってから本当の判定にかける。 */
+const bucket = new Map();
+const CELL_SPAN = 360 / 2 ** SPLIT;
+const MARGIN = CELL_SPAN * 0.05;
+for (const f of features) {
+  const grown = [
+    f.bbox[0] - MARGIN,
+    f.bbox[1] - MARGIN,
+    f.bbox[2] + MARGIN,
+    f.bbox[3] + MARGIN,
+  ];
+  const r = tileRange(grown, SPLIT);
+  for (let x = Math.max(r8.x0, r.x0 - 1); x <= Math.min(r8.x1, r.x1); x++) {
+    for (let y = Math.max(r8.y0, r.y0 - 1); y <= Math.min(r8.y1, r.y1); y++) {
+      if (!overlaps(f.bbox, cellBox(x, y))) continue;
+      const key = `${x},${y}`;
+      const list = bucket.get(key);
+      if (list) list.push(f);
+      else bucket.set(key, [f]);
+    }
+  }
+}
+console.log(
+  `tiling z${SPLIT}-${MAXZOOM} in ${cells.length} cells (${bucket.size} with arcs)`,
+);
 
 let done = 0;
 for (const [cx, cy] of cells) {
-  const b = tileBounds(SPLIT, cx, cy);
-  const margin = (b[2] - b[0]) * 0.05;
-  const box = [b[0] - margin, b[1] - margin, b[2] + margin, b[3] + margin];
-  const sub = features.filter((f) => overlaps(f.bbox, box));
+  const sub = bucket.get(`${cx},${cy}`) ?? [];
   done++;
   if (!sub.length) continue;
   const idx = geojsonvt(fc(sub), {
