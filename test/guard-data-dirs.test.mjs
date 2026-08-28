@@ -354,6 +354,9 @@ describe('木ごと消す形を止める', () => {
     ['Remove-Item -Recurse -Force build'],
     ['Remove-Item -Force -Recurse build'],
     ['Remove-Item -r -Force build'],
+    // -Force はスイッチで値を取らない。後ろの語は消す先である。
+    ['Remove-Item -Recurse -Force build'],
+    ['gci docs | Remove-Item -Recurse -Force build'],
     ['Remove-Item -Recu build'],
     ['rmdir /s /q build'],
     // cmd の旗は束ねて書ける。
@@ -388,6 +391,8 @@ describe('木ごと消す形を止める', () => {
     ['git clean --exclude foo -xdf'],
     // 短い旗は束ねられる。末尾の e も値を取る。
     ['git clean -xdfe node_modules'],
+    // 外した先が保護対象を覆っていなければ、残りは消える。
+    ['git clean -xdf -e node_modules'],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
@@ -418,6 +423,10 @@ describe('後始末は通す', () => {
     // ください」と言うのだから、名指しした先は通らなければならない。
     ['git clean -xdf web/vendor'],
     ['git clean -xdf -- docs'],
+    // 保護対象を名指しで外してある。理由文が名指しを勧めるのだから、
+    // 名指しした先は通らなければならない。
+    ['git clean -xdf -e build -e web/data'],
+    ['git clean -xdf --exclude=build --exclude=web/data'],
     // git clean が歩くのは走った場所から下だけ。docs/ からは build/ に
     // 届かない。
     ['cd docs && git clean -xdf'],

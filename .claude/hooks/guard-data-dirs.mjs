@@ -447,9 +447,12 @@ function expandVars(word, seen = new Set()) {
 /* pipe から渡る物の置き場所。ここに場所は書かれていない。 */
 const PLACEHOLDER = (w) => /^(\{\}|%|\$_(\..+)?)$/.test(w);
 /* 値を取るが、その値は場所ではない旗。`-ErrorAction SilentlyContinue` の
- * SilentlyContinue を消す先と数えると、pipe の手前を見に行かなくなる。 */
+ * SilentlyContinue を消す先と数えると、pipe の手前を見に行かなくなる。
+ *
+ * 値を取らない旗は入れない。`-Force` や `-WhatIf` はスイッチなので、
+ * 入れると `Remove-Item -Recurse -Force build` の build が落ちる。 */
 const NOT_A_PATH =
-  /^-(erroraction|warningaction|informationaction|confirm|verbose|debug|whatif|outbuffer|outvariable|errorvariable|warningvariable|informationvariable|pipelinevariable|depth|stream|encoding|force)$/i;
+  /^-(erroraction|warningaction|informationaction|outbuffer|outvariable|errorvariable|warningvariable|informationvariable|pipelinevariable|depth|stream|encoding)$/i;
 
 /* PowerShell は旗と値を `-Path:build` とも書ける。旗として落とすと、
  * 値ごと検査から外れる。 */
@@ -756,26 +759,46 @@ function scan(text, startCwd, depth = 0) {
         const takesValue = /^-[a-zA-Z]*e$/.test(w) || w === '--exclude';
         if (takesValue && after[k + 1] !== undefined) values.add(k + 1);
       });
-      /* 消す範囲を絞る引数。付いていれば、そこに保護対象が入るときだけ止める
-       * ——理由文が「名指ししてください」と言うのに、名指しすると止まるのでは
-       * 通り道が無い。 */
+      /* 消す範囲を絞る引数と、外す引数。 */
       const paths = after.filter(
         (w, k) => w !== '--' && !isFlag(w) && !values.has(k),
       );
-      const scoped =
-        paths.length > 0 &&
-        !paths.some((w) => {
-          const rel = underRoot(toAbsParts(w, at));
-          return rel !== null && hits(rel).length > 0;
-        });
+      const excludes = [
+        ...after.filter((_, k) => values.has(k)),
+        ...after
+          .filter((w) => w.startsWith('--exclude='))
+          .map((w) => w.slice('--exclude='.length)),
+      ];
+
       /* git clean が歩くのは、走った場所から下だけである。木の外はもちろん、
-       * docs/ の中で走っても build/ には届かない。走る場所が保護対象を
-       * 含むときだけ止める。 */
+       * docs/ の中で走っても build/ には届かない。 */
       const reach = underRoot(at);
+      let risk = reach === null ? [] : hits(reach);
+      /* pathspec があれば、そこに入る物だけが対象になる。 */
+      if (paths.length > 0) {
+        const inScope = paths.flatMap((w) => {
+          const rel = underRoot(toAbsParts(w, at));
+          return rel === null ? [] : hits(rel);
+        });
+        risk = risk.filter((protectedPath) => inScope.includes(protectedPath));
+      }
+      /* 外してあるものは消えない。理由文が「名指ししてください」と言うのに、
+       * 名指しして外しても止まるのでは、通り道が無い。 */
+      risk = risk.filter(
+        (protectedPath) =>
+          !excludes.some((e) => {
+            const rel = underRoot(toAbsParts(e, at));
+            if (rel === null) return false;
+            const prefix = rel.join('/');
+            return (
+              prefix === '' ||
+              protectedPath === prefix ||
+              protectedPath.startsWith(`${prefix}/`)
+            );
+          }),
+      );
       if (
-        reach !== null &&
-        hits(reach).length > 0 &&
-        !scoped &&
+        risk.length > 0 &&
         flags.some(CLEAN_IGNORED) &&
         !flags.some(DRY_RUN)
       ) {
