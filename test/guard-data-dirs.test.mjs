@@ -56,9 +56,9 @@ const NAME = basename(REPO);
 const DRIVE = REPO.replace(/^([a-zA-Z]):.*$/, '/$1');
 
 /** 番人に命令を渡し、止めたなら理由を、通したなら null を返す。 */
-function ask(command) {
+function ask(command, toolName = 'Bash') {
   const out = execFileSync(NODE, [HOOK], {
-    input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
+    input: JSON.stringify({ tool_name: toolName, tool_input: { command } }),
     env: { ...process.env, CLAUDE_PROJECT_DIR: REPO },
     encoding: 'utf8',
   });
@@ -68,6 +68,9 @@ function ask(command) {
   expect(hookSpecificOutput.permissionDecision).toBe('deny');
   return hookSpecificOutput.permissionDecisionReason;
 }
+
+/** PowerShell を呼んだ体で番人に命令を渡す。 */
+const askPowerShell = (command) => ask(command, 'PowerShell');
 
 /* 展開されないまま届く変数を書くための一字。素の文字列に `${` と書くと、
  * 書き忘れたテンプレート文字列と区別が付かない。 */
@@ -584,6 +587,38 @@ describe('木の名前に括弧があっても効く', () => {
       expect(out.trim()).not.toBe('');
     },
   );
+});
+
+describe('PowerShell の二重引用符に逆斜線は逃げ字ではない', () => {
+  // 番人は Bash と PowerShell の両方を見る。bash の綴りをそのまま当てると、
+  // 閉じたはずの引用符が開いたままになり、後ろに続く生きた命令を呑み込む。
+  test('PowerShell を名指しした呼び出しでは逆斜線が引用符を閉じさせる', () => {
+    expect(
+      askPowerShell(
+        `Remove-Item -Recurse "C:${BS}somewhere${BS}" ; Remove-Item -Recurse -Force build`,
+      ),
+    ).not.toBeNull();
+  });
+
+  // 逆斜線の綴りが変わっても、木ごと消す形はそのまま止まる。
+  test('PowerShell の普通の再帰削除は変わらず止まる', () => {
+    expect(askPowerShell('Remove-Item -Recurse -Force build')).not.toBeNull();
+  });
+
+  // 逆斜線を引用符の閉じと数えなくても、安全な命令まで止めてはいけない。
+  test('末尾が逆斜線の道筋だけなら通す', () => {
+    expect(askPowerShell(`Get-ChildItem "C:${BS}temp${BS}"`)).toBeNull();
+  });
+
+  // 呼ばれた側の shell の綴りへ切り替える。Bash から PowerShell を呼んだ
+  // 命令の中身は PowerShell の綴りで読む。
+  test('Bash から呼んだ powershell -Command の中身は PowerShell の綴りで読む', () => {
+    expect(
+      ask(
+        `powershell -Command "Remove-Item -Recurse ${BS}"C:${BS}x${BS}" ; Remove-Item -Recurse -Force build"`,
+      ),
+    ).not.toBeNull();
+  });
 });
 
 describe('読めない入力で作業を止めない', () => {

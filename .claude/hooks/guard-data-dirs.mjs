@@ -66,9 +66,11 @@ const deny = (reason) => {
 
 /* 読めなければ黙って通す。番人が落ちて作業まで止まるのは行き過ぎである。 */
 let command = '';
+let toolName = '';
 try {
   const input = JSON.parse(readFileSync(0, 'utf8'));
   command = String(input?.tool_input?.command ?? '');
+  toolName = String(input?.tool_name ?? '');
 } catch {
   process.exit(0);
 }
@@ -78,6 +80,12 @@ const ROOT = (process.env.CLAUDE_PROJECT_DIR ?? process.cwd())
   .replace(/\\/g, '/')
   .replace(/\/+$/, '');
 const ROOT_PARTS = ROOT.toLowerCase().split('/');
+
+/* 番人は Bash と PowerShell の両方の命令を見る(.claude/settings.json の
+ * matcher)。二重引用符の中で逆斜線が字を逃がすのは bash の話で、PowerShell
+ * には無い——PowerShell が逃がす字は `` ` `` である。呼んだ道具の名前で
+ * どちらの綴りとして読むかを決める。 */
+const POSIX_START = !/^powershell$/i.test(toolName);
 
 /* ------------------------------------------------------------- 場所を読む --- */
 
@@ -93,8 +101,14 @@ const ROOT_PARTS = ROOT.toLowerCase().split('/');
  * 残った `"` は引用符を閉じる。`\\\"` は `\\` が対になったあと `\"` が
  * 残り、そちらは字として読む。1 文字だけ見て `\"` かどうかを判定すると、
  * 連なりの数を数え違えて偶奇が崩れる。
+ *
+ * posix が偽なら常に読ませない。PowerShell の二重引用符に逆斜線の意味は
+ * 無く、常に字である——`"C:\foo\"` はそこで普通に閉じる。bash の綴りを
+ * PowerShell の命令に当てると、閉じたはずの引用符が開いたままになり、
+ * 後ろに続く生きた命令を呑み込んでしまう。
  */
-const escapesNext = (text, i, quote) =>
+const escapesNext = (text, i, quote, posix) =>
+  posix &&
   quote === '"' &&
   text[i] === '\\' &&
   (text[i + 1] === '"' || text[i + 1] === '\\');
@@ -103,14 +117,14 @@ const escapesNext = (text, i, quote) =>
  * 文字を語に割る。引用符の中では区切らない——`echo "…; rm -rf build"` の
  * 中身を命令と読むと、書き留めるだけの命令まで止めてしまう。
  */
-function tokenize(text) {
+function tokenize(text, posix) {
   const out = [];
   let word = '';
   let quote = '';
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (quote) {
-      if (escapesNext(text, i, quote)) {
+      if (escapesNext(text, i, quote, posix)) {
         word += text[++i];
         continue;
       }
@@ -137,7 +151,7 @@ function tokenize(text) {
  * 注記を落とす。`ls build # rm -rf build はしない` の後ろ半分は書いてある
  * だけで、走らない。引用符の中の `#` は字である。
  */
-function stripComments(text) {
+function stripComments(text, posix) {
   const out = [];
   for (const line of text.split('\n')) {
     let quote = '';
@@ -145,7 +159,7 @@ function stripComments(text) {
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (quote) {
-        if (escapesNext(line, i, quote)) {
+        if (escapesNext(line, i, quote, posix)) {
           i++;
           continue;
         }
@@ -214,7 +228,7 @@ const joinContinuations = (text) =>
  * だったかを憶えておく——PowerShell は消す先を pipe で渡すので、その段には
  * 旗しか無い。
  */
-function segments(text) {
+function segments(text, posix) {
   const out = [];
   let cur = '';
   let quote = '';
@@ -227,7 +241,7 @@ function segments(text) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (quote) {
-      if (escapesNext(text, i, quote)) {
+      if (escapesNext(text, i, quote, posix)) {
         cur += ch + text[i + 1];
         i++;
         continue;
@@ -465,6 +479,10 @@ const KEYWORDS = new Set([
 ]);
 /* -c に続く文字列を命令として走らせるもの。中をもう一度読む。 */
 const SHELLS = /^(ba|z|k|da|)sh$|^(pwsh|powershell|cmd)(\.exe)?$/i;
+/* SHELLS のうち、二重引用符の中で逆斜線が字を逃がす側。pwsh・powershell・
+ * cmd は逃がさない——`bash -c "…"` の中身は bash の綴りのままだが、
+ * `powershell -Command "…"` や `cmd /c "…"` の中身はそちらの綴りに変わる。 */
+const isPosixShell = (name) => /^(ba|z|k|da|)sh$/i.test(name);
 /* その後ろが命令になる旗。`-lc` のように束ねて書かれることも、
  * `-Command` と綴り切られることもある。 */
 const PAYLOAD_FLAG = (w) =>
@@ -595,7 +613,7 @@ function substitutions(text) {
  * 命令置換は段をまたぐ——`$(ls | head -1)` の中に区切りがある。閉じない
  * まま段が終わったら、その数を次の段へ持ち越す。
  */
-function grouping(text, carried = 0) {
+function grouping(text, carried, posix) {
   let opens = 0;
   let closes = 0;
   let subst = carried;
@@ -603,7 +621,7 @@ function grouping(text, carried = 0) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (quote) {
-      if (escapesNext(text, i, quote)) {
+      if (escapesNext(text, i, quote, posix)) {
         i++;
         continue;
       }
@@ -628,7 +646,7 @@ function grouping(text, carried = 0) {
   return { opens, closes, subst };
 }
 
-function scan(text, startCwd, depth = 0) {
+function scan(text, startCwd, depth = 0, posix = POSIX_START) {
   let cwd = startCwd;
   /* pushd が積んだ場所。popd で戻る。cd しか見ていなかったころ、
    * `pushd build && rm -rf pbf` が素通りしていた。 */
@@ -643,20 +661,21 @@ function scan(text, startCwd, depth = 0) {
   /* いま繋がっている pipe の段。`|` で来た段は後ろに足し、そうでなければ
    * そこから新しく始める。 */
   let chain = [];
-  const ready = joinContinuations(stripComments(stripHeredocs(text)));
-  /* 命令置換の中身を先に読む。走る命令であることに変わりはない。 */
-  for (const inner of substitutions(ready)) scan(inner, cwd, depth + 1);
+  const ready = joinContinuations(stripComments(stripHeredocs(text), posix));
+  /* 命令置換の中身を先に読む。走る命令であることに変わりはない。同じ shell
+   * の中の文字列なので、綴りは変わらない。 */
+  for (const inner of substitutions(ready)) scan(inner, cwd, depth + 1, posix);
   /* 閉じ括弧は、その段の命令を読み終えてから効く。次の段の頭で戻す。 */
   let closing = 0;
   /* 閉じないまま段が終わった命令置換の深さ。 */
   let substDepth = 0;
-  for (const segment of segments(ready)) {
+  for (const segment of segments(ready, posix)) {
     while (closing > 0 && subshells.length > 0) {
       cwd = subshells.pop();
       closing--;
     }
     /* 前の段の残りに足す——上で戻し切れなかったぶんは、まだ効いていない。 */
-    const paren = grouping(segment.text, substDepth);
+    const paren = grouping(segment.text, substDepth, posix);
     substDepth = paren.subst;
     closing += paren.closes;
     /* 組みの括弧は語にくっついて来る——`(cd build` の最初の語は `(cd`。
@@ -672,6 +691,7 @@ function scan(text, startCwd, depth = 0) {
         /* 組みの `{` は後ろに空白が続く。`{a,b}` の `{` は語の一部なので
          * 離さない——離すと展開する前に割れる。 */
         .replace(/(^|\s)\{(?=\s)/g, '$1 { '),
+      posix,
     ).filter((w) => !/^[({)}]+$/.test(w));
     /* `for d in build web/data; do …` と `foreach ($d in 'build','web/data')`
      * の値を覚える。for と in は KEYWORDS にあるので、剥がす前に読まないと
@@ -723,18 +743,26 @@ function scan(text, startCwd, depth = 0) {
     if (words.length === 0) continue;
     const [verb, ...rest] = words;
 
-    /* `eval "rm -rf build"` の中身も命令である。 */
+    /* `eval "rm -rf build"` の中身も命令である。今の shell の続きなので
+     * 綴りは変わらない。 */
     if (nameOf(verb) === 'eval' && rest.length > 0) {
-      scan(rest.join(' '), cwd, depth + 1);
+      scan(rest.join(' '), cwd, depth + 1, posix);
       continue;
     }
 
     /* `bash -c "…"` や `cmd /c "…"` の中身も命令である。旗の後ろを全部
-     * 渡す——`cmd /c rmdir /s /q build` は語が分かれて来る。 */
+     * 渡す——`cmd /c rmdir /s /q build` は語が分かれて来る。呼ばれた側の
+     * 綴りに切り替える——`powershell -Command "…"` の中身は PowerShell の
+     * 綴りで、逆斜線が字を逃がさない。 */
     if (SHELLS.test(nameOf(verb))) {
       const i = rest.findIndex(PAYLOAD_FLAG);
       if (i !== -1 && rest.length > i + 1) {
-        scan(rest.slice(i + 1).join(' '), cwd, depth + 1);
+        scan(
+          rest.slice(i + 1).join(' '),
+          cwd,
+          depth + 1,
+          isPosixShell(nameOf(verb)),
+        );
         continue;
       }
     }
