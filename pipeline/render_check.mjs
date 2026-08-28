@@ -87,14 +87,24 @@ const ok = (cond, msg) =>
  * 何かが終わったことを述べてはいない。遅い日には足りずに偽の失敗を出し、
  * 速い日には待ちすぎる。
  *
- * MapLibre は落ち着いたときにそう言う。`idle` は「カメラが止まり、要求した
- * タイルが全部届き、フェードも終わった」ときに出る。それを待つ。
+ * MapLibre は落ち着いたときにそう言う。待つのは `idle` だけである。
  *
- * 押した直後の 2 フレームは見ない。押す前の絵はまだ落ち着いたままなので、
- * そこで判定すると何も待たずに抜ける。動き始めてから落ち着きを見る。
+ * `idle` は _render の最後で、汚れが一つも残っておらず、動いてもいないとき
+ * にだけ出る。この「汚れ」には symbol の配置(_placementDirty)も入る。
+ * `loaded() && !isMoving()` は同じ条件ではない——配置が済んでいなくても
+ * その二つは真になりうるので、`render` を合図にしてこの式で判定すると、
+ * ラベルがまだ置かれていない絵を数えることがある。だから `render` は聞かず、
+ * MapLibre 自身の判断だけを待つ。
+ *
+ * 代わりに triggerRepaint() で描画を 1 回促す。`idle` は状態ではなく出来事
+ * なので、何も変わっていない回に待つだけでは二度と来ない——サイドバーの
+ * 折りたたみのように地図を触らない操作がそれである。促せば、次の描画で
+ * 「汚れが無い」と分かってその場で出る。
  *
  * 上限は残す。タイルが 1 枚返ってこないだけで検査が止まるより、待つのを
  * やめて、その後の検査に失敗させるほうがよい——それが本当に見たい失敗である。
+ * requestAnimationFrame は使わない。画面が伏せられて rAF が止まる回に、
+ * 上限そのものが動かなくなる。
  */
 const SETTLE_CAP_MS = 30000;
 const settle = () =>
@@ -111,27 +121,14 @@ const settle = () =>
           resolve();
           return;
         }
-        const check = () => {
-          if (!m.loaded() || m.isMoving()) return;
+        const done = () => {
           clearTimeout(timer);
           resolve();
-          m.off('idle', check);
-          m.off('render', check);
+          m.off('idle', done);
         };
-        /* 上限は rAF の外で張る。中で張ると、画面が伏せられて
-         * requestAnimationFrame が回らない回に上限そのものが動かない。 */
-        const timer = setTimeout(() => {
-          resolve();
-          m.off('idle', check);
-          m.off('render', check);
-        }, cap);
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            m.on('idle', check);
-            m.on('render', check);
-            check();
-          }),
-        );
+        const timer = setTimeout(done, cap);
+        m.on('idle', done);
+        m.triggerRepaint();
       }),
     SETTLE_CAP_MS,
   );
@@ -270,15 +267,25 @@ const folding = await page.evaluate(async () => {
   /* 幅が変わるまで待つ。canvas を動かすのは MapLibre の ResizeObserver
    * なので、押した瞬間はまだ古い幅である。決め打ちの 900 ms を数えていた
    * ——遅ければ足りず、速ければ待ちすぎる。上限を置いて、変わらなければ
-   * 変わらないまま返す。下の ok() がそれを失敗として述べる。 */
+   * 変わらないまま返す。下の ok() がそれを失敗として述べる。
+   *
+   * 上限は setTimeout で張る。rAF の中で時刻を見ていたころ、画面が伏せられて
+   * Chromium が rAF を止めた回には、上限を見る所そのものが動かなかった。
+   * page.evaluate に時限は無いので、そうなると検査が終わらない。 */
   const widthChanges = (from) =>
     new Promise((resolve) => {
-      const until = performance.now() + 5000;
-      const step = () => {
-        if (width() !== from || performance.now() > until) resolve(width());
-        else requestAnimationFrame(step);
+      let frame = 0;
+      const finish = () => {
+        clearTimeout(timer);
+        cancelAnimationFrame(frame);
+        resolve(width());
       };
-      requestAnimationFrame(step);
+      const timer = setTimeout(finish, 5000);
+      const step = () => {
+        if (width() !== from) finish();
+        else frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
     });
   const btn = document.querySelector('#panel-toggle');
   const open = width();
