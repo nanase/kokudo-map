@@ -11,6 +11,8 @@
 
 https://nanase.github.io/kokudo-map/
 
+データの更新は不定期です。いつ時点の OpenStreetMap を出しているかは、画面の「データ情報」が述べます。
+
 ## セットアップ
 
 ```sh

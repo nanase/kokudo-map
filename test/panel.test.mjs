@@ -12,7 +12,6 @@ import {
   legendNHTML,
   rankingHTML,
   routeListHTML,
-  STALE_DAYS,
   selectionLabel,
   sharedHTML,
   shareSummaryHTML,
@@ -366,23 +365,23 @@ describe('freshnessHTML', () => {
     expect(freshness(meta, at('2026-08-21T00:00:00Z'))).toContain('（4 日前）');
   });
 
-  test('7 日までは警告しない', () => {
-    const html = freshness(meta, at('2026-08-23T20:21:06Z'));
-    expect(html).not.toContain('warn');
-    expect(html).not.toContain('最近の開通');
+  test('更新の間隔が不定期であることを述べる', () => {
+    expect(freshness(meta, at('2026-08-16T21:00:00Z'))).toContain(
+      '<dt>更新の間隔</dt><dd>不定期</dd>',
+    );
   });
 
-  test('7 日を超えたら警告する', () => {
-    const html = freshness(meta, at('2026-08-25T00:00:00Z'));
-    expect(html).toContain('warn');
-    expect(html).toContain('最近の開通は反映されていない可能性があります');
-  });
-
-  test('境界は STALE_DAYS が決める', () => {
+  test('どれだけ古くても警告は出さない', () => {
+    // 守る間隔を決めていないので、警告を置けば常時点る。常に出ている警告は
+    // 情報ではなく背景になる。日付と経過日数だけを出し、判断は閲覧者に委ねる。
     const day = 86400000;
     const base = at(meta.osm_timestamp);
-    expect(freshness(meta, base + STALE_DAYS * day)).not.toContain('warn');
-    expect(freshness(meta, base + (STALE_DAYS + 1) * day)).toContain('warn');
+    for (const days of [7, 8, 30, 365]) {
+      const html = freshness(meta, base + days * day);
+      expect(html).not.toContain('warn');
+      expect(html).not.toContain('最近の開通');
+      expect(html).toContain(`（${days} 日前）`);
+    }
   });
 
   test('区間の更新と取得元も述べる', () => {

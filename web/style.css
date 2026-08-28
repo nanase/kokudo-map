@@ -366,8 +366,6 @@ input[type="search"]::placeholder { font-size: .82em; }
 .freshness { margin: 8px 0 0; }
 .stats dt, .freshness dt { color: var(--ink-3); }
 .stats dd, .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.freshness dd.warn { color: #B4690E; font-weight: 700; }
-@media (prefers-color-scheme: dark) { .freshness dd.warn { color: #E7B457; } }
 .repo-link { align-self: flex-start; margin-top: auto; }
 
 /* ----------------------------------------------------------------- map --- */
