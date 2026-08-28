@@ -254,10 +254,25 @@ def pass_ways(path: str, member_ways: set[int], member_nodes: set[int], idx: str
 # ---------------------------------------------------------------- per region ---
 def write_region(region: str, box, rels, national, competing, ways, nodes, base_ts, fetched):
     """Reproduce the three Overpass queries over the in-memory country."""
+    # Which ways touch this box, asked once.
+    #
+    # `in_box` walks a way's nodes until one lands inside, and the three queries
+    # below asked the same way that question four or five times over — once per
+    # national relation holding it, again for the core list, and twice more for
+    # the competing relations. The answer cannot change inside one region, so it
+    # is taken once here and looked up after.
+    #
+    # A set of the ways that *are* inside, rather than a yes/no for all 355,570:
+    # one prefecture's box holds a few tens of thousands, so this is the smaller
+    # of the two shapes as well as the one that reads better. `wid in inside`
+    # also folds in the `wid in ways.start` test the callers used to carry,
+    # since nothing outside ways.start can be in here.
+    inside_box = {wid for wid in ways.start if ways.in_box(wid, box)}
+
     # Query 1: national relations touching the box, then their children.
     parents = [
         rid for rid in national
-        if any(m["type"] == "way" and m["ref"] in ways.start and ways.in_box(m["ref"], box)
+        if any(m["type"] == "way" and m["ref"] in inside_box
                for m in rels[rid]["members"])
         or any(m["type"] == "node" and m["ref"] in nodes and inside(nodes[m["ref"]], box)
                for m in rels[rid]["members"])
@@ -268,7 +283,7 @@ def write_region(region: str, box, rels, national, competing, ways, nodes, base_
 
     core_way_ids = sorted({
         m["ref"] for rid in rel_ids for m in rels[rid]["members"]
-        if m["type"] == "way" and m["ref"] in ways.start and ways.in_box(m["ref"], box)
+        if m["type"] == "way" and m["ref"] in inside_box
     })
 
     # Query 2: candidates, whether or not a relation holds them. The Overpass
@@ -277,25 +292,26 @@ def write_region(region: str, box, rels, national, competing, ways, nodes, base_
     # cache. Ways held only by a *competing* relation are still candidates.
     core_set = set(core_way_ids)
     cand_ids = sorted(
-        wid for wid in ways.start
-        if wid not in core_set and is_candidate(ways.tags[wid]) and ways.in_box(wid, box)
+        wid for wid in inside_box
+        if wid not in core_set and is_candidate(ways.tags[wid])
     )
 
     # Query 3: the negative signal, kept as whole relations (tags + members)
     # rather than a flat way-id set — see build_routes.resolve_competing_claims
     # for why mere membership cannot be the disqualifying signal.
     competing_relations = [
-        {
-            "id": rid,
-            "tags": rels[rid]["tags"],
-            "members": [
-                m["ref"] for m in rels[rid]["members"]
-                if m["type"] == "way" and m["ref"] in ways.start and ways.in_box(m["ref"], box)
-            ],
-        }
-        for rid in competing
-        if any(m["type"] == "way" and m["ref"] in ways.start and ways.in_box(m["ref"], box)
-               for m in rels[rid]["members"])
+        rel for rel in (
+            {
+                "id": rid,
+                "tags": rels[rid]["tags"],
+                "members": [
+                    m["ref"] for m in rels[rid]["members"]
+                    if m["type"] == "way" and m["ref"] in inside_box
+                ],
+            }
+            for rid in competing
+        )
+        if rel["members"]
     ]
 
     def way_doc(wid: int) -> dict:
