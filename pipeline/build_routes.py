@@ -547,15 +547,29 @@ def main() -> None:
             or east - lon < EDGE_TOL
         )
 
+    # How many arc ends of each route meet at each point. A point touched once
+    # is where that route's chain stops; touched twice or more, the chain runs
+    # through it.
+    #
+    # One pass over the arcs, not one pass per route. The route loop used to sit
+    # outside and re-read all 13,000 arcs to skip the 12,000 that are not its
+    # own — the arc already names the routes it belongs to, so it can be handed
+    # to all of them as it goes by. The rounding, the order the ends are counted
+    # in, and the order the routes come out in are all unchanged, so this builds
+    # the same list.
+    ends_of: dict[int, Counter] = defaultdict(Counter)
+    for a in arcs:
+        ends = [
+            (round(p[0], 7), round(p[1], 7))
+            for p in (a["coords"][0], a["coords"][-1])
+        ]
+        for r in a["refs"]:
+            for p in ends:
+                ends_of[r][p] += 1
+
     endpoints = []
     for r in sorted(routes):
-        deg: Counter = Counter()
-        for a in arcs:
-            if r not in a["refs"]:
-                continue
-            for p in (a["coords"][0], a["coords"][-1]):
-                deg[(round(p[0], 7), round(p[1], 7))] += 1
-        for (lat, lon), d in deg.items():
+        for (lat, lon), d in ends_of[r].items():
             if d == 1 and not on_edge(lat, lon):
                 endpoints.append({"ref": r, "lat": lat, "lon": lon})
 
