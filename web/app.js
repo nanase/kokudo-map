@@ -809,11 +809,6 @@ function setPaddingKeepingView() {
 
   toggle.addEventListener('click', () => set(true, true));
   $('#panel-close').addEventListener('click', () => set(false, true));
-  // 「この地図について」。中身は動かないので、開く口を結ぶだけでよい——
-  // showModal() 自身が Esc とフォーカスの往復を面倒みる。
-  $('#about-btn').addEventListener('click', () =>
-    $('#about-dialog').showModal(),
-  );
 
   // 狭い画面では畳んで始める。浮いた箱は画面の半分を占め、その下から地図が
   // 見えるわけではない——この幅で見に来た人がまず見たいのは地図である。
@@ -827,6 +822,14 @@ function setPaddingKeepingView() {
   }
   set(open, false);
 })();
+
+/* ----------------------------------------------------- この地図について --- */
+/**
+ * データがいつのものか、どこで作られているかを出す紙。中身は buildUI() が
+ * 一度入れたきり動かないので、ここは開く口を結ぶだけでよい——showModal()
+ * 自身が Esc とフォーカスの往復を面倒みる。
+ */
+$('#about-btn').addEventListener('click', () => $('#about-dialog').showModal());
 
 /* ----------------------------------------------------------------- boot --- */
 async function boot() {
