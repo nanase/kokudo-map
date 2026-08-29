@@ -203,29 +203,6 @@ map.addControl(
   new maplibregl.NavigationControl({ showZoom: false, visualizePitch: false }),
   'top-right',
 );
-/**
- * 現在位置。押すと端末に位置を尋ね、地図の上に点で出す。
- *
- * MapLibre 自身の部品を使う。点・精度の円・追従の解除まで一式を持っており、
- * この地図が足すことは何も無い。位置は端末から地図へ渡るだけで、どこへも
- * 送らない——`state` にも URL にも入らないので、共有したリンクが自分の
- * 居場所を連れて行くこともない。
- *
- * `trackUserLocation` は、一度押したら動くたびに点が付いてくる形である。
- * 走りながら国道を辿るのに、押し直しを求める理由が無い。
- * 全国が入る縮尺のまま点だけ打たれても居場所は読めないので、寄る先は
- * 街の見える縮尺までとする。
- */
-map.addControl(
-  new maplibregl.GeolocateControl({
-    positionOptions: { enableHighAccuracy: true },
-    trackUserLocation: true,
-    showUserLocation: true,
-    showAccuracyCircle: true,
-    fitBoundsOptions: { maxZoom: 15 },
-  }),
-  'top-right',
-);
 map.addControl(
   new maplibregl.ScaleControl({ maxWidth: 110, unit: 'metric' }),
   'bottom-right',
@@ -954,6 +931,33 @@ async function boot() {
   map.addControl(new DisplayControl(), 'top-right');
   map.addControl(new GsiShadeControl(), 'top-right');
   map.addControl(new BasemapControl(), 'top-right');
+  /**
+   * 現在位置。押すと端末に位置を尋ね、地図の上に点で出す。
+   *
+   * MapLibre 自身の部品を使う。点・精度の円・追従の解除まで一式を持っており、
+   * この地図が足すことは何も無い。位置は端末から地図へ渡るだけで、どこへも
+   * 送らない——`state` にも URL にも入らないので、共有したリンクが自分の
+   * 居場所を連れて行くこともない。
+   *
+   * 並びでは一番下に置く。上に積んである釦はどれも「地図をどう見せるか」を
+   * 決めるだけで眺めは動かないが、これは押した瞬間に地図が飛ぶ。役目が違う
+   * ものを混ぜず、端に置く。
+   *
+   * `trackUserLocation` は、一度押したら動くたびに点が付いてくる形である。
+   * 走りながら国道を辿るのに、押し直しを求める理由が無い。
+   * 全国が入る縮尺のまま点だけ打たれても居場所は読めないので、寄る先は
+   * 街の見える縮尺までとする。
+   */
+  map.addControl(
+    new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+      showUserLocation: true,
+      showAccuracyCircle: true,
+      fitBoundsOptions: { maxZoom: 15 },
+    }),
+    'top-right',
+  );
 
   wirePopups();
   wireControls(document, state, applyFilters);
