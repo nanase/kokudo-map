@@ -1,34 +1,40 @@
 /* 国道マップ — 標識の青を基調にした操作面。地図に主役を譲るため彩度は抑える。 */
 :root {
-  /* ブラウザが自前で描く部品（スクロールバー、チェックボックス、検索欄の
-     消去ボタン）に、どちらの面の上にいるかを伝える。これを言わないと暗い
-     配色でもスクロールバーだけが白いままになる。 */
-  color-scheme: light;
+  /* 明るいときと暗いときの色を、一つの宣言が両方述べる (light-dark)。どちらを
+     採るかは color-scheme が決める——既定の `light dark` は端末の設定に従い、
+     app.js が data-theme を置けばそちらが勝つ。
 
-  --sign-blue: #00449E;
+     配色ごとにブロックを分けると、同じ色が二箇所に並ぶ。実際、重用の色の写しを
+     持っていたころは暗い側だけが N_COLORS と食い違ったまま誰にも使われずにいた。
+
+     color-scheme はブラウザが自前で描く部品（スクロールバー、チェックボックス、
+     検索欄の消去ボタン）にも、どちらの面の上にいるかを伝える。これを言わないと
+     暗い配色でもスクロールバーだけが白いままになる。 */
+  color-scheme: light dark;
+
+  --sign-blue: light-dark(#00449E, #79AEF7);
 
   /* 重用の深さの色（単独指定・二重用・三重用・四重用以上）はここに無い。
      地図の線も凡例の見本もその色を web/mapspec.mjs の N_COLORS から取る
-     ので、CSS に写しを置くと二箇所になる。実際、写しを持っていたころは
-     暗い配色の側だけが N_COLORS と食い違ったまま誰にも使われずにいた。 */
+     ので、CSS に写しを置くと二箇所になる。 */
 
-  --panel: #FFFFFF;
-  --panel-2: #F2F5F9;
-  --line: #D7DFEA;
-  --line-2: #E7ECF3;
-  --ink: #121A24;
-  --ink-2: #46566A;
-  --ink-3: #6C7E93;
-  --focus: #1E6FD9;
+  --panel: light-dark(#FFFFFF, #131C29);
+  --panel-2: light-dark(#F2F5F9, #0E161F);
+  --line: light-dark(#D7DFEA, #27364A);
+  --line-2: light-dark(#E7ECF3, #1D2938);
+  --ink: light-dark(#121A24, #E6EDF6);
+  --ink-2: light-dark(#46566A, #B2C1D3);
+  --ink-3: light-dark(#6C7E93, #8799AE);
+  --focus: light-dark(#1E6FD9, #79AEF7);
 
   /* スクロールバー。地図と操作面のあいだで一番目に入る必要のないものなので、
      溝は透かし、つまみだけを枠線の色より一段濃くする。 */
-  --scroll-thumb: #C2CDDC;
-  --scroll-thumb-hover: #9FB0C5;
+  --scroll-thumb: light-dark(#C2CDDC, #33445C);
+  --scroll-thumb-hover: light-dark(#9FB0C5, #48607E);
 
   /* コピー成功のチェックマークだけが使う。他の状態を持たないので上の配色群
      には混ぜない。 */
-  --success: #1E8E3E;
+  --success: light-dark(#1E8E3E, #4ADE80);
 
   /* 国道を一時的に隠すボタンが、隠している間だけ使う。白い字を載せる地なので、
      面が明るくても暗くてもこの赤のままでよい。 */
@@ -36,7 +42,7 @@
   --danger-hover: #8C1F19;
 
   /* 国道番号標識の配色。地の青、白の縁、白抜きの番号である。
-     標識は明るい配色でも暗い配色でも同じ色なので、下の切り替えには入れない。 */
+     標識は明るい配色でも暗い配色でも同じ色なので、切り替えない。 */
   --shield-face: #00449E;
   --shield-edge: #FFFFFF;
   --shield-ink: #FFFFFF;
@@ -45,27 +51,12 @@
      かける——地が暗いぶん見えないだけで、邪魔にはならない。そちらは縁自身が
      境目になるので、もともと助けが要らない。 */
   --shield-shadow: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .34));
-
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-
-    --scroll-thumb: #33445C;
-    --scroll-thumb-hover: #48607E;
-
-    --panel: #131C29;
-    --panel-2: #0E161F;
-    --line: #27364A;
-    --line-2: #1D2938;
-    --ink: #E6EDF6;
-    --ink-2: #B2C1D3;
-    --ink-3: #8799AE;
-    --sign-blue: #79AEF7;
-    --focus: #79AEF7;
-    --success: #4ADE80;
-  }
-}
+/* 配色を人が選んだとき。app.js が置き、上の light-dark はこれに従う。
+   端末に合わせているあいだも app.js は解いた側を置くので、色ではない
+   切り替え（釦の絵の反転）もここ一つを見れば済む。 */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 /* 標識の番号だけに使う。実物の書体はヒゲ（セリフ）が無く字面が立っており、
    等幅の代替書体は "1" などに細いヒゲが残って実物と字形が違って見える。
@@ -409,8 +400,8 @@ input[type="search"]::placeholder { font-size: .82em; }
 .maplibregl-ctrl-group button + button { border-top-color: var(--line); }
 /* maplibre-gl.css 側と同じ形の選択子で書き、記述順ではなく形で並ばせる。 */
 .maplibregl-ctrl button:not(:disabled):hover { background-color: var(--panel-2); }
-@media (prefers-color-scheme: dark) {
-  .maplibregl-ctrl-icon { filter: invert(1) hue-rotate(180deg); }
+:root[data-theme="dark"] .maplibregl-ctrl-icon {
+  filter: invert(1) hue-rotate(180deg);
 }
 .maplibregl-ctrl-scale {
   background-color: var(--panel); border-color: var(--ink-2);

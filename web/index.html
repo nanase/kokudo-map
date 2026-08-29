@@ -200,6 +200,16 @@
           <label><input type="checkbox" id="t-ferry" checked> 海上国道</label>
         </div>
       </section>
+      <!-- 配色も「どう見えるか」の話なので、同じ面に置く。既定は端末の設定に
+           従い、選べばその選択が次に来たときも残る。 -->
+      <section>
+        <h2>配色</h2>
+        <div class="radios" role="radiogroup" aria-label="配色">
+          <label><input type="radio" name="theme" value="auto" checked> 端末に合わせる</label>
+          <label><input type="radio" name="theme" value="light"> 明るい</label>
+          <label><input type="radio" name="theme" value="dark"> 暗い</label>
+        </div>
+      </section>
     </div>
     <div id="loading">データを読み込んでいます…</div>
   </main>

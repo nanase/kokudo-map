@@ -303,6 +303,37 @@ ok(
   report.paneButtons === 1 && report.togglesInPanel === 0,
   'the concurrency and display switches are on the map, not also in the sidebar',
 );
+/* 配色は同じ面の中から選ぶ。色そのものは style.css の light-dark() が両方
+ * 述べているので、ここが確かめるのは「選んだ側が data-theme に出て、面の地の
+ * 色がそれで変わる」ことだけである。 */
+const themed = await page.evaluate(() => {
+  const root = document.documentElement;
+  const panelBg = () =>
+    getComputedStyle(document.querySelector('#panel')).backgroundColor;
+  const pick = (value) => {
+    const el = document.querySelector(`input[name=theme][value="${value}"]`);
+    el.checked = true;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return { attr: root.dataset.theme, panel: panelBg() };
+  };
+  const dark = pick('dark');
+  const light = pick('light');
+  pick('auto'); // 検査のために選んだだけなので、端末任せに戻しておく
+  return { dark, light, auto: root.dataset.theme };
+});
+ok(
+  themed.dark.attr === 'dark' && themed.light.attr === 'light',
+  `picking a colour scheme writes it on the root (${themed.dark.attr} / ${themed.light.attr})`,
+);
+ok(
+  themed.dark.panel !== themed.light.panel,
+  `and the panel actually changes ground with it (${themed.dark.panel} vs ${themed.light.panel})`,
+);
+ok(
+  themed.auto === 'light' || themed.auto === 'dark',
+  `following the device still resolves to one side (${themed.auto})`,
+);
+
 ok(
   report.geolocateButtons === 1,
   `the map carries one 現在位置 button (${report.geolocateButtons})`,

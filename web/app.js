@@ -134,6 +134,50 @@ function readStored(key, allowed, fallback) {
 let basemap = readStored('gsi-basemap', GSI_BASEMAP_ORDER, DEFAULT_BASEMAP);
 let gsiShade = readStored('gsi-shade', GSI_SHADE_LEVELS, DEFAULT_SHADE);
 
+/* ----------------------------------------------------------------- 配色 --- */
+/**
+ * 明るい面か暗い面か。
+ *
+ * 色そのものは style.css の light-dark() が両方述べており、どちらを採るかは
+ * `color-scheme` が決める。ここが置く `data-theme` はその一言だけである
+ * ——置かなければ端末の設定がそのまま効くので、この地図が最初に描かれる絵は
+ * JavaScript を待たない。
+ *
+ * 置くのは解いた側('light'/'dark')であって、人が選んだ側('auto' を含む)では
+ * ない。色でない切り替え——MapLibre の釦の絵を反転させるかどうか——は媒体
+ * クエリでは書けず、`data-theme` を見るしかないからである。端末に合わせて
+ * いるあいだも解いた側を置いておけば、見る場所が一つで済む。
+ *
+ * 選択は localStorage に残す。地図の濃さや種類と同じで、絞り込みの状態では
+ * ないので `state` にも URL にも入らない——共有したリンクが相手の配色まで
+ * 決めてしまう理由が無い。
+ */
+const THEME_MODES = ['auto', 'light', 'dark'];
+const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+let theme = readStored('theme', THEME_MODES, 'auto');
+
+function applyTheme() {
+  document.documentElement.dataset.theme =
+    theme === 'auto' ? (darkMq.matches ? 'dark' : 'light') : theme;
+}
+
+// 端末の設定が変わったとき。自分で選んでいるあいだは applyTheme が無視する。
+darkMq.addEventListener('change', applyTheme);
+applyTheme();
+
+for (const el of document.querySelectorAll('input[name=theme]')) {
+  el.checked = el.value === theme;
+  el.addEventListener('change', () => {
+    theme = document.querySelector('input[name=theme]:checked').value;
+    applyTheme();
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {
+      /* private browsing: the choice simply does not outlive the tab */
+    }
+  });
+}
+
 /**
  * 共有されたリンクが眺めを指定しているか。
  *
