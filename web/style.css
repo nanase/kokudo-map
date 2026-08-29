@@ -547,6 +547,11 @@ input[type="search"]::placeholder { font-size: .82em; }
    maplibre-gl.css 側のフォーカス時の角丸（:only-child だけ台と同じ丸みを
    継ぐ）が外れて上下どちらかの角が直角になる。ここで丸みを台の値へ戻す。 */
 .pitch-ctrl, .hide-routes-ctrl, .basemap-ctrl, .display-ctrl { position: relative; }
+/* 台どうしは DOM の順で重なる。表示の面 (#display-popover) を持つこの台は
+   他の台より先に足してあるので、後の台の state-tip が面の上に出ていた——
+   面は読むために開いたものであり、一瞬の返事に隠される筋合いがない。
+   面のほうが手前だと一度述べておけば、台を足す順に左右されない。 */
+.display-ctrl { z-index: 1; }
 #pitch-btn:focus,
 #hide-routes-btn:focus,
 #gsi-shade-btn:focus,
