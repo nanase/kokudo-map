@@ -176,17 +176,20 @@ const kindsHTML = (kinds) =>
         .join('')}</dl></div>`
     : '';
 
-/* 区分別の隣に置く、別の軸の数(#26)。旧道もどれかの区分の道なので、
- * kindsHTML の dl に足すとその道を二度数える。区分別とは別の dl にして
- * 隣へ置く。
+/* 延長の直下に置く、旧道だけの内訳(#26・#84)。区分別の合計は延長とほぼ
+ * 一致するので(国道10号なら 791.3 km と 791.4 km)、区分別の下に同じ書体
+ * で旧道の行を続けると「四つめの区分」に読める——#26 が禁じている読みで
+ * ある。延長の直下に置けば、「うち」が指す先の真下に来る。
  *
- * 0 のときは行ごと出さない。459 路線中 277 が旧道を持たない。重用区間
- * (route.conc_km)は持たないときも「なし」と書くが、旧道は「なし」とも
- * 書かない——持たないことは述べるに値しないためである。 */
-const formerHTML = (formerKm) =>
-  formerKm
-    ? `<dl class="detail-stats">${row('うち旧道', `${fmtKm(formerKm)} km`)}</dl>`
-    : '';
+ * 0 のときは行ごと出さない。丸める前の値では判定しない——0.04 km のような
+ * 値は fmtKm で「0.0 km」になり、丸める前で判定すると「0.0 km」のまま出て
+ * しまう。旧道を持たない路線は多くある。重用区間(route.conc_km)は持たない
+ * ときも「なし」と書くが、旧道は「なし」とも書かない——持たないことは述べ
+ * るに値しないためである。 */
+const formerRowHTML = (formerKm) => {
+  const km = fmtKm(formerKm);
+  return km === '0.0' ? '' : row('うち旧道', `${km} km`);
+};
 
 /* 関わりのある路線を、標識を並べて述べる。
  *
@@ -252,6 +255,7 @@ export function detailHTML({
     terminiHTML(ref, termini) +
     '<dl class="detail-stats">' +
     row('延長', `${fmtKm(route.km)} km`) +
+    formerRowHTML(formerKm) +
     row('アーク数', route.arcs.toLocaleString()) +
     // 重用が 1 mm も無い路線は 459 のうち珍しくない。0.0 km と書くより、
     // 重用を持たないと言うほうが短い。
@@ -259,7 +263,6 @@ export function detailHTML({
     row('最大重用数', route.max_n > 1 ? `${route.max_n} 重用` : '単独指定') +
     '</dl>' +
     kindsHTML(kinds) +
-    formerHTML(formerKm) +
     relatedHTML(related) +
     '</div>'
   );

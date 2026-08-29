@@ -1,10 +1,11 @@
 /* 一つの国道について語る箱の中身。
  *
- * ここで壊れやすいのは二つあります。区分別の距離(issue #58)と台帳の起終点
- * (issue #59)は組み合わせ表と meta の欄が揃って初めて埋まるので、欄が無いとき
- * に出さないことと、来たときに出すことの両方を検査します。もう一つは、地名が
- * OpenStreetMap ではなく政令から来るとはいえ、文字列を innerHTML に流す点は
- * ポップアップと同じであることです。
+ * ここで壊れやすいのは三つあります。区分別の距離(issue #58)・台帳の起終点
+ * (issue #59)・旧道の距離(issue #84)は、どれも組み合わせ表と meta の欄が
+ * 揃って初めて埋まるので、欄が無いときに出さないことと、来たときに出す
+ * ことの両方を検査します。もう一つは、地名が OpenStreetMap ではなく政令
+ * から来るとはいえ、文字列を innerHTML に流す点はポップアップと同じで
+ * あることです。
  */
 import { describe, expect, test } from 'bun:test';
 
@@ -190,31 +191,44 @@ describe('detailHTML — 区分別', () => {
 
 describe('detailHTML — 旧道', () => {
   // formerKmFor() が拾う「区分別とは別の軸」の距離(#84)。0.0 km と書くより
-  // 短いからではなく、459 路線中 277 が旧道を持たず、持たないことは述べるに
+  // 短いからではなく、旧道を持たない路線が多くあり、持たないことは述べるに
   // 値しないため、行そのものを出さない。重用区間(上のテスト)が「なし」と
   // 書くのとは扱いを変えている。
-  test('値が無ければ行ごと出さない', () => {
+  test('値が無ければ行ごと出さない(未指定・0)', () => {
     expect(detailHTML({ route: route() })).not.toContain('うち旧道');
     expect(detailHTML({ route: route(), formerKm: 0 })).not.toContain(
       'うち旧道',
     );
   });
 
-  test('値があれば区分別とは別の dl に出す', () => {
+  // fmtKm は小数第 1 位までに丸める。丸める前の値で判定すると、0.04 のような
+  // 値が「うち旧道 0.0 km」のまま出てしまう。表示する桁——出す判定も同じ
+  // 桁——で見る。
+  test('丸めて 0.0 km になる値でも出さない', () => {
+    expect(detailHTML({ route: route(), formerKm: 0.04 })).not.toContain(
+      'うち旧道',
+    );
+  });
+
+  test('値があれば<dt>うち旧道</dt><dd>N km</dd>を出す', () => {
+    const html = detailHTML({ route: route(), formerKm: 30.8 });
+    expect(html).toContain('<dt>うち旧道</dt><dd>30.8 km</dd>');
+  });
+
+  test('延長の行の直後に来る(区分別より前)', () => {
+    // 区分別の合計は延長とほぼ一致する(国道10号なら791.3 kmと791.4 km)。
+    // 区分別の下に同じ書体で旧道の行を続けると「四つめの区分」に読める
+    // (#26)。延長の直下に置けば、「うち」が指す先の真下に来る。文字列位置
+    // を引き算するのではなく、延長と旧道の行がそのまま連続することを直接
+    // 見る。
     const html = detailHTML({
       route: route(),
       kinds: [{ kind: 'road', km: 300.2 }],
       formerKm: 30.8,
     });
-    expect(html).toContain('<dt>うち旧道</dt><dd>30.8 km</dd>');
-    // 区分別の dl とは別物であることを、旧道の行がその dl の外にあることで
-    // 確かめる。区分別の dl は最初の </dl> で閉じるので、旧道の行はその後に
-    // 現れる。
-    const kindsClose = html.indexOf('</dl></div>'); // .detail-kinds の閉じ
-    const formerRow = html.indexOf('<dt>うち旧道</dt>');
-    // 区分別が出ていなければ -1 になり、比較が素通りする。先に在ることを見る。
-    expect(kindsClose).toBeGreaterThan(-1);
-    expect(formerRow).toBeGreaterThan(kindsClose);
+    expect(html).toMatch(
+      /<dt>延長<\/dt><dd>[^<]*<\/dd><dt>うち旧道<\/dt><dd>30\.8 km<\/dd>/,
+    );
   });
 });
 
