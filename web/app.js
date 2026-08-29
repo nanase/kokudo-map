@@ -134,6 +134,20 @@ function readStored(key, allowed, fallback) {
 let basemap = readStored('gsi-basemap', GSI_BASEMAP_ORDER, DEFAULT_BASEMAP);
 let gsiShade = readStored('gsi-shade', GSI_SHADE_LEVELS, DEFAULT_SHADE);
 
+/**
+ * 共有されたリンクが眺めを指定しているか。
+ *
+ * 地図を作る前に読む。`hash: true` の MapLibre は、地図を作った時点で既定の
+ * 中心へ jumpTo し、その moveend で自分の hash を書き込む——しかもその書き込み
+ * は同期に走る。作った後に読むと、共有されたリンクの hash と、地図が今しがた
+ * 自分で書いた hash が見分けられない。
+ *
+ * 見分けが付かないあいだ、boot() の fitInitialView() は一度も呼ばれていなかった。
+ * 全国の広がりに合わせる初期表示も、`?region=` が指す地域も、そこにあるだけで
+ * 誰にも届いていない。
+ */
+const sharedView = Boolean(location.hash);
+
 const map = new maplibregl.Map({
   container: 'map',
   attributionControl: false,
@@ -806,7 +820,7 @@ async function boot() {
 
   // A shared link's hash wins. Otherwise open on everything that is built, or
   // on one region if ?region= names it — a view hint, not a data switch.
-  if (!location.hash) fitInitialView(index);
+  if (!sharedView) fitInitialView(index);
 
   $('#loading').classList.add('done');
 }
@@ -859,25 +873,27 @@ function fitInitialView(index) {
   const wanted = new URLSearchParams(location.search).get('region');
   const box = index.find((r) => r.region === wanted)?.bbox || state.meta.bbox;
   const [w, s, e, n] = box;
+  const bounds = [
+    [w, s],
+    [e, n],
+  ];
   // 浮いている箱のぶんは、既に地図の padding が述べている。fitBounds に渡す
   // padding はそれを置き換えてしまうので、余白を足した形で渡し直す——そうし
   // ないと最初の眺めだけが操作面の下に潜る。
   const p = map.getPadding();
-  map.fitBounds(
-    [
-      [w, s],
-      [e, n],
-    ],
-    {
-      padding: {
-        top: p.top + 24,
-        bottom: p.bottom + 24,
-        left: p.left + 24,
-        right: p.right + 24,
-      },
-      duration: 0,
-    },
-  );
+  const clear = {
+    top: p.top + 24,
+    bottom: p.bottom + 24,
+    left: p.left + 24,
+    right: p.right + 24,
+  };
+  // 箱を避けた残りに全国が入らない画面もある——縦に長い狭い画面では、操作面が
+  // 高さの半分を占め、残りへ収めるには縮尺が足りない。そのとき
+  // cameraForBounds は何も返さないので、避けるのをやめて窓いっぱいに合わせる。
+  // 端が操作面の下に少し潜るが、全国が一枚に入っているほうがこの地図の趣旨に
+  // 近い——箱は閉じられる。
+  const padding = map.cameraForBounds(bounds, { padding: clear }) ? clear : 24;
+  map.fitBounds(bounds, { padding, duration: 0 });
 }
 
 /* --------------------------------------------------------------- filters --- */
