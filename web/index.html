@@ -107,23 +107,28 @@
                絞り込み欄は一覧と一緒に畳む。絞り込むのは一覧を見ているあいだ
                のことなので、閉じた一覧の上に入力欄だけが残る理由がない。
                選択解除は逆で、畳んだままでも押せなければならない——選択は
-               地図に効いており、一覧を開かずに戻したいことがある。だから
-               summary の中、常に見えるところに置く。 -->
+               地図に効いており、一覧を開かずに戻したいことがある。畳んでも
+               残るのは summary の行なので、見える場所はそこにする。
+
+               ただし <summary> の中には入れない。開閉が先に手を取るので、
+               中に置いた釦はキーボードや支援技術から確実には届かない。節を
+               土台にして、その行の上へ重ねて出す(style.css の #sel-none)。
+
+               文言は updateStats() が title と aria-label に入れる。
+               「N 路線を選択解除」は数で変わるので、ここには書かない。 -->
+          <button type="button" id="sel-none" class="icon-btn" disabled
+                  title="選択解除" aria-label="選択解除">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+              <path d="M3 3l18 18" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
           <details id="route-block" class="fold">
             <summary>
               <h2>国道を選択</h2>
               <span class="count" id="route-count"></span>
-              <!-- 文言は updateStats() が title と aria-label に入れる。
-                   「N 路線を選択解除」は数で変わるので、ここには書かない。 -->
-              <button type="button" id="sel-none" class="icon-btn" disabled
-                      title="選択解除" aria-label="選択解除">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-                  <path d="M3 3l18 18" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round"/>
-                </svg>
-              </button>
             </summary>
             <div class="filter-row">
               <svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true">

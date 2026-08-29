@@ -164,7 +164,13 @@ body {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
 }
-.block { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
+/* 余白は節の中身だけでなく、行の上に重ねる釦の置き場所も決める(#sel-none)。
+   同じ数を二箇所に書かないよう、変数にして下の者へ渡す。 */
+.block {
+  --pad-y: 16px; --pad-x: 18px;
+  position: relative; padding: var(--pad-y) var(--pad-x);
+  border-bottom: 1px solid var(--line-2);
+}
 /* 区切り線は節と節のあいだにだけ引く。最後の節の下は箱の縁である。 */
 #panel > .block:last-child { border-bottom: 0; }
 .block-hd {
@@ -194,8 +200,12 @@ body {
    Reference material that is worth having but not worth the sidebar height
    it costs. Folded shut, the summary still states how much is inside. */
 .fold > summary {
-  display: flex; align-items: baseline; gap: 10px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
   list-style: none;
+  /* 「国道を選択」の行にだけ釦が重なる。行の高さをその釦に合わせておくと、
+     どの節も見出しの高さが揃い、字の上下の余白も釣り合う。釦のぶんだけ
+     背が高い節が一つあると、そこだけ字が上へ寄って見える。 */
+  min-height: 24px;
 }
 .fold > summary::-webkit-details-marker { display: none; }
 .fold > summary::after {
@@ -206,13 +216,18 @@ body {
 .fold[open] > summary::after { transform: rotate(180deg); }
 .fold[open] > summary { margin-bottom: 10px; }
 .fold > summary:hover h2 { color: var(--sign-blue); }
-/* 選択解除だけが summary の中にある。余りはこの釦が飲んで右へ寄り、開閉の
-   三角はその隣に付く——`::after` の margin-left: auto をここで譲る。 */
-#route-block > summary > #sel-none {
-  margin-left: auto; align-self: center; width: 24px; height: 24px;
+/* 選択解除の釦。DOM では summary の外(節の直下)にあり、見える場所だけを
+   ここで summary の行へ戻す。並びは開閉の三角の左隣で、以前と同じである。 */
+#sel-none {
+  position: absolute; top: var(--pad-y);
+  /* 節の右余白 + 三角 8px + 三角との間 10px。 */
+  right: calc(var(--pad-x) + 18px);
+  width: 24px; height: 24px;
 }
-#route-block > summary > #sel-none svg { width: 14px; height: 14px; }
-#route-block > summary::after { margin-left: 10px; }
+#sel-none svg { width: 14px; height: 14px; }
+/* 釦は浮いているので場所を取らない。見出しの数がその下へ潜らないよう、
+   釦 24px と間 10px のぶんをここで空ける。 */
+#route-block > summary .count { margin-right: 34px; }
 .fold > summary .count {
   font-family: ui-monospace, Consolas, monospace; font-size: .68rem;
   color: var(--ink-3); font-variant-numeric: tabular-nums;

@@ -45,11 +45,7 @@ export function wireControls(doc, state, applyFilters) {
     applyFilters();
   });
 
-  $('#sel-none').addEventListener('click', (e) => {
-    // この釦は <summary> の中に居る。押した click はそのまま summary まで
-    // 上がり、既定の動作として折りたたみを開け閉てしてしまう——選択を外した
-    // だけで一覧が開くのは、押した人が頼んでいないことである。
-    e.preventDefault();
+  $('#sel-none').addEventListener('click', () => {
     setSelection(doc, state, [], applyFilters);
   });
 
