@@ -310,17 +310,19 @@ input[type="search"]::placeholder { font-size: .82em; }
 #app:not(.panel-off) #legend-bar { left: 364px; }
 .legend-box {
   pointer-events: auto; max-width: 100%;
-  display: flex; flex-direction: column; gap: 7px;
-  padding: 9px 13px;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 7px 11px;
   background: #fff; color: #333;
   border-radius: 6px; box-shadow: 0 0 0 2px rgba(0,0,0,.1);
 }
 .legend {
-  display: flex; flex-wrap: wrap; gap: 5px 12px; justify-content: flex-end;
+  display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: flex-end;
 }
+/* 行は字面の高さまで詰める。本文の 1.6 は読み下す文章のためのもので、
+   一行ずつ拾い読みする見本の一覧には広すぎる。 */
 .legend .item {
   display: flex; align-items: center; gap: 6px;
-  font-size: .72rem; color: #333;
+  font-size: .72rem; line-height: 1.35; color: #333;
   font-family: ui-monospace, Consolas, monospace;
 }
 .legend .swatch { width: 20px; height: 0; border-top-width: 3px; border-top-style: solid; }
