@@ -30,9 +30,8 @@
      には混ぜない。 */
   --success: #1E8E3E;
 
-  /* 国道を一時的に隠すボタンが、隠している間だけ使う。載る台はズームボタンと
-     同じ MapLibre 標準の白いコントロールで、パネルの明暗に関わらず白いまま
-     なので、こちらも明暗で変える理由がない。 */
+  /* 国道を一時的に隠すボタンが、隠している間だけ使う。白い字を載せる地なので、
+     面が明るくても暗くてもこの赤のままでよい。 */
   --danger: #B3261E;
   --danger-hover: #8C1F19;
 
@@ -47,9 +46,6 @@
      境目になるので、もともと助けが要らない。 */
   --shield-shadow: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .34));
 
-  /* 地図の上の出典表示。MapLibre が白い下敷きを敷くので、本文の色を継ぐと
-     暗い配色のときに白い字が白い下敷きに載って消える。ここだけ固定する。 */
-  --attrib-ink: #26313F;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -312,7 +308,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   pointer-events: auto; max-width: 100%;
   display: flex; flex-direction: column; gap: 3px;
   padding: 7px 11px;
-  background: #fff; color: #333;
+  background: var(--panel); color: var(--ink);
   border-radius: 6px; box-shadow: 0 0 0 2px rgba(0,0,0,.1);
 }
 .legend {
@@ -322,7 +318,7 @@ input[type="search"]::placeholder { font-size: .82em; }
    一行ずつ拾い読みする見本の一覧には広すぎる。 */
 .legend .item {
   display: flex; align-items: center; gap: 6px;
-  font-size: .72rem; line-height: 1.35; color: #333;
+  font-size: .72rem; line-height: 1.35; color: var(--ink-2);
   font-family: ui-monospace, Consolas, monospace;
 }
 .legend .swatch { width: 20px; height: 0; border-top-width: 3px; border-top-style: solid; }
@@ -397,9 +393,34 @@ input[type="search"]::placeholder { font-size: .82em; }
 .stats dd, .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 
 /* ----------------------------------------------------------------- map --- */
-/* 出典表示は地図の上、MapLibre の白い下敷きの上にある。本文の色を継がせない。 */
-.maplibregl-ctrl-attrib,
-.maplibregl-ctrl-attrib a { color: var(--attrib-ink); }
+/* 地図の上の部品 -----------------------------------------------------------
+   拡大の釦も縮尺も出典も凡例も、この地図が描く面である。下に見えている
+   地理院タイルは写真と同じ「中身」であって、面ではない——だから明暗の
+   切り替えは、この地図が描くものすべてに等しく効き、地図そのものには効か
+   ない。操作面だけが暗くて釦が白い、という混ざり方はここで無くなる。
+
+   薄い地図の上では、暗い面のほうが白い面より境目がはっきりする。白い台が
+   影を頼りに浮いていたのに対し、暗い台は地との明暗差だけで立つ。
+
+   MapLibre が持ってくる釦の絵は #333 の塗りを data URI に焼き込んであり、
+   色を差し替える口が無い。暗い配色では反転させる——hue-rotate を添えるのは、
+   現在位置の青や方位の赤まで反対の色にしないためである。 */
+.maplibregl-ctrl-group { background: var(--panel); }
+.maplibregl-ctrl-group button + button { border-top-color: var(--line); }
+/* maplibre-gl.css 側と同じ形の選択子で書き、記述順ではなく形で並ばせる。 */
+.maplibregl-ctrl button:not(:disabled):hover { background-color: var(--panel-2); }
+@media (prefers-color-scheme: dark) {
+  .maplibregl-ctrl-icon { filter: invert(1) hue-rotate(180deg); }
+}
+.maplibregl-ctrl-scale {
+  background-color: var(--panel); border-color: var(--ink-2);
+  color: var(--ink-2);
+}
+/* 出典の地は二つのクラスで指定されている (.maplibregl-ctrl.maplibregl-ctrl-attrib)。
+   片方だけで書くと特異度で負け、字だけが変わって地が白いまま残る。 */
+.maplibregl-ctrl.maplibregl-ctrl-attrib { background-color: var(--panel); }
+.maplibregl-ctrl-attrib { color: var(--ink-2); }
+.maplibregl-ctrl-attrib a { color: var(--sign-blue); }
 
 /* 地図は窓いっぱいである。操作面も詳細も、その上に浮いている。 */
 #map-wrap { position: absolute; inset: 0; }
@@ -434,7 +455,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* 視点の傾きボタン ---------------------------------------------------------
    国道を隠すボタンと同じ台に乗せる。 */
 .pitch-ctrl button {
-  display: grid; place-items: center; color: #333;
+  display: grid; place-items: center; color: var(--ink-2);
 }
 .pitch-ctrl button svg { width: 17px; height: 17px; display: block; }
 
@@ -443,7 +464,7 @@ input[type="search"]::placeholder { font-size: .82em; }
    addControl するだけで自然にその下へ積む。台が常に白いので、アイコンの色は
    MapLibre 自身のズームアイコンに合わせた固定の濃い灰色にする。 */
 .hide-routes-ctrl button {
-  display: grid; place-items: center; color: #333;
+  display: grid; place-items: center; color: var(--ink-2);
 }
 .hide-routes-ctrl button svg { width: 17px; height: 17px; display: block; }
 .hide-routes-ctrl button.active { background: var(--danger); color: #fff; }
@@ -458,7 +479,7 @@ input[type="search"]::placeholder { font-size: .82em; }
    国道を隠すボタンと同じ台に乗せる。 */
 .gsi-shade-ctrl button,
 .basemap-ctrl button {
-  display: grid; place-items: center; color: #333;
+  display: grid; place-items: center; color: var(--ink-2);
 }
 .gsi-shade-ctrl button svg,
 .basemap-ctrl button svg {
@@ -470,16 +491,20 @@ input[type="search"]::placeholder { font-size: .82em; }
    標識の青で塗る。台は明暗どちらの配色でも白いので、この青も固定でよい。 */
 .conc-ctrl button,
 .display-ctrl button {
-  display: grid; place-items: center; color: #333;
+  display: grid; place-items: center; color: var(--ink-2);
 }
 .conc-ctrl button svg,
 .display-ctrl button svg { width: 17px; height: 17px; display: block; }
+/* 面が開いているあいだ、釦は押されたままである。地の青と面の色を入れ替えて
+   示す——明暗どちらでも、字と地の関係はそのまま反転するだけになる。 */
 .conc-ctrl button.active,
-.display-ctrl button.active { background: var(--shield-face); color: #fff; }
+.display-ctrl button.active { background: var(--sign-blue); color: var(--panel); }
 /* maplibre-gl.css 側の hover 規則と同じ形で書いて、記述順に頼らず勝つ
    (.hide-routes-ctrl button.active:hover と同じ理由)。 */
 .conc-ctrl button.active:hover,
-.display-ctrl button.active:hover { background: #003377; }
+.display-ctrl button.active:hover {
+  background-color: var(--sign-blue); filter: brightness(1.12);
+}
 
 /* 面そのもの。釦の台の中に居るので、位置は台を基準に決まる——寸法を測って
    合わせる計算はどこにも要らない。台の左へ出すのは、右に窓の端しか無いから
@@ -520,7 +545,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   display: flex; align-items: center;
   height: 29px; /* maplibre-gl.css の .maplibregl-ctrl-group button の高さに合わせる */
   padding: 0 8px; box-sizing: border-box;
-  background: #fff; color: #333; box-shadow: 0 0 0 2px rgba(0,0,0,.1);
+  background: var(--panel); color: var(--ink); box-shadow: 0 0 0 2px rgba(0,0,0,.1);
   font-size: .72rem; border-radius: 4px;
   white-space: nowrap; opacity: 0; pointer-events: none;
   transition: opacity .15s ease, transform .15s ease;
