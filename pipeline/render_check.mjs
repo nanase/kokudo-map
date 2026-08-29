@@ -203,10 +203,10 @@ const report = await page.evaluate(() => {
   out.routeCount = document.querySelectorAll('#route-list label').length;
   out.rankingRows = document.querySelectorAll('#ranking .row').length;
   out.sharedRows = document.querySelectorAll('#shared .row').length;
-  // #stats now lives inside the folded データ情報 block (closed by default),
-  // and a closed <details> renders no box for its non-summary children —
-  // `innerText` reports empty for anything unrendered. `textContent` does not
-  // care about layout, so the four numbers are read straight off the <dd>s.
+  // #stats now lives inside the 国道マップについて dialog, which is closed —
+  // a closed <dialog> renders nothing, and `innerText` reports empty for
+  // anything unrendered. `textContent` does not care about layout, so the
+  // four numbers are read straight off the <dd>s.
   out.stats = [...document.querySelectorAll('#stats dd')]
     .map((s) => s.textContent)
     .join(' | ');
@@ -215,7 +215,25 @@ const report = await page.evaluate(() => {
   out.concOptions = [...document.querySelectorAll('input[name=conc]')].map(
     (i) => i.value,
   );
-  out.folded = ['ranking', 'shared'].map((name) => ({
+  // 地図の上の釦。現在位置は MapLibre 自身の部品なので、あるかどうかだけを見る
+  // (押すと端末の許可を求めるので、ここでは押さない)。方位は拡大・縮小とは
+  // 別の台に乗っている——同じ群に並んでいると、拡大を連打する指が地図を回す。
+  // 重用区間と表示は地図の側にある。同じものが操作面にも残っていれば、
+  // どちらを押したかで結果が変わる二つの口ができてしまう。
+  out.togglesInPanel = document.querySelectorAll(
+    '#panel .checks input, #panel input[name=conc]',
+  ).length;
+  out.paneButtons = document.querySelectorAll('#display-btn').length;
+  out.geolocateButtons = document.querySelectorAll(
+    '.maplibregl-ctrl-geolocate',
+  ).length;
+  const groupOf = (sel) =>
+    document.querySelector(sel)?.closest('.maplibregl-ctrl-group');
+  const zoomGroup = groupOf('.maplibregl-ctrl-zoom-in');
+  const compassGroup = groupOf('.maplibregl-ctrl-compass');
+  out.compassApart =
+    !!zoomGroup && !!compassGroup && zoomGroup !== compassGroup;
+  out.folded = ['route', 'ranking', 'shared'].map((name) => ({
     name,
     open: document.querySelector(`#${name}-block`).open,
     count: document.querySelector(`#${name}-count`).innerText,
@@ -259,6 +277,71 @@ ok(
   JSON.stringify(report.concOptions) === JSON.stringify(['off', 'all']),
   `concurrency has two modes, not three (${report.concOptions.join(', ')})`,
 );
+// データがいつのものかは「国道マップについて」の中にある。操作面には無い。
+const about = await page.evaluate(async () => {
+  const dialog = document.querySelector('#about-dialog');
+  const before = dialog.open;
+  document.querySelector('#about-btn').click();
+  const opened = dialog.open;
+  dialog.close();
+  return {
+    before,
+    opened,
+    inPanel: !!document.querySelector('#panel #stats'),
+  };
+});
+ok(
+  !about.before && about.opened,
+  'the info button opens the 国道マップについて dialog',
+);
+ok(
+  !about.inPanel,
+  'the data provenance is stated in that dialog, not also in the sidebar',
+);
+
+ok(
+  report.paneButtons === 1 && report.togglesInPanel === 0,
+  'the concurrency and display switches are on the map, not also in the sidebar',
+);
+/* 配色は同じ面の中から選ぶ。色そのものは style.css の light-dark() が両方
+ * 述べているので、ここが確かめるのは「選んだ側が data-theme に出て、面の地の
+ * 色がそれで変わる」ことだけである。 */
+const themed = await page.evaluate(() => {
+  const root = document.documentElement;
+  const panelBg = () =>
+    getComputedStyle(document.querySelector('#panel')).backgroundColor;
+  const pick = (value) => {
+    const el = document.querySelector(`input[name=theme][value="${value}"]`);
+    el.checked = true;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return { attr: root.dataset.theme, panel: panelBg() };
+  };
+  const dark = pick('dark');
+  const light = pick('light');
+  pick('auto'); // 検査のために選んだだけなので、端末任せに戻しておく
+  return { dark, light, auto: root.dataset.theme };
+});
+ok(
+  themed.dark.attr === 'dark' && themed.light.attr === 'light',
+  `picking a colour scheme writes it on the root (${themed.dark.attr} / ${themed.light.attr})`,
+);
+ok(
+  themed.dark.panel !== themed.light.panel,
+  `and the panel actually changes ground with it (${themed.dark.panel} vs ${themed.light.panel})`,
+);
+ok(
+  themed.auto === 'light' || themed.auto === 'dark',
+  `following the device still resolves to one side (${themed.auto})`,
+);
+
+ok(
+  report.geolocateButtons === 1,
+  `the map carries one 現在位置 button (${report.geolocateButtons})`,
+);
+ok(
+  report.compassApart,
+  'the compass sits on its own group, apart from the zoom buttons',
+);
 // Reference lists are folded shut, but a fold that hides its own existence is
 // worse than the height it saves, so each summary must still state its size.
 for (const b of report.folded) {
@@ -269,59 +352,66 @@ for (const b of report.folded) {
   );
 }
 
-// The panel folds away to give the map the window. The failure this guards is
-// not the CSS but the canvas: MapLibre sizes it from its container, and a
-// canvas left at the old width draws the country into part of the screen.
+/* 操作面は地図の上に浮いている。畳んでも canvas の寸法は変わらない——変わる
+ * のは地図の padding、つまり「地図が中心と見なす点」が箱をどれだけ避けるか
+ * である。ここが守るのはその対応で、畳めば padding が消え、開き直せば戻る。
+ *
+ * 開いているあいだ閉じる口はパネル自身の × で、閉じているあいだ開き直す口は
+ * 地図の上の釦である。どちらか一方だけが出ていることも併せて見る。 */
 const folding = await page.evaluate(async () => {
-  const width = () =>
-    Math.round(
-      document.querySelector('#map canvas').getBoundingClientRect().width,
-    );
-  /* 幅が変わるまで待つ。canvas を動かすのは MapLibre の ResizeObserver
-   * なので、押した瞬間はまだ古い幅である。決め打ちの 900 ms を数えていた
-   * ——遅ければ足りず、速ければ待ちすぎる。上限を置いて、変わらなければ
-   * 変わらないまま返す。下の ok() がそれを失敗として述べる。
-   *
-   * 上限は setTimeout で張る。rAF の中で時刻を見ていたころ、画面が伏せられて
-   * Chromium が rAF を止めた回には、上限を見る所そのものが動かなかった。
-   * page.evaluate に時限は無いので、そうなると検査が終わらない。 */
-  const widthChanges = (from) =>
+  /* padding の変化は easeTo なので、押した瞬間はまだ途中である。MapLibre が
+   * 落ち着いたと言うまで待つ。上限を置いて、来なければそのまま返す——下の
+   * ok() がそれを失敗として述べる。 */
+  const settled = () =>
     new Promise((resolve) => {
-      let frame = 0;
-      const finish = () => {
+      const timer = setTimeout(resolve, 5000);
+      window.map.once('idle', () => {
         clearTimeout(timer);
-        cancelAnimationFrame(frame);
-        resolve(width());
-      };
-      const timer = setTimeout(finish, 5000);
-      const step = () => {
-        if (width() !== from) finish();
-        else frame = requestAnimationFrame(step);
-      };
-      frame = requestAnimationFrame(step);
+        resolve();
+      });
     });
-  const btn = document.querySelector('#panel-toggle');
-  const open = width();
-  btn.click();
-  const foldedWidth = await widthChanges(open);
-  const folded = {
-    width: foldedWidth,
-    inert: document.querySelector('#panel').inert,
+  const left = () => Math.round(window.map.getPadding().left);
+  const shown = (sel) => !!document.querySelector(sel).offsetParent;
+
+  const open = {
+    padding: left(),
+    toggleShown: shown('#panel-toggle'),
+    closeShown: shown('#panel-close'),
   };
-  btn.click();
-  return { open, folded, back: await widthChanges(foldedWidth) };
+  document.querySelector('#panel-close').click();
+  await settled();
+  const folded = {
+    padding: left(),
+    inert: document.querySelector('#panel').inert,
+    toggleShown: shown('#panel-toggle'),
+  };
+  document.querySelector('#panel-toggle').click();
+  await settled();
+  return { open, folded, back: left() };
 });
 ok(
-  folding.folded.width > folding.open,
-  `folding the panel hands the map its width (${folding.open} → ${folding.folded.width})`,
+  folding.open.padding > 0,
+  `the open panel pushes the map centre clear of it (${folding.open.padding}px)`,
+);
+ok(
+  folding.folded.padding === 0,
+  `folding the panel hands the map the whole window (${folding.folded.padding}px)`,
 );
 ok(
   folding.folded.inert,
-  'the folded panel is inert, so tab cannot reach the controls parked off screen',
+  'the folded panel is inert, so tab cannot reach the controls parked behind it',
 );
 ok(
-  folding.back === folding.open,
-  `unfolding puts the map back (${folding.back} vs ${folding.open})`,
+  folding.open.closeShown && !folding.open.toggleShown,
+  'while open, the panel is closed by its own × and the map button is out of the way',
+);
+ok(
+  folding.folded.toggleShown,
+  'while folded, the map still carries the button that opens the panel again',
+);
+ok(
+  folding.back === folding.open.padding,
+  `unfolding puts the map back (${folding.back} vs ${folding.open.padding})`,
 );
 
 // The clear button is the only place the size of the selection is stated. A
@@ -329,16 +419,25 @@ ok(
 // answer to one question, and the one free to go stale. The button also has to
 // go unavailable when there is nothing to undo rather than sit there doing
 // nothing when pressed.
+// 文字を持たない釦なので、どれだけ取り消すかは名札(title/aria-label)が述べる。
 const clearBtn = () =>
   page.evaluate(() => {
     const b = document.querySelector('#sel-none');
-    return { text: b.textContent, disabled: b.disabled };
+    return {
+      text: b.title,
+      aria: b.getAttribute('aria-label'),
+      disabled: b.disabled,
+      open: document.querySelector('#route-block').open,
+    };
   });
 const idle = await clearBtn();
 ok(
-  idle.disabled && idle.text === '選択解除',
+  idle.disabled && idle.text === '選択解除' && idle.aria === '選択解除',
   `with nothing picked the clear button is unavailable ("${idle.text}", disabled=${idle.disabled})`,
 );
+// 一覧は畳んだ状態で始まるので、押す前に開く。
+await page.click('#route-block > summary');
+await settle();
 await page.locator('#route-list input').first().check();
 await settle();
 const one = await clearBtn();
@@ -349,6 +448,9 @@ ok(
 await page.click('#sel-none');
 await settle();
 const back = await clearBtn();
+// 釦は summary の中に居る。押して折りたたみまで開け閉てしては、押した人が
+// 頼んでいないことが起きる。
+ok(back.open, 'clearing the selection does not fold the list away');
 ok(
   back.disabled &&
     back.text === '選択解除' &&
@@ -364,7 +466,20 @@ ok(
 
 await page.screenshot({ path: shot('1-all') });
 
+/* 重用区間と表示は、地図の上の釦から出る面の中にある。中の操作は面が開いて
+ * いなければ届かないので、押す前に開ける。開いていれば何もしない——もう一度
+ * 押すと畳んでしまう。 */
+const openPane = async (btn) => {
+  const shut = await page.evaluate(
+    (sel) =>
+      document.querySelector(sel).getAttribute('aria-expanded') !== 'true',
+    btn,
+  );
+  if (shut) await page.click(btn);
+};
+
 // --- switch to "concurrent sections only" -----------------------------------
+await openPane('#display-btn');
 await page.click('input[name=conc][value=all]');
 await settle();
 const concStats = await page.evaluate(() => ({
@@ -377,6 +492,7 @@ console.log(`\nafter "重用区間のみ": renderedRoads=${concStats.roads}`);
 await page.screenshot({ path: shot('2-concurrent') });
 
 // --- unfold the ranking and click its deepest row ---------------------------
+await openPane('#display-btn');
 await page.click('input[name=conc][value=off]');
 await page.click('#ranking-block > summary');
 await settle();
@@ -486,8 +602,11 @@ await page.screenshot({ path: shot('4-labels') });
 const target = await page.evaluate(() => {
   const m = window.map;
   const r = m.getCanvas().getBoundingClientRect();
-  const cx = Math.round(r.width / 2);
-  const cy = Math.round(r.height / 2);
+  // 浮いている箱のぶん、地図の中心は画面の真ん中には無い。据えた地点が
+  // 実際に落ちる画素から探し始める。
+  const pad = m.getPadding();
+  const cx = Math.round((r.width + pad.left - pad.right) / 2);
+  const cy = Math.round((r.height + pad.top - pad.bottom) / 2);
   const ring = (d) => [
     [d, 0],
     [0, d],
@@ -639,6 +758,10 @@ if (!target) {
   // so long after #65 moved that to the box's own 「…だけを表示」 — the page had
   // changed and the check had not, so it failed on a page that was working.
   const ref = target.refs[0];
+  // 箱を開ける前の padding。閉じたときにここへ戻ることが、下の「滑らない」と
+  // 対になる不変条件である——左の列には操作面も居るので、戻る先は 0 とは
+  // 限らない。
+  const paddingBeforeBox = await page.evaluate(() => window.map.getPadding());
   await page.click('.shield-btn');
   await settle();
   const box = await page.evaluate(() => {
@@ -797,8 +920,9 @@ if (!target) {
   // 滑らなかったのは padding を外し忘れたからではない、と言えるようにする。
   const padding = await page.evaluate(() => window.map.getPadding());
   ok(
-    Object.values(padding).every((v) => v === 0),
-    `and the box's padding is gone (${JSON.stringify(padding)})`,
+    JSON.stringify(padding) === JSON.stringify(paddingBeforeBox),
+    `and the box's padding is gone (${JSON.stringify(padding)} vs ` +
+      `${JSON.stringify(paddingBeforeBox)})`,
   );
 }
 
@@ -872,9 +996,11 @@ if (expresswayArc) {
       () => window.map.queryRenderedFeatures({ layers: ['expressway'] }).length,
     );
   const shown = await expressways();
+  await openPane('#display-btn');
   await page.uncheck('#t-expressway');
   await settle();
   const hidden = await expressways();
+  await openPane('#display-btn');
   await page.check('#t-expressway');
   await settle();
   const back = await expressways();
@@ -905,9 +1031,11 @@ if (ferryArc) {
       () => window.map.queryRenderedFeatures({ layers: ['ferry'] }).length,
     );
   const shown = await ferries();
+  await openPane('#display-btn');
   await page.uncheck('#t-ferry');
   await settle();
   const hidden = await ferries();
+  await openPane('#display-btn');
   await page.check('#t-ferry');
   await settle();
   const back = await ferries();
@@ -950,8 +1078,11 @@ const formerRowFor = async (ref) => {
   const hit = await page.evaluate((wantRef) => {
     const m = window.map;
     const r = m.getCanvas().getBoundingClientRect();
-    const cx = Math.round(r.width / 2);
-    const cy = Math.round(r.height / 2);
+    // 浮いている箱のぶん、地図の中心は画面の真ん中には無い。据えた地点が
+    // 実際に落ちる画素から探し始める。
+    const pad = m.getPadding();
+    const cx = Math.round((r.width + pad.left - pad.right) / 2);
+    const cy = Math.round((r.height + pad.top - pad.bottom) / 2);
     const ring = (d) => [
       [d, 0],
       [0, d],

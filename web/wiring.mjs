@@ -27,29 +27,8 @@ export function setSelection(doc, state, refs, applyFilters) {
   applyFilters();
 }
 
-/** 畳む幅。style.css の @media と同じ値である。 */
+/** 画面が狭いと見なす幅。style.css の @media と同じ値である。 */
 export const NARROW_QUERY = '(max-width: 860px)';
-
-/**
- * 国道一覧の折りたたみを画面幅に従わせる。
- *
- * 狭い画面ではサイドバーが画面の上に積まれ、高さは画面の 48% までしかない。
- * 459 個のチェックボックスがその大半を占めるので、既定では畳んでおく。
- *
- * 広い画面では畳む理由が無いので開いたままにし、見出しは CSS で消す。閉じた
- * details の中身は CSS では出せないため、open の出し入れはここが持つ。境界を
- * またいだときだけ書き換えるので、利用者が狭い画面で自分で開いた一覧は、幅が
- * 変わらないかぎり開いたままである。
- */
-export function wireRouteFold(doc) {
-  const block = doc.querySelector('#route-block');
-  const mq = doc.defaultView.matchMedia(NARROW_QUERY);
-  const apply = () => {
-    block.open = !mq.matches;
-  };
-  mq.addEventListener('change', apply);
-  apply();
-}
 
 /** サイドバーの一覧・絞り込み・表示トグルを state へ配線する。 */
 export function wireControls(doc, state, applyFilters) {
@@ -66,9 +45,13 @@ export function wireControls(doc, state, applyFilters) {
     applyFilters();
   });
 
-  $('#sel-none').addEventListener('click', () =>
-    setSelection(doc, state, [], applyFilters),
-  );
+  $('#sel-none').addEventListener('click', (e) => {
+    // この釦は <summary> の中に居る。押した click はそのまま summary まで
+    // 上がり、既定の動作として折りたたみを開け閉てしてしまう——選択を外した
+    // だけで一覧が開くのは、押した人が頼んでいないことである。
+    e.preventDefault();
+    setSelection(doc, state, [], applyFilters);
+  });
 
   $('#route-filter').addEventListener('input', (e) => {
     const q = e.target.value.trim();
@@ -114,12 +97,12 @@ export function wireShare(doc, state) {
   // index.html が持つラベル文言をそのまま読む。ここで書き直すと、
   // 表示側を直したときにこちらが黙って古くなる。
   const shareState = () => {
-    const toggles = [...doc.querySelectorAll('#panel .checks label')].map(
-      (label) => ({
-        label: label.textContent.trim(),
-        checked: label.querySelector('input').checked,
-      }),
-    );
+    const toggles = [
+      ...doc.querySelectorAll('#display-popover .checks label'),
+    ].map((label) => ({
+      label: label.textContent.trim(),
+      checked: label.querySelector('input').checked,
+    }));
     const concLabel = doc
       .querySelector('input[name=conc]:checked')
       .closest('label')

@@ -53,126 +53,169 @@
 </svg>
 
 <div id="app">
-  <aside id="panel">
-    <header>
-      <img src="favicon.svg" alt="" class="brand-icon" width="495" height="475">
-      <h1>国道マップ</h1>
-      <button type="button" id="share-btn" class="icon-btn share-btn" title="共有" aria-label="共有">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-share"/></svg>
-      </button>
-    </header>
-
-    <section class="block">
-      <div class="filter-row">
-        <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 15）" autocomplete="off">
-        <button type="button" id="sel-none" class="mini" disabled>選択解除</button>
-      </div>
-      <!-- 狭い画面でだけ畳む。広い画面では summary を出さず、開いたままにする
-           (style.css と wiring.mjs の wireRouteFold)。絞り込み欄と選択解除は
-           外に置いてあるので、畳んだままでも選択は外せる。 -->
-      <details id="route-block" class="fold" open>
-        <summary>
-          <h2>国道を選ぶ</h2>
-          <span class="count" id="route-count"></span>
-        </summary>
-        <div id="route-list" class="route-list" role="group" aria-label="国道の選択">
-          <!-- buildUI() が innerHTML を丸ごと差し替えるので、データが届けば
-               このまま消える。表示・非表示を別に持つ必要が無い。 -->
-          <div class="route-list-spinner" aria-hidden="true"></div>
-        </div>
-      </details>
-    </section>
-
-    <section class="block">
-      <div class="block-hd"><h2>重用区間</h2></div>
-      <div class="radios" role="radiogroup" aria-label="重用区間の表示">
-        <label><input type="radio" name="conc" value="off" checked> 強調なし</label>
-        <label><input type="radio" name="conc" value="all"> 重用区間のみ</label>
-      </div>
-      <!-- panel.mjs の legendNHTML() の出力そのもの。static にしてあるのは
-           vendor/*.js の読み込みを待たずに最初の描画から出したいため —
-           test/panel.test.mjs がここと legendNHTML() の一致を検査する。 -->
-      <div id="legend-n" class="legend"><span class="item"><span class="swatch" style="border-top-color:#1B62C4"></span>単独指定</span><span class="item"><span class="swatch" style="border-top-color:#D98324"></span>二重用</span><span class="item"><span class="swatch" style="border-top-color:#C2352B"></span>三重用</span><span class="item"><span class="swatch" style="border-top-color:#7B3E9D"></span>四重用以上</span></div>
-    </section>
-
-    <section class="block">
-      <div class="block-hd"><h2>表示</h2></div>
-      <div class="checks">
-        <label><input type="checkbox" id="t-labels" checked> 路線番号</label>
-        <label><input type="checkbox" id="t-termini" checked> 起点・終点</label>
-        <label><input type="checkbox" id="t-former" checked> 旧道</label>
-        <label><input type="checkbox" id="t-expressway" checked> 自動車専用道路（高速道路）</label>
-        <label><input type="checkbox" id="t-special" checked> 点線国道・工事中・未開通</label>
-        <label><input type="checkbox" id="t-ferry" checked> 海上国道</label>
-      </div>
-      <!-- panel.mjs の legendKindHTML() の出力そのもの。理由は legend-n と同じ。 -->
-      <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
-    </section>
-
-    <section class="block">
-      <details id="ranking-block" class="fold">
-        <summary>
-          <h2>重用ランキング</h2>
-          <span class="count" id="ranking-count"></span>
-        </summary>
-        <div id="ranking" class="ranking"></div>
-      </details>
-    </section>
-
-    <section class="block">
-      <details id="shared-block" class="fold">
-        <summary>
-          <h2>起終点を共有する地点</h2>
-          <span class="count" id="shared-count"></span>
-        </summary>
-        <div id="shared" class="ranking"></div>
-      </details>
-    </section>
-
-    <footer>
-      <details id="freshness-block" class="fold">
-        <summary><h2>データ情報</h2></summary>
-        <dl id="stats" class="stats"></dl>
-        <dl id="freshness" class="freshness"></dl>
-      </details>
-      <!-- 出典は地図の上の表示だけが述べる。ここにも書くと二箇所になる。 -->
-      <a href="https://github.com/nanase/kokudo-map" target="_blank" rel="noopener"
-         class="icon-btn repo-link" title="GitHub リポジトリ" aria-label="GitHub リポジトリ">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
-            0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
-            -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
-            .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
-            -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
-            .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
-            .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
-            0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
-        </svg>
-      </a>
-    </footer>
-  </aside>
-
   <main id="map-wrap">
     <div id="map"></div>
-    <!-- 地図の上に置く。閉じている間もここに残るので、開き直す口が必ずある。 -->
-    <button type="button" id="panel-toggle" aria-controls="panel" aria-expanded="true">
+    <!-- 地図の上に置く。パネルを閉じている間だけ出て、開き直す口になる。 -->
+    <button type="button" id="panel-toggle" aria-controls="panel" aria-expanded="true"
+            title="サイドバーを表示" aria-label="サイドバーを表示">
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor"
-              stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor"
+              stroke-width="2.2" stroke-linecap="round"/>
       </svg>
     </button>
-    <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。
-         地図の上に浮かせ、地図のほうは padding でその幅ぶんずらす — 地図の
+    <!-- 地図の上に浮かぶ二つの箱。上が操作面、下が路線の詳細で、地図のほうは
+         padding でこの列のぶんだけずらす (app.js の applyMapPadding) — 地図の
          要素を細くすると canvas ごと描き直しになる。 -->
-    <aside id="detail" hidden aria-labelledby="detail-title">
-      <button type="button" id="detail-close" class="dialog-close" aria-label="閉じる">×</button>
-      <div id="detail-body"></div>
-    </aside>
+    <div id="left-stack">
+      <aside id="panel">
+        <header>
+          <img src="favicon.svg" alt="" class="brand-icon" width="495" height="475">
+          <h1>国道マップ</h1>
+          <!-- 名札はダイアログの見出しと同じ文言にする。押す前と押した後で
+               呼び名が変わると、同じものだと分かるのに一手かかる。 -->
+          <button type="button" id="about-btn" class="icon-btn about-btn" title="国道マップについて" aria-label="国道マップについて">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 10.6v6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              <circle cx="12" cy="7.2" r="1.25" fill="currentColor"/>
+            </svg>
+          </button>
+          <button type="button" id="share-btn" class="icon-btn share-btn" title="共有" aria-label="共有">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-share"/></svg>
+          </button>
+          <!-- 詳細の箱と同じく、浮いている箱は自分で閉じられる。開き直す口は
+               地図の上に残る #panel-toggle である。 -->
+          <button type="button" id="panel-close" class="icon-btn" title="サイドバーを閉じる" aria-label="サイドバーを閉じる">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor"
+                    stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </header>
+
+        <section class="block">
+          <!-- 最初は畳んでおく。459 個のチェックボックスは、どの画面幅でも
+               サイドバーの大半を占める——番号で絞り込むほうが速いので、一覧を
+               開くのは番号を眺めたい人だけでよい。
+
+               絞り込み欄は一覧と一緒に畳む。絞り込むのは一覧を見ているあいだ
+               のことなので、閉じた一覧の上に入力欄だけが残る理由がない。
+               選択解除は逆で、畳んだままでも押せなければならない——選択は
+               地図に効いており、一覧を開かずに戻したいことがある。だから
+               summary の中、常に見えるところに置く。 -->
+          <details id="route-block" class="fold">
+            <summary>
+              <h2>国道を選択</h2>
+              <span class="count" id="route-count"></span>
+              <!-- 文言は updateStats() が title と aria-label に入れる。
+                   「N 路線を選択解除」は数で変わるので、ここには書かない。 -->
+              <button type="button" id="sel-none" class="icon-btn" disabled
+                      title="選択解除" aria-label="選択解除">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+                  <path d="M3 3l18 18" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </summary>
+            <div class="filter-row">
+              <svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.4" fill="none" stroke="currentColor" stroke-width="2.2"/>
+                <path d="M15.3 15.3 20.5 20.5" fill="none" stroke="currentColor"
+                      stroke-width="2.4" stroke-linecap="round"/>
+              </svg>
+              <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 15）" autocomplete="off">
+            </div>
+            <div id="route-list" class="route-list" role="group" aria-label="国道の選択">
+              <!-- buildUI() が innerHTML を丸ごと差し替えるので、データが届けば
+                   このまま消える。表示・非表示を別に持つ必要が無い。 -->
+              <div class="route-list-spinner" aria-hidden="true"></div>
+            </div>
+          </details>
+        </section>
+
+        <section class="block">
+          <details id="ranking-block" class="fold">
+            <summary>
+              <h2>重用ランキング</h2>
+              <span class="count" id="ranking-count"></span>
+            </summary>
+            <div id="ranking" class="ranking"></div>
+          </details>
+        </section>
+
+        <section class="block">
+          <details id="shared-block" class="fold">
+            <summary>
+              <h2>起終点を共有する地点</h2>
+              <span class="count" id="shared-count"></span>
+            </summary>
+            <div id="shared" class="ranking"></div>
+          </details>
+        </section>
+      </aside>
+      <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。 -->
+      <aside id="detail" hidden aria-labelledby="detail-title">
+        <button type="button" id="detail-close" class="dialog-close" aria-label="閉じる">×</button>
+        <div id="detail-body"></div>
+      </aside>
+    </div>
+    <!-- 凡例。線の色と形が何を述べているかは、その線を見ながらでなければ
+         確かめようがない。操作面の中では地図と目を往復することになるので、
+         同じ画面の、地図の上に置く。
+
+         中身は panel.mjs の legendNHTML() / legendKindHTML() の出力そのもの。
+         static にしてあるのは vendor/*.js の読み込みを待たずに最初の描画から
+         出したいため——test/panel.test.mjs がここと関数の一致を検査する。 -->
+    <div id="legend-bar">
+      <div class="legend-box">
+        <div id="legend-n" class="legend"><span class="item"><span class="swatch" style="border-top-color:#1B62C4"></span>単独指定</span><span class="item"><span class="swatch" style="border-top-color:#D98324"></span>二重用</span><span class="item"><span class="swatch" style="border-top-color:#C2352B"></span>三重用</span><span class="item"><span class="swatch" style="border-top-color:#7B3E9D"></span>四重用以上</span></div>
+        <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
+      </div>
+    </div>
+    <!-- 地図の上の釦から出る面。「何が地図に描かれるか」を決めるものは残らず
+         ここに集める——切り替えた結果は地図にしか現れないので、操作面ではなく
+         地図の側に置く。節を分けて一つの面に収めてあるのは、どれも同じ問いの
+         答えだからである。釦を分けると、どちらを押すか毎回考えることになる。
+
+         位置は app.js が釦の台へ移してから CSS が決める。中身をここに置いて
+         あるのは、データが届く前から state と結べるようにするためである。 -->
+    <div id="display-popover" class="map-popover" hidden>
+      <section>
+        <h2>重用区間</h2>
+        <div class="radios" role="radiogroup" aria-label="重用区間の表示">
+          <label><input type="radio" name="conc" value="off" checked> 強調なし</label>
+          <label><input type="radio" name="conc" value="all"> 重用区間のみ</label>
+        </div>
+      </section>
+      <section>
+        <h2>表示</h2>
+        <div class="checks">
+          <label><input type="checkbox" id="t-labels" checked> 路線番号</label>
+          <label><input type="checkbox" id="t-termini" checked> 起点・終点</label>
+          <label><input type="checkbox" id="t-former" checked> 旧道</label>
+          <label><input type="checkbox" id="t-expressway" checked> 自動車専用道路（高速道路）</label>
+          <label><input type="checkbox" id="t-special" checked> 点線国道・工事中・未開通</label>
+          <label><input type="checkbox" id="t-ferry" checked> 海上国道</label>
+        </div>
+      </section>
+      <!-- 配色も「どう見えるか」の話なので、同じ面に置く。既定は端末の設定に
+           従い、選べばその選択が次に来たときも残る。 -->
+      <section>
+        <h2>配色</h2>
+        <div class="radios" role="radiogroup" aria-label="配色">
+          <label><input type="radio" name="theme" value="auto" checked> 端末に合わせる</label>
+          <label><input type="radio" name="theme" value="light"> 明るい</label>
+          <label><input type="radio" name="theme" value="dark"> 暗い</label>
+        </div>
+      </section>
+    </div>
     <div id="loading">データを読み込んでいます…</div>
   </main>
 </div>
 
-<dialog id="share-dialog">
+<dialog id="share-dialog" class="sheet">
   <form method="dialog">
     <header>
       <h2>表示位置を共有</h2>
@@ -187,6 +230,63 @@
       文章で共有
     </button>
     <div id="share-body" class="share-summary"></div>
+  </form>
+</dialog>
+
+
+<!-- この地図について。データがいつのものか、どこで作られているかは、地図を
+     読むあいだ要らない。要るのは知りたくなったときだけなので、操作面に常時
+     置かず、ここへ寄せる。
+
+     出典はここに書かない。地図の上の表示が一度だけ述べている。 -->
+<dialog id="about-dialog" class="sheet">
+  <form method="dialog">
+    <header>
+      <h2>国道マップについて</h2>
+      <button type="submit" class="dialog-close" aria-label="閉じる">×</button>
+    </header>
+    <p class="about-lead">
+      日本の一般国道を全国 1 枚で出す地図です。縮尺を引いても番号を省略せず、
+      重用区間では重なるすべての番号を出します。
+    </p>
+    <section>
+      <h3>データ情報</h3>
+      <dl id="stats" class="stats"></dl>
+      <dl id="freshness" class="freshness"></dl>
+    </section>
+    <section>
+      <h3>リンク</h3>
+      <div class="about-links">
+        <a href="https://github.com/nanase/kokudo-map" target="_blank" rel="noopener"
+           class="mini about-link">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+              0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+              -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+              .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+              -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27
+              .68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12
+              .51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48
+              0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+          </svg>
+          GitHub リポジトリ
+        </a>
+        <!-- X の印は使わず、外へ出るリンクの印で述べる。どこへ飛ぶかは
+             宛先そのものが答える。名乗るのは人であって、アカウントの
+             置き場所ではない。 -->
+        <a href="https://x.com/nanase_coder" target="_blank" rel="noopener"
+           class="mini about-link">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 4h6v6M20 4l-8.6 8.6" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M18 14.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4.5"
+                  fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          制作者: Nanase
+        </a>
+      </div>
+    </section>
   </form>
 </dialog>
 

@@ -7,12 +7,7 @@ import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 
 import { routeListHTML } from '../web/panel.mjs';
-import {
-  NARROW_QUERY,
-  setSelection,
-  wireControls,
-  wireRouteFold,
-} from '../web/wiring.mjs';
+import { NARROW_QUERY, setSelection, wireControls } from '../web/wiring.mjs';
 
 const indexHtml = readFileSync(
   new URL('../web/index.html', import.meta.url),
@@ -177,84 +172,69 @@ describe('wireControls — 表示のトグル', () => {
   });
 });
 
-/* 折りたたみは画面幅に従う。happy-dom の matchMedia は matches を答えるが、
- * 画面幅を変えても change を自分では発火しないので、境界をまたぐ側は
- * 手で change を投げて確かめる。 */
-describe('wireRouteFold — 国道一覧の折りたたみ', () => {
-  const fold = (width) => {
+/* 国道一覧はどの画面幅でも畳んだ状態で始まる。459 個のチェックボックスは
+ * サイドバーの大半を占めるので、開くのは番号を眺めたい人だけでよい。 */
+describe('国道一覧の折りたたみ', () => {
+  const load = (width) => {
     const window = new Window({
       url: 'https://example.invalid/',
       width,
       height: 720,
     });
-    const document = window.document;
-    document.write(indexHtml);
-    // matchMedia は呼ぶたびに別の MediaQueryList を返すので、配線が実際に
-    // 購読した一つを捕まえておく。別の個体へ change を投げても届かない。
-    const real = window.matchMedia.bind(window);
-    const created = [];
-    window.matchMedia = (q) => {
-      const m = real(q);
-      created.push(m);
-      return m;
-    };
-    wireRouteFold(document);
-    return {
-      window,
-      document,
-      block: document.querySelector('#route-block'),
-      mq: created[0],
-    };
+    window.document.write(indexHtml);
+    return window.document;
   };
 
-  const resize = ({ window, mq }, width) => {
-    window.happyDOM.setViewport({ width, height: 720 });
-    mq.dispatchEvent(new window.Event('change'));
-  };
-
-  test('広い画面では開いている', () => {
-    expect(fold(1280).block.open).toBe(true);
+  test('広い画面でも畳まれている', () => {
+    expect(load(1280).querySelector('#route-block').open).toBe(false);
   });
 
-  test('狭い画面では畳まれている', () => {
-    expect(fold(375).block.open).toBe(false);
+  test('狭い画面でも畳まれている', () => {
+    expect(load(375).querySelector('#route-block').open).toBe(false);
   });
 
-  test('狭い画面から広げると開く', () => {
-    const ctx = fold(375);
-    expect(ctx.block.open).toBe(false);
-
-    resize(ctx, 1280);
-    expect(ctx.block.open).toBe(true);
+  /* 絞り込み欄は一覧と一緒に畳む。選択解除は畳んだままでも押せなければ
+   * ならない——選択は地図に効いており、一覧を開かずに戻したいことがある。
+   * summary は閉じていても描かれるので、そこに置けば常に見える。 */
+  test('絞り込み欄は畳む側にある', () => {
+    const document = load(1280);
+    const block = document.querySelector('#route-block');
+    expect(block.contains(document.querySelector('#route-filter'))).toBe(true);
+    expect(
+      document
+        .querySelector('#route-block > summary')
+        .contains(document.querySelector('#route-filter')),
+    ).toBe(false);
   });
 
-  test('広い画面から狭めると畳まれる', () => {
-    const ctx = fold(1280);
-    expect(ctx.block.open).toBe(true);
-
-    resize(ctx, 375);
-    expect(ctx.block.open).toBe(false);
+  test('選択解除は summary の中にあり、畳んでも見える', () => {
+    const document = load(1280);
+    expect(
+      document
+        .querySelector('#route-block > summary')
+        .contains(document.querySelector('#sel-none')),
+    ).toBe(true);
   });
 
-  /* 畳む幅は style.css の @media と wiring.mjs の二箇所にある。片方だけ
-   * 動かすと、見出しを消したまま中身も畳まれた画面ができる。
-   *
-   * 見出しを隠す側は補集合で書く。min-width: 861px のように 1px ずらすと、
-   * そのあいだの幅がどちらにも入らず、開いた一覧の上に見出しだけが残る。 */
-  test('畳む幅が style.css の @media と一致する', () => {
+  test('選択解除を押しても折りたたみは開かない', () => {
+    const { document } = setup();
+    const block = document.querySelector('#route-block');
+    expect(block.open).toBe(false);
+
+    document.querySelector('#route-list input[value="7"]').click();
+    document.querySelector('#sel-none').click();
+
+    expect(block.open).toBe(false);
+  });
+
+  /* 狭い画面と見なす幅は style.css の @media と wiring.mjs の二箇所にある。
+   * 片方だけ動かすと、パネルの見た目と地図がずらす向きが食い違う。 */
+  test('狭い画面の幅が style.css の @media と一致する', () => {
     const css = readFileSync(
       new URL('../web/style.css', import.meta.url),
       'utf8',
     );
     expect(NARROW_QUERY).toBe('(max-width: 860px)');
     expect(css).toContain(`@media ${NARROW_QUERY}`);
-    expect(css).toContain(`@media not all and ${NARROW_QUERY}`);
-  });
-
-  test('畳んだままでも絞り込み欄と選択解除は一覧の外にある', () => {
-    const { document, block } = fold(375);
-    expect(block.open).toBe(false);
-    expect(block.contains(document.querySelector('#route-filter'))).toBe(false);
-    expect(block.contains(document.querySelector('#sel-none'))).toBe(false);
   });
 });

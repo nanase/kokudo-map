@@ -40,7 +40,8 @@ export const routeListHTML = (routes) =>
     .join('');
 
 /* ------------------------------------------------------------------ 集計 --- */
-/** The footer's four numbers. An empty selection means everything. */
+/** The four numbers the 国道マップについて dialog states. An empty selection
+ *  means everything. */
 export const statsHTML = (selectedCount, totalRoutes, { arcs, km, conc }) =>
   `<dt>選択路線</dt><dd>${selectedCount || totalRoutes} / ${totalRoutes}</dd>` +
   `<dt>対象アーク</dt><dd>${arcs.toLocaleString()}</dd>` +

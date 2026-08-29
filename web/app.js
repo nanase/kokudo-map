@@ -89,7 +89,6 @@ import {
   NARROW_QUERY,
   setSelection,
   wireControls,
-  wireRouteFold,
   wireShare,
 } from './wiring.mjs';
 
@@ -135,6 +134,63 @@ function readStored(key, allowed, fallback) {
 let basemap = readStored('gsi-basemap', GSI_BASEMAP_ORDER, DEFAULT_BASEMAP);
 let gsiShade = readStored('gsi-shade', GSI_SHADE_LEVELS, DEFAULT_SHADE);
 
+/* ----------------------------------------------------------------- 配色 --- */
+/**
+ * 明るい面か暗い面か。
+ *
+ * 色そのものは style.css の light-dark() が両方述べており、どちらを採るかは
+ * `color-scheme` が決める。ここが置く `data-theme` はその一言だけである
+ * ——置かなければ端末の設定がそのまま効くので、この地図が最初に描かれる絵は
+ * JavaScript を待たない。
+ *
+ * 置くのは解いた側('light'/'dark')であって、人が選んだ側('auto' を含む)では
+ * ない。色でない切り替え——MapLibre の釦の絵を反転させるかどうか——は媒体
+ * クエリでは書けず、`data-theme` を見るしかないからである。端末に合わせて
+ * いるあいだも解いた側を置いておけば、見る場所が一つで済む。
+ *
+ * 選択は localStorage に残す。地図の濃さや種類と同じで、絞り込みの状態では
+ * ないので `state` にも URL にも入らない——共有したリンクが相手の配色まで
+ * 決めてしまう理由が無い。
+ */
+const THEME_MODES = ['auto', 'light', 'dark'];
+const darkMq = window.matchMedia('(prefers-color-scheme: dark)');
+let theme = readStored('theme', THEME_MODES, 'auto');
+
+function applyTheme() {
+  document.documentElement.dataset.theme =
+    theme === 'auto' ? (darkMq.matches ? 'dark' : 'light') : theme;
+}
+
+// 端末の設定が変わったとき。自分で選んでいるあいだは applyTheme が無視する。
+darkMq.addEventListener('change', applyTheme);
+applyTheme();
+
+for (const el of document.querySelectorAll('input[name=theme]')) {
+  el.checked = el.value === theme;
+  el.addEventListener('change', () => {
+    theme = document.querySelector('input[name=theme]:checked').value;
+    applyTheme();
+    try {
+      localStorage.setItem('theme', theme);
+    } catch {
+      /* private browsing: the choice simply does not outlive the tab */
+    }
+  });
+}
+
+/**
+ * 共有されたリンクが眺めを指定しているか。
+ *
+ * 地図を作る前に読む。`hash: true` の MapLibre は、地図を作った時点で既定の
+ * 中心へ jumpTo し、その moveend で自分の hash を書き込む——しかもその書き込み
+ * は同期に走る。作った後に読むと、共有されたリンクの hash と、地図が今しがた
+ * 自分で書いた hash が見分けられない。
+ *
+ * 見分けが付かないあいだ、boot() の fitInitialView() は一度も呼ばれておらず、
+ * `?region=` が指す地域は、そこにあるだけで誰にも届いていなかった。
+ */
+const sharedView = Boolean(location.hash);
+
 const map = new maplibregl.Map({
   container: 'map',
   attributionControl: false,
@@ -147,8 +203,23 @@ const map = new maplibregl.Map({
   // where no CJK font is installed.
   localIdeographFontFamily: false,
   style: baseStyle(basemap, gsiShade),
-  center: [138.0, 36.2],
-  zoom: 7.6,
+  // 何も指定されていないときの眺め。全国が一枚に収まり、北海道から沖縄まで
+  // 端が切れない位置を目で決めてある——`#4.62/35.79/137.92` を開いたときと
+  // 同じ絵である。データの広がり (meta.bbox) に自動で合わせると、南鳥島の
+  // ような離れた点まで入れようとして日本が小さく片寄る。
+  center: [137.92, 35.79],
+  zoom: 4.62,
+  // MapLibre 自身が作る釦の名札。この地図の釦は残らず日本語で名乗っている
+  // ので、拡大・方位・現在位置だけが英語で名乗る理由が無い。ここに無い鍵
+  // (縮尺の単位など)は MapLibre の既定のままである。
+  locale: {
+    'NavigationControl.ZoomIn': '拡大',
+    'NavigationControl.ZoomOut': '縮小',
+    'NavigationControl.ResetBearing': '北を上に戻す',
+    'GeolocateControl.FindMyLocation': '現在位置を表示',
+    'GeolocateControl.LocationNotAvailable': '現在位置を取得できません',
+    'Popup.Close': '閉じる',
+  },
 });
 
 // exposed for debugging and for pipeline/render_check.mjs
@@ -163,8 +234,17 @@ window.map = map;
 // typically, unlike a cold first visit).
 const mapLoaded = new Promise((res) => map.once('load', res));
 
+// 拡大・縮小と方位を別の台に分ける。NavigationControl は既定では三つを
+// 一つの角丸の群にまとめるが、拡大・縮小が「今見ている範囲」を変えるのに対し、
+// 方位は「北がどちらか」を戻すだけで、押す場面も頻度も違う。同じ群に並んで
+// いると、拡大を連打している指がそのまま方位に触れて地図が回る。
+// 二つ addControl すれば、MapLibre が群ごとに積んで隙間を空ける。
 map.addControl(
-  new maplibregl.NavigationControl({ visualizePitch: false }),
+  new maplibregl.NavigationControl({ showCompass: false }),
+  'top-right',
+);
+map.addControl(
+  new maplibregl.NavigationControl({ showZoom: false, visualizePitch: false }),
   'top-right',
 );
 map.addControl(
@@ -266,8 +346,9 @@ for (const [selector, zoomOnce, sign] of [
   if (btn) attachHoldToZoom(btn, zoomOnce, sign);
 }
 // The one place the sources are credited. The panel used to say the same thing
-// in its footer, which is two answers to one question and one of them free to
-// go stale; the map's own control is the copy that has to be there.
+// in its own footer, which is two answers to one question and one of them free
+// to go stale; the map's own control is the copy that has to be there — which
+// is also why the 国道マップについて dialog does not repeat it.
 map.addControl(
   new maplibregl.AttributionControl({
     compact: false,
@@ -300,7 +381,10 @@ function attachStateTip(container) {
     ev.stopPropagation();
     hide();
   });
-  return (text) => {
+  // 台に釦が二つ載ることがある。ラベルは押された釦の高さに合わせる——
+  // 台の真ん中に出すと、二つのあいだから出てどちらの返事か分からない。
+  return (text, btn) => {
+    tip.style.top = `${btn.offsetTop}px`;
     tip.textContent = text;
     tip.classList.add('show');
     clearTimeout(hideTimer);
@@ -310,71 +394,78 @@ function attachStateTip(container) {
 
 /* --------------------------------------------------------- control factory --- */
 /**
- * The three top-right controls are all the same shape: a MapLibre IControl —
- * so `addControl(…, 'top-right')` stacks it in its own rounded group
- * directly under the zoom buttons for free — whose button steps through
- * `order` on click and re-renders its icon/title/aria-label from whatever
- * value is now current. `get`/`apply` reach into state that lives outside
- * the control (map layers, localStorage) — this factory only owns the
- * button.
+ * 地図の右上の釦は、どれも同じ形をしている。押すと `order` を一つ進め、いま
+ * の値から絵と名札を描き直す。`get`/`apply` は釦の外にある状態(地図の層、
+ * localStorage)へ手を伸ばすので、ここが持つのは釦だけである。
  *
- * A two-value `order` is a toggle, not a cycle, and gets the `active` class
- * and `aria-pressed` that only a toggle needs; the two three-value controls
- * fall through untouched. `tip` defaults to `label`, since only the
- * hide-routes button needs a different phrasing for "what happens next" vs.
- * "what just happened" (see `hideStateTip`).
+ * `order` が二値なら循環ではなく切り替えなので、切り替えにだけ要る `active`
+ * と `aria-pressed` が付く。三値のものはそこを素通りする。`tip` は既定で
+ * `label` と同じ——「次に押すと何が起きるか」と「いま何になったか」で言い方を
+ * 変える必要があるのは、国道を隠す釦だけである(`hideStateTip`)。
  *
- * `onExternalChange`, if given, is handed the button's own `render` so a
- * control can redraw when its state changes off-screen from any click —
- * the pitch button's state also moves via Ctrl+drag. `isPressed` likewise
- * defaults to exact equality with `order[1]`, which the two hard-toggle
- * buttons never need to override — but the pitch button's `get()` can land
- * on any angle a drag left it at, not just the two the button cycles
- * between, so it treats every non-zero pitch as pressed.
+ * `onExternalChange` を渡すと、その釦の `render` が手渡される。押していない
+ * ところで状態が動く釦——視点は Ctrl+ドラッグでも変わる——が描き直すために
+ * 使う。`isPressed` も同じ事情で、視点の `get()` はドラッグが残した任意の角度
+ * を返しうるので、真上でない限りすべて「押されている」と見なす。
  */
-function buildCycleControl({
-  className,
-  id,
-  order,
-  get,
-  apply,
-  icon,
-  label,
-  tip,
-  isPressed = (value) => value === order[1],
-  onExternalChange,
-}) {
+function cycleButton(
+  {
+    id,
+    order,
+    get,
+    apply,
+    icon,
+    label,
+    tip,
+    isPressed = (value) => value === order[1],
+    onExternalChange,
+  },
+  showTip,
+) {
   const tipFor = tip ?? label;
   const isToggle = order.length === 2;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = id;
+  const render = () => {
+    const value = get();
+    btn.innerHTML = icon(value);
+    const text = label(value);
+    btn.title = text;
+    btn.setAttribute('aria-label', text);
+    if (isToggle) {
+      const pressed = isPressed(value);
+      btn.classList.toggle('active', pressed);
+      btn.setAttribute('aria-pressed', String(pressed));
+    }
+  };
+  btn.addEventListener('click', () => {
+    const next = order[(order.indexOf(get()) + 1) % order.length];
+    apply(next);
+    render();
+    showTip(tipFor(next), btn);
+  });
+  render();
+  onExternalChange?.(render);
+  return btn;
+}
+
+/**
+ * 一つの台に、釦を一つ以上載せる。MapLibre の IControl なので、
+ * `addControl(…, 'top-right')` するだけで角丸の台ごと縦に積まれる。
+ *
+ * 台を分けるか一つにするかが、釦どうしの近さの唯一の表し方である。地図の
+ * 種類と濃さのように「同じ絵の見え方」を決める二つは一つの台に載せ、役目の
+ * 違うものは別の台にする。
+ */
+function buildCycleControl(className, ...specs) {
   return class CycleControl {
     onAdd() {
       const container = document.createElement('div');
       container.className = `maplibregl-ctrl maplibregl-ctrl-group ${className}`;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.id = id;
-      const render = () => {
-        const value = get();
-        btn.innerHTML = icon(value);
-        const text = label(value);
-        btn.title = text;
-        btn.setAttribute('aria-label', text);
-        if (isToggle) {
-          const pressed = isPressed(value);
-          btn.classList.toggle('active', pressed);
-          btn.setAttribute('aria-pressed', String(pressed));
-        }
-      };
       const showTip = attachStateTip(container);
-      btn.addEventListener('click', () => {
-        const next = order[(order.indexOf(get()) + 1) % order.length];
-        apply(next);
-        render();
-        showTip(tipFor(next));
-      });
-      render();
-      onExternalChange?.(render);
-      container.appendChild(btn);
+      for (const spec of specs)
+        container.appendChild(cycleButton(spec, showTip));
       this._container = container;
       return container;
     }
@@ -422,8 +513,7 @@ function applyPitch(pitch) {
   map.easeTo({ pitch, duration: 400 });
 }
 
-const PitchControl = buildCycleControl({
-  className: 'pitch-ctrl',
+const PitchControl = buildCycleControl('pitch-ctrl', {
   id: 'pitch-btn',
   order: [0, 60],
   get: () => mapPitch,
@@ -481,8 +571,7 @@ function setRoutesHidden(hidden) {
   }
 }
 
-const HideRoutesControl = buildCycleControl({
-  className: 'hide-routes-ctrl',
+const HideRoutesControl = buildCycleControl('hide-routes-ctrl', {
   id: 'hide-routes-btn',
   order: [false, true],
   get: () => routesHidden,
@@ -491,6 +580,91 @@ const HideRoutesControl = buildCycleControl({
   label: (hidden) => (hidden ? '国道の表示に戻す' : '国道を一時的に隠す'),
   tip: hideStateTip,
 });
+
+/* --------------------------------------------------------- display pane --- */
+/**
+ * 釦を押すと出る面。「何が地図に描かれるか」を決めるものは残らずここに集める
+ * ——切り替えた結果は地図にしか現れないので、操作面ではなく地図の側に置く。
+ * 節を分けて一つの面に収めてあるのは、重用区間の見せ方も種別の出し入れも同じ
+ * 問いの答えだからである。釦を分けると、どちらを押すか毎回考えることになる。
+ *
+ * 中身の markup は index.html が持ち、ここは開け閉てだけを持つ。onAdd がその
+ * 要素を釦と同じ台へ移すので、面の位置は釦を追う——位置合わせの計算はどこにも
+ * 無い。state-tip が同じ台に居るのと同じ仕掛けである。
+ */
+const displayPane = $('#display-popover');
+let displayBtn = null;
+
+const displayPaneOpen = () => !displayPane.hidden;
+
+/**
+ * 面の上端は釦に合わせる。それで窓の下からはみ出すなら、はみ出したぶんだけ
+ * 引き上げる——低い窓では、釦の高さに揃えることより中身が見えることが先である。
+ * 引き上げても入らない高さは面の中が巻き取る (style.css の max-height)。
+ */
+const PANE_GAP = 12;
+
+function fitDisplayPane() {
+  displayPane.style.top = '-1px';
+  const over =
+    displayPane.getBoundingClientRect().bottom -
+    (window.innerHeight - PANE_GAP);
+  if (over > 0) displayPane.style.top = `${-1 - over}px`;
+}
+
+function setDisplayPane(open) {
+  displayPane.hidden = !open;
+  displayBtn.classList.toggle('active', open);
+  displayBtn.setAttribute('aria-expanded', String(open));
+  if (open) fitDisplayPane();
+}
+
+// 窓を掴んでいる最中に面が窓からはみ出さないように。
+window.addEventListener('resize', () => {
+  if (displayPaneOpen()) fitDisplayPane();
+});
+
+// 面の外を押したら閉じる。釦自身の click はそこで止めてあるので、ここへは
+// 上がってこない。
+document.addEventListener('click', (ev) => {
+  if (displayPaneOpen() && !displayPane.contains(ev.target))
+    setDisplayPane(false);
+});
+
+/** つまみの付いた二本の桿。何を出すかを決める面の、ありふれた印である。 */
+const DISPLAY_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<path d="M3 8h8M17.5 8H21M3 16h4.5M14 16h7" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+  '<circle cx="14.2" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/>' +
+  '<circle cx="10.7" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/>' +
+  '</svg>';
+
+class DisplayControl {
+  onAdd() {
+    const container = document.createElement('div');
+    container.className = 'maplibregl-ctrl maplibregl-ctrl-group display-ctrl';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'display-btn';
+    btn.innerHTML = DISPLAY_ICON;
+    btn.title = '表示';
+    btn.setAttribute('aria-label', '表示');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', 'display-popover');
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      setDisplayPane(!displayPaneOpen());
+    });
+    displayBtn = btn;
+    container.append(btn, displayPane);
+    this._container = container;
+    return container;
+  }
+  onRemove() {
+    this._container.remove();
+  }
+}
 
 /* -------------------------------------------------------------- gsi shade --- */
 /**
@@ -557,15 +731,14 @@ function applyGsiShade(level) {
   }
 }
 
-const GsiShadeControl = buildCycleControl({
-  className: 'gsi-shade-ctrl',
+const SHADE_BUTTON = {
   id: 'gsi-shade-btn',
   order: GSI_SHADE_LEVELS,
   get: () => gsiShade,
   apply: applyGsiShade,
   icon: shadeIcon,
   label: (level) => `地図の濃さ: ${GSI_SHADE_LABELS[level]}`,
-});
+};
 
 /* --------------------------------------------------------------- basemap --- */
 /**
@@ -620,38 +793,138 @@ function applyBasemap(id) {
   }
 }
 
-const BasemapControl = buildCycleControl({
-  className: 'basemap-ctrl',
+const BASEMAP_BUTTON = {
   id: 'basemap-btn',
   order: GSI_BASEMAP_ORDER,
   get: () => basemap,
   apply: applyBasemap,
   icon: (bmId) => BASEMAP_ICONS[bmId],
   label: (bmId) => `地図の種類: ${GSI_BASEMAPS[bmId].label}`,
-});
+};
+
+/**
+ * 下に敷く地図について決めることは二つ——どれを敷くかと、どれだけ濃く敷くか
+ * ——で、どちらも同じ一枚の見え方の話である。台を一つにして、その二つが並んで
+ * いることを形で述べる。種類が先で、濃さがその下に付く。
+ */
+const BasemapControl = buildCycleControl(
+  'basemap-ctrl',
+  BASEMAP_BUTTON,
+  SHADE_BUTTON,
+);
+
+/* --------------------------------------------------------- 地図をずらす --- */
+/**
+ * 地図の上に浮いている箱のぶんだけ、地図の「中心」をずらす。
+ *
+ * 箱は #left-stack に縦に並んでいる。操作面 (#panel) も詳細 (#detail) も、
+ * 地図の要素を細くするのではなく上に浮かせてある——細くすると canvas の寸法が
+ * 変わり、開け閉てのたびに全部描き直しになる。浮かせて padding をずらせば、
+ * 地図が持っている絵はそのままで、fitBounds や flyTo の行き先だけが箱を
+ * 避ける。
+ *
+ * 寸法と位置は style.css が持つので、ここは実測した矩形に隙間ぶんを足すだけに
+ * する——同じ数を二箇所で言わない。
+ */
+const app = $('#app');
+const panel = $('#panel');
+const detail = $('#detail');
+const detailBody = $('#detail-body');
+const narrowMq = window.matchMedia(NARROW_QUERY);
+
+const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
+/** 箱と地図のあいだに残す余白。 */
+const BOX_GAP = 12;
+/** 一辺で覆ってよい上限と、向かい合う二辺の和の上限。狭い画面では操作面が上を、
+ *  詳細が下を覆うので、これが無いと和が canvas の高さを超え、地図の中心が画面の
+ *  外へ出る。 */
+const MAX_SIDE_RATIO = 0.6;
+const MAX_OPPOSITE_RATIO = 0.8;
+const EASE_MS = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ? 0
+  : 260;
+
+const panelOpen = () => !app.classList.contains('panel-off');
+
+function mapPadding() {
+  const canvas = $('#map').getBoundingClientRect();
+  const panelBox = panelOpen() ? panel.getBoundingClientRect() : null;
+  const detailBox = detail.hidden ? null : detail.getBoundingClientRect();
+  if (!panelBox && !detailBox) return { ...NO_PADDING };
+
+  // 広い画面では列は左端にあるので、左だけを空ける。
+  if (!narrowMq.matches) {
+    const right = Math.max(panelBox?.right ?? 0, detailBox?.right ?? 0);
+    const left = Math.min(
+      right - canvas.left + BOX_GAP,
+      canvas.width * MAX_SIDE_RATIO,
+    );
+    return { ...NO_PADDING, left };
+  }
+
+  // 狭い画面では列が画面の幅いっぱいなので、避ける向きは上下になる。操作面が
+  // 上を、詳細が下を覆う。
+  const cap = canvas.height * MAX_SIDE_RATIO;
+  const pad = { ...NO_PADDING };
+  if (panelBox) {
+    pad.top = Math.min(panelBox.bottom - canvas.top + BOX_GAP, cap);
+  }
+  if (detailBox) {
+    pad.bottom = Math.min(canvas.bottom - detailBox.top + BOX_GAP, cap);
+  }
+  // 二つとも出ているときは、和のほうが先に効く。
+  const both = pad.top + pad.bottom;
+  const room = canvas.height * MAX_OPPOSITE_RATIO;
+  if (both > room) {
+    pad.top *= room / both;
+    pad.bottom *= room / both;
+  }
+  return pad;
+}
+
+/** 渡すのは padding だけである。center も zoom も渡さないので、地図が持って
+ *  いる絵はそのままで、地図が中心と見なす点だけが箱の外へ寄る。 */
+function applyMapPadding(animate) {
+  const padding = mapPadding();
+  if (animate) map.easeTo({ padding, duration: EASE_MS });
+  else map.setPadding(padding);
+}
+
+/**
+ * padding を変えても絵を動かさない。
+ *
+ * padding は「地図が中心と見なす点」をずらす仕組みなので、変えるとその点は
+ * 別の画素へ移り、絵は逆へ滑る。滑らせないためには、新しい padding のもとで
+ * 中心が置かれることになる画素に今写っている地点を、そのまま新しい中心に
+ * 据え直せばよい。
+ */
+function setPaddingKeepingView() {
+  const padding = mapPadding();
+  const canvas = $('#map').getBoundingClientRect();
+  const x = canvas.width / 2 + (padding.left - padding.right) / 2;
+  const y = canvas.height / 2 + (padding.top - padding.bottom) / 2;
+  map.jumpTo({ padding, center: map.unproject([x, y]) });
+}
 
 /* ----------------------------------------------------------------- panel --- */
 /**
- * Fold the sidebar away to give the map the whole window.
+ * 操作面を畳んで、地図に窓を丸ごと渡す。
  *
- * The button is map chrome, not panel chrome: it has to stay on screen while
- * the panel is off it, or there would be no way back. Wired here rather than in
- * wireControls() so it answers before the data has arrived.
+ * 開いているあいだ閉じる口はパネル自身の × で、閉じているあいだ開き直す口は
+ * 地図の上の #panel-toggle である。後者は地図側の部品なので、データが届く前
+ * から答えられるよう wireControls() ではなくここで配線する。
  *
- * `inert` is what actually takes the folded panel out of play — the CSS only
- * parks it past the left edge, and a checkbox sitting off screen is still
- * reachable by tab and still readable by a screen reader.
+ * 畳んだパネルを実際に無効化するのは `inert` である。CSS は visibility で
+ * 伏せるだけで、伏せた要素も読み上げには残りうる。
  */
 (() => {
-  const app = $('#app');
-  const panel = $('#panel');
-  const btn = $('#panel-toggle');
+  const toggle = $('#panel-toggle');
 
-  const set = (open) => {
+  const set = (open, animate) => {
     app.classList.toggle('panel-off', !open);
     panel.inert = !open;
-    btn.setAttribute('aria-expanded', String(open));
-    btn.title = open ? 'サイドバーを隠す' : 'サイドバーを表示';
+    toggle.setAttribute('aria-expanded', String(open));
+    applyMapPadding(animate);
     try {
       localStorage.setItem('panel-open', open ? '1' : '0');
     } catch {
@@ -659,25 +932,42 @@ const BasemapControl = buildCycleControl({
     }
   };
 
-  // The canvas follows a click on its own: MapLibre watches its container
-  // with a ResizeObserver, and the panel changes width in one step (see
-  // style.css on why it does not slide), so one observation is all it takes.
-  btn.addEventListener('click', () => set(app.classList.contains('panel-off')));
+  toggle.addEventListener('click', () => set(true, true));
+  $('#panel-close').addEventListener('click', () => set(false, true));
 
-  let open = true;
+  // 狭い画面では畳んで始める。浮いた箱は画面の半分を占め、その下から地図が
+  // 見えるわけではない——この幅で見に来た人がまず見たいのは地図である。
+  // 一度でも自分で開け閉てした人の選択は、幅より優先する。
+  let open = !narrowMq.matches;
   try {
-    open = localStorage.getItem('panel-open') !== '0';
+    const stored = localStorage.getItem('panel-open');
+    if (stored !== null) open = stored === '1';
   } catch {
     /* ditto */
   }
-  set(open);
-  // Applying the stored panel state above is a synchronous DOM mutation
-  // that lands before the first paint, which the ResizeObserver comment
-  // above does not cover — it only catches changes after the page has
-  // settled. `map` (above) was still built against the panel-open layout,
-  // so the canvas needs one explicit resize to pick up the collapsed one.
-  map.resize();
+  set(open, false);
 })();
+
+/* ----------------------------------------------------- この地図について --- */
+/**
+ * データがいつのものか、どこで作られているかを出す紙。中身は buildUI() が
+ * 一度入れたきり動かないので、ここは開く口を結ぶだけでよい——showModal()
+ * 自身が Esc とフォーカスの往復を面倒みる。
+ */
+$('#about-btn').addEventListener('click', () => $('#about-dialog').showModal());
+
+/**
+ * 紙の外——後ろの暗がり——を押したら閉じる。
+ *
+ * <dialog> にとって暗がりは自分の箱のうちにあり、紙のほうは中の <form> が
+ * 隅まで埋めている。だから押されたのが箱そのものだったなら、それは紙ではなく
+ * 暗がりを押したということである。位置を測る必要が無い。
+ */
+for (const dialog of document.querySelectorAll('dialog.sheet')) {
+  dialog.addEventListener('click', (ev) => {
+    if (ev.target === dialog) dialog.close();
+  });
+}
 
 /* ----------------------------------------------------------------- boot --- */
 async function boot() {
@@ -699,12 +989,38 @@ async function boot() {
   for (const layer of routeLayers()) map.addLayer(layer);
   map.addControl(new PitchControl(), 'top-right');
   map.addControl(new HideRoutesControl(), 'top-right');
-  map.addControl(new GsiShadeControl(), 'top-right');
+  map.addControl(new DisplayControl(), 'top-right');
   map.addControl(new BasemapControl(), 'top-right');
+  /**
+   * 現在位置。押すと端末に位置を尋ね、地図の上に点で出す。
+   *
+   * MapLibre 自身の部品を使う。点・精度の円・追従の解除まで一式を持っており、
+   * この地図が足すことは何も無い。位置は端末から地図へ渡るだけで、どこへも
+   * 送らない——`state` にも URL にも入らないので、共有したリンクが自分の
+   * 居場所を連れて行くこともない。
+   *
+   * 並びでは一番下に置く。上に積んである釦はどれも「地図をどう見せるか」を
+   * 決めるだけで眺めは動かないが、これは押した瞬間に地図が飛ぶ。役目が違う
+   * ものを混ぜず、端に置く。
+   *
+   * `trackUserLocation` は、一度押したら動くたびに点が付いてくる形である。
+   * 走りながら国道を辿るのに、押し直しを求める理由が無い。
+   * 全国が入る縮尺のまま点だけ打たれても居場所は読めないので、寄る先は
+   * 街の見える縮尺までとする。
+   */
+  map.addControl(
+    new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+      showUserLocation: true,
+      showAccuracyCircle: true,
+      fitBoundsOptions: { maxZoom: 15 },
+    }),
+    'top-right',
+  );
 
   wirePopups();
   wireControls(document, state, applyFilters);
-  wireRouteFold(document);
   wireShare(document, state);
 
   map.getSource('termini').setData(terminiFeatures(state.meta));
@@ -713,9 +1029,10 @@ async function boot() {
   syncControls();
   applyFilters();
 
-  // A shared link's hash wins. Otherwise open on everything that is built, or
-  // on one region if ?region= names it — a view hint, not a data switch.
-  if (!location.hash) fitInitialView(index);
+  // A shared link's hash wins. Otherwise ?region=, if it names one — a view
+  // hint, not a data switch. With neither, the map keeps the view it was
+  // built with.
+  if (!sharedView) fitInitialView(index);
 
   $('#loading').classList.add('done');
 }
@@ -758,23 +1075,40 @@ function syncControls() {
 }
 
 /**
- * Open on the roads themselves, or on the box named by ?region=.
+ * `?region=` が地域を名指していれば、そこへ寄る。
  *
- * The union of the region boxes is not the same thing: they are rectangles
- * drawn around prefecture outlines, and 東京都 reaches 南鳥島, so their union
- * spans a third of the Pacific. The extent of the arcs is what there is to see.
+ * 全国の眺めはふつうここで決めない——地図を作るときの center/zoom が既定で、
+ * 名指しが無ければそれがそのまま残る。例外は縦長の狭い画面で、既定の縮尺の
+ * ままだと九州と北海道が両端で切れる。そこだけはデータの広がりに合わせる。
  */
 function fitInitialView(index) {
   const wanted = new URLSearchParams(location.search).get('region');
-  const box = index.find((r) => r.region === wanted)?.bbox || state.meta.bbox;
+  const box =
+    index.find((r) => r.region === wanted)?.bbox ??
+    (narrowMq.matches ? state.meta.bbox : null);
+  if (!box) return;
   const [w, s, e, n] = box;
-  map.fitBounds(
-    [
-      [w, s],
-      [e, n],
-    ],
-    { padding: 24, duration: 0 },
-  );
+  const bounds = [
+    [w, s],
+    [e, n],
+  ];
+  // 浮いている箱のぶんは、既に地図の padding が述べている。fitBounds に渡す
+  // padding はそれを置き換えてしまうので、余白を足した形で渡し直す——そうし
+  // ないと最初の眺めだけが操作面の下に潜る。
+  const p = map.getPadding();
+  const clear = {
+    top: p.top + 24,
+    bottom: p.bottom + 24,
+    left: p.left + 24,
+    right: p.right + 24,
+  };
+  // 箱を避けた残りに地域が入らない画面もある——縦に長い狭い画面では、操作面が
+  // 高さの半分を占め、残りへ収めるには縮尺が足りない。そのとき
+  // cameraForBounds は何も返さないので、避けるのをやめて窓いっぱいに合わせる。
+  // 端が操作面の下に少し潜るが、地域が一枚に入っているほうがよい——箱は
+  // 閉じられる。
+  const padding = map.cameraForBounds(bounds, { padding: clear }) ? clear : 24;
+  map.fitBounds(bounds, { padding, duration: 0 });
 }
 
 /* --------------------------------------------------------------- filters --- */
@@ -834,10 +1168,12 @@ function updateStats() {
   $('#stats').innerHTML = statsHTML(sel.size, state.routes.length, totals);
 
   // A button that cannot act should say so by being unavailable rather than by
-  // doing nothing.
+  // doing nothing. 文字は持たない釦なので、どれだけ取り消すかは名札が述べる。
   const clear = $('#sel-none');
   clear.disabled = sel.size === 0;
-  clear.textContent = clearLabel(sel.size);
+  const clearText = clearLabel(sel.size);
+  clear.title = clearText;
+  clear.setAttribute('aria-label', clearText);
 
   // 畳んだ一覧は中身を見せないので、選択がいくつあるかは見出しが述べる。
   $('#route-count').textContent = selectionLabel(sel.size, state.routes.length);
@@ -961,48 +1297,9 @@ function wirePopups() {
  * のは地図が要る三つ——開いたぶん地図をずらすこと、起終点へ飛ぶこと、選択を
  * 差し替えること——だけである。
  *
- * 箱は地図の上に浮かせてある。#map を細くして横に並べる手もあるが、それは
- * canvas の寸法を変えることであり、開くたびに全部描き直しになる。浮かせて
- * padding をずらせば、地図が持っている絵はそのままである。
+ * 箱の居場所と、地図をずらす量は #left-stack と applyMapPadding が持つ
+ * (上の「地図をずらす」の節)。
  */
-const detail = $('#detail');
-const detailBody = $('#detail-body');
-const narrowMq = window.matchMedia(NARROW_QUERY);
-
-const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
-/** 箱と地図のあいだに残す余白。箱の寸法と位置は style.css が持つので、ここは
- *  実測した矩形にこの余白だけを足す——同じ数を CSS と二箇所で言わない。 */
-const DETAIL_GAP = 12;
-const DETAIL_EASE_MS = window.matchMedia('(prefers-reduced-motion: reduce)')
-  .matches
-  ? 0
-  : 260;
-
-/**
- * 箱が覆っているぶんの padding。
- *
- * 広い画面では左下の固定箱なので左を、狭い画面では下部の帯になるので下を
- * 空ける。どちらも style.css の @media と同じ境界で切り替わるよう、
- * wiring.mjs が持つ NARROW_QUERY をそのまま見る。
- */
-function detailPadding() {
-  if (detail.hidden) return { ...NO_PADDING };
-  const box = detail.getBoundingClientRect();
-  const canvas = $('#map').getBoundingClientRect();
-  return narrowMq.matches
-    ? { ...NO_PADDING, bottom: canvas.bottom - box.top + DETAIL_GAP }
-    : { ...NO_PADDING, left: box.right - canvas.left + DETAIL_GAP };
-}
-
-/** 渡すのは padding だけである。center も zoom も渡さないので、地図が持って
- *  いる絵はそのままで、地図が中心と見なす点だけが箱の右(狭い画面では上)へ
- *  寄る。 */
-function applyDetailPadding(animate) {
-  const padding = detailPadding();
-  if (animate) map.easeTo({ padding, duration: DETAIL_EASE_MS });
-  else map.setPadding(padding);
-}
-
 /**
  * 箱を開いた時点の居場所。閉じるときに、寄せたぶんを戻すかどうかを決める。
  *
@@ -1031,19 +1328,6 @@ const cameraMoved = (a, b) =>
   Math.abs(a.lat - b.lat) > CAMERA_EPS ||
   Math.abs(a.zoom - b.zoom) > CAMERA_EPS;
 
-/**
- * padding を外しても絵を動かさない。
- *
- * padding は「地図が中心と見なす点」をずらす仕組みなので、外すとその点は画面
- * の真ん中へ戻り、絵は逆へ滑る。滑らせないためには、いま画面の真ん中に写って
- * いる地点を、そのまま新しい中心に据え直せばよい。
- */
-function dropDetailPadding() {
-  const canvas = $('#map').getBoundingClientRect();
-  const anchor = map.unproject([canvas.width / 2, canvas.height / 2]);
-  map.jumpTo({ padding: { ...NO_PADDING }, center: anchor });
-}
-
 function openDetail(ref) {
   const route = state.routes.find((r) => r.ref === ref);
   if (!route) return;
@@ -1067,7 +1351,8 @@ function openDetail(ref) {
   // ここで取り直すと、動いた後に開き直した人が閉じたときに横へ滑る。
   if (detail.hidden) detailOpenedAt = cameraNow();
   detail.hidden = false;
-  applyDetailPadding(true);
+  app.classList.add('detail-open');
+  applyMapPadding(true);
 }
 
 function closeDetail() {
@@ -1075,25 +1360,31 @@ function closeDetail() {
   const moved = detailOpenedAt && cameraMoved(detailOpenedAt, cameraNow());
   detailOpenedAt = null;
   detail.hidden = true;
-  if (moved) dropDetailPadding();
-  else applyDetailPadding(true);
+  app.classList.remove('detail-open');
+  if (moved) setPaddingKeepingView();
+  else applyMapPadding(true);
 }
 
 $('#detail-close').addEventListener('click', closeDetail);
 
-// 共有ダイアログが開いているあいだの Esc はそちらのものである。<dialog> の
+// ダイアログが開いているあいだの Esc はそちらのものである。<dialog> の
 // キャンセルは document まで上がってくるので、ここで譲らないと後ろの箱まで
 // 一緒に閉じる。
 document.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Escape' && !$('#share-dialog').open) closeDetail();
+  if (ev.key !== 'Escape') return;
+  if ($('dialog[open]')) return; // ダイアログの Esc はそちらのものである
+  // 開いている面が先に閉じる。Esc は一番手前のものを畳む鍵である。
+  if (displayPaneOpen()) {
+    setDisplayPane(false);
+    return;
+  }
+  closeDetail();
 });
 
 // 箱の大きさは画面幅で変わる(狭い画面では下部の帯になる)ので、開いている
 // あいだは幅の変化に padding を追随させる。開閉と違って利用者が窓を掴んで
 // いる最中なので、滑らせずにその場で合わせる。
-window.addEventListener('resize', () => {
-  if (!detail.hidden) applyDetailPadding(false);
-});
+window.addEventListener('resize', () => applyMapPadding(false));
 
 /**
  * 標識と、箱の中のボタン。
