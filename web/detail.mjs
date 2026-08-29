@@ -188,7 +188,10 @@ const kindsHTML = (kinds) =>
  * るに値しないためである。 */
 const formerRowHTML = (formerKm) => {
   const km = fmtKm(formerKm);
-  return km === '0.0' ? '' : row('うち旧道', `${km} km`);
+  // 0 かどうかも fmtKm に聞く。fmtKm は閲覧者のロケールで数を組むので、小数点に
+  // コンマを使う地域では 0 が「0,0」になる。'0.0' と書き写した判定はそこで外れ、
+  // 旧道を持たない路線に「うち旧道 0,0 km」が出る。
+  return km === fmtKm(0) ? '' : row('うち旧道', `${km} km`);
 };
 
 /* 関わりのある路線を、標識を並べて述べる。
