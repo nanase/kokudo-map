@@ -55,6 +55,7 @@ jobs:
           bun run vendor
           test -s web/vendor/maplibre-gl.js
           test -s web/vendor/pmtiles.js
+          test -s web/vendor/line-seed-jp.css
 
       # data.nanase.cc に直接向けます。'data/…' は手元の pipeline/serve.py 用の
       # 相対パスなので、置き換え忘れれば 404 になって検査で気付きます。
