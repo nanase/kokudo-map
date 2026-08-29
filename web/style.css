@@ -275,12 +275,16 @@ input[type="search"]::placeholder { font-size: .82em; }
 .radios input, .checks input { accent-color: var(--sign-blue); margin: 0; }
 
 /* legends -----------------------------------------------------------------
-   凡例は地図の上、下端に浮かせる。左の列とは重ならないところまで内へ寄せ、
-   残った幅の真ん中に置く。下端の 56px は、地図の右下に積まれた縮尺と出典の
-   ぶんである——右へ伸びた凡例がその上に載らないように、行ごと上へ逃がす。 */
+   凡例は地図の上、右下に浮かせる。縮尺と出典もその角にあるので、下端の 56px
+   はその二つのぶんである——凡例が上、縮尺と出典が下に並ぶ。左の列とは重なら
+   ないところまで内へ寄せてあるが、右端に寄せている限りふつうは効かない。
+
+   台は明暗どちらの配色でも白いままにする。凡例は地図の部品であり、隣にある
+   拡大の釦も縮尺も出典も、MapLibre が白い台に濃い灰色で描く——そこだけ地の
+   色が変わると、同じ列に別の紙が混ざる。 */
 #legend-bar {
   position: absolute; left: 12px; right: 12px; bottom: 56px; z-index: 3;
-  display: flex; justify-content: center;
+  display: flex; justify-content: flex-end;
   /* 帯そのものは地図を掴む手を通す。箱だけが受け取る。 */
   pointer-events: none;
 }
@@ -289,14 +293,15 @@ input[type="search"]::placeholder { font-size: .82em; }
   pointer-events: auto; max-width: 100%;
   display: flex; flex-direction: column; gap: 7px;
   padding: 9px 13px;
-  background: var(--panel); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 6px;
-  box-shadow: 0 4px 18px rgba(0,0,0,.2);
+  background: #fff; color: #333;
+  border-radius: 6px; box-shadow: 0 0 0 2px rgba(0,0,0,.1);
 }
-.legend { display: flex; flex-wrap: wrap; gap: 5px 12px; justify-content: center; }
+.legend {
+  display: flex; flex-wrap: wrap; gap: 5px 12px; justify-content: flex-end;
+}
 .legend .item {
   display: flex; align-items: center; gap: 6px;
-  font-size: .72rem; color: var(--ink-2);
+  font-size: .72rem; color: #333;
   font-family: ui-monospace, Consolas, monospace;
 }
 .legend .swatch { width: 20px; height: 0; border-top-width: 3px; border-top-style: solid; }
