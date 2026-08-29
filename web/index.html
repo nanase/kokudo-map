@@ -174,29 +174,32 @@
         <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
       </div>
     </div>
-    <!-- 地図の上の釦から出る小さな面。どちらも「何が地図に描かれるか」を
-         決めるものなので、操作面ではなく地図の側に置く——切り替えた結果は
-         地図にしか現れない。
+    <!-- 地図の上の釦から出る面。「何が地図に描かれるか」を決めるものは残らず
+         ここに集める——切り替えた結果は地図にしか現れないので、操作面ではなく
+         地図の側に置く。節を分けて一つの面に収めてあるのは、どれも同じ問いの
+         答えだからである。釦を分けると、どちらを押すか毎回考えることになる。
 
          位置は app.js が釦の台へ移してから CSS が決める。中身をここに置いて
          あるのは、データが届く前から state と結べるようにするためである。 -->
-    <div id="conc-popover" class="map-popover" hidden>
-      <h2>重用区間</h2>
-      <div class="radios" role="radiogroup" aria-label="重用区間の表示">
-        <label><input type="radio" name="conc" value="off" checked> 強調なし</label>
-        <label><input type="radio" name="conc" value="all"> 重用区間のみ</label>
-      </div>
-    </div>
     <div id="display-popover" class="map-popover" hidden>
-      <h2>表示</h2>
-      <div class="checks">
-        <label><input type="checkbox" id="t-labels" checked> 路線番号</label>
-        <label><input type="checkbox" id="t-termini" checked> 起点・終点</label>
-        <label><input type="checkbox" id="t-former" checked> 旧道</label>
-        <label><input type="checkbox" id="t-expressway" checked> 自動車専用道路（高速道路）</label>
-        <label><input type="checkbox" id="t-special" checked> 点線国道・工事中・未開通</label>
-        <label><input type="checkbox" id="t-ferry" checked> 海上国道</label>
-      </div>
+      <section>
+        <h2>重用区間</h2>
+        <div class="radios" role="radiogroup" aria-label="重用区間の表示">
+          <label><input type="radio" name="conc" value="off" checked> 強調なし</label>
+          <label><input type="radio" name="conc" value="all"> 重用区間のみ</label>
+        </div>
+      </section>
+      <section>
+        <h2>表示</h2>
+        <div class="checks">
+          <label><input type="checkbox" id="t-labels" checked> 路線番号</label>
+          <label><input type="checkbox" id="t-termini" checked> 起点・終点</label>
+          <label><input type="checkbox" id="t-former" checked> 旧道</label>
+          <label><input type="checkbox" id="t-expressway" checked> 自動車専用道路（高速道路）</label>
+          <label><input type="checkbox" id="t-special" checked> 点線国道・工事中・未開通</label>
+          <label><input type="checkbox" id="t-ferry" checked> 海上国道</label>
+        </div>
+      </section>
     </div>
     <div id="loading">データを読み込んでいます…</div>
   </main>

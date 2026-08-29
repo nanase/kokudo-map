@@ -537,77 +537,34 @@ const HideRoutesControl = buildCycleControl('hide-routes-ctrl', {
   tip: hideStateTip,
 });
 
-/* ------------------------------------------------------- map popovers --- */
+/* --------------------------------------------------------- display pane --- */
 /**
- * 釦を押すと出る小さな面。「重用区間」と「表示」がこれで、どちらも
- * 「何が地図に描かれるか」を決める——切り替えた結果は地図にしか現れないので、
- * 操作面ではなく地図の側に置く。
+ * 釦を押すと出る面。「何が地図に描かれるか」を決めるものは残らずここに集める
+ * ——切り替えた結果は地図にしか現れないので、操作面ではなく地図の側に置く。
+ * 節を分けて一つの面に収めてあるのは、重用区間の見せ方も種別の出し入れも同じ
+ * 問いの答えだからである。釦を分けると、どちらを押すか毎回考えることになる。
  *
  * 中身の markup は index.html が持ち、ここは開け閉てだけを持つ。onAdd がその
  * 要素を釦と同じ台へ移すので、面の位置は釦を追う——位置合わせの計算はどこにも
  * 無い。state-tip が同じ台に居るのと同じ仕掛けである。
- *
- * 開くのは一度に一つである。二つ並べても読む場所が増えるだけで、地図は
- * その下に隠れる。
  */
-const popovers = [];
-let openPopover = null;
+const displayPane = $('#display-popover');
+let displayBtn = null;
 
-function setOpenPopover(next) {
-  for (const { btn, panel: pane } of popovers) {
-    const on = pane === next;
-    pane.hidden = !on;
-    btn.classList.toggle('active', on);
-    btn.setAttribute('aria-expanded', String(on));
-  }
-  openPopover = next;
+const displayPaneOpen = () => !displayPane.hidden;
+
+function setDisplayPane(open) {
+  displayPane.hidden = !open;
+  displayBtn.classList.toggle('active', open);
+  displayBtn.setAttribute('aria-expanded', String(open));
 }
 
 // 面の外を押したら閉じる。釦自身の click はそこで止めてあるので、ここへは
 // 上がってこない。
 document.addEventListener('click', (ev) => {
-  if (openPopover && !openPopover.contains(ev.target)) setOpenPopover(null);
+  if (displayPaneOpen() && !displayPane.contains(ev.target))
+    setDisplayPane(false);
 });
-
-function buildPopoverControl({ className, id, panelId, icon, label }) {
-  return class PopoverControl {
-    onAdd() {
-      const container = document.createElement('div');
-      container.className = `maplibregl-ctrl maplibregl-ctrl-group ${className}`;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.id = id;
-      btn.innerHTML = icon;
-      btn.title = label;
-      btn.setAttribute('aria-label', label);
-      btn.setAttribute('aria-expanded', 'false');
-      btn.setAttribute('aria-controls', panelId);
-      const pane = $(`#${panelId}`);
-      btn.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        setOpenPopover(pane.hidden ? pane : null);
-      });
-      container.append(btn, pane);
-      popovers.push({ btn, panel: pane });
-      this._container = container;
-      return container;
-    }
-    onRemove() {
-      this._container.remove();
-    }
-  };
-}
-
-/**
- * 二本の道が寄り合って一本になる形。重用とはそういう区間のことである。
- */
-const CONC_ICON =
-  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-  '<path d="M3 5c5 0 5.5 7 9.5 7H21" fill="none" stroke="currentColor" ' +
-  'stroke-width="2" stroke-linecap="round"/>' +
-  '<path d="M3 19c5 0 5.5-7 9.5-7" fill="none" stroke="currentColor" ' +
-  'stroke-width="2" stroke-linecap="round"/>' +
-  '</svg>';
 
 /** つまみの付いた二本の桿。何を出すかを決める面の、ありふれた印である。 */
 const DISPLAY_ICON =
@@ -618,21 +575,31 @@ const DISPLAY_ICON =
   '<circle cx="10.7" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/>' +
   '</svg>';
 
-const ConcurrencyControl = buildPopoverControl({
-  className: 'conc-ctrl',
-  id: 'conc-btn',
-  panelId: 'conc-popover',
-  icon: CONC_ICON,
-  label: '重用区間の見せ方',
-});
-
-const DisplayControl = buildPopoverControl({
-  className: 'display-ctrl',
-  id: 'display-btn',
-  panelId: 'display-popover',
-  icon: DISPLAY_ICON,
-  label: '表示するもの',
-});
+class DisplayControl {
+  onAdd() {
+    const container = document.createElement('div');
+    container.className = 'maplibregl-ctrl maplibregl-ctrl-group display-ctrl';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'display-btn';
+    btn.innerHTML = DISPLAY_ICON;
+    btn.title = '表示';
+    btn.setAttribute('aria-label', '表示');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', 'display-popover');
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      setDisplayPane(!displayPaneOpen());
+    });
+    displayBtn = btn;
+    container.append(btn, displayPane);
+    this._container = container;
+    return container;
+  }
+  onRemove() {
+    this._container.remove();
+  }
+}
 
 /* -------------------------------------------------------------- gsi shade --- */
 /**
@@ -944,7 +911,6 @@ async function boot() {
   for (const layer of routeLayers()) map.addLayer(layer);
   map.addControl(new PitchControl(), 'top-right');
   map.addControl(new HideRoutesControl(), 'top-right');
-  map.addControl(new ConcurrencyControl(), 'top-right');
   map.addControl(new DisplayControl(), 'top-right');
   map.addControl(new BasemapControl(), 'top-right');
   /**
@@ -1330,8 +1296,8 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape') return;
   if ($('dialog[open]')) return; // ダイアログの Esc はそちらのものである
   // 開いている面が先に閉じる。Esc は一番手前のものを畳む鍵である。
-  if (openPopover) {
-    setOpenPopover(null);
+  if (displayPaneOpen()) {
+    setDisplayPane(false);
     return;
   }
   closeDetail();

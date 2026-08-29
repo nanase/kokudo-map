@@ -223,9 +223,7 @@ const report = await page.evaluate(() => {
   out.togglesInPanel = document.querySelectorAll(
     '#panel .checks input, #panel input[name=conc]',
   ).length;
-  out.paneButtons = ['#conc-btn', '#display-btn'].filter((sel) =>
-    document.querySelector(sel),
-  ).length;
+  out.paneButtons = document.querySelectorAll('#display-btn').length;
   out.geolocateButtons = document.querySelectorAll(
     '.maplibregl-ctrl-geolocate',
   ).length;
@@ -302,7 +300,7 @@ ok(
 );
 
 ok(
-  report.paneButtons === 2 && report.togglesInPanel === 0,
+  report.paneButtons === 1 && report.togglesInPanel === 0,
   'the concurrency and display switches are on the map, not also in the sidebar',
 );
 ok(
@@ -450,7 +448,7 @@ const openPane = async (btn) => {
 };
 
 // --- switch to "concurrent sections only" -----------------------------------
-await openPane('#conc-btn');
+await openPane('#display-btn');
 await page.click('input[name=conc][value=all]');
 await settle();
 const concStats = await page.evaluate(() => ({
@@ -463,7 +461,7 @@ console.log(`\nafter "重用区間のみ": renderedRoads=${concStats.roads}`);
 await page.screenshot({ path: shot('2-concurrent') });
 
 // --- unfold the ranking and click its deepest row ---------------------------
-await openPane('#conc-btn');
+await openPane('#display-btn');
 await page.click('input[name=conc][value=off]');
 await page.click('#ranking-block > summary');
 await settle();
