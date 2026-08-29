@@ -552,6 +552,103 @@ const HideRoutesControl = buildCycleControl({
   tip: hideStateTip,
 });
 
+/* ------------------------------------------------------- map popovers --- */
+/**
+ * 釦を押すと出る小さな面。「重用区間」と「表示」がこれで、どちらも
+ * 「何が地図に描かれるか」を決める——切り替えた結果は地図にしか現れないので、
+ * 操作面ではなく地図の側に置く。
+ *
+ * 中身の markup は index.html が持ち、ここは開け閉てだけを持つ。onAdd がその
+ * 要素を釦と同じ台へ移すので、面の位置は釦を追う——位置合わせの計算はどこにも
+ * 無い。state-tip が同じ台に居るのと同じ仕掛けである。
+ *
+ * 開くのは一度に一つである。二つ並べても読む場所が増えるだけで、地図は
+ * その下に隠れる。
+ */
+const popovers = [];
+let openPopover = null;
+
+function setOpenPopover(next) {
+  for (const { btn, panel: pane } of popovers) {
+    const on = pane === next;
+    pane.hidden = !on;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-expanded', String(on));
+  }
+  openPopover = next;
+}
+
+// 面の外を押したら閉じる。釦自身の click はそこで止めてあるので、ここへは
+// 上がってこない。
+document.addEventListener('click', (ev) => {
+  if (openPopover && !openPopover.contains(ev.target)) setOpenPopover(null);
+});
+
+function buildPopoverControl({ className, id, panelId, icon, label }) {
+  return class PopoverControl {
+    onAdd() {
+      const container = document.createElement('div');
+      container.className = `maplibregl-ctrl maplibregl-ctrl-group ${className}`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = id;
+      btn.innerHTML = icon;
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('aria-expanded', 'false');
+      btn.setAttribute('aria-controls', panelId);
+      const pane = $(`#${panelId}`);
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        setOpenPopover(pane.hidden ? pane : null);
+      });
+      container.append(btn, pane);
+      popovers.push({ btn, panel: pane });
+      this._container = container;
+      return container;
+    }
+    onRemove() {
+      this._container.remove();
+    }
+  };
+}
+
+/**
+ * 二本の道が寄り合って一本になる形。重用とはそういう区間のことである。
+ */
+const CONC_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<path d="M3 5c5 0 5.5 7 9.5 7H21" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linecap="round"/>' +
+  '<path d="M3 19c5 0 5.5-7 9.5-7" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linecap="round"/>' +
+  '</svg>';
+
+/** つまみの付いた二本の桿。何を出すかを決める面の、ありふれた印である。 */
+const DISPLAY_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+  '<path d="M3 8h8M17.5 8H21M3 16h4.5M14 16h7" fill="none" ' +
+  'stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+  '<circle cx="14.2" cy="8" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/>' +
+  '<circle cx="10.7" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/>' +
+  '</svg>';
+
+const ConcurrencyControl = buildPopoverControl({
+  className: 'conc-ctrl',
+  id: 'conc-btn',
+  panelId: 'conc-popover',
+  icon: CONC_ICON,
+  label: '重用区間の見せ方',
+});
+
+const DisplayControl = buildPopoverControl({
+  className: 'display-ctrl',
+  id: 'display-btn',
+  panelId: 'display-popover',
+  icon: DISPLAY_ICON,
+  label: '表示するもの',
+});
+
 /* -------------------------------------------------------------- gsi shade --- */
 /**
  * How full the drop sits for each shade, and how tilted its liquid surface
@@ -853,6 +950,8 @@ async function boot() {
   for (const layer of routeLayers()) map.addLayer(layer);
   map.addControl(new PitchControl(), 'top-right');
   map.addControl(new HideRoutesControl(), 'top-right');
+  map.addControl(new ConcurrencyControl(), 'top-right');
+  map.addControl(new DisplayControl(), 'top-right');
   map.addControl(new GsiShadeControl(), 'top-right');
   map.addControl(new BasemapControl(), 'top-right');
 
@@ -1208,7 +1307,14 @@ $('#detail-close').addEventListener('click', closeDetail);
 // キャンセルは document まで上がってくるので、ここで譲らないと後ろの箱まで
 // 一緒に閉じる。
 document.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Escape' && !$('dialog[open]')) closeDetail();
+  if (ev.key !== 'Escape') return;
+  if ($('dialog[open]')) return; // ダイアログの Esc はそちらのものである
+  // 開いている面が先に閉じる。Esc は一番手前のものを畳む鍵である。
+  if (openPopover) {
+    setOpenPopover(null);
+    return;
+  }
+  closeDetail();
 });
 
 // 箱の大きさは画面幅で変わる(狭い画面では下部の帯になる)ので、開いている

@@ -97,12 +97,12 @@ export function wireShare(doc, state) {
   // index.html が持つラベル文言をそのまま読む。ここで書き直すと、
   // 表示側を直したときにこちらが黙って古くなる。
   const shareState = () => {
-    const toggles = [...doc.querySelectorAll('#panel .checks label')].map(
-      (label) => ({
-        label: label.textContent.trim(),
-        checked: label.querySelector('input').checked,
-      }),
-    );
+    const toggles = [
+      ...doc.querySelectorAll('#display-popover .checks label'),
+    ].map((label) => ({
+      label: label.textContent.trim(),
+      checked: label.querySelector('input').checked,
+    }));
     const concLabel = doc
       .querySelector('input[name=conc]:checked')
       .closest('label')

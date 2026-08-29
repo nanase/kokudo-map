@@ -218,6 +218,14 @@ const report = await page.evaluate(() => {
   // 地図の上の釦。現在位置は MapLibre 自身の部品なので、あるかどうかだけを見る
   // (押すと端末の許可を求めるので、ここでは押さない)。方位は拡大・縮小とは
   // 別の台に乗っている——同じ群に並んでいると、拡大を連打する指が地図を回す。
+  // 重用区間と表示は地図の側にある。同じものが操作面にも残っていれば、
+  // どちらを押したかで結果が変わる二つの口ができてしまう。
+  out.togglesInPanel = document.querySelectorAll(
+    '#panel .checks input, #panel input[name=conc]',
+  ).length;
+  out.paneButtons = ['#conc-btn', '#display-btn'].filter((sel) =>
+    document.querySelector(sel),
+  ).length;
   out.geolocateButtons = document.querySelectorAll(
     '.maplibregl-ctrl-geolocate',
   ).length;
@@ -293,6 +301,10 @@ ok(
   'the data provenance is stated in that dialog, not also in the sidebar',
 );
 
+ok(
+  report.paneButtons === 2 && report.togglesInPanel === 0,
+  'the concurrency and display switches are on the map, not also in the sidebar',
+);
 ok(
   report.geolocateButtons === 1,
   `the map carries one 現在位置 button (${report.geolocateButtons})`,
@@ -425,7 +437,20 @@ ok(
 
 await page.screenshot({ path: shot('1-all') });
 
+/* 重用区間と表示は、地図の上の釦から出る面の中にある。中の操作は面が開いて
+ * いなければ届かないので、押す前に開ける。開いていれば何もしない——もう一度
+ * 押すと畳んでしまう。 */
+const openPane = async (btn) => {
+  const shut = await page.evaluate(
+    (sel) =>
+      document.querySelector(sel).getAttribute('aria-expanded') !== 'true',
+    btn,
+  );
+  if (shut) await page.click(btn);
+};
+
 // --- switch to "concurrent sections only" -----------------------------------
+await openPane('#conc-btn');
 await page.click('input[name=conc][value=all]');
 await settle();
 const concStats = await page.evaluate(() => ({
@@ -438,6 +463,7 @@ console.log(`\nafter "重用区間のみ": renderedRoads=${concStats.roads}`);
 await page.screenshot({ path: shot('2-concurrent') });
 
 // --- unfold the ranking and click its deepest row ---------------------------
+await openPane('#conc-btn');
 await page.click('input[name=conc][value=off]');
 await page.click('#ranking-block > summary');
 await settle();
@@ -941,9 +967,11 @@ if (expresswayArc) {
       () => window.map.queryRenderedFeatures({ layers: ['expressway'] }).length,
     );
   const shown = await expressways();
+  await openPane('#display-btn');
   await page.uncheck('#t-expressway');
   await settle();
   const hidden = await expressways();
+  await openPane('#display-btn');
   await page.check('#t-expressway');
   await settle();
   const back = await expressways();
@@ -974,9 +1002,11 @@ if (ferryArc) {
       () => window.map.queryRenderedFeatures({ layers: ['ferry'] }).length,
     );
   const shown = await ferries();
+  await openPane('#display-btn');
   await page.uncheck('#t-ferry');
   await settle();
   const hidden = await ferries();
+  await openPane('#display-btn');
   await page.check('#t-ferry');
   await settle();
   const back = await ferries();

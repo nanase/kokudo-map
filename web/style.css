@@ -181,7 +181,7 @@ body {
 /* #panel を付けると id を含む分だけ詳細度が上がり、.fold > summary:hover h2
    の hover 色 (クラスのみ) に勝ってしまう — 折りたたみの見出しだけホバーで
    色が変わらない不具合になる。 */
-.block h2 {
+.block h2, .map-popover h2 {
   margin: 0; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace;
@@ -461,17 +461,53 @@ input[type="search"]::placeholder { font-size: .82em; }
   width: 17px; height: 17px; display: block;
 }
 
+/* 重用区間・表示のボタンと、そこから出る面 -------------------------------
+   釦は他と同じ白い台に乗る。押されているあいだ——面が開いているあいだ——は
+   標識の青で塗る。台は明暗どちらの配色でも白いので、この青も固定でよい。 */
+.conc-ctrl button,
+.display-ctrl button {
+  display: grid; place-items: center; color: #333;
+}
+.conc-ctrl button svg,
+.display-ctrl button svg { width: 17px; height: 17px; display: block; }
+.conc-ctrl button.active,
+.display-ctrl button.active { background: var(--shield-face); color: #fff; }
+/* maplibre-gl.css 側の hover 規則と同じ形で書いて、記述順に頼らず勝つ
+   (.hide-routes-ctrl button.active:hover と同じ理由)。 */
+.conc-ctrl button.active:hover,
+.display-ctrl button.active:hover { background: #003377; }
+
+/* 面そのもの。釦の台の中に居るので、位置は台を基準に決まる——寸法を測って
+   合わせる計算はどこにも要らない。台の左へ出すのは、右に窓の端しか無いから
+   である。 */
+.map-popover {
+  position: absolute; top: -1px; right: calc(100% + 8px);
+  width: max-content; max-width: min(280px, calc(100vw - 64px));
+  padding: 12px 14px; text-align: left;
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 26px rgba(0,0,0,.26);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.map-popover[hidden] { display: none; }
+/* 面の中では縦に積む。横に折り返すと、どれが何行目かを目で追うことになる。 */
+.map-popover .radios,
+.map-popover .checks { flex-direction: column; gap: 8px; }
+
 /* ボタンの状態を示す一瞬のラベル -----------------------------------------
    タップには hover の title が出せないので、その代わりに一瞬だけ状態を
    返す。ボタンと同じ台の中に置き、台の位置だけを頼りに左へ出す。
    台の中にラベルを同居させる以上ボタンは :only-child でなくなり、
    maplibre-gl.css 側のフォーカス時の角丸（:only-child だけ台と同じ丸みを
    継ぐ）が外れて上下どちらかの角が直角になる。ここで丸みを台の値へ戻す。 */
-.pitch-ctrl, .hide-routes-ctrl, .gsi-shade-ctrl, .basemap-ctrl { position: relative; }
+.pitch-ctrl, .hide-routes-ctrl, .gsi-shade-ctrl, .basemap-ctrl,
+.conc-ctrl, .display-ctrl { position: relative; }
 #pitch-btn:focus,
 #hide-routes-btn:focus,
 #gsi-shade-btn:focus,
-#basemap-btn:focus {
+#basemap-btn:focus,
+#conc-btn:focus,
+#display-btn:focus {
   border-radius: inherit;
 }
 .state-tip {
