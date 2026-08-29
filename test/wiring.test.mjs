@@ -173,7 +173,7 @@ describe('wireControls — 表示のトグル', () => {
 });
 
 /* 国道一覧はどの画面幅でも畳んだ状態で始まる。459 個のチェックボックスは
- * サイドバーの大半を占めるので、開くのは番号を眺めたい人だけでよい。 */
+ * サイドパネルの大半を占めるので、開くのは番号を眺めたい人だけでよい。 */
 describe('国道一覧の折りたたみ', () => {
   const load = (width) => {
     const window = new Window({
@@ -207,12 +207,15 @@ describe('国道一覧の折りたたみ', () => {
     ).toBe(false);
   });
 
-  test('選択解除は summary の中にあり、畳んでも見える', () => {
+  /* 見える場所は summary の行のままだが、DOM では details の外に置く。
+   * <summary> の中の対話部品は、開閉が先に手を取るのでキーボードや支援技術
+   * から確実には届かない。 */
+  test('選択解除は details の外、同じ節の中にある', () => {
     const document = load(1280);
+    const clear = document.querySelector('#sel-none');
+    expect(document.querySelector('#route-block').contains(clear)).toBe(false);
     expect(
-      document
-        .querySelector('#route-block > summary')
-        .contains(document.querySelector('#sel-none')),
+      document.querySelector('#route-block').closest('.block').contains(clear),
     ).toBe(true);
   });
 

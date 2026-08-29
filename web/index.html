@@ -29,16 +29,42 @@
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
 
+<!-- 配色は app.js が決めるが、その JS は文書を読み終えるまで走らない。端末が
+     暗く、この地図では明るいほうを選んでいる人には、その間だけ暗い面が出る
+     ——「地図を読み込んでいます」が暗く出て、明るくなって、地図が出る、と
+     地図に着くまでに色が二度変わっていた。
+
+     ここで選択を先に置き、最初の描画からその側で出す。'auto' のときは何も
+     置かない——端末の設定がそのまま効き、あとで app.js が置き直す値も同じに
+     なるので、そちらは元から変わらない。
+
+     選択を書くのも、'auto' を解くのも app.js の仕事である。ここがするのは、
+     app.js が前に書いた物をそのまま置き直すことだけである。 -->
+<script>
+  try {
+    const t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch {
+    /* private browsing: 保存が読めないので端末の設定のまま出す。 */
+  }
+</script>
+
 <!-- style.css の解析を待たずに路線番号シールドの書体を取り始める。
      待つと HTML→style.css→woff2 の依存鎖が 1 段伸びる。 -->
 <link rel="preload" href="vendor/roboto-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
+<!-- 操作面の書体 (LINE Seed JP)。日本語 1 書体は 7000 字あり 1 ファイルには
+     ならないので、Fontsource が分けた ~120 片の @font-face を並べた表になって
+     いる。どれを取るかは unicode-range を見てブラウザが決めるので、実際に降りて
+     くるのは画面に出ている字を含む片だけである。
+     scripts/vendor_web.mjs が node_modules から作る。 -->
+<link rel="stylesheet" href="vendor/line-seed-jp.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <!-- 二度以上出てくる絵は、ここで一度だけ描いて <use> で呼ぶ。共有の鎖は
-     サイドバーの見出しと共有ダイアログの「文章で共有」に出る。同じ形を
+     サイドパネルの見出しと共有ダイアログの「文章で共有」に出る。同じ形を
      二箇所に写すと、片方だけ直したときに黙って食い違う。
      寸法は呼ぶ側の svg が持つので、ここは形だけを述べる。 -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -57,7 +83,7 @@
     <div id="map"></div>
     <!-- 地図の上に置く。パネルを閉じている間だけ出て、開き直す口になる。 -->
     <button type="button" id="panel-toggle" aria-controls="panel" aria-expanded="true"
-            title="サイドバーを表示" aria-label="サイドバーを表示">
+            title="サイドパネルを表示" aria-label="サイドパネルを表示">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor"
               stroke-width="2.2" stroke-linecap="round"/>
@@ -85,7 +111,7 @@
           </button>
           <!-- 詳細の箱と同じく、浮いている箱は自分で閉じられる。開き直す口は
                地図の上に残る #panel-toggle である。 -->
-          <button type="button" id="panel-close" class="icon-btn" title="サイドバーを閉じる" aria-label="サイドバーを閉じる">
+          <button type="button" id="panel-close" class="icon-btn" title="サイドパネルを閉じる" aria-label="サイドパネルを閉じる">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor"
                     stroke-width="2.2" stroke-linecap="round"/>
@@ -95,29 +121,34 @@
 
         <section class="block">
           <!-- 最初は畳んでおく。459 個のチェックボックスは、どの画面幅でも
-               サイドバーの大半を占める——番号で絞り込むほうが速いので、一覧を
+               サイドパネルの大半を占める——番号で絞り込むほうが速いので、一覧を
                開くのは番号を眺めたい人だけでよい。
 
                絞り込み欄は一覧と一緒に畳む。絞り込むのは一覧を見ているあいだ
                のことなので、閉じた一覧の上に入力欄だけが残る理由がない。
                選択解除は逆で、畳んだままでも押せなければならない——選択は
-               地図に効いており、一覧を開かずに戻したいことがある。だから
-               summary の中、常に見えるところに置く。 -->
+               地図に効いており、一覧を開かずに戻したいことがある。畳んでも
+               残るのは summary の行なので、見える場所はそこにする。
+
+               ただし <summary> の中には入れない。開閉が先に手を取るので、
+               中に置いた釦はキーボードや支援技術から確実には届かない。節を
+               土台にして、その行の上へ重ねて出す(style.css の #sel-none)。
+
+               文言は updateStats() が title と aria-label に入れる。
+               「N 路線を選択解除」は数で変わるので、ここには書かない。 -->
+          <button type="button" id="sel-none" class="icon-btn" disabled
+                  title="選択解除" aria-label="選択解除">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+              <path d="M3 3l18 18" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
           <details id="route-block" class="fold">
             <summary>
               <h2>国道を選択</h2>
               <span class="count" id="route-count"></span>
-              <!-- 文言は updateStats() が title と aria-label に入れる。
-                   「N 路線を選択解除」は数で変わるので、ここには書かない。 -->
-              <button type="button" id="sel-none" class="icon-btn" disabled
-                      title="選択解除" aria-label="選択解除">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-                  <path d="M3 3l18 18" fill="none" stroke="currentColor"
-                        stroke-width="2" stroke-linecap="round"/>
-                </svg>
-              </button>
             </summary>
             <div class="filter-row">
               <svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -206,12 +237,12 @@
         <h2>配色</h2>
         <div class="radios" role="radiogroup" aria-label="配色">
           <label><input type="radio" name="theme" value="auto" checked> 端末に合わせる</label>
-          <label><input type="radio" name="theme" value="light"> 明るい</label>
-          <label><input type="radio" name="theme" value="dark"> 暗い</label>
+          <label><input type="radio" name="theme" value="light"> ライトテーマ</label>
+          <label><input type="radio" name="theme" value="dark"> ダークテーマ</label>
         </div>
       </section>
     </div>
-    <div id="loading">データを読み込んでいます…</div>
+    <div id="loading">地図を読み込んでいます…</div>
   </main>
 </div>
 

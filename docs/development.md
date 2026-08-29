@@ -24,7 +24,9 @@ mise activate fish | source    # fish
 bun x playwright install chromium   # 実描画チェックにのみ必要
 ```
 
-`bun install` は続けて `scripts/vendor_web.mjs` を走らせ、MapLibre と PMTiles を `node_modules` から `web/vendor/` に複製します。地図はそこから読みます。CDN は読みません。
+`bun install` は続けて `scripts/vendor_web.mjs` を走らせ、MapLibre と PMTiles と書体を `node_modules` から `web/vendor/` に複製します。地図はそこから読みます。CDN は読みません。
+
+書体は 2 つです。路線番号の標識が Roboto、操作面が LINE Seed JP です。後者は日本語 1 書体ぶんあるので 1 ファイルにはならず、Fontsource が unicode-range で分けた ~120 片を weight 400・700 のぶんだけ複製します(woff2 で 248 ファイル・6 MB)。ブラウザが取るのは画面に出ている字を含む片だけです。
 
 `bunfig.toml` で `minimumReleaseAge` を設定してあり、公開から 3 日経っていないパッケージは入りません。サプライチェーン攻撃で悪意あるバージョンが公開直後に出回っても、既知の期間はそれを踏みません。
 

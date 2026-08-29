@@ -18,8 +18,16 @@
      地図の線も凡例の見本もその色を web/mapspec.mjs の N_COLORS から取る
      ので、CSS に写しを置くと二箇所になる。 */
 
-  --panel: light-dark(#FFFFFF, #131C29);
-  --panel-2: light-dark(#F2F5F9, #0E161F);
+  /* 明るい側の地は、真っ白ではなく地図そのものの白 (#FDFDFE) を採る。操作面は
+     地図の上に浮いており、純白だと画面で一番明るい面になって地図より前へ出て
+     しまう。#FDFDFE はごく薄く青が入っているので、一段沈めた --panel-2 も
+     同じ側へ寄せ、青みの強かった #F2F5F9 をやめる。
+
+     --panel-2 は body の地でもある。地図の raster はその上へ 0.82 で乗るので、
+     ここを動かすと地図の色も動く——ただし差は RGB で 2 に満たず、
+     GSI_SHADE_PAINT が守っている「見え方を変えない」の内側である。 */
+  --panel: light-dark(#FDFDFE, #131C29);
+  --panel-2: light-dark(#F3F4F7, #0E161F);
   --line: light-dark(#D7DFEA, #27364A);
   --line-2: light-dark(#E7ECF3, #1D2938);
   --ink: light-dark(#121A24, #E6EDF6);
@@ -92,8 +100,12 @@
 }
 html, body { height: 100%; margin: 0; }
 body {
-  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI",
-               "Yu Gothic", "Noto Sans JP", "Segoe UI", system-ui, sans-serif;
+  /* 先頭の 1 書体だけが自前で、残りは端末が持っている物である。降ってくるのは
+     画面に出ている字を含む片だけとはいえ、それでも数百 kB は待つ——font-display
+     が swap なので、その間は次の候補で読める字が出て、届いた時点で入れ替わる。 */
+  font-family: "LINE Seed JP", "Hiragino Kaku Gothic ProN", "Hiragino Sans",
+               "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", "Segoe UI",
+               system-ui, sans-serif;
   color: var(--ink);
   background: var(--panel-2);
   font-size: 14px;
@@ -160,7 +172,13 @@ body {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
 }
-.block { padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
+/* 余白は節の中身だけでなく、行の上に重ねる釦の置き場所も決める(#sel-none)。
+   同じ数を二箇所に書かないよう、変数にして下の者へ渡す。 */
+.block {
+  --pad-y: 10px; --pad-x: 18px;
+  position: relative; padding: var(--pad-y) var(--pad-x);
+  border-bottom: 1px solid var(--line-2);
+}
 /* 区切り線は節と節のあいだにだけ引く。最後の節の下は箱の縁である。 */
 #panel > .block:last-child { border-bottom: 0; }
 .block-hd {
@@ -190,8 +208,12 @@ body {
    Reference material that is worth having but not worth the sidebar height
    it costs. Folded shut, the summary still states how much is inside. */
 .fold > summary {
-  display: flex; align-items: baseline; gap: 10px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
   list-style: none;
+  /* 「国道を選択」の行にだけ釦が重なる。行の高さをその釦に合わせておくと、
+     どの節も見出しの高さが揃い、字の上下の余白も釣り合う。釦のぶんだけ
+     背が高い節が一つあると、そこだけ字が上へ寄って見える。 */
+  min-height: 24px;
 }
 .fold > summary::-webkit-details-marker { display: none; }
 .fold > summary::after {
@@ -202,27 +224,35 @@ body {
 .fold[open] > summary::after { transform: rotate(180deg); }
 .fold[open] > summary { margin-bottom: 10px; }
 .fold > summary:hover h2 { color: var(--sign-blue); }
-/* 選択解除だけが summary の中にある。余りはこの釦が飲んで右へ寄り、開閉の
-   三角はその隣に付く——`::after` の margin-left: auto をここで譲る。 */
-#route-block > summary > #sel-none {
-  margin-left: auto; align-self: center; width: 24px; height: 24px;
+/* 選択解除の釦。DOM では summary の外(節の直下)にあり、見える場所だけを
+   ここで summary の行へ戻す。並びは開閉の三角の左隣で、以前と同じである。 */
+#sel-none {
+  position: absolute; top: var(--pad-y);
+  /* 節の右余白 + 三角 8px + 三角との間 10px。 */
+  right: calc(var(--pad-x) + 18px);
+  width: 24px; height: 24px;
 }
-#route-block > summary > #sel-none svg { width: 14px; height: 14px; }
-#route-block > summary::after { margin-left: 10px; }
+#sel-none svg { width: 14px; height: 14px; }
+/* 釦は浮いているので場所を取らない。見出しの数がその下へ潜らないよう、
+   釦 24px と間 10px のぶんをここで空ける。 */
+#route-block > summary .count { margin-right: 34px; }
 .fold > summary .count {
   font-family: ui-monospace, Consolas, monospace; font-size: .68rem;
   color: var(--ink-3); font-variant-numeric: tabular-nums;
 }
 
-button.mini {
+/* 釦の骨格。about ダイアログのリンク (a.mini) もこれを借りる——`button.mini`
+   と書いていたころは a に当たらず、色を誰も述べないまま既定の青と、訪問後の
+   紫になっていた。ここで色を述べるので、:visited でも変わらない。 */
+.mini {
   font: inherit; font-size: .72rem; padding: 2px 8px; cursor: pointer;
   background: var(--panel-2); color: var(--ink-2);
   border: 1px solid var(--line); border-radius: 3px;
 }
-button.mini:hover:not(:disabled) {
+.mini:hover:not(:disabled) {
   border-color: var(--sign-blue); color: var(--sign-blue);
 }
-button.mini:disabled { color: var(--ink-3); opacity: .55; cursor: default; }
+.mini:disabled { color: var(--ink-3); opacity: .55; cursor: default; }
 
 input[type="search"] {
   font: inherit; width: 100%; padding: 6px 9px; margin-bottom: 10px;
@@ -517,6 +547,11 @@ input[type="search"]::placeholder { font-size: .82em; }
    maplibre-gl.css 側のフォーカス時の角丸（:only-child だけ台と同じ丸みを
    継ぐ）が外れて上下どちらかの角が直角になる。ここで丸みを台の値へ戻す。 */
 .pitch-ctrl, .hide-routes-ctrl, .basemap-ctrl, .display-ctrl { position: relative; }
+/* 台どうしは DOM の順で重なる。表示の面 (#display-popover) を持つこの台は
+   他の台より先に足してあるので、後の台の state-tip が面の上に出ていた——
+   面は読むために開いたものであり、一瞬の返事に隠される筋合いがない。
+   面のほうが手前だと一度述べておけば、台を足す順に左右されない。 */
+.display-ctrl { z-index: 1; }
 #pitch-btn:focus,
 #hide-routes-btn:focus,
 #gsi-shade-btn:focus,
@@ -765,7 +800,7 @@ input[type="search"]::placeholder { font-size: .82em; }
    出典はここに無い。地図の上の表示が一度だけ述べている。 */
 #about-dialog { width: min(480px, 92vw); }
 .about-lead { margin: 0; font-size: .82rem; color: var(--ink-2); }
-/* button.mini の骨格を借りる。リンクなので、下線ではなく釦の形で立たせる。 */
+/* .mini の骨格を借りる。リンクなので、下線ではなく釦の形で立たせる。 */
 .about-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .mini.about-link {
   text-decoration: none;
@@ -798,9 +833,9 @@ input[type="search"]::placeholder { font-size: .82em; }
 
 /* URL だけのコピーとは別に、SNS などへそのまま渡せる「タイトル + URL」の
    文章を渡す。対応環境では Web Share API の共有シートを開き、無ければ
-   #share-copy と同じ「コピーしました」の点滅で伝える。骨格は button.mini
+   #share-copy と同じ「コピーしました」の点滅で伝える。骨格は .mini
    を再利用し、ここではアイコン付きレイアウトの差分だけを足す。
-   クラスを二つ重ねて button.mini より特異度を上げているので、記述順を
+   クラスを二つ重ねて .mini より特異度を上げているので、記述順を
    入れ替えても上書きは崩れない。 */
 .mini.share-text-btn {
   display: flex; align-items: center; justify-content: center; gap: 7px;

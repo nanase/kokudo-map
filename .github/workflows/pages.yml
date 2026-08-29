@@ -55,6 +55,7 @@ jobs:
           bun run vendor
           test -s web/vendor/maplibre-gl.js
           test -s web/vendor/pmtiles.js
+          test -s web/vendor/line-seed-jp.css
 
       # data.nanase.cc に直接向けます。'data/…' は手元の pipeline/serve.py 用の
       # 相対パスなので、置き換え忘れれば 404 になって検査で気付きます。
@@ -120,9 +121,9 @@ jobs:
       # (CLOUDFLARE_CACHE_PURGE_TOKEN、github-pages environment の Secret)。
       # ファイル名にハッシュを付けていないため URL 単位でしか指定できない。
       # Cloudflare の purge_cache は1回の呼び出しで URL 30件までしか受け付け
-      # ない。現状は web/ 配下(vendor/ を含む)で20件台なので収まっているが、
-      # 超えれば Cloudflare の応答が success: false になり、下の jq -e が
-      # 落ちて気付ける。
+      # ないので、30件ずつに割って送る。操作面の書体(LINE Seed JP)を自前で
+      # 配るようになり、web/vendor/ だけで woff2 が 248 個ある。1回でも
+      # 失敗すれば下の jq -e が落ちて気付ける。
       - name: Cloudflare のキャッシュをパージする
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
@@ -143,22 +144,27 @@ jobs:
             paths+=("${file#web/}")
           done < "$paths_file"
 
-          # ファイル名に改行が混じっても1件のまま扱えるよう、printf/jq -R
-          # でテキスト化せず、argv 経由(jq --args)でそのまま渡す。区切りの
-          # "/" は残したまま、各階層ごとに @uri で percent-encode する
-          # (# ? 空白 改行 等を含むパスでも配信 URL と一致させるため)。
-          payload=$(jq -n --arg base "$SITE_URL" '
-              {files: ($ARGS.positional | map(
-                $base + "/" + (split("/") | map(@uri) | join("/"))
-              ))}
-            ' --args "${paths[@]}")
-          echo "パージ対象:"
-          echo "$payload" | jq .
+          # 1回あたり30件。Cloudflare の purge_cache がそれ以上を受け付けない。
+          for ((i = 0; i < ${#paths[@]}; i += 30)); do
+            batch=("${paths[@]:i:30}")
 
-          response=$(curl -sSf -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data "$payload")
-          echo "Cloudflare の応答:"
-          echo "$response" | jq .
-          echo "$response" | jq -e '.success == true' > /dev/null
+            # ファイル名に改行が混じっても1件のまま扱えるよう、printf/jq -R
+            # でテキスト化せず、argv 経由(jq --args)でそのまま渡す。区切りの
+            # "/" は残したまま、各階層ごとに @uri で percent-encode する
+            # (# ? 空白 改行 等を含むパスでも配信 URL と一致させるため)。
+            payload=$(jq -n --arg base "$SITE_URL" '
+                {files: ($ARGS.positional | map(
+                  $base + "/" + (split("/") | map(@uri) | join("/"))
+                ))}
+              ' --args "${batch[@]}")
+            echo "パージ対象 $((i + 1))〜$((i + ${#batch[@]})) / ${#paths[@]}:"
+            echo "$payload" | jq -c '.files'
+
+            response=$(curl -sSf -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "$payload")
+            echo "Cloudflare の応答:"
+            echo "$response" | jq .
+            echo "$response" | jq -e '.success == true' > /dev/null
+          done
