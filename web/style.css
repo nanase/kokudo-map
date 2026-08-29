@@ -175,7 +175,7 @@ body {
 /* 余白は節の中身だけでなく、行の上に重ねる釦の置き場所も決める(#sel-none)。
    同じ数を二箇所に書かないよう、変数にして下の者へ渡す。 */
 .block {
-  --pad-y: 16px; --pad-x: 18px;
+  --pad-y: 10px; --pad-x: 18px;
   position: relative; padding: var(--pad-y) var(--pad-x);
   border-bottom: 1px solid var(--line-2);
 }
