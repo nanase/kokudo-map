@@ -14,8 +14,8 @@
  * with the first.
  *
  * There is no bundler. The page loads these as it always did: two plain
- * <script> tags that define `maplibregl` and `pmtiles` as globals, plus one
- * stylesheet, plus one @font-face src. Only the URLs changed.
+ * <script> tags that define `maplibregl` and `pmtiles` as globals, plus two
+ * stylesheets, plus one @font-face src. Only the URLs changed.
  *
  * Usage:  node scripts/vendor_web.mjs
  */
@@ -35,6 +35,23 @@ const FILES = [
   ['pmtiles', 'dist/pmtiles.js'],
   ['@fontsource/roboto', 'files/roboto-latin-700-normal.woff2'],
 ];
+
+/* The UI typeface. A Japanese face covers ~7000 glyphs and cannot be shipped
+ * as one file the way the Latin-only Roboto is, so Fontsource splits it into
+ * ~120 pieces and lets `unicode-range` decide which ones a page actually
+ * fetches. The map draws its own labels from web/glyphs/, so this is the
+ * chrome only — but the chrome states place names that come from the data,
+ * and those can hold any kanji. That rules out subsetting to the strings in
+ * the source: the pieces have to stay complete.
+ *
+ * Only the weights the stylesheet asks for are copied. 800 is not among them;
+ * the two rules that ask for it fall back to 700 by the normal CSS weight
+ * matching, which is what LINE Seed JP's Bold is.
+ *
+ * `.woff` is left behind. Every browser that runs MapLibre reads `.woff2`. */
+const FONT_CSS = ['400.css', '700.css'];
+const FONT_PKG = '@fontsource/line-seed-jp';
+const FONT_OUT = 'line-seed-jp.css';
 
 function pkg(name) {
   const path = join(MODULES, name, 'package.json');
@@ -56,6 +73,34 @@ for (const [name, rel] of FILES) {
   const to = join(VENDOR, rel.split('/').pop());
   copyFileSync(join(MODULES, name, rel), to);
   console.log(`  ${name}@${meta.version}  ${rel.split('/').pop()}`);
+}
+
+/* Fontsource's stylesheets point at `./files/…`; web/vendor/ is flat, so the
+ * `src` is rewritten as the sheets are joined into one. The set of files to
+ * copy is read out of that same `src` — a hand-kept list would be a second
+ * statement of which pieces exist, free to disagree with the first. */
+{
+  const meta = pkg(FONT_PKG);
+  used.set(FONT_PKG, meta);
+  const woff2 = new Set();
+  const sheets = FONT_CSS.map((file) =>
+    readFileSync(join(MODULES, FONT_PKG, file), 'utf8')
+      .replace(
+        /url\(\.\/files\/([\w.-]+\.woff2)\) format\('woff2'\), url\([^)]+\) format\('woff'\)/g,
+        (_, name) => {
+          woff2.add(name);
+          return `url(${name}) format('woff2')`;
+        },
+      )
+      .trim(),
+  );
+  for (const name of woff2) {
+    copyFileSync(join(MODULES, FONT_PKG, 'files', name), join(VENDOR, name));
+  }
+  writeFileSync(join(VENDOR, FONT_OUT), `${sheets.join('\n\n')}\n`, 'utf8');
+  console.log(
+    `  ${FONT_PKG}@${meta.version}  ${FONT_OUT} + ${woff2.size} woff2`,
+  );
 }
 
 /* Redistributing someone else's code means carrying its terms with it. */

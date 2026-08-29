@@ -33,6 +33,12 @@
      待つと HTML→style.css→woff2 の依存鎖が 1 段伸びる。 -->
 <link rel="preload" href="vendor/roboto-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
+<!-- 操作面の書体 (LINE Seed JP)。日本語 1 書体は 7000 字あり 1 ファイルには
+     ならないので、Fontsource が分けた ~120 片の @font-face を並べた表になって
+     いる。どれを取るかは unicode-range を見てブラウザが決めるので、実際に降りて
+     くるのは画面に出ている字を含む片だけである。
+     scripts/vendor_web.mjs が node_modules から作る。 -->
+<link rel="stylesheet" href="vendor/line-seed-jp.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>

@@ -92,8 +92,12 @@
 }
 html, body { height: 100%; margin: 0; }
 body {
-  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI",
-               "Yu Gothic", "Noto Sans JP", "Segoe UI", system-ui, sans-serif;
+  /* 先頭の 1 書体だけが自前で、残りは端末が持っている物である。降ってくるのは
+     画面に出ている字を含む片だけとはいえ、それでも数百 kB は待つ——font-display
+     が swap なので、その間は次の候補で読める字が出て、届いた時点で入れ替わる。 */
+  font-family: "LINE Seed JP", "Hiragino Kaku Gothic ProN", "Hiragino Sans",
+               "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", "Segoe UI",
+               system-ui, sans-serif;
   color: var(--ink);
   background: var(--panel-2);
   font-size: 14px;
