@@ -721,15 +721,13 @@ const panelOpen = () => !app.classList.contains('panel-off');
 
 function mapPadding() {
   const canvas = $('#map').getBoundingClientRect();
-  const boxes = [];
-  if (panelOpen()) boxes.push(panel.getBoundingClientRect());
-  if (!detail.hidden) boxes.push(detail.getBoundingClientRect());
-  if (!boxes.length) return { ...NO_PADDING };
+  const panelBox = panelOpen() ? panel.getBoundingClientRect() : null;
+  const detailBox = detail.hidden ? null : detail.getBoundingClientRect();
+  if (!panelBox && !detailBox) return { ...NO_PADDING };
 
-  // 狭い画面では列が画面の幅いっぱいなので、避ける向きは上下になる。操作面が
-  // 上を、詳細が下を覆う。広い画面では列は左端にあるので、左だけを空ける。
+  // 広い画面では列は左端にあるので、左だけを空ける。
   if (!narrowMq.matches) {
-    const right = Math.max(...boxes.map((b) => b.right));
+    const right = Math.max(panelBox?.right ?? 0, detailBox?.right ?? 0);
     const left = Math.min(
       right - canvas.left + BOX_GAP,
       canvas.width * MAX_SIDE_RATIO,
@@ -737,15 +735,15 @@ function mapPadding() {
     return { ...NO_PADDING, left };
   }
 
+  // 狭い画面では列が画面の幅いっぱいなので、避ける向きは上下になる。操作面が
+  // 上を、詳細が下を覆う。
   const cap = canvas.height * MAX_SIDE_RATIO;
   const pad = { ...NO_PADDING };
-  if (panelOpen()) {
-    const box = panel.getBoundingClientRect();
-    pad.top = Math.min(box.bottom - canvas.top + BOX_GAP, cap);
+  if (panelBox) {
+    pad.top = Math.min(panelBox.bottom - canvas.top + BOX_GAP, cap);
   }
-  if (!detail.hidden) {
-    const box = detail.getBoundingClientRect();
-    pad.bottom = Math.min(canvas.bottom - box.top + BOX_GAP, cap);
+  if (detailBox) {
+    pad.bottom = Math.min(canvas.bottom - detailBox.top + BOX_GAP, cap);
   }
   // 二つとも出ているときは、和のほうが先に効く。
   const both = pad.top + pad.bottom;
