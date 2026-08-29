@@ -30,7 +30,7 @@ export function setSelection(doc, state, refs, applyFilters) {
 /** 画面が狭いと見なす幅。style.css の @media と同じ値である。 */
 export const NARROW_QUERY = '(max-width: 860px)';
 
-/** サイドバーの一覧・絞り込み・表示トグルを state へ配線する。 */
+/** サイドパネルの一覧・絞り込み・表示トグルを state へ配線する。 */
 export function wireControls(doc, state, applyFilters) {
   const $ = (sel) => doc.querySelector(sel);
   const list = $('#route-list');

@@ -44,7 +44,7 @@
 <body>
 
 <!-- 二度以上出てくる絵は、ここで一度だけ描いて <use> で呼ぶ。共有の鎖は
-     サイドバーの見出しと共有ダイアログの「文章で共有」に出る。同じ形を
+     サイドパネルの見出しと共有ダイアログの「文章で共有」に出る。同じ形を
      二箇所に写すと、片方だけ直したときに黙って食い違う。
      寸法は呼ぶ側の svg が持つので、ここは形だけを述べる。 -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -63,7 +63,7 @@
     <div id="map"></div>
     <!-- 地図の上に置く。パネルを閉じている間だけ出て、開き直す口になる。 -->
     <button type="button" id="panel-toggle" aria-controls="panel" aria-expanded="true"
-            title="サイドバーを表示" aria-label="サイドバーを表示">
+            title="サイドパネルを表示" aria-label="サイドパネルを表示">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor"
               stroke-width="2.2" stroke-linecap="round"/>
@@ -91,7 +91,7 @@
           </button>
           <!-- 詳細の箱と同じく、浮いている箱は自分で閉じられる。開き直す口は
                地図の上に残る #panel-toggle である。 -->
-          <button type="button" id="panel-close" class="icon-btn" title="サイドバーを閉じる" aria-label="サイドバーを閉じる">
+          <button type="button" id="panel-close" class="icon-btn" title="サイドパネルを閉じる" aria-label="サイドパネルを閉じる">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor"
                     stroke-width="2.2" stroke-linecap="round"/>
@@ -101,7 +101,7 @@
 
         <section class="block">
           <!-- 最初は畳んでおく。459 個のチェックボックスは、どの画面幅でも
-               サイドバーの大半を占める——番号で絞り込むほうが速いので、一覧を
+               サイドパネルの大半を占める——番号で絞り込むほうが速いので、一覧を
                開くのは番号を眺めたい人だけでよい。
 
                絞り込み欄は一覧と一緒に畳む。絞り込むのは一覧を見ているあいだ

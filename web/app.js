@@ -1404,7 +1404,7 @@ document.addEventListener('click', (ev) => {
   }
 
   // 選択の持ち主は state.selected のままである。ここは setSelection を呼ぶ
-  // だけで、サイドバーのチェックもそちらが合わせる。
+  // だけで、サイドパネルのチェックもそちらが合わせる。
   const only = ev.target.closest('.detail-only');
   if (only) {
     setSelection(document, state, [Number(only.dataset.ref)], applyFilters);
