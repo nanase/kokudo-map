@@ -322,8 +322,9 @@ for (const [selector, zoomOnce, sign] of [
   if (btn) attachHoldToZoom(btn, zoomOnce, sign);
 }
 // The one place the sources are credited. The panel used to say the same thing
-// in its footer, which is two answers to one question and one of them free to
-// go stale; the map's own control is the copy that has to be there.
+// in its own footer, which is two answers to one question and one of them free
+// to go stale; the map's own control is the copy that has to be there — which
+// is also why the 国道マップについて dialog does not repeat it.
 map.addControl(
   new maplibregl.AttributionControl({
     compact: false,
