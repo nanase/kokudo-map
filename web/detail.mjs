@@ -176,6 +176,18 @@ const kindsHTML = (kinds) =>
         .join('')}</dl></div>`
     : '';
 
+/* 区分別の隣に置く、別の軸の数(#26)。旧道もどれかの区分の道なので、
+ * kindsHTML の dl に足すとその道を二度数える。区分別とは別の dl にして
+ * 隣へ置く。
+ *
+ * 0 のときは行ごと出さない。459 路線中 277 が旧道を持たない。重用区間
+ * (route.conc_km)は持たないときも「なし」と書くが、旧道は「なし」とも
+ * 書かない——持たないことは述べるに値しないためである。 */
+const formerHTML = (formerKm) =>
+  formerKm
+    ? `<dl class="detail-stats">${row('うち旧道', `${fmtKm(formerKm)} km`)}</dl>`
+    : '';
+
 /* 関わりのある路線を、標識を並べて述べる。
  *
  * 標識は押せる。ポップアップの見出しと同じ `.shield-btn` で、押せばその路線の
@@ -204,9 +216,10 @@ const relatedHTML = (groups) =>
  *
  * `route` は aggregate.mjs の routesOf() が返す行、`kinds` は kindsFor() が返す
  * 内訳、`termini` は decreeTerminiOf() が返す起終点、`related` は
- * relatedRoutesOf() が返す関わりのある路線である。後ろの三つは meta がその欄を
- * 持って初めて埋まる(区分別は issue #58、起終点は issue #59、関わりのある路線は
- * その後)。どれが先に入っても壊れないよう、欄が無ければその欄ごと出さない。
+ * relatedRoutesOf() が返す関わりのある路線、`formerKm` は formerKmFor() が返す
+ * 旧道の距離である。後ろの四つは meta がその欄を持って初めて埋まる(区分別は
+ * issue #58、起終点は issue #59、関わりのある路線はその後、旧道の距離は
+ * issue #84)。どれが先に入っても壊れないよう、欄が無ければその欄ごと出さない。
  *
  * 見出しは標識だけを出す。標識は番号を書いた路線の名前そのものなので、隣に
  * 「国道N号」と書き添えるのは同じことを二度言うことだった。空いた場所には、
@@ -214,7 +227,13 @@ const relatedHTML = (groups) =>
  * ボタンで置く。名前は読み上げのために `h2` に残す(`.sr-only`)。箱の
  * `aria-labelledby` がそれを指している。
  */
-export function detailHTML({ route, kinds = [], termini = [], related = [] }) {
+export function detailHTML({
+  route,
+  kinds = [],
+  termini = [],
+  related = [],
+  formerKm = 0,
+}) {
   const { ref } = route;
   const name = `国道${ref}号`;
   return (
@@ -240,6 +259,7 @@ export function detailHTML({ route, kinds = [], termini = [], related = [] }) {
     row('最大重用数', route.max_n > 1 ? `${route.max_n} 重用` : '単独指定') +
     '</dl>' +
     kindsHTML(kinds) +
+    formerHTML(formerKm) +
     relatedHTML(related) +
     '</div>'
   );

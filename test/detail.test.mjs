@@ -188,6 +188,34 @@ describe('detailHTML — 区分別', () => {
   });
 });
 
+describe('detailHTML — 旧道', () => {
+  // formerKmFor() が拾う「区分別とは別の軸」の距離(#84)。0.0 km と書くより
+  // 短いからではなく、459 路線中 277 が旧道を持たず、持たないことは述べるに
+  // 値しないため、行そのものを出さない。重用区間(上のテスト)が「なし」と
+  // 書くのとは扱いを変えている。
+  test('値が無ければ行ごと出さない', () => {
+    expect(detailHTML({ route: route() })).not.toContain('うち旧道');
+    expect(detailHTML({ route: route(), formerKm: 0 })).not.toContain(
+      'うち旧道',
+    );
+  });
+
+  test('値があれば区分別とは別の dl に出す', () => {
+    const html = detailHTML({
+      route: route(),
+      kinds: [{ kind: 'road', km: 300.2 }],
+      formerKm: 30.8,
+    });
+    expect(html).toContain('<dt>うち旧道</dt><dd>30.8 km</dd>');
+    // 区分別の dl とは別物であることを、旧道の行がその dl の外にあることで
+    // 確かめる。区分別の dl は最初の </dl> で閉じるので、旧道の行はその後に
+    // 現れる。
+    const kindsClose = html.indexOf('</dl></div>'); // .detail-kinds の閉じ
+    const formerRow = html.indexOf('<dt>うち旧道</dt>');
+    expect(formerRow).toBeGreaterThan(kindsClose);
+  });
+});
+
 describe('detailHTML — 起点・終点', () => {
   test('起終点が無ければ欄ごと出さない', () => {
     expect(detailHTML({ route: route() })).not.toContain('detail-termini');

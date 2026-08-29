@@ -41,7 +41,13 @@
  *   wiring.mjs     index.html の要素と state の対応づけ
  */
 
-import { concurrencies, kindsFor, routesOf, statsFor } from './aggregate.mjs';
+import {
+  concurrencies,
+  formerKmFor,
+  kindsFor,
+  routesOf,
+  statsFor,
+} from './aggregate.mjs';
 import { decreeTerminiOf, detailHTML, relatedRoutesOf } from './detail.mjs';
 import {
   baseStyle,
@@ -1051,6 +1057,7 @@ function openDetail(ref) {
     kinds: kindsFor(state.meta.combinations, new Set([ref])),
     termini: decreeTerminiOf(state.meta, ref),
     related: relatedRoutesOf(state.meta, ref),
+    formerKm: formerKmFor(state.meta.combinations, new Set([ref])),
   });
   // 別の路線に開き直しただけなら、居場所は開いたときのままにしておく。
   // ここで取り直すと、動いた後に開き直した人が閉じたときに横へ滑る。
