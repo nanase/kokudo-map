@@ -162,6 +162,17 @@ const map = new maplibregl.Map({
   style: baseStyle(basemap, gsiShade),
   center: [138.0, 36.2],
   zoom: 7.6,
+  // MapLibre 自身が作る釦の名札。この地図の釦は残らず日本語で名乗っている
+  // ので、拡大・方位・現在位置だけが英語で名乗る理由が無い。ここに無い鍵
+  // (縮尺の単位など)は MapLibre の既定のままである。
+  locale: {
+    'NavigationControl.ZoomIn': '拡大',
+    'NavigationControl.ZoomOut': '縮小',
+    'NavigationControl.ResetBearing': '北を上に戻す',
+    'GeolocateControl.FindMyLocation': '現在位置を表示',
+    'GeolocateControl.LocationNotAvailable': '現在位置を取得できません',
+    'Popup.Close': '閉じる',
+  },
 });
 
 // exposed for debugging and for pipeline/render_check.mjs
@@ -187,6 +198,29 @@ map.addControl(
 );
 map.addControl(
   new maplibregl.NavigationControl({ showZoom: false, visualizePitch: false }),
+  'top-right',
+);
+/**
+ * 現在位置。押すと端末に位置を尋ね、地図の上に点で出す。
+ *
+ * MapLibre 自身の部品を使う。点・精度の円・追従の解除まで一式を持っており、
+ * この地図が足すことは何も無い。位置は端末から地図へ渡るだけで、どこへも
+ * 送らない——`state` にも URL にも入らないので、共有したリンクが自分の
+ * 居場所を連れて行くこともない。
+ *
+ * `trackUserLocation` は、一度押したら動くたびに点が付いてくる形である。
+ * 走りながら国道を辿るのに、押し直しを求める理由が無い。
+ * 全国が入る縮尺のまま点だけ打たれても居場所は読めないので、寄る先は
+ * 街の見える縮尺までとする。
+ */
+map.addControl(
+  new maplibregl.GeolocateControl({
+    positionOptions: { enableHighAccuracy: true },
+    trackUserLocation: true,
+    showUserLocation: true,
+    showAccuracyCircle: true,
+    fitBoundsOptions: { maxZoom: 15 },
+  }),
   'top-right',
 );
 map.addControl(

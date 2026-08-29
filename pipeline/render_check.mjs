@@ -215,6 +215,18 @@ const report = await page.evaluate(() => {
   out.concOptions = [...document.querySelectorAll('input[name=conc]')].map(
     (i) => i.value,
   );
+  // 地図の上の釦。現在位置は MapLibre 自身の部品なので、あるかどうかだけを見る
+  // (押すと端末の許可を求めるので、ここでは押さない)。方位は拡大・縮小とは
+  // 別の台に乗っている——同じ群に並んでいると、拡大を連打する指が地図を回す。
+  out.geolocateButtons = document.querySelectorAll(
+    '.maplibregl-ctrl-geolocate',
+  ).length;
+  const groupOf = (sel) =>
+    document.querySelector(sel)?.closest('.maplibregl-ctrl-group');
+  const zoomGroup = groupOf('.maplibregl-ctrl-zoom-in');
+  const compassGroup = groupOf('.maplibregl-ctrl-compass');
+  out.compassApart =
+    !!zoomGroup && !!compassGroup && zoomGroup !== compassGroup;
   out.folded = ['route', 'ranking', 'shared'].map((name) => ({
     name,
     open: document.querySelector(`#${name}-block`).open,
@@ -258,6 +270,14 @@ ok(
 ok(
   JSON.stringify(report.concOptions) === JSON.stringify(['off', 'all']),
   `concurrency has two modes, not three (${report.concOptions.join(', ')})`,
+);
+ok(
+  report.geolocateButtons === 1,
+  `the map carries one 現在位置 button (${report.geolocateButtons})`,
+);
+ok(
+  report.compassApart,
+  'the compass sits on its own group, apart from the zoom buttons',
 );
 // Reference lists are folded shut, but a fold that hides its own existence is
 // worse than the height it saves, so each summary must still state its size.
