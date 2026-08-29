@@ -67,10 +67,11 @@
         <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 15）" autocomplete="off">
         <button type="button" id="sel-none" class="mini" disabled>選択解除</button>
       </div>
-      <!-- 狭い画面でだけ畳む。広い画面では summary を出さず、開いたままにする
-           (style.css と wiring.mjs の wireRouteFold)。絞り込み欄と選択解除は
-           外に置いてあるので、畳んだままでも選択は外せる。 -->
-      <details id="route-block" class="fold" open>
+      <!-- 最初は畳んでおく。459 個のチェックボックスは、どの画面幅でも
+           サイドバーの大半を占める——番号で絞り込むほうが速いので、一覧を
+           開くのは番号を眺めたい人だけでよい。絞り込み欄と選択解除は外に
+           置いてあるので、畳んだままでも絞り込めるし選択も外せる。 -->
+      <details id="route-block" class="fold">
         <summary>
           <h2>国道を選ぶ</h2>
           <span class="count" id="route-count"></span>

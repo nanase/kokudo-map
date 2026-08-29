@@ -89,7 +89,6 @@ import {
   NARROW_QUERY,
   setSelection,
   wireControls,
-  wireRouteFold,
   wireShare,
 } from './wiring.mjs';
 
@@ -713,7 +712,6 @@ async function boot() {
 
   wirePopups();
   wireControls(document, state, applyFilters);
-  wireRouteFold(document);
   wireShare(document, state);
 
   map.getSource('termini').setData(terminiFeatures(state.meta));

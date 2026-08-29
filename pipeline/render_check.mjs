@@ -215,7 +215,7 @@ const report = await page.evaluate(() => {
   out.concOptions = [...document.querySelectorAll('input[name=conc]')].map(
     (i) => i.value,
   );
-  out.folded = ['ranking', 'shared'].map((name) => ({
+  out.folded = ['route', 'ranking', 'shared'].map((name) => ({
     name,
     open: document.querySelector(`#${name}-block`).open,
     count: document.querySelector(`#${name}-count`).innerText,
@@ -339,6 +339,9 @@ ok(
   idle.disabled && idle.text === '選択解除',
   `with nothing picked the clear button is unavailable ("${idle.text}", disabled=${idle.disabled})`,
 );
+// 一覧は畳んだ状態で始まるので、押す前に開く。
+await page.click('#route-block > summary');
+await settle();
 await page.locator('#route-list input').first().check();
 await settle();
 const one = await clearBtn();

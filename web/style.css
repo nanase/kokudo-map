@@ -213,18 +213,8 @@ input[type="search"]::placeholder { font-size: .82em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
 /* route checkbox grid ----------------------------------------------------
-   一覧は #route-block(details.fold)の中にある。狭い画面でだけ畳むので、
-   広い画面では見出しを消して、今までどおり開いた一覧だけが見えるようにする。
-   open の出し入れは wiring.mjs の wireRouteFold() が持つ — CSS では閉じた
-   details の中身を見せられない。
-
-   条件は wireRouteFold() が見る (max-width: 860px) の補集合そのものにする。
-   min-width: 861px と書くと、そのあいだ(拡大率やデバイス比で 860.5px の
-   ような幅は起こる)がどちらにも入らず、開いた一覧の上に見出しだけが残る。 */
-@media not all and (max-width: 860px) {
-  #route-block > summary { display: none; }
-  #route-block[open] > summary { margin-bottom: 0; }
-}
+   一覧は #route-block(details.fold)の中にあり、どの画面幅でも畳んだ状態で
+   始まる。開閉は details 自身が持つので、ここに書くことは無い。 */
 .route-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
   gap: 3px; position: relative;
