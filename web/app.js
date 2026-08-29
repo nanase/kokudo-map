@@ -1134,6 +1134,7 @@ function openDetail(ref) {
   // ここで取り直すと、動いた後に開き直した人が閉じたときに横へ滑る。
   if (detail.hidden) detailOpenedAt = cameraNow();
   detail.hidden = false;
+  app.classList.add('detail-open');
   applyMapPadding(true);
 }
 
@@ -1142,6 +1143,7 @@ function closeDetail() {
   const moved = detailOpenedAt && cameraMoved(detailOpenedAt, cameraNow());
   detailOpenedAt = null;
   detail.hidden = true;
+  app.classList.remove('detail-open');
   if (moved) setPaddingKeepingView();
   else applyMapPadding(true);
 }

@@ -275,8 +275,26 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .radios input, .checks input { accent-color: var(--sign-blue); margin: 0; }
 
-/* legends --------------------------------------------------------------- */
-.legend { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 12px; }
+/* legends -----------------------------------------------------------------
+   凡例は地図の上、下端に浮かせる。左の列とは重ならないところまで内へ寄せ、
+   残った幅の真ん中に置く。下端の 56px は、地図の右下に積まれた縮尺と出典の
+   ぶんである——右へ伸びた凡例がその上に載らないように、行ごと上へ逃がす。 */
+#legend-bar {
+  position: absolute; left: 12px; right: 12px; bottom: 56px; z-index: 3;
+  display: flex; justify-content: center;
+  /* 帯そのものは地図を掴む手を通す。箱だけが受け取る。 */
+  pointer-events: none;
+}
+#app:not(.panel-off) #legend-bar { left: 364px; }
+.legend-box {
+  pointer-events: auto; max-width: 100%;
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 9px 13px;
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 4px 18px rgba(0,0,0,.2);
+}
+.legend { display: flex; flex-wrap: wrap; gap: 5px 12px; justify-content: center; }
 .legend .item {
   display: flex; align-items: center; gap: 6px;
   font-size: .72rem; color: var(--ink-2);
@@ -732,4 +750,12 @@ input[type="search"]::placeholder { font-size: .82em; }
   #panel { max-height: 52%; }
   #detail { height: min(42vh, 240px); }
   #panel-toggle { top: 8px; left: 8px; }
+  /* 列が幅いっぱいなので、凡例は寄せる先を持たない。上の規則と同じ形の
+     選択子で書く——@media は詳細度を足さないので、#legend-bar だけでは
+     #app:not(.panel-off) #legend-bar に負ける。 */
+  #legend-bar, #app:not(.panel-off) #legend-bar { left: 8px; right: 8px; }
+  /* 詳細の箱はこの幅では下端に出る。凡例と場所を取り合うので、開いているあいだ
+     は凡例を譲る——詳細を読んでいる人が見ているのはその路線であって、線の色
+     の一覧ではない。 */
+  #app.detail-open #legend-bar { display: none; }
 }
