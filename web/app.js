@@ -638,28 +638,120 @@ const BasemapControl = buildCycleControl({
   label: (bmId) => `地図の種類: ${GSI_BASEMAPS[bmId].label}`,
 });
 
+/* --------------------------------------------------------- 地図をずらす --- */
+/**
+ * 地図の上に浮いている箱のぶんだけ、地図の「中心」をずらす。
+ *
+ * 箱は #left-stack に縦に並んでいる。操作面 (#panel) も詳細 (#detail) も、
+ * 地図の要素を細くするのではなく上に浮かせてある——細くすると canvas の寸法が
+ * 変わり、開け閉てのたびに全部描き直しになる。浮かせて padding をずらせば、
+ * 地図が持っている絵はそのままで、fitBounds や flyTo の行き先だけが箱を
+ * 避ける。
+ *
+ * 寸法と位置は style.css が持つので、ここは実測した矩形に隙間ぶんを足すだけに
+ * する——同じ数を二箇所で言わない。
+ */
+const app = $('#app');
+const panel = $('#panel');
+const detail = $('#detail');
+const detailBody = $('#detail-body');
+const narrowMq = window.matchMedia(NARROW_QUERY);
+
+const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
+/** 箱と地図のあいだに残す余白。 */
+const BOX_GAP = 12;
+/** 一辺で覆ってよい上限と、向かい合う二辺の和の上限。狭い画面では操作面が上を、
+ *  詳細が下を覆うので、これが無いと和が canvas の高さを超え、地図の中心が画面の
+ *  外へ出る。 */
+const MAX_SIDE_RATIO = 0.6;
+const MAX_OPPOSITE_RATIO = 0.8;
+const EASE_MS = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ? 0
+  : 260;
+
+const panelOpen = () => !app.classList.contains('panel-off');
+
+function mapPadding() {
+  const canvas = $('#map').getBoundingClientRect();
+  const boxes = [];
+  if (panelOpen()) boxes.push(panel.getBoundingClientRect());
+  if (!detail.hidden) boxes.push(detail.getBoundingClientRect());
+  if (!boxes.length) return { ...NO_PADDING };
+
+  // 狭い画面では列が画面の幅いっぱいなので、避ける向きは上下になる。操作面が
+  // 上を、詳細が下を覆う。広い画面では列は左端にあるので、左だけを空ける。
+  if (!narrowMq.matches) {
+    const right = Math.max(...boxes.map((b) => b.right));
+    const left = Math.min(
+      right - canvas.left + BOX_GAP,
+      canvas.width * MAX_SIDE_RATIO,
+    );
+    return { ...NO_PADDING, left };
+  }
+
+  const cap = canvas.height * MAX_SIDE_RATIO;
+  const pad = { ...NO_PADDING };
+  if (panelOpen()) {
+    const box = panel.getBoundingClientRect();
+    pad.top = Math.min(box.bottom - canvas.top + BOX_GAP, cap);
+  }
+  if (!detail.hidden) {
+    const box = detail.getBoundingClientRect();
+    pad.bottom = Math.min(canvas.bottom - box.top + BOX_GAP, cap);
+  }
+  // 二つとも出ているときは、和のほうが先に効く。
+  const both = pad.top + pad.bottom;
+  const room = canvas.height * MAX_OPPOSITE_RATIO;
+  if (both > room) {
+    pad.top *= room / both;
+    pad.bottom *= room / both;
+  }
+  return pad;
+}
+
+/** 渡すのは padding だけである。center も zoom も渡さないので、地図が持って
+ *  いる絵はそのままで、地図が中心と見なす点だけが箱の外へ寄る。 */
+function applyMapPadding(animate) {
+  const padding = mapPadding();
+  if (animate) map.easeTo({ padding, duration: EASE_MS });
+  else map.setPadding(padding);
+}
+
+/**
+ * padding を変えても絵を動かさない。
+ *
+ * padding は「地図が中心と見なす点」をずらす仕組みなので、変えるとその点は
+ * 別の画素へ移り、絵は逆へ滑る。滑らせないためには、新しい padding のもとで
+ * 中心が置かれることになる画素に今写っている地点を、そのまま新しい中心に
+ * 据え直せばよい。
+ */
+function setPaddingKeepingView() {
+  const padding = mapPadding();
+  const canvas = $('#map').getBoundingClientRect();
+  const x = canvas.width / 2 + (padding.left - padding.right) / 2;
+  const y = canvas.height / 2 + (padding.top - padding.bottom) / 2;
+  map.jumpTo({ padding, center: map.unproject([x, y]) });
+}
+
 /* ----------------------------------------------------------------- panel --- */
 /**
- * Fold the sidebar away to give the map the whole window.
+ * 操作面を畳んで、地図に窓を丸ごと渡す。
  *
- * The button is map chrome, not panel chrome: it has to stay on screen while
- * the panel is off it, or there would be no way back. Wired here rather than in
- * wireControls() so it answers before the data has arrived.
+ * 開いているあいだ閉じる口はパネル自身の × で、閉じているあいだ開き直す口は
+ * 地図の上の #panel-toggle である。後者は地図側の部品なので、データが届く前
+ * から答えられるよう wireControls() ではなくここで配線する。
  *
- * `inert` is what actually takes the folded panel out of play — the CSS only
- * parks it past the left edge, and a checkbox sitting off screen is still
- * reachable by tab and still readable by a screen reader.
+ * 畳んだパネルを実際に無効化するのは `inert` である。CSS は visibility で
+ * 伏せるだけで、伏せた要素も読み上げには残りうる。
  */
 (() => {
-  const app = $('#app');
-  const panel = $('#panel');
-  const btn = $('#panel-toggle');
+  const toggle = $('#panel-toggle');
 
-  const set = (open) => {
+  const set = (open, animate) => {
     app.classList.toggle('panel-off', !open);
     panel.inert = !open;
-    btn.setAttribute('aria-expanded', String(open));
-    btn.title = open ? 'サイドバーを隠す' : 'サイドバーを表示';
+    toggle.setAttribute('aria-expanded', String(open));
+    applyMapPadding(animate);
     try {
       localStorage.setItem('panel-open', open ? '1' : '0');
     } catch {
@@ -667,10 +759,8 @@ const BasemapControl = buildCycleControl({
     }
   };
 
-  // The canvas follows a click on its own: MapLibre watches its container
-  // with a ResizeObserver, and the panel changes width in one step (see
-  // style.css on why it does not slide), so one observation is all it takes.
-  btn.addEventListener('click', () => set(app.classList.contains('panel-off')));
+  toggle.addEventListener('click', () => set(true, true));
+  $('#panel-close').addEventListener('click', () => set(false, true));
 
   let open = true;
   try {
@@ -678,13 +768,7 @@ const BasemapControl = buildCycleControl({
   } catch {
     /* ditto */
   }
-  set(open);
-  // Applying the stored panel state above is a synchronous DOM mutation
-  // that lands before the first paint, which the ResizeObserver comment
-  // above does not cover — it only catches changes after the page has
-  // settled. `map` (above) was still built against the panel-open layout,
-  // so the canvas needs one explicit resize to pick up the collapsed one.
-  map.resize();
+  set(open, false);
 })();
 
 /* ----------------------------------------------------------------- boot --- */
@@ -775,12 +859,24 @@ function fitInitialView(index) {
   const wanted = new URLSearchParams(location.search).get('region');
   const box = index.find((r) => r.region === wanted)?.bbox || state.meta.bbox;
   const [w, s, e, n] = box;
+  // 浮いている箱のぶんは、既に地図の padding が述べている。fitBounds に渡す
+  // padding はそれを置き換えてしまうので、余白を足した形で渡し直す——そうし
+  // ないと最初の眺めだけが操作面の下に潜る。
+  const p = map.getPadding();
   map.fitBounds(
     [
       [w, s],
       [e, n],
     ],
-    { padding: 24, duration: 0 },
+    {
+      padding: {
+        top: p.top + 24,
+        bottom: p.bottom + 24,
+        left: p.left + 24,
+        right: p.right + 24,
+      },
+      duration: 0,
+    },
   );
 }
 
@@ -968,48 +1064,9 @@ function wirePopups() {
  * のは地図が要る三つ——開いたぶん地図をずらすこと、起終点へ飛ぶこと、選択を
  * 差し替えること——だけである。
  *
- * 箱は地図の上に浮かせてある。#map を細くして横に並べる手もあるが、それは
- * canvas の寸法を変えることであり、開くたびに全部描き直しになる。浮かせて
- * padding をずらせば、地図が持っている絵はそのままである。
+ * 箱の居場所と、地図をずらす量は #left-stack と applyMapPadding が持つ
+ * (上の「地図をずらす」の節)。
  */
-const detail = $('#detail');
-const detailBody = $('#detail-body');
-const narrowMq = window.matchMedia(NARROW_QUERY);
-
-const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
-/** 箱と地図のあいだに残す余白。箱の寸法と位置は style.css が持つので、ここは
- *  実測した矩形にこの余白だけを足す——同じ数を CSS と二箇所で言わない。 */
-const DETAIL_GAP = 12;
-const DETAIL_EASE_MS = window.matchMedia('(prefers-reduced-motion: reduce)')
-  .matches
-  ? 0
-  : 260;
-
-/**
- * 箱が覆っているぶんの padding。
- *
- * 広い画面では左下の固定箱なので左を、狭い画面では下部の帯になるので下を
- * 空ける。どちらも style.css の @media と同じ境界で切り替わるよう、
- * wiring.mjs が持つ NARROW_QUERY をそのまま見る。
- */
-function detailPadding() {
-  if (detail.hidden) return { ...NO_PADDING };
-  const box = detail.getBoundingClientRect();
-  const canvas = $('#map').getBoundingClientRect();
-  return narrowMq.matches
-    ? { ...NO_PADDING, bottom: canvas.bottom - box.top + DETAIL_GAP }
-    : { ...NO_PADDING, left: box.right - canvas.left + DETAIL_GAP };
-}
-
-/** 渡すのは padding だけである。center も zoom も渡さないので、地図が持って
- *  いる絵はそのままで、地図が中心と見なす点だけが箱の右(狭い画面では上)へ
- *  寄る。 */
-function applyDetailPadding(animate) {
-  const padding = detailPadding();
-  if (animate) map.easeTo({ padding, duration: DETAIL_EASE_MS });
-  else map.setPadding(padding);
-}
-
 /**
  * 箱を開いた時点の居場所。閉じるときに、寄せたぶんを戻すかどうかを決める。
  *
@@ -1038,19 +1095,6 @@ const cameraMoved = (a, b) =>
   Math.abs(a.lat - b.lat) > CAMERA_EPS ||
   Math.abs(a.zoom - b.zoom) > CAMERA_EPS;
 
-/**
- * padding を外しても絵を動かさない。
- *
- * padding は「地図が中心と見なす点」をずらす仕組みなので、外すとその点は画面
- * の真ん中へ戻り、絵は逆へ滑る。滑らせないためには、いま画面の真ん中に写って
- * いる地点を、そのまま新しい中心に据え直せばよい。
- */
-function dropDetailPadding() {
-  const canvas = $('#map').getBoundingClientRect();
-  const anchor = map.unproject([canvas.width / 2, canvas.height / 2]);
-  map.jumpTo({ padding: { ...NO_PADDING }, center: anchor });
-}
-
 function openDetail(ref) {
   const route = state.routes.find((r) => r.ref === ref);
   if (!route) return;
@@ -1074,7 +1118,7 @@ function openDetail(ref) {
   // ここで取り直すと、動いた後に開き直した人が閉じたときに横へ滑る。
   if (detail.hidden) detailOpenedAt = cameraNow();
   detail.hidden = false;
-  applyDetailPadding(true);
+  applyMapPadding(true);
 }
 
 function closeDetail() {
@@ -1082,8 +1126,8 @@ function closeDetail() {
   const moved = detailOpenedAt && cameraMoved(detailOpenedAt, cameraNow());
   detailOpenedAt = null;
   detail.hidden = true;
-  if (moved) dropDetailPadding();
-  else applyDetailPadding(true);
+  if (moved) setPaddingKeepingView();
+  else applyMapPadding(true);
 }
 
 $('#detail-close').addEventListener('click', closeDetail);
@@ -1098,9 +1142,7 @@ document.addEventListener('keydown', (ev) => {
 // 箱の大きさは画面幅で変わる(狭い画面では下部の帯になる)ので、開いている
 // あいだは幅の変化に padding を追随させる。開閉と違って利用者が窓を掴んで
 // いる最中なので、滑らせずにその場で合わせる。
-window.addEventListener('resize', () => {
-  if (!detail.hidden) applyDetailPadding(false);
-});
+window.addEventListener('resize', () => applyMapPadding(false));
 
 /**
  * 標識と、箱の中のボタン。

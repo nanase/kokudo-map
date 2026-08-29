@@ -113,14 +113,29 @@ body {
   line-height: 1.6;
 }
 
-#app { display: flex; height: 100%; }
+#app { position: relative; height: 100%; }
+
+/* 地図の上に浮かぶ左の列 --------------------------------------------------
+   操作面 (#panel) と路線の詳細 (#detail) は、どちらも地図の上に浮く箱で、
+   同時に出る。別々に絶対配置すると重なりを二箇所で調整することになるので、
+   一本の縦列に入れて flex に任せる。列は画面の上下いっぱいまであり、操作面が
+   縮んで (flex-shrink) 詳細の場所を空ける。
+
+   列そのものは地図を掴む手を通す。箱だけが受け取る。 */
+#left-stack {
+  position: absolute; left: 12px; top: 12px; bottom: 12px; width: 340px;
+  z-index: 4; display: flex; flex-direction: column; gap: 10px;
+  pointer-events: none;
+}
+#left-stack > * { pointer-events: auto; }
 
 /* ---------------------------------------------------------------- panel --- */
 #panel {
-  width: 340px;
-  flex: 0 0 340px;
+  /* 中身は列の高さを超える。縮む側はここで、詳細の箱は縮まない。 */
+  flex: 0 1 auto; min-height: 0;
   background: var(--panel);
-  border-right: 1px solid var(--line);
+  border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 26px rgba(0,0,0,.26);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -358,28 +373,29 @@ input[type="search"]::placeholder { font-size: .82em; }
 .maplibregl-ctrl-attrib,
 .maplibregl-ctrl-attrib a { color: var(--attrib-ink); }
 
-#map-wrap { flex: 1; position: relative; min-width: 0; }
+/* 地図は窓いっぱいである。操作面も詳細も、その上に浮いている。 */
+#map-wrap { position: absolute; inset: 0; }
 #map { position: absolute; inset: 0; }
 
 /* パネルの開閉 ------------------------------------------------------------
-   畳んだパネルは負の余白で画面の外へ出す。display:none にすると路線一覧の
-   スクロール位置が開き直すたびに戻ってしまう。表示のまま外に出している以上
-   中の操作に tab で入れてしまうので、app.js が inert を付けて塞ぐ。
-
-   滑らせない。幅が変わるあいだ地図の canvas も追随させることになり、
-   MapLibre はその連続した変化を間引くので、滑り終えても canvas が途中の幅の
-   まま 1 秒ほど残る。開閉は一瞬で済ませる。 */
-#app.panel-off #panel { margin-left: -340px; }
+   畳んだパネルは visibility で伏せる。display:none にすると路線一覧の
+   スクロール位置が開き直すたびに戻ってしまう。伏せた要素は場所こそ取るが、
+   地図を掴む手も tab も通り抜ける——それでも読み上げには残るので、app.js が
+   inert を付けて塞ぐ。詳細の箱は列の下端に居るので、伏せたパネルが上に
+   場所を取っていても動かない。 */
+#app.panel-off #panel { visibility: hidden; }
+/* 開いている間は、閉じる口はパネル自身の × である。この釦は開き直すためだけ
+   にあるので、開いているあいだは出さない。 */
+#app:not(.panel-off) #panel-toggle { display: none; }
 #panel-toggle {
-  position: absolute; top: 10px; left: 10px; z-index: 4;
+  position: absolute; top: 12px; left: 12px; z-index: 5;
   width: 30px; height: 30px; padding: 0; display: grid; place-items: center;
   background: var(--panel); color: var(--ink-2); cursor: pointer;
   border: 1px solid var(--line); border-radius: 4px;
   box-shadow: 0 1px 4px rgba(0,0,0,.24);
 }
 #panel-toggle:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
-#panel-toggle svg { width: 18px; height: 18px; transition: transform .18s ease; }
-#app.panel-off #panel-toggle svg { transform: rotate(180deg); }
+#panel-toggle svg { width: 18px; height: 18px; }
 #loading {
   position: absolute; inset: 0; display: grid; place-items: center;
   background: var(--panel-2); color: var(--ink-3);
@@ -508,14 +524,16 @@ input[type="search"]::placeholder { font-size: .82em; }
 
 /* detail ------------------------------------------------------------------
    一つの国道について語る箱。地図の上に浮かせ、地図のほうは padding でその
-   ぶんだけ空ける (app.js の applyDetailPadding)。#map を細くして横に並べる
+   ぶんだけ空ける (app.js の applyMapPadding)。#map を細くして横に並べる
    と canvas の寸法が変わり、開くたびに全部描き直しになる。
 
    大きさは固定する。路線によって中身の量は違うが、箱が伸び縮みすると地図の
    ずれ幅も毎回変わってしまう。入り切らないぶんは .detail-scroll が飲む。 */
 #detail {
-  position: absolute; left: 12px; bottom: 12px; z-index: 4;
-  width: 320px; height: 340px;
+  /* 位置は #left-stack が決める。列の中では下端に沿わせ、余りは上の
+     パネルへ渡す——margin-top: auto がそれをする。 */
+  position: relative; margin-top: auto; flex: 0 0 auto;
+  height: 340px; max-height: 100%;
   display: flex; flex-direction: column;
   background: var(--panel); color: var(--ink);
   border: 1px solid var(--line); border-radius: 6px;
@@ -703,23 +721,15 @@ input[type="search"]::placeholder { font-size: .82em; }
 .share-toggles li.off::before { content: "– "; color: var(--ink-3); }
 
 @media (max-width: 860px) {
-  #app { flex-direction: column; }
-  /* 左下の固定箱にしない。横に 320px を割く幅が無く、割いたところで地図に
-     残るのは細い帯になる。画面下部いっぱいの帯にして、地図は下へずらす。 */
-  #detail {
-    left: 0; right: 0; bottom: 0; width: auto;
-    height: min(42vh, 240px);
-    border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0;
-  }
-  /* 上を占めるのはパネルだが、この幅で見に来た人が見たいのは地図である。
-     絞り込みと表示の切り替えまでは畳まずに見えるので、これ以上は要らない。 */
-  #panel { width: 100%; flex: 0 0 auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--line); }
-  /* 横並びではないので、左へずらしても隠れない。高さが割合なので畳めもしない。 */
-  #app.panel-off #panel { margin-left: 0; display: none; }
-  #map-wrap { flex: 1; }
-  /* パネルが上下に積まれる幅では、開閉の向きも上下でなければ矢印が嘘をつく。
-     基準の矢印は左向きなので、開いた状態は 90deg で上向きに、畳んだ状態は
-     開閉時に足される 180deg と合わせて 270deg で下向きにする。 */
-  #panel-toggle svg { transform: rotate(90deg); }
-  #app.panel-off #panel-toggle svg { transform: rotate(270deg); }
+  /* 横に 340px を割く幅が無いので、列を画面の幅いっぱいまで広げる。上下の
+     並びは変わらない——上が操作面、下が詳細である。
+
+     右端だけは空けておく。拡大・方位・地図の種類は地図の右上に積まれており、
+     この幅では列がそこへ達する——覆うと、地図を操作する口が全部ふさがる。 */
+  #left-stack { left: 8px; right: 56px; top: 8px; bottom: 8px; width: auto; }
+  /* この幅で見に来た人が見たいのは地図なので、操作面は画面の半分までにする。
+     中身が入り切らないぶんはパネル自身が飲む。 */
+  #panel { max-height: 52%; }
+  #detail { height: min(42vh, 240px); }
+  #panel-toggle { top: 8px; left: 8px; }
 }

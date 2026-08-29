@@ -269,59 +269,66 @@ for (const b of report.folded) {
   );
 }
 
-// The panel folds away to give the map the window. The failure this guards is
-// not the CSS but the canvas: MapLibre sizes it from its container, and a
-// canvas left at the old width draws the country into part of the screen.
+/* 操作面は地図の上に浮いている。畳んでも canvas の寸法は変わらない——変わる
+ * のは地図の padding、つまり「地図が中心と見なす点」が箱をどれだけ避けるか
+ * である。ここが守るのはその対応で、畳めば padding が消え、開き直せば戻る。
+ *
+ * 開いているあいだ閉じる口はパネル自身の × で、閉じているあいだ開き直す口は
+ * 地図の上の釦である。どちらか一方だけが出ていることも併せて見る。 */
 const folding = await page.evaluate(async () => {
-  const width = () =>
-    Math.round(
-      document.querySelector('#map canvas').getBoundingClientRect().width,
-    );
-  /* 幅が変わるまで待つ。canvas を動かすのは MapLibre の ResizeObserver
-   * なので、押した瞬間はまだ古い幅である。決め打ちの 900 ms を数えていた
-   * ——遅ければ足りず、速ければ待ちすぎる。上限を置いて、変わらなければ
-   * 変わらないまま返す。下の ok() がそれを失敗として述べる。
-   *
-   * 上限は setTimeout で張る。rAF の中で時刻を見ていたころ、画面が伏せられて
-   * Chromium が rAF を止めた回には、上限を見る所そのものが動かなかった。
-   * page.evaluate に時限は無いので、そうなると検査が終わらない。 */
-  const widthChanges = (from) =>
+  /* padding の変化は easeTo なので、押した瞬間はまだ途中である。MapLibre が
+   * 落ち着いたと言うまで待つ。上限を置いて、来なければそのまま返す——下の
+   * ok() がそれを失敗として述べる。 */
+  const settled = () =>
     new Promise((resolve) => {
-      let frame = 0;
-      const finish = () => {
+      const timer = setTimeout(resolve, 5000);
+      window.map.once('idle', () => {
         clearTimeout(timer);
-        cancelAnimationFrame(frame);
-        resolve(width());
-      };
-      const timer = setTimeout(finish, 5000);
-      const step = () => {
-        if (width() !== from) finish();
-        else frame = requestAnimationFrame(step);
-      };
-      frame = requestAnimationFrame(step);
+        resolve();
+      });
     });
-  const btn = document.querySelector('#panel-toggle');
-  const open = width();
-  btn.click();
-  const foldedWidth = await widthChanges(open);
-  const folded = {
-    width: foldedWidth,
-    inert: document.querySelector('#panel').inert,
+  const left = () => Math.round(window.map.getPadding().left);
+  const shown = (sel) => !!document.querySelector(sel).offsetParent;
+
+  const open = {
+    padding: left(),
+    toggleShown: shown('#panel-toggle'),
+    closeShown: shown('#panel-close'),
   };
-  btn.click();
-  return { open, folded, back: await widthChanges(foldedWidth) };
+  document.querySelector('#panel-close').click();
+  await settled();
+  const folded = {
+    padding: left(),
+    inert: document.querySelector('#panel').inert,
+    toggleShown: shown('#panel-toggle'),
+  };
+  document.querySelector('#panel-toggle').click();
+  await settled();
+  return { open, folded, back: left() };
 });
 ok(
-  folding.folded.width > folding.open,
-  `folding the panel hands the map its width (${folding.open} → ${folding.folded.width})`,
+  folding.open.padding > 0,
+  `the open panel pushes the map centre clear of it (${folding.open.padding}px)`,
+);
+ok(
+  folding.folded.padding === 0,
+  `folding the panel hands the map the whole window (${folding.folded.padding}px)`,
 );
 ok(
   folding.folded.inert,
-  'the folded panel is inert, so tab cannot reach the controls parked off screen',
+  'the folded panel is inert, so tab cannot reach the controls parked behind it',
 );
 ok(
-  folding.back === folding.open,
-  `unfolding puts the map back (${folding.back} vs ${folding.open})`,
+  folding.open.closeShown && !folding.open.toggleShown,
+  'while open, the panel is closed by its own × and the map button is out of the way',
+);
+ok(
+  folding.folded.toggleShown,
+  'while folded, the map still carries the button that opens the panel again',
+);
+ok(
+  folding.back === folding.open.padding,
+  `unfolding puts the map back (${folding.back} vs ${folding.open.padding})`,
 );
 
 // The clear button is the only place the size of the selection is stated. A
@@ -489,8 +496,11 @@ await page.screenshot({ path: shot('4-labels') });
 const target = await page.evaluate(() => {
   const m = window.map;
   const r = m.getCanvas().getBoundingClientRect();
-  const cx = Math.round(r.width / 2);
-  const cy = Math.round(r.height / 2);
+  // 浮いている箱のぶん、地図の中心は画面の真ん中には無い。据えた地点が
+  // 実際に落ちる画素から探し始める。
+  const pad = m.getPadding();
+  const cx = Math.round((r.width + pad.left - pad.right) / 2);
+  const cy = Math.round((r.height + pad.top - pad.bottom) / 2);
   const ring = (d) => [
     [d, 0],
     [0, d],
@@ -953,8 +963,11 @@ const formerRowFor = async (ref) => {
   const hit = await page.evaluate((wantRef) => {
     const m = window.map;
     const r = m.getCanvas().getBoundingClientRect();
-    const cx = Math.round(r.width / 2);
-    const cy = Math.round(r.height / 2);
+    // 浮いている箱のぶん、地図の中心は画面の真ん中には無い。据えた地点が
+    // 実際に落ちる画素から探し始める。
+    const pad = m.getPadding();
+    const cx = Math.round((r.width + pad.left - pad.right) / 2);
+    const cy = Math.round((r.height + pad.top - pad.bottom) / 2);
     const ring = (d) => [
       [d, 0],
       [0, d],
