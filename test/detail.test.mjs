@@ -212,6 +212,8 @@ describe('detailHTML — 旧道', () => {
     // 現れる。
     const kindsClose = html.indexOf('</dl></div>'); // .detail-kinds の閉じ
     const formerRow = html.indexOf('<dt>うち旧道</dt>');
+    // 区分別が出ていなければ -1 になり、比較が素通りする。先に在ることを見る。
+    expect(kindsClose).toBeGreaterThan(-1);
     expect(formerRow).toBeGreaterThan(kindsClose);
   });
 });
