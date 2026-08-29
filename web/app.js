@@ -41,7 +41,13 @@
  *   wiring.mjs     index.html の要素と state の対応づけ
  */
 
-import { concurrencies, kindsFor, routesOf, statsFor } from './aggregate.mjs';
+import {
+  concurrencies,
+  formerKmFor,
+  kindsFor,
+  routesOf,
+  statsFor,
+} from './aggregate.mjs';
 import { decreeTerminiOf, detailHTML, relatedRoutesOf } from './detail.mjs';
 import {
   baseStyle,
@@ -1046,11 +1052,16 @@ function openDetail(ref) {
   // 二つが別のことを語る。箱は地図の左下を覆うから、狭い画面では重なりもする。
   // 影はポップアップのものなので、closePopup() が一緒に消す。
   closePopup();
+  // kinds と former の二つは必ず同じ絞り方で読まなければならない
+  // (aggregate.mjs の touched() が一箇所にある理由もそれ)。Set を二回作ると
+  // 生成が食い違う第一歩になるので、一つを両方に渡す。
+  const sel = new Set([ref]);
   detailBody.innerHTML = detailHTML({
     route,
-    kinds: kindsFor(state.meta.combinations, new Set([ref])),
+    kinds: kindsFor(state.meta.combinations, sel),
     termini: decreeTerminiOf(state.meta, ref),
     related: relatedRoutesOf(state.meta, ref),
+    formerKm: formerKmFor(state.meta.combinations, sel),
   });
   // 別の路線に開き直しただけなら、居場所は開いたときのままにしておく。
   // ここで取り直すと、動いた後に開き直した人が閉じたときに横へ滑る。

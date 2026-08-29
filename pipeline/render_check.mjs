@@ -19,8 +19,21 @@ const { GSI_TILES } = await import(
 );
 // Same reason: the box's three sections are a rule over three meta fields, and
 // a copy of that rule here would stop checking the one the page runs.
-const { relatedRoutesOf } = await import(
+// detailHTML is imported alongside it so the former-designation check below
+// can build its expected row through the real formatting rule (fmtKm, and
+// formerRowHTML's "0.0 → no row") instead of retyping that rule here.
+const { relatedRoutesOf, detailHTML } = await import(
   pathToFileURL(join(ROOT, 'web', 'detail.mjs')).href
+);
+// Same reason again: former_km's meta → DOM path (#84) is otherwise the one
+// part of the detail box bun test never walks with a real field name — it
+// only ever hands detailHTML() a literal. formerKmFor() is the function that
+// actually reads the field, so importing it is what lets this file notice a
+// rename the way it already notices one in decree.routes or crossings.
+// routesOf comes along because detailHTML() needs a route object, not just
+// the former_km number.
+const { formerKmFor, routesOf } = await import(
+  pathToFileURL(join(ROOT, 'web', 'aggregate.mjs')).href
 );
 const TILE_HOST = new URL(GSI_TILES).host;
 
@@ -904,6 +917,128 @@ if (ferryArc) {
   );
 } else {
   console.log('\n海上国道: no ferry arc built — the toggle is not exercised');
+}
+
+// --- former designations (#84): the one meta → DOM path bun test never walks
+// former_km lives in each combination row next to kinds, and formerKmFor()
+// (aggregate.mjs) sums it exactly the way kindsFor() sums kinds. bun test only
+// ever hands detailHTML() a literal former_km, so it never reads the field by
+// name — a rename in pack_web.mjs (the #64/#65 shape of bug: the field still
+// exists, just under a different name than the code reads) would make
+// formerKmFor() return 0 forever and the row vanish from the box. No
+// exception, no console error, bun test still green throughout.
+//
+// 国道10号 has 30.8 km of former designation; 国道4号 has none. Picking by ref
+// rather than by whatever the cursor lands on (as the arc click above does)
+// means both branches — row shown, row omitted — run every time this check
+// does, instead of only when the dice land on a route that happens to have one.
+const arcOf = (ref) =>
+  features.find(
+    (f) => f.properties.kind === 'road' && f.properties.refs_list.includes(ref),
+  );
+
+const formerRowFor = async (ref) => {
+  const arc = arcOf(ref);
+  if (!arc) return undefined; // no arc for this ref in the build at all
+  await page.evaluate(
+    (c) => window.map.jumpTo({ center: c, zoom: 13.5 }),
+    midOf(arc),
+  );
+  await settle();
+  // Same ring search as the arc-click test above (473 行), but aimed at a
+  // specific ref instead of whatever sits under the canvas centre.
+  const hit = await page.evaluate((wantRef) => {
+    const m = window.map;
+    const r = m.getCanvas().getBoundingClientRect();
+    const cx = Math.round(r.width / 2);
+    const cy = Math.round(r.height / 2);
+    const ring = (d) => [
+      [d, 0],
+      [0, d],
+      [-d, 0],
+      [0, -d],
+      [d, d],
+      [-d, -d],
+      [d, -d],
+      [-d, d],
+    ];
+    for (let d = 0; d < 320; d += 5) {
+      for (const [dx, dy] of ring(d)) {
+        const feat = m
+          .queryRenderedFeatures([cx + dx, cy + dy], { layers: ['roads'] })
+          .find((f) => f.properties.refs.split(',').includes(String(wantRef)));
+        if (feat) return { x: cx + dx + r.x, y: cy + dy + r.y };
+      }
+    }
+    return null;
+  }, ref);
+  if (!hit) return undefined; // in the data, but nothing rendered there
+  await page.mouse.click(hit.x, hit.y);
+  await settle();
+  await page.click(`.shield-btn[data-ref="${ref}"]`);
+  await settle();
+  const dd = await page.evaluate(() => {
+    const dt = [...document.querySelectorAll('#detail dt')].find(
+      (d) => d.textContent === 'うち旧道',
+    );
+    return dt ? dt.nextElementSibling.textContent : null;
+  });
+  await page.click('#detail-close');
+  await settle();
+  return dd; // "30.8 km", or null if the row is absent
+};
+
+// Both sides of the comparison below read meta.combinations through
+// formerKmFor() — once because that is what the running page calls, once to
+// compute what the page ought to show. If pack_web.mjs renamed the field,
+// formerKmFor() would return 0 on *both* sides and they would agree, green,
+// on the wrong answer — the same shape of self-agreeing check f694172 fixed
+// for the dl-position test. 国道10号 having a nonzero former_km is a fact
+// about the real network, independent of what this file's meta happens to
+// contain, so it is asserted here on its own, first: if this comes back 0,
+// the field is gone or renamed, not that 10号 lost its former road.
+const anchorKm = formerKmFor(meta.combinations, new Set([10]));
+ok(
+  anchorKm > 0,
+  `the meta still carries former_km for 国道10号 (${anchorKm} km) — 0 would ` +
+    `mean the field was dropped or renamed, not that 10号 has no former road`,
+);
+
+// The expected row's text comes from detailHTML() itself, not from retyping
+// fmtKm's rounding and formerRowHTML's "0.0 → no row" rule here (CLAUDE.md:
+// 検証スクリプトは本物の定義を読み込んで検査する). Only former_km needs to be
+// the real, freshly-read value; the rest of `route` just has to be a route
+// that exists, so detailHTML has something to build the rest of the box from.
+const expectedFormerRow = (ref) => {
+  const route = routesOf(meta.combinations).find((r) => r.ref === ref);
+  if (!route) return undefined; // ref not in this build at all
+  const html = detailHTML({
+    route,
+    formerKm: formerKmFor(meta.combinations, new Set([ref])),
+  });
+  return html.match(/<dt>うち旧道<\/dt><dd>([^<]*)<\/dd>/)?.[1] ?? null;
+};
+
+for (const ref of [10, 4]) {
+  const shownRow = await formerRowFor(ref);
+  if (shownRow === undefined) {
+    fails.push(
+      `FAIL  no clickable arc for 国道${ref}号 (former-designation check)`,
+    );
+    continue;
+  }
+  const wantRow = expectedFormerRow(ref);
+  if (wantRow === undefined) {
+    fails.push(
+      `FAIL  国道${ref}号 is missing from routesOf() (former-designation check)`,
+    );
+    continue;
+  }
+  ok(
+    shownRow === wantRow,
+    `国道${ref}号's box shows うち旧道 the way the meta has it ` +
+      `(want ${wantRow ?? 'no row'}, got ${shownRow ?? 'no row'})`,
+  );
 }
 
 // --- every region's data must actually be on the map ------------------------

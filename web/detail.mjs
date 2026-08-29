@@ -176,6 +176,24 @@ const kindsHTML = (kinds) =>
         .join('')}</dl></div>`
     : '';
 
+/* 延長の直下に置く、旧道だけの内訳(#26・#84)。区分別の合計は延長とほぼ
+ * 一致するので(国道10号なら 791.3 km と 791.4 km)、区分別の下に同じ書体
+ * で旧道の行を続けると「四つめの区分」に読める——#26 が禁じている読みで
+ * ある。延長の直下に置けば、「うち」が指す先の真下に来る。
+ *
+ * 0 のときは行ごと出さない。丸める前の値では判定しない——0.04 km のような
+ * 値は fmtKm で「0.0 km」になり、丸める前で判定すると「0.0 km」のまま出て
+ * しまう。旧道を持たない路線は多くある。重用区間(route.conc_km)は持たない
+ * ときも「なし」と書くが、旧道は「なし」とも書かない——持たないことは述べ
+ * るに値しないためである。 */
+const formerRowHTML = (formerKm) => {
+  const km = fmtKm(formerKm);
+  // 0 かどうかも fmtKm に聞く。fmtKm は閲覧者のロケールで数を組むので、小数点に
+  // コンマを使う地域では 0 が「0,0」になる。'0.0' と書き写した判定はそこで外れ、
+  // 旧道を持たない路線に「うち旧道 0,0 km」が出る。
+  return km === fmtKm(0) ? '' : row('うち旧道', `${km} km`);
+};
+
 /* 関わりのある路線を、標識を並べて述べる。
  *
  * 標識は押せる。ポップアップの見出しと同じ `.shield-btn` で、押せばその路線の
@@ -204,9 +222,10 @@ const relatedHTML = (groups) =>
  *
  * `route` は aggregate.mjs の routesOf() が返す行、`kinds` は kindsFor() が返す
  * 内訳、`termini` は decreeTerminiOf() が返す起終点、`related` は
- * relatedRoutesOf() が返す関わりのある路線である。後ろの三つは meta がその欄を
- * 持って初めて埋まる(区分別は issue #58、起終点は issue #59、関わりのある路線は
- * その後)。どれが先に入っても壊れないよう、欄が無ければその欄ごと出さない。
+ * relatedRoutesOf() が返す関わりのある路線、`formerKm` は formerKmFor() が返す
+ * 旧道の距離である。後ろの四つは meta がその欄を持って初めて埋まる(区分別は
+ * issue #58、起終点は issue #59、関わりのある路線はその後、旧道の距離は
+ * issue #84)。どれが先に入っても壊れないよう、欄が無ければその欄ごと出さない。
  *
  * 見出しは標識だけを出す。標識は番号を書いた路線の名前そのものなので、隣に
  * 「国道N号」と書き添えるのは同じことを二度言うことだった。空いた場所には、
@@ -214,7 +233,13 @@ const relatedHTML = (groups) =>
  * ボタンで置く。名前は読み上げのために `h2` に残す(`.sr-only`)。箱の
  * `aria-labelledby` がそれを指している。
  */
-export function detailHTML({ route, kinds = [], termini = [], related = [] }) {
+export function detailHTML({
+  route,
+  kinds = [],
+  termini = [],
+  related = [],
+  formerKm = 0,
+}) {
   const { ref } = route;
   const name = `国道${ref}号`;
   return (
@@ -233,6 +258,7 @@ export function detailHTML({ route, kinds = [], termini = [], related = [] }) {
     terminiHTML(ref, termini) +
     '<dl class="detail-stats">' +
     row('延長', `${fmtKm(route.km)} km`) +
+    formerRowHTML(formerKm) +
     row('アーク数', route.arcs.toLocaleString()) +
     // 重用が 1 mm も無い路線は 459 のうち珍しくない。0.0 km と書くより、
     // 重用を持たないと言うほうが短い。
