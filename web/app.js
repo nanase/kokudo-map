@@ -935,6 +935,19 @@ function setPaddingKeepingView() {
  */
 $('#about-btn').addEventListener('click', () => $('#about-dialog').showModal());
 
+/**
+ * 紙の外——後ろの暗がり——を押したら閉じる。
+ *
+ * <dialog> にとって暗がりは自分の箱のうちにあり、紙のほうは中の <form> が
+ * 隅まで埋めている。だから押されたのが箱そのものだったなら、それは紙ではなく
+ * 暗がりを押したということである。位置を測る必要が無い。
+ */
+for (const dialog of document.querySelectorAll('dialog.sheet')) {
+  dialog.addEventListener('click', (ev) => {
+    if (ev.target === dialog) dialog.close();
+  });
+}
+
 /* ----------------------------------------------------------------- boot --- */
 async function boot() {
   const [index, meta] = await Promise.all([

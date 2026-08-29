@@ -739,7 +739,10 @@ input[type="search"]::placeholder { font-size: .82em; }
   width: min(420px, 92vw);
   box-shadow: 0 8px 32px rgba(0,0,0,.28);
 }
-.sheet::backdrop { background: rgba(10,14,20,.45); }
+/* 後ろの暗がり。紙の側が明るくても暗くても、紙とその後ろの隔たりが読めるだけ
+   の濃さが要る。押せば閉じる (app.js) ので、暗がりは「ここは紙の外」と
+   述べてもいる。 */
+.sheet::backdrop { background: rgba(8, 12, 18, .66); }
 .sheet form {
   padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px;
 }
