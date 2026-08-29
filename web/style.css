@@ -18,8 +18,16 @@
      地図の線も凡例の見本もその色を web/mapspec.mjs の N_COLORS から取る
      ので、CSS に写しを置くと二箇所になる。 */
 
-  --panel: light-dark(#FFFFFF, #131C29);
-  --panel-2: light-dark(#F2F5F9, #0E161F);
+  /* 明るい側の地は、真っ白ではなく地図そのものの白 (#FDFDFE) を採る。操作面は
+     地図の上に浮いており、純白だと画面で一番明るい面になって地図より前へ出て
+     しまう。#FDFDFE はごく薄く青が入っているので、一段沈めた --panel-2 も
+     同じ側へ寄せ、青みの強かった #F2F5F9 をやめる。
+
+     --panel-2 は body の地でもある。地図の raster はその上へ 0.82 で乗るので、
+     ここを動かすと地図の色も動く——ただし差は RGB で 2 に満たず、
+     GSI_SHADE_PAINT が守っている「見え方を変えない」の内側である。 */
+  --panel: light-dark(#FDFDFE, #131C29);
+  --panel-2: light-dark(#F3F4F7, #0E161F);
   --line: light-dark(#D7DFEA, #27364A);
   --line-2: light-dark(#E7ECF3, #1D2938);
   --ink: light-dark(#121A24, #E6EDF6);
