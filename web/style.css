@@ -161,7 +161,9 @@ body {
 }
 .icon-btn:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
 .icon-btn svg { width: 15px; height: 15px; }
-.share-btn { margin-left: auto; flex: 0 0 auto; }
+/* 見出しの右に並ぶ釦の列。先頭だけが余りを飲んで右端へ寄せる。 */
+.about-btn { margin-left: auto; }
+.about-btn, .share-btn, #panel-close { flex: 0 0 auto; }
 /* 目には出さず、読み上げにだけ残す文字。display: none と違って描画はされる
    ので、aria-labelledby の指し先になれるし、Chromium の innerText にも出る
    (pipeline/render_check.mjs が箱の名乗りをそこから読む)。 */
@@ -175,10 +177,9 @@ body {
   gap: 10px; margin-bottom: 10px;
 }
 /* #panel を付けると id を含む分だけ詳細度が上がり、.fold > summary:hover h2
-   の hover 色 (クラスのみ) に勝ってしまう — データ情報だけホバーで色が
-   変わらない不具合になる。footer は #panel の中に一つしかないので、
-   id が無くても他要素と衝突しない。 */
-.block h2, footer h2 {
+   の hover 色 (クラスのみ) に勝ってしまう — 折りたたみの見出しだけホバーで
+   色が変わらない不具合になる。 */
+.block h2 {
   margin: 0; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace;
@@ -188,9 +189,7 @@ body {
 
 /* folded block ----------------------------------------------------------
    Reference material that is worth having but not worth the sidebar height
-   it costs. Folded shut, the summary still states how much is inside.
-   `.fold` rather than `.block > details`, so the same look also works in
-   `footer`, which is not a `.block`. */
+   it costs. Folded shut, the summary still states how much is inside. */
 .fold > summary {
   display: flex; align-items: baseline; gap: 10px; cursor: pointer;
   list-style: none;
@@ -358,23 +357,9 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .shield-btn:hover { background: var(--line-2); }
 
-/* footer ------------------------------------------------------------------
-   データ情報 (#freshness-block) は他の折りたたみブロックと同じく上に沿わせ、
-   GitHub リンクだけを下端に沿わせる。footer 自身に margin-top: auto を置くと
-   両方まとめて下端に押し出されてしまうので、footer を残り空間まで伸ばし
-   (flex: 1 0 auto)、その中で .repo-link だけを margin-top: auto で押し下げる。
-   中身がパネルの高さを超えて溢れるときは伸びる余地が無いので、これまで通り
-   自然に積み上がる。 */
-#panel footer {
-  padding: 14px 18px 4px; flex: 1 0 auto;
-  display: flex; flex-direction: column;
-  /* データ情報と GitHub リンクのあいだは段落 1 行ぶん空ける。gap は最小値
-     なので、余地があるときは .repo-link の margin-top: auto がさらに広げる。
-     .repo-link 自身に margin-top を置くと auto を潰してしまう。 */
-  gap: 1.6em;
-}
-#freshness-block { margin: 0; }
-/* Data provenance: which day of OSM this map is showing. */
+/* Data provenance: which day of OSM this map is showing.
+   出す場所は「国道マップについて」のダイアログである。地図を読むあいだ要る
+   ものではなく、知りたくなったときだけ要る。 */
 .stats, .freshness {
   display: grid; grid-template-columns: max-content 1fr;
   gap: 1px 10px; font-size: .68rem; line-height: 1.55;
@@ -384,7 +369,6 @@ input[type="search"]::placeholder { font-size: .82em; }
 .freshness { margin: 8px 0 0; }
 .stats dt, .freshness dt { color: var(--ink-3); }
 .stats dd, .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.repo-link { align-self: flex-start; margin-top: auto; }
 
 /* ----------------------------------------------------------------- map --- */
 /* 出典表示は地図の上、MapLibre の白い下敷きの上にある。本文の色を継がせない。 */
@@ -671,24 +655,47 @@ input[type="search"]::placeholder { font-size: .82em; }
    標識の影(--shield-shadow)が下へ落ちるぶんだけ列の隙間より広く取る。 */
 .rel-shields { display: flex; flex-wrap: wrap; gap: 5px 3px; }
 
-/* share dialog ------------------------------------------------------------
-   ネイティブの <dialog> を使う。表示状態を変更する口は無いので、独自の
-   フォーカストラップやキー処理を書く理由が無い — showModal() 自身が Esc と
-   フォーカスの往復を面倒みる。 */
-#share-dialog {
+/* dialogs ------------------------------------------------------------------
+   ネイティブの <dialog> を使う。どちらのダイアログにも表示状態を変更する口は
+   無いので、独自のフォーカストラップやキー処理を書く理由が無い —
+   showModal() 自身が Esc とフォーカスの往復を面倒みる。
+
+   共有と「この地図について」は同じ体裁の紙である。器の見た目は .sheet が
+   一度だけ述べ、中身の違いだけをそれぞれが足す。 */
+.sheet {
   border: 1px solid var(--line); border-radius: 6px; padding: 0;
   background: var(--panel); color: var(--ink);
   width: min(420px, 92vw);
   box-shadow: 0 8px 32px rgba(0,0,0,.28);
 }
-#share-dialog::backdrop { background: rgba(10,14,20,.45); }
-#share-dialog form {
+.sheet::backdrop { background: rgba(10,14,20,.45); }
+.sheet form {
   padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px;
 }
-#share-dialog form > header {
+.sheet form > header {
   display: flex; align-items: center; justify-content: space-between;
 }
-#share-dialog h2 { margin: 0; font-size: 1rem; font-weight: 800; }
+.sheet h2 { margin: 0; font-size: 1rem; font-weight: 800; }
+/* 節の見出し。操作面の h2 と同じ小さな大文字の帯で、同じものだと分かる。 */
+.sheet h3 {
+  margin: 0 0 8px; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-3);
+  font-family: ui-monospace, Consolas, monospace;
+}
+.sheet section { margin: 0; }
+
+/* about dialog ------------------------------------------------------------
+   出典はここに無い。地図の上の表示が一度だけ述べている。 */
+#about-dialog { width: min(480px, 92vw); }
+.about-lead { margin: 0; font-size: .82rem; color: var(--ink-2); }
+/* button.mini の骨格を借りる。リンクなので、下線ではなく釦の形で立たせる。 */
+.mini.about-repo {
+  align-self: flex-start; text-decoration: none;
+  display: flex; align-items: center; gap: 7px;
+  font-size: .78rem; padding: 7px 10px;
+}
+.mini.about-repo:hover { border-color: var(--sign-blue); color: var(--sign-blue); }
+.about-repo svg { width: 14px; height: 14px; display: block; }
 .dialog-close {
   border: 0; background: none; cursor: pointer; line-height: 1;
   color: var(--ink-3); border-radius: 4px;

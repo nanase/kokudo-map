@@ -203,10 +203,10 @@ const report = await page.evaluate(() => {
   out.routeCount = document.querySelectorAll('#route-list label').length;
   out.rankingRows = document.querySelectorAll('#ranking .row').length;
   out.sharedRows = document.querySelectorAll('#shared .row').length;
-  // #stats now lives inside the folded データ情報 block (closed by default),
-  // and a closed <details> renders no box for its non-summary children —
-  // `innerText` reports empty for anything unrendered. `textContent` does not
-  // care about layout, so the four numbers are read straight off the <dd>s.
+  // #stats now lives inside the 国道マップについて dialog, which is closed —
+  // a closed <dialog> renders nothing, and `innerText` reports empty for
+  // anything unrendered. `textContent` does not care about layout, so the
+  // four numbers are read straight off the <dd>s.
   out.stats = [...document.querySelectorAll('#stats dd')]
     .map((s) => s.textContent)
     .join(' | ');
@@ -271,6 +271,28 @@ ok(
   JSON.stringify(report.concOptions) === JSON.stringify(['off', 'all']),
   `concurrency has two modes, not three (${report.concOptions.join(', ')})`,
 );
+// データがいつのものかは「国道マップについて」の中にある。操作面には無い。
+const about = await page.evaluate(async () => {
+  const dialog = document.querySelector('#about-dialog');
+  const before = dialog.open;
+  document.querySelector('#about-btn').click();
+  const opened = dialog.open;
+  dialog.close();
+  return {
+    before,
+    opened,
+    inPanel: !!document.querySelector('#panel #stats'),
+  };
+});
+ok(
+  !about.before && about.opened,
+  'the info button opens the 国道マップについて dialog',
+);
+ok(
+  !about.inPanel,
+  'the data provenance is stated in that dialog, not also in the sidebar',
+);
+
 ok(
   report.geolocateButtons === 1,
   `the map carries one 現在位置 button (${report.geolocateButtons})`,

@@ -809,6 +809,11 @@ function setPaddingKeepingView() {
 
   toggle.addEventListener('click', () => set(true, true));
   $('#panel-close').addEventListener('click', () => set(false, true));
+  // 「この地図について」。中身は動かないので、開く口を結ぶだけでよい——
+  // showModal() 自身が Esc とフォーカスの往復を面倒みる。
+  $('#about-btn').addEventListener('click', () =>
+    $('#about-dialog').showModal(),
+  );
 
   // 狭い画面では畳んで始める。浮いた箱は画面の半分を占め、その下から地図が
   // 見えるわけではない——この幅で見に来た人がまず見たいのは地図である。
@@ -1188,11 +1193,11 @@ function closeDetail() {
 
 $('#detail-close').addEventListener('click', closeDetail);
 
-// 共有ダイアログが開いているあいだの Esc はそちらのものである。<dialog> の
+// ダイアログが開いているあいだの Esc はそちらのものである。<dialog> の
 // キャンセルは document まで上がってくるので、ここで譲らないと後ろの箱まで
 // 一緒に閉じる。
 document.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Escape' && !$('#share-dialog').open) closeDetail();
+  if (ev.key === 'Escape' && !$('dialog[open]')) closeDetail();
 });
 
 // 箱の大きさは画面幅で変わる(狭い画面では下部の帯になる)ので、開いている
