@@ -694,6 +694,10 @@ if (!target) {
   // so long after #65 moved that to the box's own 「…だけを表示」 — the page had
   // changed and the check had not, so it failed on a page that was working.
   const ref = target.refs[0];
+  // 箱を開ける前の padding。閉じたときにここへ戻ることが、下の「滑らない」と
+  // 対になる不変条件である——左の列には操作面も居るので、戻る先は 0 とは
+  // 限らない。
+  const paddingBeforeBox = await page.evaluate(() => window.map.getPadding());
   await page.click('.shield-btn');
   await settle();
   const box = await page.evaluate(() => {
@@ -852,8 +856,9 @@ if (!target) {
   // 滑らなかったのは padding を外し忘れたからではない、と言えるようにする。
   const padding = await page.evaluate(() => window.map.getPadding());
   ok(
-    Object.values(padding).every((v) => v === 0),
-    `and the box's padding is gone (${JSON.stringify(padding)})`,
+    JSON.stringify(padding) === JSON.stringify(paddingBeforeBox),
+    `and the box's padding is gone (${JSON.stringify(padding)} vs ` +
+      `${JSON.stringify(paddingBeforeBox)})`,
   );
 }
 

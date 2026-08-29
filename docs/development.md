@@ -99,7 +99,7 @@ uvx ruff check pipeline      # Python の静的検査
 | `web/wiring.mjs` | index.html の要素と state の対応づけ。地図を作らずに import できる |
 | `web/urlstate.mjs` | 絞り込みと表示状態を URL のクエリ文字列に載せる |
 | `web/aggregate.mjs` | 画面が出す数を組み合わせ表から読む |
-| `web/panel.mjs` | 側面の一覧・集計・凡例の組み立て |
+| `web/panel.mjs` | 操作面の一覧・集計と、地図の上の凡例の組み立て |
 | `web/popup.mjs` | 押したアークが自分について述べること |
 | `web/detail.mjs` | 一つの国道について述べること。標識を押すと出る箱 |
 | `web/termini.mjs` | 起点・終点を GeoJSON にする |
