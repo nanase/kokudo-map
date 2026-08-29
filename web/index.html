@@ -29,6 +29,26 @@
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
 
+<!-- 配色は app.js が決めるが、その JS は文書を読み終えるまで走らない。端末が
+     暗く、この地図では明るいほうを選んでいる人には、その間だけ暗い面が出る
+     ——「データを読み込んでいます」が暗く出て、明るくなって、地図が出る、と
+     地図に着くまでに色が二度変わっていた。
+
+     ここで選択を先に置き、最初の描画からその側で出す。'auto' のときは何も
+     置かない——端末の設定がそのまま効き、あとで app.js が置き直す値も同じに
+     なるので、そちらは元から変わらない。
+
+     選択を書くのも、'auto' を解くのも app.js の仕事である。ここがするのは、
+     app.js が前に書いた物をそのまま置き直すことだけである。 -->
+<script>
+  try {
+    const t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch {
+    /* private browsing: 保存が読めないので端末の設定のまま出す。 */
+  }
+</script>
+
 <!-- style.css の解析を待たずに路線番号シールドの書体を取り始める。
      待つと HTML→style.css→woff2 の依存鎖が 1 段伸びる。 -->
 <link rel="preload" href="vendor/roboto-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
