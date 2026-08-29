@@ -163,8 +163,17 @@ window.map = map;
 // typically, unlike a cold first visit).
 const mapLoaded = new Promise((res) => map.once('load', res));
 
+// 拡大・縮小と方位を別の台に分ける。NavigationControl は既定では三つを
+// 一つの角丸の群にまとめるが、拡大・縮小が「今見ている範囲」を変えるのに対し、
+// 方位は「北がどちらか」を戻すだけで、押す場面も頻度も違う。同じ群に並んで
+// いると、拡大を連打している指がそのまま方位に触れて地図が回る。
+// 二つ addControl すれば、MapLibre が群ごとに積んで隙間を空ける。
 map.addControl(
-  new maplibregl.NavigationControl({ visualizePitch: false }),
+  new maplibregl.NavigationControl({ showCompass: false }),
+  'top-right',
+);
+map.addControl(
+  new maplibregl.NavigationControl({ showZoom: false, visualizePitch: false }),
   'top-right',
 );
 map.addControl(
