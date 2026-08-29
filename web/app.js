@@ -776,9 +776,13 @@ function setPaddingKeepingView() {
   toggle.addEventListener('click', () => set(true, true));
   $('#panel-close').addEventListener('click', () => set(false, true));
 
-  let open = true;
+  // 狭い画面では畳んで始める。浮いた箱は画面の半分を占め、その下から地図が
+  // 見えるわけではない——この幅で見に来た人がまず見たいのは地図である。
+  // 一度でも自分で開け閉てした人の選択は、幅より優先する。
+  let open = !narrowMq.matches;
   try {
-    open = localStorage.getItem('panel-open') !== '0';
+    const stored = localStorage.getItem('panel-open');
+    if (stored !== null) open = stored === '1';
   } catch {
     /* ditto */
   }
