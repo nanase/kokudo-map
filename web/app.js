@@ -142,9 +142,8 @@ let gsiShade = readStored('gsi-shade', GSI_SHADE_LEVELS, DEFAULT_SHADE);
  * は同期に走る。作った後に読むと、共有されたリンクの hash と、地図が今しがた
  * 自分で書いた hash が見分けられない。
  *
- * 見分けが付かないあいだ、boot() の fitInitialView() は一度も呼ばれていなかった。
- * 全国の広がりに合わせる初期表示も、`?region=` が指す地域も、そこにあるだけで
- * 誰にも届いていない。
+ * 見分けが付かないあいだ、boot() の fitInitialView() は一度も呼ばれておらず、
+ * `?region=` が指す地域は、そこにあるだけで誰にも届いていなかった。
  */
 const sharedView = Boolean(location.hash);
 
@@ -160,8 +159,12 @@ const map = new maplibregl.Map({
   // where no CJK font is installed.
   localIdeographFontFamily: false,
   style: baseStyle(basemap, gsiShade),
-  center: [138.0, 36.2],
-  zoom: 7.6,
+  // 何も指定されていないときの眺め。全国が一枚に収まり、北海道から沖縄まで
+  // 端が切れない位置を目で決めてある——`#4.62/35.79/137.92` を開いたときと
+  // 同じ絵である。データの広がり (meta.bbox) に自動で合わせると、南鳥島の
+  // ような離れた点まで入れようとして日本が小さく片寄る。
+  center: [137.92, 35.79],
+  zoom: 4.62,
   // MapLibre 自身が作る釦の名札。この地図の釦は残らず日本語で名乗っている
   // ので、拡大・方位・現在位置だけが英語で名乗る理由が無い。ここに無い鍵
   // (縮尺の単位など)は MapLibre の既定のままである。
@@ -863,8 +866,9 @@ async function boot() {
   syncControls();
   applyFilters();
 
-  // A shared link's hash wins. Otherwise open on everything that is built, or
-  // on one region if ?region= names it — a view hint, not a data switch.
+  // A shared link's hash wins. Otherwise ?region=, if it names one — a view
+  // hint, not a data switch. With neither, the map keeps the view it was
+  // built with.
   if (!sharedView) fitInitialView(index);
 
   $('#loading').classList.add('done');
@@ -908,15 +912,18 @@ function syncControls() {
 }
 
 /**
- * Open on the roads themselves, or on the box named by ?region=.
+ * `?region=` が地域を名指していれば、そこへ寄る。
  *
- * The union of the region boxes is not the same thing: they are rectangles
- * drawn around prefecture outlines, and 東京都 reaches 南鳥島, so their union
- * spans a third of the Pacific. The extent of the arcs is what there is to see.
+ * 全国の眺めはふつうここで決めない——地図を作るときの center/zoom が既定で、
+ * 名指しが無ければそれがそのまま残る。例外は縦長の狭い画面で、既定の縮尺の
+ * ままだと九州と北海道が両端で切れる。そこだけはデータの広がりに合わせる。
  */
 function fitInitialView(index) {
   const wanted = new URLSearchParams(location.search).get('region');
-  const box = index.find((r) => r.region === wanted)?.bbox || state.meta.bbox;
+  const box =
+    index.find((r) => r.region === wanted)?.bbox ??
+    (narrowMq.matches ? state.meta.bbox : null);
+  if (!box) return;
   const [w, s, e, n] = box;
   const bounds = [
     [w, s],
@@ -932,11 +939,11 @@ function fitInitialView(index) {
     left: p.left + 24,
     right: p.right + 24,
   };
-  // 箱を避けた残りに全国が入らない画面もある——縦に長い狭い画面では、操作面が
+  // 箱を避けた残りに地域が入らない画面もある——縦に長い狭い画面では、操作面が
   // 高さの半分を占め、残りへ収めるには縮尺が足りない。そのとき
   // cameraForBounds は何も返さないので、避けるのをやめて窓いっぱいに合わせる。
-  // 端が操作面の下に少し潜るが、全国が一枚に入っているほうがこの地図の趣旨に
-  // 近い——箱は閉じられる。
+  // 端が操作面の下に少し潜るが、地域が一枚に入っているほうがよい——箱は
+  // 閉じられる。
   const padding = map.cameraForBounds(bounds, { padding: clear }) ? clear : 24;
   map.fitBounds(bounds, { padding, duration: 0 });
 }
