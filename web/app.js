@@ -337,7 +337,10 @@ function attachStateTip(container) {
     ev.stopPropagation();
     hide();
   });
-  return (text) => {
+  // 台に釦が二つ載ることがある。ラベルは押された釦の高さに合わせる——
+  // 台の真ん中に出すと、二つのあいだから出てどちらの返事か分からない。
+  return (text, btn) => {
+    tip.style.top = `${btn.offsetTop}px`;
     tip.textContent = text;
     tip.classList.add('show');
     clearTimeout(hideTimer);
@@ -347,71 +350,78 @@ function attachStateTip(container) {
 
 /* --------------------------------------------------------- control factory --- */
 /**
- * The three top-right controls are all the same shape: a MapLibre IControl —
- * so `addControl(…, 'top-right')` stacks it in its own rounded group
- * directly under the zoom buttons for free — whose button steps through
- * `order` on click and re-renders its icon/title/aria-label from whatever
- * value is now current. `get`/`apply` reach into state that lives outside
- * the control (map layers, localStorage) — this factory only owns the
- * button.
+ * 地図の右上の釦は、どれも同じ形をしている。押すと `order` を一つ進め、いま
+ * の値から絵と名札を描き直す。`get`/`apply` は釦の外にある状態(地図の層、
+ * localStorage)へ手を伸ばすので、ここが持つのは釦だけである。
  *
- * A two-value `order` is a toggle, not a cycle, and gets the `active` class
- * and `aria-pressed` that only a toggle needs; the two three-value controls
- * fall through untouched. `tip` defaults to `label`, since only the
- * hide-routes button needs a different phrasing for "what happens next" vs.
- * "what just happened" (see `hideStateTip`).
+ * `order` が二値なら循環ではなく切り替えなので、切り替えにだけ要る `active`
+ * と `aria-pressed` が付く。三値のものはそこを素通りする。`tip` は既定で
+ * `label` と同じ——「次に押すと何が起きるか」と「いま何になったか」で言い方を
+ * 変える必要があるのは、国道を隠す釦だけである(`hideStateTip`)。
  *
- * `onExternalChange`, if given, is handed the button's own `render` so a
- * control can redraw when its state changes off-screen from any click —
- * the pitch button's state also moves via Ctrl+drag. `isPressed` likewise
- * defaults to exact equality with `order[1]`, which the two hard-toggle
- * buttons never need to override — but the pitch button's `get()` can land
- * on any angle a drag left it at, not just the two the button cycles
- * between, so it treats every non-zero pitch as pressed.
+ * `onExternalChange` を渡すと、その釦の `render` が手渡される。押していない
+ * ところで状態が動く釦——視点は Ctrl+ドラッグでも変わる——が描き直すために
+ * 使う。`isPressed` も同じ事情で、視点の `get()` はドラッグが残した任意の角度
+ * を返しうるので、真上でない限りすべて「押されている」と見なす。
  */
-function buildCycleControl({
-  className,
-  id,
-  order,
-  get,
-  apply,
-  icon,
-  label,
-  tip,
-  isPressed = (value) => value === order[1],
-  onExternalChange,
-}) {
+function cycleButton(
+  {
+    id,
+    order,
+    get,
+    apply,
+    icon,
+    label,
+    tip,
+    isPressed = (value) => value === order[1],
+    onExternalChange,
+  },
+  showTip,
+) {
   const tipFor = tip ?? label;
   const isToggle = order.length === 2;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = id;
+  const render = () => {
+    const value = get();
+    btn.innerHTML = icon(value);
+    const text = label(value);
+    btn.title = text;
+    btn.setAttribute('aria-label', text);
+    if (isToggle) {
+      const pressed = isPressed(value);
+      btn.classList.toggle('active', pressed);
+      btn.setAttribute('aria-pressed', String(pressed));
+    }
+  };
+  btn.addEventListener('click', () => {
+    const next = order[(order.indexOf(get()) + 1) % order.length];
+    apply(next);
+    render();
+    showTip(tipFor(next), btn);
+  });
+  render();
+  onExternalChange?.(render);
+  return btn;
+}
+
+/**
+ * 一つの台に、釦を一つ以上載せる。MapLibre の IControl なので、
+ * `addControl(…, 'top-right')` するだけで角丸の台ごと縦に積まれる。
+ *
+ * 台を分けるか一つにするかが、釦どうしの近さの唯一の表し方である。地図の
+ * 種類と濃さのように「同じ絵の見え方」を決める二つは一つの台に載せ、役目の
+ * 違うものは別の台にする。
+ */
+function buildCycleControl(className, ...specs) {
   return class CycleControl {
     onAdd() {
       const container = document.createElement('div');
       container.className = `maplibregl-ctrl maplibregl-ctrl-group ${className}`;
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.id = id;
-      const render = () => {
-        const value = get();
-        btn.innerHTML = icon(value);
-        const text = label(value);
-        btn.title = text;
-        btn.setAttribute('aria-label', text);
-        if (isToggle) {
-          const pressed = isPressed(value);
-          btn.classList.toggle('active', pressed);
-          btn.setAttribute('aria-pressed', String(pressed));
-        }
-      };
       const showTip = attachStateTip(container);
-      btn.addEventListener('click', () => {
-        const next = order[(order.indexOf(get()) + 1) % order.length];
-        apply(next);
-        render();
-        showTip(tipFor(next));
-      });
-      render();
-      onExternalChange?.(render);
-      container.appendChild(btn);
+      for (const spec of specs)
+        container.appendChild(cycleButton(spec, showTip));
       this._container = container;
       return container;
     }
@@ -459,8 +469,7 @@ function applyPitch(pitch) {
   map.easeTo({ pitch, duration: 400 });
 }
 
-const PitchControl = buildCycleControl({
-  className: 'pitch-ctrl',
+const PitchControl = buildCycleControl('pitch-ctrl', {
   id: 'pitch-btn',
   order: [0, 60],
   get: () => mapPitch,
@@ -518,8 +527,7 @@ function setRoutesHidden(hidden) {
   }
 }
 
-const HideRoutesControl = buildCycleControl({
-  className: 'hide-routes-ctrl',
+const HideRoutesControl = buildCycleControl('hide-routes-ctrl', {
   id: 'hide-routes-btn',
   order: [false, true],
   get: () => routesHidden,
@@ -691,15 +699,14 @@ function applyGsiShade(level) {
   }
 }
 
-const GsiShadeControl = buildCycleControl({
-  className: 'gsi-shade-ctrl',
+const SHADE_BUTTON = {
   id: 'gsi-shade-btn',
   order: GSI_SHADE_LEVELS,
   get: () => gsiShade,
   apply: applyGsiShade,
   icon: shadeIcon,
   label: (level) => `地図の濃さ: ${GSI_SHADE_LABELS[level]}`,
-});
+};
 
 /* --------------------------------------------------------------- basemap --- */
 /**
@@ -754,15 +761,25 @@ function applyBasemap(id) {
   }
 }
 
-const BasemapControl = buildCycleControl({
-  className: 'basemap-ctrl',
+const BASEMAP_BUTTON = {
   id: 'basemap-btn',
   order: GSI_BASEMAP_ORDER,
   get: () => basemap,
   apply: applyBasemap,
   icon: (bmId) => BASEMAP_ICONS[bmId],
   label: (bmId) => `地図の種類: ${GSI_BASEMAPS[bmId].label}`,
-});
+};
+
+/**
+ * 下に敷く地図について決めることは二つ——どれを敷くかと、どれだけ濃く敷くか
+ * ——で、どちらも同じ一枚の見え方の話である。台を一つにして、その二つが並んで
+ * いることを形で述べる。種類が先で、濃さがその下に付く。
+ */
+const BasemapControl = buildCycleControl(
+  'basemap-ctrl',
+  BASEMAP_BUTTON,
+  SHADE_BUTTON,
+);
 
 /* --------------------------------------------------------- 地図をずらす --- */
 /**
@@ -929,7 +946,6 @@ async function boot() {
   map.addControl(new HideRoutesControl(), 'top-right');
   map.addControl(new ConcurrencyControl(), 'top-right');
   map.addControl(new DisplayControl(), 'top-right');
-  map.addControl(new GsiShadeControl(), 'top-right');
   map.addControl(new BasemapControl(), 'top-right');
   /**
    * 現在位置。押すと端末に位置を尋ね、地図の上に点で出す。

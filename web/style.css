@@ -475,16 +475,12 @@ input[type="search"]::placeholder { font-size: .82em; }
    keeps the win explicit instead of resting on load order. */
 .hide-routes-ctrl button.active:hover { background: var(--danger-hover); }
 
-/* 地図の濃さ・種類ボタン ---------------------------------------------------
-   国道を隠すボタンと同じ台に乗せる。 */
-.gsi-shade-ctrl button,
+/* 地図の種類・濃さボタン ---------------------------------------------------
+   二つで一つの台である。どちらも下に敷く一枚の見え方を決めるので、離さない。 */
 .basemap-ctrl button {
   display: grid; place-items: center; color: var(--ink-2);
 }
-.gsi-shade-ctrl button svg,
-.basemap-ctrl button svg {
-  width: 17px; height: 17px; display: block;
-}
+.basemap-ctrl button svg { width: 17px; height: 17px; display: block; }
 
 /* 重用区間・表示のボタンと、そこから出る面 -------------------------------
    釦は他と同じ白い台に乗る。押されているあいだ——面が開いているあいだ——は
@@ -529,7 +525,7 @@ input[type="search"]::placeholder { font-size: .82em; }
    台の中にラベルを同居させる以上ボタンは :only-child でなくなり、
    maplibre-gl.css 側のフォーカス時の角丸（:only-child だけ台と同じ丸みを
    継ぐ）が外れて上下どちらかの角が直角になる。ここで丸みを台の値へ戻す。 */
-.pitch-ctrl, .hide-routes-ctrl, .gsi-shade-ctrl, .basemap-ctrl,
+.pitch-ctrl, .hide-routes-ctrl, .basemap-ctrl,
 .conc-ctrl, .display-ctrl { position: relative; }
 #pitch-btn:focus,
 #hide-routes-btn:focus,
@@ -540,8 +536,10 @@ input[type="search"]::placeholder { font-size: .82em; }
   border-radius: inherit;
 }
 .state-tip {
-  position: absolute; top: 50%; right: calc(100% + 8px);
-  transform: translate(4px, -50%);
+  /* 上端は app.js が押された釦に合わせる。台に釦が二つ載ることがあり、真ん中
+     に出すとどちらの返事か分からない。 */
+  position: absolute; top: 0; right: calc(100% + 8px);
+  transform: translate(4px, 0);
   display: flex; align-items: center;
   height: 29px; /* maplibre-gl.css の .maplibregl-ctrl-group button の高さに合わせる */
   padding: 0 8px; box-sizing: border-box;
@@ -550,7 +548,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   white-space: nowrap; opacity: 0; pointer-events: none;
   transition: opacity .15s ease, transform .15s ease;
 }
-.state-tip.show { opacity: 1; transform: translate(0, -50%); pointer-events: auto; cursor: pointer; }
+.state-tip.show { opacity: 1; transform: translate(0, 0); pointer-events: auto; cursor: pointer; }
 
 /* popup ----------------------------------------------------------------- */
 .maplibregl-popup-content {
