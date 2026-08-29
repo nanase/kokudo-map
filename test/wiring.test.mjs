@@ -193,11 +193,38 @@ describe('国道一覧の折りたたみ', () => {
     expect(load(375).querySelector('#route-block').open).toBe(false);
   });
 
-  test('畳んだままでも絞り込み欄と選択解除は一覧の外にある', () => {
+  /* 絞り込み欄は一覧と一緒に畳む。選択解除は畳んだままでも押せなければ
+   * ならない——選択は地図に効いており、一覧を開かずに戻したいことがある。
+   * summary は閉じていても描かれるので、そこに置けば常に見える。 */
+  test('絞り込み欄は畳む側にある', () => {
     const document = load(1280);
     const block = document.querySelector('#route-block');
-    expect(block.contains(document.querySelector('#route-filter'))).toBe(false);
-    expect(block.contains(document.querySelector('#sel-none'))).toBe(false);
+    expect(block.contains(document.querySelector('#route-filter'))).toBe(true);
+    expect(
+      document
+        .querySelector('#route-block > summary')
+        .contains(document.querySelector('#route-filter')),
+    ).toBe(false);
+  });
+
+  test('選択解除は summary の中にあり、畳んでも見える', () => {
+    const document = load(1280);
+    expect(
+      document
+        .querySelector('#route-block > summary')
+        .contains(document.querySelector('#sel-none')),
+    ).toBe(true);
+  });
+
+  test('選択解除を押しても折りたたみは開かない', () => {
+    const { document } = setup();
+    const block = document.querySelector('#route-block');
+    expect(block.open).toBe(false);
+
+    document.querySelector('#route-list input[value="7"]').click();
+    document.querySelector('#sel-none').click();
+
+    expect(block.open).toBe(false);
   });
 
   /* 狭い画面と見なす幅は style.css の @media と wiring.mjs の二箇所にある。

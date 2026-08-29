@@ -92,19 +92,39 @@
         </header>
 
         <section class="block">
-          <div class="filter-row">
-            <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 15）" autocomplete="off">
-            <button type="button" id="sel-none" class="mini" disabled>選択解除</button>
-          </div>
           <!-- 最初は畳んでおく。459 個のチェックボックスは、どの画面幅でも
                サイドバーの大半を占める——番号で絞り込むほうが速いので、一覧を
-               開くのは番号を眺めたい人だけでよい。絞り込み欄と選択解除は外に
-               置いてあるので、畳んだままでも絞り込めるし選択も外せる。 -->
+               開くのは番号を眺めたい人だけでよい。
+
+               絞り込み欄は一覧と一緒に畳む。絞り込むのは一覧を見ているあいだ
+               のことなので、閉じた一覧の上に入力欄だけが残る理由がない。
+               選択解除は逆で、畳んだままでも押せなければならない——選択は
+               地図に効いており、一覧を開かずに戻したいことがある。だから
+               summary の中、常に見えるところに置く。 -->
           <details id="route-block" class="fold">
             <summary>
-              <h2>国道を選ぶ</h2>
+              <h2>国道を選択</h2>
               <span class="count" id="route-count"></span>
+              <!-- 文言は updateStats() が title と aria-label に入れる。
+                   「N 路線を選択解除」は数で変わるので、ここには書かない。 -->
+              <button type="button" id="sel-none" class="icon-btn" disabled
+                      title="選択解除" aria-label="選択解除">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+                  <path d="M3 3l18 18" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
             </summary>
+            <div class="filter-row">
+              <svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="10.5" cy="10.5" r="6.4" fill="none" stroke="currentColor" stroke-width="2.2"/>
+                <path d="M15.3 15.3 20.5 20.5" fill="none" stroke="currentColor"
+                      stroke-width="2.4" stroke-linecap="round"/>
+              </svg>
+              <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 15）" autocomplete="off">
+            </div>
             <div id="route-list" class="route-list" role="group" aria-label="国道の選択">
               <!-- buildUI() が innerHTML を丸ごと差し替えるので、データが届けば
                    このまま消える。表示・非表示を別に持つ必要が無い。 -->

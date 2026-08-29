@@ -159,7 +159,9 @@ body {
   background: var(--panel-2); color: var(--ink-2); cursor: pointer;
   border: 1px solid var(--line); border-radius: 4px;
 }
-.icon-btn:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
+.icon-btn:hover:not(:disabled) { color: var(--sign-blue); border-color: var(--sign-blue); }
+/* 押しても何も起きない釦は、押せないと見えていなければならない。 */
+.icon-btn:disabled { color: var(--ink-3); opacity: .45; cursor: default; }
 .icon-btn svg { width: 15px; height: 15px; }
 /* 見出しの右に並ぶ釦の列。先頭だけが余りを飲んで右端へ寄せる。 */
 .about-btn { margin-left: auto; }
@@ -184,8 +186,16 @@ body {
   text-transform: uppercase; color: var(--ink-3);
   font-family: ui-monospace, Consolas, monospace;
 }
-.filter-row { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
-.filter-row input[type="search"] { flex: 1; min-width: 0; margin-bottom: 0; }
+/* 絞り込み欄。虫眼鏡は欄の中に置く——ラベルを書き足さずに、この欄が探す所で
+   あることを述べる。押せる物ではないので、手は素通りさせる。 */
+.filter-row { position: relative; display: flex; align-items: center; margin-bottom: 10px; }
+.filter-icon {
+  position: absolute; left: 9px; width: 13px; height: 13px;
+  color: var(--ink-3); pointer-events: none;
+}
+.filter-row input[type="search"] {
+  flex: 1; min-width: 0; margin-bottom: 0; padding-left: 28px;
+}
 
 /* folded block ----------------------------------------------------------
    Reference material that is worth having but not worth the sidebar height
@@ -203,6 +213,13 @@ body {
 .fold[open] > summary::after { transform: rotate(180deg); }
 .fold[open] > summary { margin-bottom: 10px; }
 .fold > summary:hover h2 { color: var(--sign-blue); }
+/* 選択解除だけが summary の中にある。余りはこの釦が飲んで右へ寄り、開閉の
+   三角はその隣に付く——`::after` の margin-left: auto をここで譲る。 */
+#route-block > summary > #sel-none {
+  margin-left: auto; align-self: center; width: 24px; height: 24px;
+}
+#route-block > summary > #sel-none svg { width: 14px; height: 14px; }
+#route-block > summary::after { margin-left: 10px; }
 .fold > summary .count {
   font-family: ui-monospace, Consolas, monospace; font-size: .68rem;
   color: var(--ink-3); font-variant-numeric: tabular-nums;

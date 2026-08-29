@@ -1005,10 +1005,12 @@ function updateStats() {
   $('#stats').innerHTML = statsHTML(sel.size, state.routes.length, totals);
 
   // A button that cannot act should say so by being unavailable rather than by
-  // doing nothing.
+  // doing nothing. 文字は持たない釦なので、どれだけ取り消すかは名札が述べる。
   const clear = $('#sel-none');
   clear.disabled = sel.size === 0;
-  clear.textContent = clearLabel(sel.size);
+  const clearText = clearLabel(sel.size);
+  clear.title = clearText;
+  clear.setAttribute('aria-label', clearText);
 
   // 畳んだ一覧は中身を見せないので、選択がいくつあるかは見出しが述べる。
   $('#route-count').textContent = selectionLabel(sel.size, state.routes.length);

@@ -378,14 +378,20 @@ ok(
 // answer to one question, and the one free to go stale. The button also has to
 // go unavailable when there is nothing to undo rather than sit there doing
 // nothing when pressed.
+// 文字を持たない釦なので、どれだけ取り消すかは名札(title/aria-label)が述べる。
 const clearBtn = () =>
   page.evaluate(() => {
     const b = document.querySelector('#sel-none');
-    return { text: b.textContent, disabled: b.disabled };
+    return {
+      text: b.title,
+      aria: b.getAttribute('aria-label'),
+      disabled: b.disabled,
+      open: document.querySelector('#route-block').open,
+    };
   });
 const idle = await clearBtn();
 ok(
-  idle.disabled && idle.text === '選択解除',
+  idle.disabled && idle.text === '選択解除' && idle.aria === '選択解除',
   `with nothing picked the clear button is unavailable ("${idle.text}", disabled=${idle.disabled})`,
 );
 // 一覧は畳んだ状態で始まるので、押す前に開く。
@@ -401,6 +407,9 @@ ok(
 await page.click('#sel-none');
 await settle();
 const back = await clearBtn();
+// 釦は summary の中に居る。押して折りたたみまで開け閉てしては、押した人が
+// 頼んでいないことが起きる。
+ok(back.open, 'clearing the selection does not fold the list away');
 ok(
   back.disabled &&
     back.text === '選択解除' &&
