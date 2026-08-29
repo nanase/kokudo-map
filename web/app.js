@@ -597,11 +597,32 @@ let displayBtn = null;
 
 const displayPaneOpen = () => !displayPane.hidden;
 
+/**
+ * 面の上端は釦に合わせる。それで窓の下からはみ出すなら、はみ出したぶんだけ
+ * 引き上げる——低い窓では、釦の高さに揃えることより中身が見えることが先である。
+ * 引き上げても入らない高さは面の中が巻き取る (style.css の max-height)。
+ */
+const PANE_GAP = 12;
+
+function fitDisplayPane() {
+  displayPane.style.top = '-1px';
+  const over =
+    displayPane.getBoundingClientRect().bottom -
+    (window.innerHeight - PANE_GAP);
+  if (over > 0) displayPane.style.top = `${-1 - over}px`;
+}
+
 function setDisplayPane(open) {
   displayPane.hidden = !open;
   displayBtn.classList.toggle('active', open);
   displayBtn.setAttribute('aria-expanded', String(open));
+  if (open) fitDisplayPane();
 }
+
+// 窓を掴んでいる最中に面が窓からはみ出さないように。
+window.addEventListener('resize', () => {
+  if (displayPaneOpen()) fitDisplayPane();
+});
 
 // 面の外を押したら閉じる。釦自身の click はそこで止めてあるので、ここへは
 // 上がってこない。

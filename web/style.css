@@ -492,8 +492,11 @@ input[type="search"]::placeholder { font-size: .82em; }
    合わせる計算はどこにも要らない。台の左へ出すのは、右に窓の端しか無いから
    である。 */
 .map-popover {
+  /* 上端は釦に合わせるのが基本で、窓の下からはみ出すときだけ app.js が
+     引き上げる。それでも入り切らない高さの窓では、面の中が巻き取る。 */
   position: absolute; top: -1px; right: calc(100% + 8px);
   width: max-content; max-width: min(280px, calc(100vw - 64px));
+  max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain;
   padding: 12px 14px; text-align: left;
   background: var(--panel); color: var(--ink);
   border: 1px solid var(--line); border-radius: 6px;
