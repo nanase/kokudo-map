@@ -49,6 +49,10 @@ primary の 95.5% が `ref` 100 以下、secondary の 99.5% が 101 以上で�
 はみ出す少数側の長さは、県別の差にそのまま現れる。だから県ごとの表にその量を
 並べる。差がそれより小さい県について、差を論じても意味がない。
 
+県ごとの差は、そのままでは上下線分離を含んだままである。都市部の県はそこが
+大きい——東京都の +25.6% は、引くと -1.8% になる——ので、引いた後の残りも並べる。
+県ごとの原因を見分けられるのは、この列があるからである。
+
 使い方:  uv run pipeline/compare_annual_report_pref.py
          uv run pipeline/compare_annual_report_pref.py --distance 60
          uv run pipeline/compare_annual_report_pref.py --no-pairing
