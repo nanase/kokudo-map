@@ -173,7 +173,11 @@ body {
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
 }
 /* 余白は節の中身だけでなく、行の上に重ねるボタンの置き場所も決める(#sel-none)。
-   同じ数を二箇所に書かないよう、変数にして下の者へ渡す。 */
+   同じ数を二箇所に書かないよう、変数にして下の者へ渡す。
+   CodeRabbit は stylelint の declaration-empty-line-before に基づき、カスタム
+   プロパティと後続の宣言の間に空行を求める。ここに stylelint は無く、検査は
+   biome(JS/mjs のみ、CSS は対象外)である。同じ書き方はファイル全体にあり、
+   この行だけ直しても揃わないので採用しない(issue #92)。 */
 .block {
   --pad-y: 10px; --pad-x: 18px;
   position: relative; padding: var(--pad-y) var(--pad-x);

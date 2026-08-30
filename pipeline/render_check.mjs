@@ -1061,6 +1061,11 @@ const arcOf = (ref) =>
     (f) => f.properties.kind === 'road' && f.properties.refs_list.includes(ref),
   );
 
+// 実際にアークをクリックしてパネルを開き、「うち旧道」の行の文面を読み取る。
+// 戻り値は三通り——`undefined` は ref のアークがビルドに無いか描画されておらず
+// 押せなかった場合(検査そのものが成立しない)、文字列は行にある値
+// (例: "30.8 km")、`null` は旧道を持たずその行が出ていない場合。呼び出し側は
+// この undefined と null の違いで、検査を打ち切るか判定を続けるかを分ける。
 const formerRowFor = async (ref) => {
   const arc = arcOf(ref);
   if (!arc) return undefined; // no arc for this ref in the build at all

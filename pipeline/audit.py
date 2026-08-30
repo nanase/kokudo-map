@@ -40,6 +40,10 @@ from geo import haversine
 
 NODE_GAP_M = 50
 LINK_GAP_M = 2000
+
+# bbox の縁の許容差(度)。本物の端点ではなく、県境で地域を切ったせいで生じた
+# 端点を、路線が本当に途切れている場所と区別するのに使う。build_routes.py も
+# 同じ定数を同じ理由で持つ。
 EDGE_TOL = 0.02
 
 NAME_NUM = re.compile(r"国道\s*(\d+)\s*号")
@@ -178,6 +182,12 @@ def claims(tags):
 
 
 def why_excluded(wid, tags, cache, corroborated):
+    """この way が除外されていそうな理由を、大まかな近似で推測する。
+
+    build_routes.py の判定ルールを厳密には再現しない——
+    names_a_closed_residential_road のような細かい規則は見ていない。
+    当てはまる理由をすべて返し、どれも無ければ「unclear — investigate」を返す。
+    """
     reasons = []
     c = claims(tags)
     if not (c & corroborated):

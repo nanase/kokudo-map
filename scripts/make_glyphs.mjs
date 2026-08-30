@@ -139,7 +139,11 @@ async function rasterise() {
   return glyphs;
 }
 
-/* -------------------------------------------------------------- 符号化する --- */
+/* -------------------------------------------------------------- 符号化する ---
+ * field 番号は MapLibre/Mapbox のグリフ PBF 仕様(glyphs.proto)が定めるとおりに
+ * 書く。番号を変えても例外は出ず、MapLibre がエラーを出さずにこのスタックを
+ * 読み損ね、グリフが表示されなくなるだけになる。
+ */
 function writeGlyph(g, pbf) {
   pbf.writeVarintField(1, g.id);
   pbf.writeBytesField(2, g.bitmap);
