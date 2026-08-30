@@ -226,7 +226,7 @@ def load_region(region: str) -> tuple[dict, list[dict]]:
     path = SURVEY / f"{region}.json"
     if not path.exists():
         raise SystemExit(
-            f"{path} is missing; run `mise run survey-prefectural` first")
+            f"{path} is missing; run `mise run survey-pref` first")
     doc = json.loads(path.read_text(encoding="utf-8"))
     return doc, doc["ways"]
 
@@ -407,6 +407,9 @@ def main() -> None:
     for grade in ("primary", "secondary"):
         ways, km = nation.grade_ways[grade], nation.grade_km[grade]
         held_w, held_k = nation.held_ways[grade], nation.held_km[grade]
+        if not ways:
+            print(f"    {grade:10} 候補が 1 本も無い")
+            continue
         print(f"    {grade:10} way {held_w:7,}/{ways:7,} ({held_w / ways:5.1%})  "
               f"延長 {held_k:9,.1f}/{km:9,.1f} km ({held_k / km:5.1%})")
 
