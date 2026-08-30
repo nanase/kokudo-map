@@ -309,6 +309,37 @@ def report_mismatched_band(rows: list[tuple], limit: int = 10) -> None:
                   f"way/{wid:<12} {way_km:6.1f} km")
 
 
+def report_number_range(per_region: dict[str, Tally],
+                        ledger: dict[str, annual_report.Prefecture]) -> None:
+    """番号が県内で妥当か。県ごとの番号の数を、年報の路線数の幅と突き合わせる。
+
+    番号は県の中でしか一意でないので、番号が妥当かどうかは県を決めてからでないと
+    訊けない。台帳の側は数え上げなので足せず、幅でしか持てない——県の行が下限、
+    県と政令指定都市の和が上限である(annual_report.Prefecture)。
+
+    幅の上を超えた県は、その県に無い番号を地図が持っている。`ref` の打ち間違い、
+    市町村道への県道番号の付与、県境を跨いだ way の寄せ間違いのどれかである。
+    幅の下に届かない県は、路線が丸ごと地図に無い。どちらであるかは判定と N13 の
+    仕事なので、ここでは量だけを出す。
+    """
+    over, under = [], []
+    for region, t in per_region.items():
+        p = ledger[region]
+        found = sum(len(t.numbers[r]) for r in RANKS)
+        if found > p.routes_max:
+            over.append((found - p.routes_max, p.name, found, p.routes_max))
+        elif found < p.routes_min:
+            under.append((p.routes_min - found, p.name, found, p.routes_min))
+    print("\n番号が県内で妥当か(地図の番号の数と、年報の路線数の幅)")
+    print(f"  幅の中に収まる県 {47 - len(over) - len(under)}")
+    print(f"  上限を超えた県 {len(over)}(その県に無い番号を持っている)")
+    for excess, name, found, limit in sorted(over, reverse=True):
+        print(f"    {name:6} {found:5,} > {limit:5,}  +{excess}")
+    print(f"  下限に届かない県 {len(under)}(路線が丸ごと地図に無い)")
+    for missing, name, found, limit in sorted(under, reverse=True):
+        print(f"    {name:6} {found:5,} < {limit:5,}  -{missing}")
+
+
 def main() -> None:
     args = sys.argv[1:]
     reach = PAIR_DISTANCE_M
@@ -499,6 +530,8 @@ def main() -> None:
     print("\n上下線分離を引いても差が大きい県")
     for _, name, rest, want in sorted(worst, reverse=True)[:8]:
         print(f"  {name:6} {rest:+10,.1f} km / {want:,.1f} km  ({rest / want:+.1%})")
+
+    report_number_range(per_region, by_pref)
 
     report_mismatched_band(band_rows)
 
