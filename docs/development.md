@@ -59,7 +59,7 @@ mise run serve        # http://localhost:8000/
 | `mise run serve` | ローカルサーバを起動する |
 | `mise run render-check` | Chromium で実描画を確認する |
 
-`mise run decree` は初回に国土数値情報 N03(行政区域)を取ります。47 都道府県ぶんを現行と 2000 年版の二つ、約 530 MB です。以後はキャッシュから読みます。
+国土数値情報 N03(行政区域)は初回に取ります。`mise run extract` は way の所属都道府県を決めるのに現行の年版を、`mise run decree` は政令の地名を引くのに 2000 年版も使います。47 都道府県ぶん二つで約 530 MB です。以後はキャッシュから読みます。
 
 `serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが必要です。
 
