@@ -85,6 +85,26 @@ REGIONS: dict[str, dict] = {
 }
 
 
+# 都道府県の符号 -> 地域名。ISO 3166-2:JP は `JP-01`〜`JP-47` を、国土数値情報は
+# 同じ二桁を単独で使い、OSM の `admin_level=4` の境界リレーションは `ISO3166-2`
+# として前者を持つ。数字は公式に固定されているので、ここが対応表である。地域を
+# 名前で照合すると、都・府・県・道を書くか書かないかで揺れる。
+PREF_CODE: dict[str, str] = {
+    "01": "hokkaido", "02": "aomori", "03": "iwate", "04": "miyagi",
+    "05": "akita", "06": "yamagata", "07": "fukushima", "08": "ibaraki",
+    "09": "tochigi", "10": "gunma", "11": "saitama", "12": "chiba",
+    "13": "tokyo", "14": "kanagawa", "15": "niigata", "16": "toyama",
+    "17": "ishikawa", "18": "fukui", "19": "yamanashi", "20": "nagano",
+    "21": "gifu", "22": "shizuoka", "23": "aichi", "24": "mie",
+    "25": "shiga", "26": "kyoto", "27": "osaka", "28": "hyogo",
+    "29": "nara", "30": "wakayama", "31": "tottori", "32": "shimane",
+    "33": "okayama", "34": "hiroshima", "35": "yamaguchi", "36": "tokushima",
+    "37": "kagawa", "38": "ehime", "39": "kochi", "40": "fukuoka",
+    "41": "saga", "42": "nagasaki", "43": "kumamoto", "44": "oita",
+    "45": "miyazaki", "46": "kagoshima", "47": "okinawa",
+}
+
+
 def for_region(region: str) -> dict:
     if region not in REGIONS:
         raise SystemExit(
