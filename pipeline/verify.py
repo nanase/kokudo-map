@@ -91,9 +91,14 @@ def boxes_touch(one, other) -> bool:
 
 # 面の索引が壊れれば、長野県の切り出しに沖縄県の way が現れる。この地域の矩形に
 # 触れる県の集合を超えた所属は、そういう壊れ方でしか出ない。
+#
+# 主たる所属だけでなく、跨いだ先も見る。`pref` が長野で `prefs` が長野と沖縄と
+# いう way は、上の三つの検査をすべて通ってしまう。跨いだ先も所属であり、後の段
+# はそれを読む。
 touching = {r for r, spec in REGION_BOXES.items()
             if boxes_touch(spec["bbox"], REGION_BOXES[region]["bbox"])}
-stray = sorted({w["pref"] for w in cache_ways if w.get("pref")} - touching)
+claimed = {p for w in cache_ways for p in (w.get("prefs") or [w.get("pref")]) if p}
+stray = sorted(claimed - touching)
 check(not stray, f"prefectures found are ones this bbox can touch ({stray})")
 
 own = sum(1 for w in cache_ways if w.get("pref") == region)
