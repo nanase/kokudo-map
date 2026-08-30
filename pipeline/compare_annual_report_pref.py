@@ -65,10 +65,6 @@ from collections import defaultdict
 
 import annual_report
 from _paths import SURVEY
-# 種別の境目は判定が持つ。ここで同じ値を書き直すと、書き写した複製を検査すること
-# になる。境目を選んだ理由と、その選択が北海道と沖縄県で生む誤りは PREFECTURAL.md に
-# ある。どの表と突き合わせるか(RANK_TABLE)だけは、この突き合わせ自身の問いなので
-# ここに残す。
 from build_prefectural import GENERAL, MAJOR, MAJOR_MAX, RANK_LABEL, rank_of
 from compare_annual_report import (
     KIND_GROUP,
@@ -81,6 +77,12 @@ from compare_annual_report import (
 )
 from regions import REGIONS
 
+# --------------------------------------------------------------------- 種別 ---
+# 境目(MAJOR_MAX)と呼び名は判定が持つ。ここで同じ値を書き直すと、書き写した複製を
+# 検査することになる。境目を選んだ理由と、その選択が北海道と沖縄県で生む誤りは
+# PREFECTURAL.md にある。
+#
+# どの表と突き合わせるかだけは、この突き合わせ自身の問いなのでここにある。
 RANKS = (MAJOR, GENERAL)
 RANK_TABLE = {MAJOR: 12, GENERAL: 13}
 
