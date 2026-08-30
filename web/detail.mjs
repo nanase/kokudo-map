@@ -166,13 +166,22 @@ const terminiHTML = (ref, termini) =>
         .join(ARROW)}</div>`
     : '';
 
+/* 区分の距離。round1() が 0.1 km 未満を切り捨てるので、地図には描かれている
+ * のに丸めた値がちょうど 0 になる区分がある(#88)。旧道(formerRowHTML)の
+ * ように行ごと落とすと、「その区分がある」という事実そのものが消える——旧道
+ * と違い、区分(未開通・工事中・階段など)は短くても在ることに意味がある。
+ * だから「0.0 km」ではなく「0.1 km 未満」と書き、無いのではなく短いだけだと
+ * 言う。0 かどうかも閾値の書き方も fmtKm に聞く。fmtKm は閲覧者のロケールで
+ * 数を組むので、'0.0' や '0.1' と書き写した判定・表記は小数点にコンマを使う
+ * 地域で外れる。 */
+const kindKmHTML = (km) =>
+  fmtKm(km) === fmtKm(0) ? `${fmtKm(0.1)} km 未満` : `${fmtKm(km)} km`;
+
 const kindsHTML = (kinds) =>
   kinds.length
     ? '<div class="detail-kinds"><div class="detail-sub">区分別</div>' +
       `<dl class="detail-stats">${kinds
-        .map((k) =>
-          row(esc(KIND_LABELS[k.kind] ?? k.kind), `${fmtKm(k.km)} km`),
-        )
+        .map((k) => row(esc(KIND_LABELS[k.kind] ?? k.kind), kindKmHTML(k.km)))
         .join('')}</dl></div>`
     : '';
 

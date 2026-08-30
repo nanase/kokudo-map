@@ -187,6 +187,18 @@ describe('detailHTML — 区分別', () => {
     });
     expect(html).toContain('newkind');
   });
+
+  // round1() が 0.1 km 未満を切り捨てるので、地図には描かれているのに丸めた
+  // 値がちょうど 0 になる区分がある(#88)。行ごと落とすと「階段が 0.0 km
+  // ある」より悪い——「階段がある」という事実そのものが消える。
+  test('丸めて 0.0 km になる区分は行を落とさず「0.1 km 未満」と出す', () => {
+    const html = detailHTML({
+      route: route(),
+      kinds: [{ kind: 'steps', km: 0.04 }],
+    });
+    expect(html).toContain(`<dt>${KIND_LABELS.steps}</dt><dd>0.1 km 未満</dd>`);
+    expect(html).not.toContain('0.0 km');
+  });
 });
 
 describe('detailHTML — 旧道', () => {
