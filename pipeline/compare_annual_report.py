@@ -42,25 +42,24 @@
 いようと、way は id で一度だけ数えるからである。
 
 その障害は取り除いてある。way は行政区域の面で決めた所属都道府県 `pref` を持って
-いる(prefectures.py)ので、県ごとに数えられる。年報の県別の表と突き合わせるのは
-別の作業なので、ここではまだやらない。
+いる(prefectures.py)ので、県ごとに数えられる。それでもここが全国計だけを見るのは、
+国道の番号が全国で一意だからである。県別に割っても、全国計より細かい問いに答える
+だけで、番号の取り違えは見つからない。県別でしか答えられないのは都道府県道のほう
+で、そちらは compare_annual_report_pref.py が県ごとに突き合わせている。
 
 使い方:  uv run pipeline/compare_annual_report.py
          uv run pipeline/compare_annual_report.py --distance 60
 """
 from __future__ import annotations
 
-import csv
 import json
 import math
 import sys
 from collections import defaultdict
-from pathlib import Path
 
+import annual_report
 from _paths import CACHE, REGIONS as REGION_DIR
 from regions import REGIONS
-
-REPORT_CSV = Path(__file__).with_name("annual_report_2025.csv")
 
 # 1 本の道の二つの車道が、どれだけ離れていてもなお 1 本の道と見なせるか。
 # 日本の上下線分離は、市街地で 5〜20 m、車道が別々の切り通しやトンネルに入る所で
@@ -91,36 +90,6 @@ KIND_GROUP = {
     "road": "open", "expressway": "open",
     "construction": "build", "unopened": "build",
 }
-
-LENGTH_COLUMNS = ("total_m", "concurrent_m", "unopened_m", "unopened_sea_m",
-                  "ferry_m", "actual_m", "current_m", "former_m", "new_m",
-                  "median_m")
-
-
-# ------------------------------------------------------------------ ledger ---
-def load_report() -> dict[str, float]:
-    """写し取った表 8 の行を合計し、km で返す。
-
-    kind=pref と kind=city は互いに交わらない。政令指定都市は自分の国道を自分で
-    管理し、県の行の中には入らないので、両方を足す。表自身の合計の行も写し取って
-    あり、この和と突き合わせる。写し間違いを機械的に防げるのはそこだけである。
-    """
-    lines = [ln for ln in REPORT_CSV.read_text(encoding="utf-8").splitlines()
-             if not ln.startswith("#")]
-    rows = list(csv.DictReader(lines))
-    parts = [r for r in rows if r["kind"] in ("pref", "city")]
-    stated = [r for r in rows if r["kind"] == "total"]
-    if len(stated) != 1:
-        raise SystemExit(f"{REPORT_CSV}: expected exactly one kind=total row")
-    for col in LENGTH_COLUMNS:
-        summed, total = sum(int(r[col]) for r in parts), int(stated[0][col])
-        if summed != total:
-            raise SystemExit(
-                f"{REPORT_CSV}: the 47+20 rows sum to {summed:,} for {col}, but the "
-                f"sheet's 合計 row says {total:,}")
-    out = {col.removesuffix("_m"): int(stated[0][col]) / 1000 for col in LENGTH_COLUMNS}
-    out["routes"] = int(stated[0]["routes"])
-    return out
 
 
 # ---------------------------------------------------------------- geometry ---
@@ -395,8 +364,10 @@ def main() -> None:
     if args:
         raise SystemExit(f"unexpected argument: {args[0]}")
 
-    report = load_report()
-    print(f"道路統計年報2025 表8〈一般国道〉 令和6年3月31日現在 ({REPORT_CSV.name})")
+    ledger = annual_report.total(8)
+    report = ledger.km
+    print(f"道路統計年報2025 表8〈一般国道〉 令和6年3月31日現在 "
+          f"({annual_report.REPORT_CSV.name})")
     print(f"地図 build/regions データ基準 {base_timestamp()}")
     print(f"上下線の判定: 側方 {reach:.0f} m 以内、{SAMPLE_M:.0f} m ごとに測る\n")
 
@@ -445,7 +416,7 @@ def main() -> None:
     print(row("実延長+未供用+渡船 / 重複排除", comparable, dedup_km))
     print(row("重用延長", report["concurrent"], m["designated_km"] - dedup_km))
     print(row("旧道", report["former"], m["former_km"]))
-    print(f"  {'路線数':26} {report['routes']:>12} {'459':>12}")
+    print(f"  {'路線数':26} {ledger.routes:>12} {'459':>12}")
 
     print("\n区分ごと(足すと上の重複排除の延長になる)")
     print(row("海上区間", sea_report, sea_km))
