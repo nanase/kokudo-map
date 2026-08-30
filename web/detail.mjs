@@ -106,8 +106,10 @@ export function relatedRoutesOf(meta, ref) {
   ].filter((g) => g.refs.length);
 }
 
-/* 小数第 1 位まで。組み合わせ表の km がその桁で丸めてある。 */
-const fmtKm = (km) =>
+/* 小数第 1 位まで。組み合わせ表の km がその桁で丸めてある。テストが期待値を
+ * 独自に組むと同じ書式を二箇所で持つことになるので、export して本物の定義を
+ * そのまま使わせる。 */
+export const fmtKm = (km) =>
   km.toLocaleString(undefined, {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,

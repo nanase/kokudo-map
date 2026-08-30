@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   decreeTerminiOf,
   detailHTML,
+  fmtKm,
   relatedRoutesOf,
   wikipediaURL,
 } from '../web/detail.mjs';
@@ -196,8 +197,12 @@ describe('detailHTML — 区分別', () => {
       route: route(),
       kinds: [{ kind: 'steps', km: 0.04 }],
     });
-    expect(html).toContain(`<dt>${KIND_LABELS.steps}</dt><dd>0.1 km 未満</dd>`);
-    expect(html).not.toContain('0.0 km');
+    // 期待値も fmtKm で組む。'0.1' と書き写すと、小数点にコンマを使うロケール
+    // で実装の出力(fmtKm(0.1))と食い違う。
+    expect(html).toContain(
+      `<dt>${KIND_LABELS.steps}</dt><dd>${fmtKm(0.1)} km 未満</dd>`,
+    );
+    expect(html).not.toContain(`${fmtKm(0)} km</dd>`);
   });
 });
 
