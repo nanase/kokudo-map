@@ -40,7 +40,7 @@ mise run pack
 
 コードは GitHub Pages に、配信データは Cloudflare R2(`data.nanase.cc`)に置きます。分けているのは選択ではなく回避です。GitHub Pages の裏側にいる Fastly は、ファイルの先頭(バイト 0)から始まらない Range 要求に対して、要求したファイルと無関係なバイト列を返す不具合を抱えています。PMTiles はほぼ全ての読み取りがそのような Range 要求なので、Pages 経由では地図が描けませんでした。同じ Cloudflare ゾーンの内側にある R2 には、この不具合がありません。
 
-コード側(`web/vendor/`・`web/*.mjs`・`web/*.js`・`index.html`)はバンドラを通さず、`web/` の中身をそのまま配ります。読むパスは元々すべて相対で、`user.github.io/<repo>/` の下でもそのまま動きます。配信データだけは例外で、`web/mapspec.mjs` と `web/app.js` が持つ `'data/…'` という相対パスを、配る直前に Actions が `https://data.nanase.cc/…` へ書き換えます(手元で `mise run serve` する分には相対パスのまま、`build/regions/` から作った `web/data/` を読みます)。
+コード側(`web/vendor/`・`web/*.mjs`・`web/*.js`・`index.html`)はバンドラを通さず、`web/` の中身をそのまま配ります。読むパスは元々すべて相対で、`user.github.io/<repo>/` の下でもそのまま動きます。配信データだけは例外で、`web/mapspec.mjs` と `web/app.js` は `web/dataurl.mjs` が持つ `dataURL()` を通して配信データの URL を組みます。基点(`data/` という相対パス)を持つのは `dataurl.mjs` の 1 行だけで、配る直前に Actions がそこを `https://data.nanase.cc/` へ書き換えます(手元で `mise run serve` する分には相対パスのまま、`build/regions/` から作った `web/data/` を読みます)。配信データのファイルが増えても、書き換える行は増えません。
 
 ```sh
 mise run publish-data   # web/data/ を R2(data.nanase.cc)に上げる

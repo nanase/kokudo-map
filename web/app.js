@@ -45,6 +45,7 @@ import {
   routesOf,
   statsFor,
 } from './aggregate.mjs';
+import { dataURL } from './dataurl.mjs';
 import { decreeTerminiOf, detailHTML, relatedRoutesOf } from './detail.mjs';
 import {
   baseStyle,
@@ -964,10 +965,10 @@ for (const dialog of document.querySelectorAll('dialog.sheet')) {
 /* ------------------------------------------------------------------ 起動 --- */
 async function boot() {
   const [index, meta] = await Promise.all([
-    fetch('data/regions.json').then((r) => r.json()),
-    fetch('data/national.meta.json').then((r) => r.json()),
+    fetch(dataURL('regions.json')).then((r) => r.json()),
+    fetch(dataURL('national.meta.json')).then((r) => r.json()),
   ]);
-  if (!index.length) throw new Error('data/regions.json is empty');
+  if (!index.length) throw new Error(`${dataURL('regions.json')} is empty`);
   state.meta = meta;
   state.routes = routesOf(meta.combinations);
   applyURLState();
