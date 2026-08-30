@@ -34,7 +34,9 @@
 
 長さは geo.py が測る。区分(road・construction・ferry など)と旧道の判定は
 build_routes.py の物をそのまま読む。道の状態についての問いは、国道でも都道府県道
-でも同じ問いだからである。
+でも同じ問いだからである。way の形を持つ器は extract_pbf.Ways をそのまま使う。
+全国ぶんの座標をノードごとの Python オブジェクトにせず持つ、という同じ問いに
+二度答えないためである。
 
 ## 番号の読み方
 
@@ -49,7 +51,6 @@ from __future__ import annotations
 
 import json
 import sys
-from array import array
 from datetime import datetime, timezone
 
 import osmium
@@ -57,6 +58,7 @@ import osmium
 from _paths import PBF, SURVEY
 from build_routes import classify, is_former
 from extract_pbf import (
+    Ways,
     is_candidate,
     is_national_relation,
     kept_tags,
@@ -137,33 +139,16 @@ def relation_numbers(rels: dict[int, dict], prefectural: list[int]) -> dict[int,
     return own
 
 
-class Ways:
-    """全国ぶんの way の形を、ノードごとの Python オブジェクトを作らずに持つ。
+def points(ways: Ways, wid: int) -> list[tuple[float, float]]:
+    """way の形を (緯度, 経度) の列で返す。
 
-    extract_pbf.Ways と同じ理由で同じ形にしてあるが、あちらは bbox を持ち、
-    こちらは長さを持つ。残す way も相手も違うので、共有すると両方が要らない物を
-    運ぶことになる。
+    Ways.geometry は `{"lat": …, "lon": …}` の列を返す。あちらの形は Overpass の
+    応答に合わせてあり、キャッシュへそのまま書けるためにそうなっている。ここで
+    要るのは geo.line_length と prefectures.Prefectures が読む形なので、辞書を
+    28 万本ぶん組み立てずに済むよう、平らな配列から直に取る。
     """
-
-    def __init__(self) -> None:
-        self.order: list[int] = []
-        self.lat = array("d")
-        self.lon = array("d")
-        self.start: dict[int, int] = {}
-        self.count: dict[int, int] = {}
-        self.tags: dict[int, dict[str, str]] = {}
-
-    def add(self, wid: int, tags: dict[str, str], pts: list[tuple[float, float]]) -> None:
-        self.order.append(wid)
-        self.start[wid] = len(self.lat)
-        self.count[wid] = len(pts)
-        self.tags[wid] = tags
-        self.lat.extend(p[0] for p in pts)
-        self.lon.extend(p[1] for p in pts)
-
-    def points(self, wid: int) -> list[tuple[float, float]]:
-        i, n = self.start[wid], self.count[wid]
-        return [(self.lat[j], self.lon[j]) for j in range(i, i + n)]
+    i, n = ways.start[wid], ways.count[wid]
+    return [(ways.lat[j], ways.lon[j]) for j in range(i, i + n)]
 
 
 def pass_ways(path: str, wanted: set[int], index: str) -> Ways:
@@ -181,7 +166,7 @@ def pass_ways(path: str, wanted: set[int], index: str) -> Ways:
     for o in proc:
         seen += 1
         if seen % 5_000_000 == 0:
-            print(f"    {seen:,} ways scanned, {len(ways.order):,} kept", flush=True)
+            print(f"    {seen:,} ways scanned, {len(ways.start):,} kept", flush=True)
         keep = o.id in wanted
         if not keep and "highway" not in o.tags:
             continue
@@ -197,7 +182,7 @@ def pass_ways(path: str, wanted: set[int], index: str) -> Ways:
             continue
         if len(pts) < 2:
             continue
-        ways.add(o.id, tags, pts)
+        ways.add(o.id, tags, o.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"), pts)
     return ways
 
 
@@ -245,7 +230,8 @@ def main() -> None:
     print(f"  ways held by a national relation:    {len(national_ways):,}")
 
     ways = pass_ways(path, set(claimed), node_index)
-    print(f"  ways kept: {len(ways.order):,}  coordinates: {len(ways.lat):,}")
+    order = list(ways.start)
+    print(f"  ways kept: {len(order):,}  coordinates: {len(ways.lat):,}")
 
     # 所属都道府県。ノードの位置の索引を手放した後に読む。全国のノード位置は数 GB
     # を占め、行政区域の面はさらに 0.7 GB 要る。二つを同時に持つ必要は無い。
@@ -253,13 +239,13 @@ def main() -> None:
     prefs = Prefectures()
     print(f"  {prefs.polygon_count:,} polygons", flush=True)
     assigned = prefs.assign_ways(
-        ways.lat, ways.lon, [ways.count[w] for w in ways.order])
-    report(list(zip(ways.order, assigned, strict=True)), prefs.vintage)
+        ways.lat, ways.lon, [ways.count[w] for w in order])
+    report(list(zip(order, assigned, strict=True)), prefs.vintage)
 
     surveyed = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     by_region: dict[str, list[dict]] = {r: [] for r in REGIONS}
     unassigned: list[int] = []
-    for wid, a in zip(ways.order, assigned, strict=True):
+    for wid, a in zip(order, assigned, strict=True):
         tags = ways.tags[wid]
         if a.region is None:
             unassigned.append(wid)
@@ -280,10 +266,10 @@ def main() -> None:
             "refs": sorted(set(tag_refs) | set(rel)),
             "national_relation": wid in national_ways,
             "national_tag": is_candidate(tags),
-            "m": line_length(ways.points(wid)),
+            "m": line_length(points(ways, wid)),
             "how": a.how,
             "geometry": [[round(lat, 7), round(lon, 7)]
-                         for lat, lon in ways.points(wid)],
+                         for lat, lon in points(ways, wid)],
         }
         if len(a.regions) > 1:
             doc["cross"] = list(a.regions)
@@ -313,7 +299,7 @@ def main() -> None:
         "prefectural_relations": len(prefectural),
         "relations_without_number": numberless,
         "ways_claimed_by_relation": len(claimed),
-        "ways_kept": len(ways.order),
+        "ways_kept": len(order),
         "ways_without_prefecture": unassigned,
     }
     (SURVEY / "summary.json").write_text(
