@@ -344,6 +344,12 @@ def take_distance(args: list[str]) -> tuple[float, list[str]]:
         reach = float(args[i + 1])
     except ValueError:
         raise SystemExit(f"--distance needs a number, not {args[i + 1]!r}") from None
+    # 0 も負も nan も inf も float() は受け取る。0 は build_grid のセルの一辺に
+    # そのまま渡り、セルを数えるところで 0 除算になる。nan と inf はその先の
+    # 整数への変換で落ちる。どれも側方の探る距離としては意味を持たないので、
+    # 落ちる場所ではなくここで断る。
+    if not math.isfinite(reach) or reach <= 0:
+        raise SystemExit(f"--distance needs a positive finite number, not {reach}")
     return reach, args[:i] + args[i + 2:]
 
 
