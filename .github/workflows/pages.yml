@@ -57,16 +57,13 @@ jobs:
           test -s web/vendor/pmtiles.js
           test -s web/vendor/line-seed-jp.css
 
-      # data.nanase.cc に直接向けます。'data/…' は手元の pipeline/serve.py 用の
-      # 相対パスなので、置き換え忘れれば 404 になって検査で気付きます。
+      # data.nanase.cc に直接向けます。配信データの基点は web/dataurl.mjs だけが
+      # 持っており(mapspec.mjs・app.js はそこから組む)、書き換えるのもこの 1 行
+      # だけです。置き換え忘れれば 404 になって検査で気付きます。
       - name: 配信データの向き先を書き換える
         run: |
-          sed -i "s|'data/national-routes.pmtiles'|'https://data.nanase.cc/national-routes.pmtiles'|" web/mapspec.mjs
-          sed -i "s|'data/regions.json'|'https://data.nanase.cc/regions.json'|" web/app.js
-          sed -i "s|'data/national.meta.json'|'https://data.nanase.cc/national.meta.json'|" web/app.js
-          ! grep -q "'data/national-routes.pmtiles'" web/mapspec.mjs
-          ! grep -q "'data/regions.json'" web/app.js
-          ! grep -q "'data/national.meta.json'" web/app.js
+          sed -i "s|const DATA_BASE_URL = 'data/';|const DATA_BASE_URL = 'https://data.nanase.cc/';|" web/dataurl.mjs
+          ! grep -q "const DATA_BASE_URL = 'data/';" web/dataurl.mjs
 
       - uses: actions/configure-pages@v5
         id: pages

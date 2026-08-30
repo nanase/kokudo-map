@@ -4,6 +4,8 @@
  * 拒否されていた。
  */
 
+import { dataURL } from './dataurl.mjs';
+
 export const N_COLORS = ['#1B62C4', '#D98324', '#C2352B', '#7B3E9D']; // n = 1,2,3,4+
 export const N_LABELS = ['単独指定', '二重用', '三重用', '四重用以上'];
 export const FONT = ['NotoSansJP-Regular'];
@@ -86,7 +88,7 @@ const GLYPHS = 'glyphs/{fontstack}/{range}.pbf';
 
 /* アークはベクタタイルとして届く。全国で約 13 万件あり、閲覧側は手元に持てない。
  * 画面に出ている物だけを描き、出す合計はすべて national.meta.json から読む。 */
-export const PMTILES_URL = 'data/national-routes.pmtiles';
+export const PMTILES_URL = dataURL('national-routes.pmtiles');
 export const SOURCE_LAYER = 'routes';
 
 /** 国道の層が前提とするソース。検査スクリプトもこの同じ関数からスタイルを組む

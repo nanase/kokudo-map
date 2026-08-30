@@ -98,6 +98,7 @@ uvx ruff check pipeline      # Python の静的検査
 | `web/` | 地図本体。MapLibre GL JS と配信データ |
 | `web/mapspec.mjs` | スタイルと絞り込み式の定義。検証スクリプトも同じ物を読む |
 | `web/app.js` | 地図と操作の繋ぎ込み。生きた地図とページが必要な部分だけが残る |
+| `web/dataurl.mjs` | 配信データの URL の基点。Pages に配るときだけ Actions が書き換える |
 | `web/wiring.mjs` | index.html の要素と state の対応づけ。地図を作らずに import できる |
 | `web/urlstate.mjs` | 絞り込みと表示状態を URL のクエリ文字列に載せる |
 | `web/aggregate.mjs` | 画面が出す数を組み合わせ表から読む |

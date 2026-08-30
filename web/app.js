@@ -27,6 +27,7 @@
  * test/wiring.test.mjs が地図を作らずに happy-dom の実物の index.html へ
  * 配線できるからである。
  *
+ *   dataurl.mjs    配信データの URL の基点
  *   mapspec.mjs    スタイル、層、絞り込み式
  *   aggregate.mjs  画面が出す数を組み合わせ表から読む
  *   panel.mjs      サイドパネルの markup
@@ -45,6 +46,7 @@ import {
   routesOf,
   statsFor,
 } from './aggregate.mjs';
+import { dataURL } from './dataurl.mjs';
 import { decreeTerminiOf, detailHTML, relatedRoutesOf } from './detail.mjs';
 import {
   baseStyle,
@@ -964,10 +966,10 @@ for (const dialog of document.querySelectorAll('dialog.sheet')) {
 /* ------------------------------------------------------------------ 起動 --- */
 async function boot() {
   const [index, meta] = await Promise.all([
-    fetch('data/regions.json').then((r) => r.json()),
-    fetch('data/national.meta.json').then((r) => r.json()),
+    fetch(dataURL('regions.json')).then((r) => r.json()),
+    fetch(dataURL('national.meta.json')).then((r) => r.json()),
   ]);
-  if (!index.length) throw new Error('data/regions.json is empty');
+  if (!index.length) throw new Error(`${dataURL('regions.json')} is empty`);
   state.meta = meta;
   state.routes = routesOf(meta.combinations);
   applyURLState();
