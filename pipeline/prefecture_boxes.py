@@ -10,7 +10,8 @@
 違いようがない。
 
 名前は測らない。同一性を決めるのは ISO 3166-2:JP の符号で、符号ごとの slug と
-日本語ラベルは決まっている。だからここで述べ、ファイルの中身と突き合わせる。
+日本語ラベルは決まっている。それは regions.py が持っているので、ここは読むだけで
+あり、ファイルの中身と突き合わせる。
 
 使い方:  uv run pipeline/prefecture_boxes.py [--pbf path] [--pad 0.05]
 """
@@ -21,34 +22,14 @@ import sys
 import osmium
 
 from _paths import PBF
+from regions import PREF_CODE, REGIONS
 
-# ISO 3166-2:JP -> (slug, 日本語ラベル)。公式で固定である。ファイルが与えるのは
-# 形だけである。
+# ISO 3166-2:JP -> (slug, 日本語ラベル)。符号と slug の対応は regions.py が持ち、
+# ラベルも同じ表にある。ここで打ち直せば、片方が暗黙のうちに古くなる。ファイルが
+# 与えるのは形だけである。
 JP = {
-    "JP-01": ("hokkaido", "北海道"), "JP-02": ("aomori", "青森県"),
-    "JP-03": ("iwate", "岩手県"), "JP-04": ("miyagi", "宮城県"),
-    "JP-05": ("akita", "秋田県"), "JP-06": ("yamagata", "山形県"),
-    "JP-07": ("fukushima", "福島県"), "JP-08": ("ibaraki", "茨城県"),
-    "JP-09": ("tochigi", "栃木県"), "JP-10": ("gunma", "群馬県"),
-    "JP-11": ("saitama", "埼玉県"), "JP-12": ("chiba", "千葉県"),
-    "JP-13": ("tokyo", "東京都"), "JP-14": ("kanagawa", "神奈川県"),
-    "JP-15": ("niigata", "新潟県"), "JP-16": ("toyama", "富山県"),
-    "JP-17": ("ishikawa", "石川県"), "JP-18": ("fukui", "福井県"),
-    "JP-19": ("yamanashi", "山梨県"), "JP-20": ("nagano", "長野県"),
-    "JP-21": ("gifu", "岐阜県"), "JP-22": ("shizuoka", "静岡県"),
-    "JP-23": ("aichi", "愛知県"), "JP-24": ("mie", "三重県"),
-    "JP-25": ("shiga", "滋賀県"), "JP-26": ("kyoto", "京都府"),
-    "JP-27": ("osaka", "大阪府"), "JP-28": ("hyogo", "兵庫県"),
-    "JP-29": ("nara", "奈良県"), "JP-30": ("wakayama", "和歌山県"),
-    "JP-31": ("tottori", "鳥取県"), "JP-32": ("shimane", "島根県"),
-    "JP-33": ("okayama", "岡山県"), "JP-34": ("hiroshima", "広島県"),
-    "JP-35": ("yamaguchi", "山口県"), "JP-36": ("tokushima", "徳島県"),
-    "JP-37": ("kagawa", "香川県"), "JP-38": ("ehime", "愛媛県"),
-    "JP-39": ("kochi", "高知県"), "JP-40": ("fukuoka", "福岡県"),
-    "JP-41": ("saga", "佐賀県"), "JP-42": ("nagasaki", "長崎県"),
-    "JP-43": ("kumamoto", "熊本県"), "JP-44": ("oita", "大分県"),
-    "JP-45": ("miyazaki", "宮崎県"), "JP-46": ("kagoshima", "鹿児島県"),
-    "JP-47": ("okinawa", "沖縄県"),
+    f"JP-{code}": (slug, REGIONS[slug]["label"])
+    for code, slug in PREF_CODE.items()
 }
 
 

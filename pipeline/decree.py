@@ -57,18 +57,16 @@ import io
 import json
 import math
 import sys
-import time
 import xml.etree.ElementTree as ET
 import zipfile
 from datetime import datetime, timezone
-from pathlib import Path
 
-import requests
 import shapefile
 
-from _paths import DECREE, N03, REGIONS
+from _paths import DECREE, REGIONS
 from build_routes import TERMINI_CLUSTER_M, VALID
 from geo import haversine
+from n03 import PREF_CODES, VINTAGES, archive, cached
 
 # 一般国道の路線を指定する政令(昭和40年政令第58号). e-Gov 法令検索 API v1 hands
 # 安定した id で、別表を含む法令全体を XML として返す。
@@ -80,18 +78,6 @@ LAW_URL = f"https://laws.e-gov.go.jp/api/1/lawdata/{LAW_ID}"
 # 誰も --refresh を覚えていなくても、改正の頻度に近いところへ落ち着く。
 DECREE_MAX_AGE_S = 90 * 24 * 3600
 
-# 国土数値情報 N03(行政区域)。この順に試す。shapefile はどちらの年版でも同じ
-# 五つの列を持つ——都道府県名、支庁名、郡・政令市名、市区町村名、政令市の区名
-# ——が、古いほうの年版は DBF が UTF-8 へ移る前の物である。
-N03_BASE = "https://nlftp.mlit.go.jp/ksj/gml/data/N03"
-VINTAGES = (
-    ("2026", f"{N03_BASE}/N03-2026/N03-20260101_{{code}}_GML.zip", "utf-8"),
-    ("2000", f"{N03_BASE}/N03-2000/N03-001001_{{code}}_GML.zip", "cp932"),
-)
-PREF_CODES = tuple(f"{i:02d}" for i in range(1, 48))
-
-UA = {"User-Agent": "NationalRouteMap/0.2 (build pipeline)"}
-
 # N03 の欄の位置。名前は KSJ の符号化の約束に従って N03_001..N03_007 なので、
 # ここで名前を付けるのは、このスクリプトが読む物だけである。
 F_PREF, F_GUN, F_MUNI, F_WARD = 0, 2, 3, 4
@@ -99,29 +85,6 @@ F_PREF, F_GUN, F_MUNI, F_WARD = 0, 2, 3, 4
 # 自分の市区町村を持たないレコード。所属未定地は市区町村が決まっていない土地で、
 # 都道府県だけを持ち、他に何も持たない。
 NO_MUNICIPALITY = {"", "所属未定地"}
-
-
-# ------------------------------------------------------------------ fetch ---
-def cached(url: str, path: Path, max_age_s: float | None = None) -> bytes:
-    """一度 GET し、以後はディスクから読む。`max_age_s` を過ぎた物は取り直す。"""
-    fresh = path.exists() and (
-        max_age_s is None or time.time() - path.stat().st_mtime < max_age_s
-    )
-    if fresh:
-        return path.read_bytes()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        r = requests.get(url, headers=UA, timeout=120)
-        r.raise_for_status()
-    except requests.RequestException as e:
-        # 省庁のサーバが落ちているせいで全国の生成を止めるより、古い写しの
-        # ほうがましである。致命的なのは、写しが 1 つも無いときだけである。
-        if not path.exists():
-            raise
-        print(f"WARN  {url} を取れませんでした({e})。古いキャッシュを使います。")
-        return path.read_bytes()
-    path.write_bytes(r.content)
-    return r.content
 
 
 # ----------------------------------------------------------------- decree ---
@@ -196,14 +159,8 @@ class Gazetteer:
         self.by_name: dict[str, set[int]] = collections.defaultdict(set)
         self._rings: dict[int, list] = {}
 
-    def zip_path(self, code: str) -> Path:
-        return N03 / self.vintage / f"{code}.zip"
-
     def _archive(self, code: str) -> tuple[zipfile.ZipFile, str]:
-        raw = cached(self.url.format(code=code), self.zip_path(code))
-        z = zipfile.ZipFile(io.BytesIO(raw))
-        base = next(n[:-4] for n in z.namelist() if n.endswith(".shp"))
-        return z, base
+        return archive(self.vintage, self.url, code)
 
     def load(self) -> None:
         for code in PREF_CODES:

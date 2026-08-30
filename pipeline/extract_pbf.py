@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["osmium>=4.0"]
+# dependencies = ["osmium>=4.0", "pyshp", "requests", "shapely>=2.0"]
 # ///
 """全国 1 つの .osm.pbf から、地域ごとの生の OSM の物を切り出す。
 
@@ -16,6 +16,11 @@
                    タグとメンバー。負の証拠である。大半は都道府県道のリレーション
                    だが、事業者が自分の番号を名乗る物(network=首都高速道路 など)
                    も同じ理由で同じ証拠になる——CASES.md 20 を参照。
+
+書き出す way には所属都道府県 `pref` が付く。矩形では決まらないので、国土数値
+情報 N03 の行政区域の面で決める——理由と実測は prefectures.py にある。地域の
+分け方は矩形のままである。そこを面にすると build_routes.py の裏取りが持つ保証
+集合が変わり、国道の判定そのものが変わってしまう。
 
 Overpass を使い続けない理由。47 都道府県は約 140 件の問い合わせと約 1 GB の応答
 になり、公開ミラーから何時間もかけて取ることになる。2.5 GB のファイルを一度
@@ -58,6 +63,7 @@ from regions import REGIONS, named_regions
 # を受け入れるにはそうするしかない——ので、同じ理由で `E93;2` も受け入れる。
 # accepts `2;28;250`.
 from build_routes import TAGS_USED, tokens
+from prefectures import Assignment, Prefectures, report, write_pref
 
 SOURCE_URL = "https://download.geofabrik.de/asia/japan-latest.osm.pbf"
 
@@ -94,6 +100,8 @@ class Ways:
         self.ts: dict[int, str] = {}
         # way ごとの bbox。地域の判定に使う。
         self.box: dict[int, tuple[float, float, float, float]] = {}
+        # way ごとの所属都道府県。prefectures.py が全国を一度に決める。
+        self.pref: dict[int, Assignment] = {}
 
     def add(self, wid: int, tags: dict[str, str], ts: str, pts: list[tuple[float, float]]) -> None:
         self.start[wid] = len(self.lat)
@@ -311,13 +319,15 @@ def write_region(region: str, box, rels, national, competing, ways, nodes, base_
     ]
 
     def way_doc(wid: int) -> dict:
-        return {
+        doc = {
             "type": "way",
             "id": wid,
             "timestamp": ways.ts[wid],
             "tags": ways.tags[wid],
             "geometry": ways.geometry(wid),
         }
+        write_pref(doc, ways.pref[wid])
+        return doc
 
     doc = {
         "region": region,
@@ -448,6 +458,20 @@ def main() -> None:
     ways, nodes = pass_ways(path, member_ways, member_nodes, node_index)
     print(f"  ways kept: {len(ways.start):,}  coordinates: {len(ways.lat):,}")
 
+    # 所属都道府県。bbox は県の輪郭に沿わないので、どの県の道かは矩形では
+    # 決まらない——理由と実測は prefectures.py にある。ここで決めるのは、全国を
+    # 一度に持っているのがここだけだからである。地域ごとに決め直すと、同じ way に
+    # 47 回まで答えることになる。
+    #
+    # ノードの位置の索引を手放した後に読む。全国のノード位置は数 GB を占め、
+    # 行政区域の面はさらに 0.7 GB 要る。二つを同時に持つ必要は無い。
+    print("\nreading N03 municipal boundaries", flush=True)
+    prefs = Prefectures()
+    print(f"  {prefs.polygon_count:,} polygons", flush=True)
+    order = list(ways.start)
+    ways.pref = dict(zip(order, prefs.assign_ways(
+        ways.lat, ways.lon, [ways.count[w] for w in order]), strict=True))
+
     fetched = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"\nwriting {len(wanted)} region cache file(s)")
     for region in wanted:
@@ -477,10 +501,20 @@ def main() -> None:
         print("  " + ", ".join(f"way/{w}" for w in orphan[:20]))
         print("  A national route is outside every box. Fix regions.py before building.")
 
+    # 所属都道府県の網羅。bbox の取りこぼしと同じ形で出す。こちらは面なので、
+    # 落ちるのは島や県境ではなく、海の上に描かれた way だけである。
+    assigned = [(w, ways.pref[w]) for w in order]
+    report(assigned, prefs.vintage)
+    unplaced = [w for w, a in assigned if a.region is None]
+
     (CACHE / "pbf_source.json").write_text(json.dumps({
         "path": path, "url": SOURCE_URL,
         "timestamp_osm_base": base_ts, "extracted_at": fetched,
         "ways_kept": len(ways.start), "orphan_ways": len(orphan),
+        "n03_vintage": prefs.vintage,
+        "ways_crossing_a_boundary": sum(
+            1 for _, a in assigned if a.how == "majority"),
+        "ways_without_prefecture": len(unplaced),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
 

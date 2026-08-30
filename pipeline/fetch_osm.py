@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["requests"]
+# dependencies = ["pyshp", "requests", "shapely>=2.0"]
 # ///
 """1 地域ぶんの生の OSM の物を Overpass から取り、キャッシュする。
 
@@ -21,6 +21,10 @@
      ので、way 自身の主張を、競合するリレーションがその way について述べる番号と
      突き合わせられる。ただ所属しているというだけで失格にせずに済む。
 
+書き出す way には所属都道府県 `pref` が付く。extract_pbf.py の経路と同じ物を
+同じように書くので、キャッシュを読む側は二つの経路を見分けずに済む。決め方は
+prefectures.py にある。
+
 新しさは効いてくるうえに自動では保たれない。公開されている Overpass のミラーは
 大きく遅れることがある。だからすべての配布元を測って最も新しい物を選び、その
 `timestamp_osm_base` を記録する。地図がいつ時点を出しているかを述べられる
@@ -38,6 +42,7 @@ from datetime import datetime, timezone
 import requests
 
 from _paths import CACHE
+from prefectures import Prefectures, assign_docs, report
 from regions import for_region
 
 ENDPOINTS = [
@@ -204,6 +209,13 @@ out meta geom;
         ],
     }
 
+    # 所属都道府県。extract_pbf.py の経路と同じ物を書く。二つの経路が同じ形の
+    # キャッシュを書くからこそ、build_routes.py も verify.py も違いに気付かずに
+    # 済む。ここだけ `pref` が無ければ、その約束が破れる。
+    print("\n  reading N03 municipal boundaries", flush=True)
+    prefs = Prefectures()
+    assigned = assign_docs(prefs, doc["core"] + doc["candidates"])
+
     rels = sum(1 for e in doc["core"] if e["type"] == "relation")
     ways = sum(1 for e in doc["core"] if e["type"] == "way")
     competing_ways = {w for r in doc["competing_relations"] for w in r["members"]}
@@ -212,6 +224,7 @@ out meta geom;
     print(f"  candidate ways:     {sum(1 for e in doc['candidates'] if e['type'] == 'way')}")
     print(f"  competing relations: {len(doc['competing_relations'])}")
     print(f"  competing ways:     {len(competing_ways)}")
+    report(assigned, prefs.vintage)
 
     CACHE.mkdir(parents=True, exist_ok=True)
     out = CACHE / f"{region}.raw.json"
