@@ -92,6 +92,11 @@ description = "都道府県道になりうる way を全国から測り、build/
 # 判定(#98)ではなく、判定より先に立てる検証の土台です。pbf を一度だけ読みます。
 run = "uv run {{env.PIPELINE}}/survey_prefectural.py {{arg(name='flags', var=true, default='')}}"
 
+[tasks.build-pref]
+description = "build/survey から都道府県道を判定し、build/prefectural を作る"
+# pbf は読みません。読むのは survey-pref が落とした県ごとのファイルです。
+run = "uv run {{env.PIPELINE}}/build_prefectural.py {{arg(name='regions', var=true, default='')}}"
+
 [tasks.compare-annual-report-pref]
 description = "都道府県道の延長を年報の表11・表12・表13 と突き合わせ、差の内訳と重用の復元率を出す"
 run = "uv run {{env.PIPELINE}}/compare_annual_report_pref.py {{arg(name='flags', var=true, default='')}}"
