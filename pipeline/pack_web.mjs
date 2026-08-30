@@ -314,7 +314,10 @@ if (decree.routes.length !== 459)
     `build/decree/decree.json has ${decree.routes.length} routes, not 459`,
   );
 
+/** 日付文字列(ISO 8601、ゼロ埋め)のうち最も古いもの。この形式は文字列の
+ *  辞書順がそのまま時系列順になるため、Date に変換せず文字列のまま比べる。 */
 const min = (v) => v.filter(Boolean).sort()[0] || null;
+/** `min` と同じ理由で、文字列の辞書順のまま最も新しいものを返す。 */
 const max = (v) => v.filter(Boolean).sort().slice(-1)[0] || null;
 
 const combos = combinationsOf(features);
