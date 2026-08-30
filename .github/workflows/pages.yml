@@ -1,6 +1,6 @@
 # 地図を GitHub Pages に配ります。
 #
-# 配信データ（タイルと集計）はリポジトリに入っていません。ODbL のデータを MIT の
+# 配信データ(タイルと集計)はリポジトリに入っていません。ODbL のデータを MIT の
 # コードと同じ木に置かないため、また 55 MB の gzip 済みタイルを作り直すたびに
 # 履歴へ丸ごと積まないためです。理由は .gitignore に書いてあります。
 #
@@ -71,9 +71,9 @@ jobs:
       - uses: actions/configure-pages@v5
         id: pages
 
-      # steps.pages.outputs.base_url は実測で http:// を返す(独自ドメインで
+      # steps.pages.outputs.base_url は実測で http:// を返します(独自ドメインで
       # Enforce HTTPS が無効なため)。ここで一度だけ https に正規化し、以降は
-      # このステップの出力だけを使う。
+      # このステップの出力だけを使います。
       - name: 公開 URL を https に正規化する
         id: site_url
         run: |
@@ -96,34 +96,35 @@ jobs:
         uses: actions/deploy-pages@v4
 
       # Cloudflare のエッジキャッシュの保持期限は、GitHub Pages が返す
-      # cache-control: max-age=600(10分)で決まる。応答ヘッダーに見える
-      # max-age=172800(48時間)は Cloudflare のゾーン設定(Browser Cache TTL)
-      # がブラウザ向けにだけ被せている値で、エッジ自身の保持期限には効かない。
-      # つまりパージなしでもエッジの古さは最大10分で、ここでのパージはその
-      # 10分を0にする。一方、ブラウザが握る48時間のキャッシュは URL が変わらない
-      # 限り再検証されないため、この URL 単位のパージでは届かない(ファイル名に
-      # ハッシュを付けていないのでキャッシュバスティングもできない。ブラウザ側の
-      # 手当てはこの PR の範囲外)。
+      # cache-control: max-age=600(10 分)で決まります。応答ヘッダーに見える
+      # max-age=172800(48 時間)は Cloudflare のゾーン設定(Browser Cache TTL)
+      # がブラウザ向けにだけ被せている値で、エッジ自身の保持期限には効きません。
+      # つまりパージなしでもエッジの古さは最大 10 分で、ここでのパージはその
+      # 10 分を 0 にします。一方、ブラウザが握る 48 時間のキャッシュは URL が
+      # 変わらない限り再検証されないので、この URL 単位のパージでは届きません。
+      # ファイル名にハッシュを付けておらずキャッシュバスティングもできないため、
+      # ブラウザ側の手当てはこの PR の範囲外です。
       #
-      # パージ対象は web/ 配下を丸ごと走査して作る。upload-pages-artifact が
+      # パージ対象は web/ 配下を丸ごと走査して作ります。upload-pages-artifact が
       # web/ をそのまま配信物にしている(上の path: web)ため、web/ にある物は
-      # 全て配信され、理論上すべてキャッシュされうる。一覧を手で持つと、ファイル
-      # を足したのにここへの追記を忘れて古いまま配られる不具合が起きる
-      # (実際に urlstate.mjs・wiring.mjs・vendor/roboto-latin-700-normal.woff2
-      # で起きた)。走査ならその種類の漏れは構造的に起きない。
+      # 全て配信され、理論上すべてキャッシュされうるからです。一覧を手で持つと、
+      # ファイルを足したのにここへの追記を忘れ、古いまま配られます(実際に
+      # urlstate.mjs・wiring.mjs・vendor/roboto-latin-700-normal.woff2 で
+      # 起きました)。走査ならその種類の漏れは構造的に起きません。
       #
-      # base_url は「公開 URL を埋める」と同じ steps.site_url.outputs.url を使う。
-      # nanase.cc はユーザーページの独自ドメインで、このリポジトリはプロジェクト
-      # サイトとして nanase.cc/kokudo-map/ に乗る。ドメイン直下を決め打ちすると、
-      # 実際にキャッシュされている URL と一致せず何もパージできない。
+      # base_url は「公開 URL を埋める」と同じ steps.site_url.outputs.url を
+      # 使います。nanase.cc はユーザーページの独自ドメインで、このリポジトリは
+      # プロジェクトサイトとして nanase.cc/kokudo-map/ に乗ります。ドメイン直下を
+      # 決め打ちすると、実際にキャッシュされている URL と一致せず何もパージ
+      # できません。
       #
-      # トークンは Cache Purge 権限のみ・nanase.cc ゾーンのみに絞ってある
+      # トークンは Cache Purge 権限のみ・nanase.cc ゾーンのみに絞ってあります
       # (CLOUDFLARE_CACHE_PURGE_TOKEN、github-pages environment の Secret)。
-      # ファイル名にハッシュを付けていないため URL 単位でしか指定できない。
-      # Cloudflare の purge_cache は1回の呼び出しで URL 30件までしか受け付け
-      # ないので、30件ずつに割って送る。操作面の書体(LINE Seed JP)を自前で
-      # 配るようになり、web/vendor/ だけで woff2 が 248 個ある。1回でも
-      # 失敗すれば下の jq -e が落ちて気付ける。
+      # ファイル名にハッシュを付けていないため URL 単位でしか指定できません。
+      # Cloudflare の purge_cache は 1 回の呼び出しで URL 30 件までしか受け付け
+      # ないので、30 件ずつに割って送ります。操作面の書体(LINE Seed JP)を自前で
+      # 配るようになり、web/vendor/ だけで woff2 が 248 個あります。1 回でも
+      # 失敗すれば下の jq -e が落ちて気付けます。
       - name: Cloudflare のキャッシュをパージする
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_CACHE_PURGE_TOKEN }}
@@ -131,10 +132,10 @@ jobs:
           SITE_URL: ${{ steps.site_url.outputs.url }}
         run: |
           set -euo pipefail
-          # "" はルート(ディレクトリ索引)。以降は web/ 配下の全ファイルを
-          # web/ からの相対パスに直して並べる。find | sort を素通しの
-          # process substitution で読むと find の失敗を set -e が拾えない
-          # ため、一度ファイルへ書き出してからループへ渡す。
+          # "" はルート(ディレクトリ索引)です。以降は web/ 配下の全ファイルを
+          # web/ からの相対パスに直して並べます。find | sort を素通しの
+          # process substitution で読むと find の失敗を set -e が拾えないので、
+          # 一度ファイルへ書き出してからループへ渡します。
           paths_file=$(mktemp)
           trap 'rm -f "$paths_file"' EXIT
           find web -type f -print0 | sort -z > "$paths_file"
@@ -144,13 +145,13 @@ jobs:
             paths+=("${file#web/}")
           done < "$paths_file"
 
-          # 1回あたり30件。Cloudflare の purge_cache がそれ以上を受け付けない。
+          # 1 回あたり 30 件。Cloudflare の purge_cache がそれ以上を受け付けません。
           for ((i = 0; i < ${#paths[@]}; i += 30)); do
             batch=("${paths[@]:i:30}")
 
-            # ファイル名に改行が混じっても1件のまま扱えるよう、printf/jq -R
-            # でテキスト化せず、argv 経由(jq --args)でそのまま渡す。区切りの
-            # "/" は残したまま、各階層ごとに @uri で percent-encode する
+            # ファイル名に改行が混じっても 1 件のまま扱えるよう、printf/jq -R
+            # でテキスト化せず、argv 経由(jq --args)でそのまま渡します。区切りの
+            # "/" は残したまま、各階層ごとに @uri で percent-encode します
             # (# ? 空白 改行 等を含むパスでも配信 URL と一致させるため)。
             payload=$(jq -n --arg base "$SITE_URL" '
                 {files: ($ARGS.positional | map(

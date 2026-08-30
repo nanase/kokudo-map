@@ -1,24 +1,24 @@
 /* 国道マップ — 標識の青を基調にした操作面。地図に主役を譲るため彩度は抑える。 */
 :root {
   /* 明るいときと暗いときの色を、一つの宣言が両方述べる (light-dark)。どちらを
-     採るかは color-scheme が決める——既定の `light dark` は端末の設定に従い、
+     採用するかは color-scheme が決める——既定の `light dark` は端末の設定に従い、
      app.js が data-theme を置けばそちらが勝つ。
 
      配色ごとにブロックを分けると、同じ色が二箇所に並ぶ。実際、重用の色の写しを
      持っていたころは暗い側だけが N_COLORS と食い違ったまま誰にも使われずにいた。
 
-     color-scheme はブラウザが自前で描く部品（スクロールバー、チェックボックス、
-     検索欄の消去ボタン）にも、どちらの面の上にいるかを伝える。これを言わないと
+     color-scheme はブラウザが自前で描く部品(スクロールバー、チェックボックス、
+     検索欄の消去ボタン)にも、どちらの面の上にいるかを伝える。これを言わないと
      暗い配色でもスクロールバーだけが白いままになる。 */
   color-scheme: light dark;
 
   --sign-blue: light-dark(#00449E, #79AEF7);
 
-  /* 重用の深さの色（単独指定・二重用・三重用・四重用以上）はここに無い。
+  /* 重用の深さの色(単独指定・二重用・三重用・四重用以上)はここに無い。
      地図の線も凡例の見本もその色を web/mapspec.mjs の N_COLORS から取る
      ので、CSS に写しを置くと二箇所になる。 */
 
-  /* 明るい側の地は、真っ白ではなく地図そのものの白 (#FDFDFE) を採る。操作面は
+  /* 明るい側の地は、真っ白ではなく地図そのものの白 (#FDFDFE) を採用する。操作面は
      地図の上に浮いており、純白だと画面で一番明るい面になって地図より前へ出て
      しまう。#FDFDFE はごく薄く青が入っているので、一段沈めた --panel-2 も
      同じ側へ寄せ、青みの強かった #F2F5F9 をやめる。
@@ -57,16 +57,16 @@
   /* 白い縁は明るい配色の面では地に溶け、標識が面に貼り付いて見える。実物は
      面から浮いて立っているので、縁の外側を薄い影で締める。同じ影を暗い面へも
      かける——地が暗いぶん見えないだけで、邪魔にはならない。そちらは縁自身が
-     境目になるので、もともと助けが要らない。 */
+     境目になるので、もともと助けは不要である。 */
   --shield-shadow: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .34));
 }
 /* 配色を人が選んだとき。app.js が置き、上の light-dark はこれに従う。
    端末に合わせているあいだも app.js は解いた側を置くので、色ではない
-   切り替え（釦の絵の反転）もここ一つを見れば済む。 */
+   切り替え(ボタンの絵の反転)もここ一つを見れば済む。 */
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
 
-/* 標識の番号だけに使う。実物の書体はヒゲ（セリフ）が無く字面が立っており、
+/* 標識の番号だけに使う。実物の書体はヒゲ(セリフ)が無く字面が立っており、
    等幅の代替書体は "1" などに細いヒゲが残って実物と字形が違って見える。
    scripts/vendor_web.mjs が node_modules から複製する。 */
 @font-face {
@@ -82,7 +82,7 @@
 /* スクロールバー ----------------------------------------------------------
    同じ見た目を二通りで書く。標準の 2 行が Firefox と新しい Chrome に効き、
    ::-webkit- の側が Safari と古い Chrome に効く。両方を解する Chrome は
-   標準の側を採る。 */
+   標準の側を採用する。 */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scroll-thumb) transparent;
@@ -115,12 +115,12 @@ body {
 #app { position: relative; height: 100%; }
 
 /* 地図の上に浮かぶ左の列 --------------------------------------------------
-   操作面 (#panel) と路線の詳細 (#detail) は、どちらも地図の上に浮く箱で、
+   操作面 (#panel) と路線の詳細 (#detail) は、どちらも地図の上に浮くパネルで、
    同時に出る。別々に絶対配置すると重なりを二箇所で調整することになるので、
    一本の縦列に入れて flex に任せる。列は画面の上下いっぱいまであり、操作面が
    縮んで (flex-shrink) 詳細の場所を空ける。
 
-   列そのものは地図を掴む手を通す。箱だけが受け取る。 */
+   列そのものは地図を掴む手を通す。パネルだけが受け取る。 */
 #left-stack {
   position: absolute; left: 12px; top: 12px; bottom: 12px; width: 340px;
   z-index: 4; display: flex; flex-direction: column; gap: 10px;
@@ -128,9 +128,9 @@ body {
 }
 #left-stack > * { pointer-events: auto; }
 
-/* ---------------------------------------------------------------- panel --- */
+/* ---------------------------------------------------------------- 操作面 --- */
 #panel {
-  /* 中身は列の高さを超える。縮む側はここで、詳細の箱は縮まない。 */
+  /* 中身は列の高さを超える。縮む側はここで、詳細パネルは縮まない。 */
   flex: 0 1 auto; min-height: 0;
   background: var(--panel);
   border: 1px solid var(--line); border-radius: 6px;
@@ -159,34 +159,34 @@ body {
   border: 1px solid var(--line); border-radius: 4px;
 }
 .icon-btn:hover:not(:disabled) { color: var(--sign-blue); border-color: var(--sign-blue); }
-/* 押しても何も起きない釦は、押せないと見えていなければならない。 */
+/* 押しても何も起きないボタンは、押せないと見えていなければならない。 */
 .icon-btn:disabled { color: var(--ink-3); opacity: .45; cursor: default; }
 .icon-btn svg { width: 15px; height: 15px; }
-/* 見出しの右に並ぶ釦の列。先頭だけが余りを飲んで右端へ寄せる。 */
+/* 見出しの右に並ぶボタンの列。先頭だけが余りを飲んで右端へ寄せる。 */
 .about-btn { margin-left: auto; }
 .about-btn, .share-btn, #panel-close { flex: 0 0 auto; }
 /* 目には出さず、読み上げにだけ残す文字。display: none と違って描画はされる
    ので、aria-labelledby の指し先になれるし、Chromium の innerText にも出る
-   (pipeline/render_check.mjs が箱の名乗りをそこから読む)。 */
+   (pipeline/render_check.mjs がパネルの名乗りをそこから読む)。 */
 .sr-only {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
 }
-/* 余白は節の中身だけでなく、行の上に重ねる釦の置き場所も決める(#sel-none)。
+/* 余白は節の中身だけでなく、行の上に重ねるボタンの置き場所も決める(#sel-none)。
    同じ数を二箇所に書かないよう、変数にして下の者へ渡す。 */
 .block {
   --pad-y: 10px; --pad-x: 18px;
   position: relative; padding: var(--pad-y) var(--pad-x);
   border-bottom: 1px solid var(--line-2);
 }
-/* 区切り線は節と節のあいだにだけ引く。最後の節の下は箱の縁である。 */
+/* 区切り線は節と節のあいだにだけ引く。最後の節の下はパネルの縁である。 */
 #panel > .block:last-child { border-bottom: 0; }
 .block-hd {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 10px; margin-bottom: 10px;
 }
 /* #panel を付けると id を含む分だけ詳細度が上がり、.fold > summary:hover h2
-   の hover 色 (クラスのみ) に勝ってしまう — 折りたたみの見出しだけホバーで
+   の hover 色 (クラスのみ) に勝ってしまう——折りたたみの見出しだけホバーで
    色が変わらない不具合になる。 */
 .block h2, .map-popover h2 {
   margin: 0; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
@@ -204,14 +204,14 @@ body {
   flex: 1; min-width: 0; margin-bottom: 0; padding-left: 28px;
 }
 
-/* folded block ----------------------------------------------------------
+/* 畳んだ節 --------------------------------------------------------------
    Reference material that is worth having but not worth the sidebar height
    it costs. Folded shut, the summary still states how much is inside. */
 .fold > summary {
   display: flex; align-items: center; gap: 10px; cursor: pointer;
   list-style: none;
-  /* 「国道を選択」の行にだけ釦が重なる。行の高さをその釦に合わせておくと、
-     どの節も見出しの高さが揃い、字の上下の余白も釣り合う。釦のぶんだけ
+  /* 「国道を選択」の行にだけボタンが重なる。行の高さをそのボタンに合わせておくと、
+     どの節も見出しの高さが揃い、字の上下の余白も釣り合う。ボタンのぶんだけ
      背が高い節が一つあると、そこだけ字が上へ寄って見える。 */
   min-height: 24px;
 }
@@ -224,7 +224,7 @@ body {
 .fold[open] > summary::after { transform: rotate(180deg); }
 .fold[open] > summary { margin-bottom: 10px; }
 .fold > summary:hover h2 { color: var(--sign-blue); }
-/* 選択解除の釦。DOM では summary の外(節の直下)にあり、見える場所だけを
+/* 選択解除のボタン。DOM では summary の外(節の直下)にあり、見える場所だけを
    ここで summary の行へ戻す。並びは開閉の三角の左隣で、以前と同じである。 */
 #sel-none {
   position: absolute; top: var(--pad-y);
@@ -233,15 +233,15 @@ body {
   width: 24px; height: 24px;
 }
 #sel-none svg { width: 14px; height: 14px; }
-/* 釦は浮いているので場所を取らない。見出しの数がその下へ潜らないよう、
-   釦 24px と間 10px のぶんをここで空ける。 */
+/* ボタンは浮いているので場所を取らない。見出しの数がその下へ潜らないよう、
+   ボタン 24px と間 10px のぶんをここで空ける。 */
 #route-block > summary .count { margin-right: 34px; }
 .fold > summary .count {
   font-family: ui-monospace, Consolas, monospace; font-size: .68rem;
   color: var(--ink-3); font-variant-numeric: tabular-nums;
 }
 
-/* 釦の骨格。about ダイアログのリンク (a.mini) もこれを借りる——`button.mini`
+/* ボタンの骨格。about ダイアログのリンク (a.mini) もこれを借りる——`button.mini`
    と書いていたころは a に当たらず、色を誰も述べないまま既定の青と、訪問後の
    紫になっていた。ここで色を述べるので、:visited でも変わらない。 */
 .mini {
@@ -262,7 +262,7 @@ input[type="search"] {
 input[type="search"]::placeholder { font-size: .82em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
-/* route checkbox grid ----------------------------------------------------
+/* 路線のチェックボックスの並び --------------------------------------------
    一覧は #route-block(details.fold)の中にあり、どの画面幅でも畳んだ状態で
    始まる。開閉は details 自身が持つので、ここに書くことは無い。 */
 .route-list {
@@ -277,7 +277,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 /* データが届く前、この場所に何も無いのは「壊れている」と読めてしまう。
    buildUI() が innerHTML を丸ごと差し替えると一緒に消えるので、消す側の
-   コードは要らない。 */
+   コードは不要である。 */
 .route-list-spinner {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   width: 26px; height: 26px; border-radius: 50%;
@@ -310,18 +310,18 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .radios input, .checks input { accent-color: var(--sign-blue); margin: 0; }
 
-/* legends -----------------------------------------------------------------
+/* 凡例 --------------------------------------------------------------------
    凡例は地図の上、右下に浮かせる。縮尺と出典もその角にあるので、下端の 56px
    はその二つのぶんである——凡例が上、縮尺と出典が下に並ぶ。左の列とは重なら
    ないところまで内へ寄せてあるが、右端に寄せている限りふつうは効かない。
 
    台は明暗どちらの配色でも白いままにする。凡例は地図の部品であり、隣にある
-   拡大の釦も縮尺も出典も、MapLibre が白い台に濃い灰色で描く——そこだけ地の
+   拡大のボタンも縮尺も出典も、MapLibre が白い台に濃い灰色で描く——そこだけ地の
    色が変わると、同じ列に別の紙が混ざる。 */
 #legend-bar {
   position: absolute; left: 12px; right: 12px; bottom: 56px; z-index: 3;
   display: flex; justify-content: flex-end;
-  /* 帯そのものは地図を掴む手を通す。箱だけが受け取る。 */
+  /* 帯そのものは地図を掴む手を通す。パネルだけが受け取る。 */
   pointer-events: none;
 }
 #app:not(.panel-off) #legend-bar { left: 364px; }
@@ -346,7 +346,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* title 属性を持つ項目だけ、補足があることをカーソルで示す。 */
 .legend .item[title] { cursor: help; }
 
-/* ranking --------------------------------------------------------------- */
+/* 重用ランキング -------------------------------------------------------- */
 .ranking { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
 .ranking .row {
   display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
@@ -371,11 +371,11 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .ranking .empty { font-size: .75rem; color: var(--ink-3); }
 
-/* おにぎり（国道番号標識）-------------------------------------------------
+/* おにぎり(国道番号標識)-------------------------------------------------
    実物と同じ配色にしてある。白い縁は明るい配色の面では見えないが、暗い面では
    標識と地の境目になる。実物が縁を持っているのも同じ理由である。 */
 /* 幅は決め打ちにしない。SHIELD_VIEWBOX の縦横比が変わっても、svg 自身の
-   実寸（height だけ決めて width を auto にする）が追随する。 */
+   実寸(height だけ決めて width を auto にする)が追随する。 */
 .shield { height: 30px; flex: 0 0 auto; display: block; }
 /* 影は縁の外側に落ちるので、svg の枠より外へ出る。CSS の filter は枠で切らない
    ので、置き場所は標識ごと——番号だけに落ちないよう、path ではなく svg に
@@ -400,9 +400,9 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .shield-btn:hover { background: var(--line-2); }
 
-/* Data provenance: which day of OSM this map is showing.
-   出す場所は「国道マップについて」のダイアログである。地図を読むあいだ要る
-   ものではなく、知りたくなったときだけ要る。 */
+/* データの出どころ。いつ時点の OSM を出しているか。
+   出す場所は「国道マップについて」のダイアログである。地図を読むあいだ必要な
+   ものではなく、知りたくなったときだけ必要になる。 */
 .stats, .freshness {
   display: grid; grid-template-columns: max-content 1fr;
   gap: 1px 10px; font-size: .68rem; line-height: 1.55;
@@ -413,17 +413,17 @@ input[type="search"]::placeholder { font-size: .82em; }
 .stats dt, .freshness dt { color: var(--ink-3); }
 .stats dd, .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 
-/* ----------------------------------------------------------------- map --- */
+/* ------------------------------------------------------------------ 地図 --- */
 /* 地図の上の部品 -----------------------------------------------------------
-   拡大の釦も縮尺も出典も凡例も、この地図が描く面である。下に見えている
+   拡大のボタンも縮尺も出典も凡例も、この地図が描く面である。下に見えている
    地理院タイルは写真と同じ「中身」であって、面ではない——だから明暗の
    切り替えは、この地図が描くものすべてに等しく効き、地図そのものには効か
-   ない。操作面だけが暗くて釦が白い、という混ざり方はここで無くなる。
+   ない。操作面だけが暗くてボタンが白い、という混ざり方はここで無くなる。
 
    薄い地図の上では、暗い面のほうが白い面より境目がはっきりする。白い台が
    影を頼りに浮いていたのに対し、暗い台は地との明暗差だけで立つ。
 
-   MapLibre が持ってくる釦の絵は #333 の塗りを data URI に焼き込んであり、
+   MapLibre が持ってくるボタンの絵は #333 の塗りを data URI に焼き込んであり、
    色を差し替える口が無い。暗い配色では反転させる——hue-rotate を添えるのは、
    現在位置の青や方位の赤まで反対の色にしないためである。 */
 .maplibregl-ctrl-group { background: var(--panel); }
@@ -437,8 +437,9 @@ input[type="search"]::placeholder { font-size: .82em; }
   background-color: var(--panel); border-color: var(--ink-2);
   color: var(--ink-2);
 }
-/* 出典の地は二つのクラスで指定されている (.maplibregl-ctrl.maplibregl-ctrl-attrib)。
-   片方だけで書くと特異度で負け、字だけが変わって地が白いまま残る。 */
+/* 出典の地は二つのクラスで指定されている
+   (.maplibregl-ctrl.maplibregl-ctrl-attrib)。片方だけで書くと特異度で負け、
+   字だけが変わって地が白いまま残る。 */
 .maplibregl-ctrl.maplibregl-ctrl-attrib { background-color: var(--panel); }
 .maplibregl-ctrl-attrib { color: var(--ink-2); }
 .maplibregl-ctrl-attrib a { color: var(--sign-blue); }
@@ -451,10 +452,10 @@ input[type="search"]::placeholder { font-size: .82em; }
    畳んだパネルは visibility で伏せる。display:none にすると路線一覧の
    スクロール位置が開き直すたびに戻ってしまう。伏せた要素は場所こそ取るが、
    地図を掴む手も tab も通り抜ける——それでも読み上げには残るので、app.js が
-   inert を付けて塞ぐ。詳細の箱は列の下端に居るので、伏せたパネルが上に
+   inert を付けて塞ぐ。詳細パネルは列の下端に居るので、伏せたパネルが上に
    場所を取っていても動かない。 */
 #app.panel-off #panel { visibility: hidden; }
-/* 開いている間は、閉じる口はパネル自身の × である。この釦は開き直すためだけ
+/* 開いている間は、閉じる口はパネル自身の × である。このボタンは開き直すためだけ
    にあるので、開いているあいだは出さない。 */
 #app:not(.panel-off) #panel-toggle { display: none; }
 #panel-toggle {
@@ -481,7 +482,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 .pitch-ctrl button svg { width: 17px; height: 17px; display: block; }
 
 /* 国道を隠すボタン -------------------------------------------------------
-   MapLibre のズームボタンと同じグループの体裁（白い台、角丸）に乗せ、続けて
+   MapLibre のズームボタンと同じグループの体裁(白い台、角丸)に乗せ、続けて
    addControl するだけで自然にその下へ積む。台が常に白いので、アイコンの色は
    MapLibre 自身のズームアイコンに合わせた固定の濃い灰色にする。 */
 .hide-routes-ctrl button {
@@ -489,11 +490,11 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .hide-routes-ctrl button svg { width: 17px; height: 17px; display: block; }
 .hide-routes-ctrl button.active { background: var(--danger); color: #fff; }
-/* MapLibre's own `.maplibregl-ctrl button:not(:disabled):hover` rule matches
-   three classes too and loses only because this file loads after it — drop
-   that ordering and its 5%-black tint replaces the red outright, leaving a
-   near-white button with a white icon on it. Matching the selector's shape
-   keeps the win explicit instead of resting on load order. */
+/* MapLibre 自身の `.maplibregl-ctrl button:not(:disabled):hover` も三つの
+   クラスに当たっており、負けているのはこのファイルが後に読まれるからでしかない
+   ——その順序が崩れると、あちらの 5% の黒がそのまま赤を置き換え、白に近いボタン
+   の上に白いアイコンが載る。選択子の形を揃えておけば、勝ちは読み込み順に頼らず
+   はっきりする。 */
 .hide-routes-ctrl button.active:hover { background: var(--danger-hover); }
 
 /* 地図の種類・濃さボタン ---------------------------------------------------
@@ -504,12 +505,12 @@ input[type="search"]::placeholder { font-size: .82em; }
 .basemap-ctrl button svg { width: 17px; height: 17px; display: block; }
 
 /* 表示のボタンと、そこから出る面 -------------------------------------------
-   釦は他と同じ台に乗る。 */
+   ボタンは他と同じ台に乗る。 */
 .display-ctrl button {
   display: grid; place-items: center; color: var(--ink-2);
 }
 .display-ctrl button svg { width: 17px; height: 17px; display: block; }
-/* 面が開いているあいだ、釦は押されたままである。地の青と面の色を入れ替えて
+/* 面が開いているあいだ、ボタンは押されたままである。地の青と面の色を入れ替えて
    示す——明暗どちらでも、字と地の関係はそのまま反転するだけになる。 */
 .display-ctrl button.active { background: var(--sign-blue); color: var(--panel); }
 /* maplibre-gl.css 側の hover 規則と同じ形で書いて、記述順に頼らず勝つ
@@ -518,11 +519,11 @@ input[type="search"]::placeholder { font-size: .82em; }
   background-color: var(--sign-blue); filter: brightness(1.12);
 }
 
-/* 面そのもの。釦の台の中に居るので、位置は台を基準に決まる——寸法を測って
-   合わせる計算はどこにも要らない。台の左へ出すのは、右に窓の端しか無いから
+/* 面そのもの。ボタンの台の中に居るので、位置は台を基準に決まる——寸法を測って
+   合わせる計算はどこにも不要である。台の左へ出すのは、右に窓の端しか無いから
    である。 */
 .map-popover {
-  /* 上端は釦に合わせるのが基本で、窓の下からはみ出すときだけ app.js が
+  /* 上端はボタンに合わせるのが基本で、窓の下からはみ出すときだけ app.js が
      引き上げる。それでも入り切らない高さの窓では、面の中が巻き取る。 */
   position: absolute; top: -1px; right: calc(100% + 8px);
   width: max-content; max-width: min(280px, calc(100vw - 64px));
@@ -544,8 +545,8 @@ input[type="search"]::placeholder { font-size: .82em; }
    タップには hover の title が出せないので、その代わりに一瞬だけ状態を
    返す。ボタンと同じ台の中に置き、台の位置だけを頼りに左へ出す。
    台の中にラベルを同居させる以上ボタンは :only-child でなくなり、
-   maplibre-gl.css 側のフォーカス時の角丸（:only-child だけ台と同じ丸みを
-   継ぐ）が外れて上下どちらかの角が直角になる。ここで丸みを台の値へ戻す。 */
+   maplibre-gl.css 側のフォーカス時の角丸(:only-child だけ台と同じ丸みを
+   継ぐ)が外れて上下どちらかの角が直角になる。ここで丸みを台の値へ戻す。 */
 .pitch-ctrl, .hide-routes-ctrl, .basemap-ctrl, .display-ctrl { position: relative; }
 /* 台どうしは DOM の順で重なる。表示の面 (#display-popover) を持つこの台は
    他の台より先に足してあるので、後の台の state-tip が面の上に出ていた——
@@ -560,8 +561,8 @@ input[type="search"]::placeholder { font-size: .82em; }
   border-radius: inherit;
 }
 .state-tip {
-  /* 上端は app.js が押された釦に合わせる。台に釦が二つ載ることがあり、真ん中
-     に出すとどちらの返事か分からない。 */
+  /* 上端は app.js が押されたボタンに合わせる。台にボタンが二つ載ることが
+     あり、真ん中に出すとどちらの返事か分からない。 */
   position: absolute; top: 0; right: calc(100% + 8px);
   transform: translate(4px, 0);
   display: flex; align-items: center;
@@ -574,7 +575,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .state-tip.show { opacity: 1; transform: translate(0, 0); pointer-events: auto; cursor: pointer; }
 
-/* popup ----------------------------------------------------------------- */
+/* ポップアップ ---------------------------------------------------------- */
 .maplibregl-popup-content {
   font-family: inherit; font-size: .8rem; padding: 12px 14px;
   border-radius: 4px; background: var(--panel); color: var(--ink);
@@ -628,17 +629,17 @@ input[type="search"]::placeholder { font-size: .82em; }
 .pop-row { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); }
 .pop-row dt { color: var(--ink-3); font-size: .72rem; }
 .pop-row dd { margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: .72rem; }
-/* The OSM way link is the only anchor in a popup. The browser default is a
-   near-black blue that all but disappears on the dark panel, so it takes the
-   theme-aware sign blue like everything else. */
+/* ポップアップの中で anchor は OSM の way へのリンクだけである。ブラウザの
+   既定は黒に近い青で、暗い操作面ではほとんど消えるので、他と同じく配色に
+   追随する標識の青にする。 */
 .maplibregl-popup-content a { color: var(--sign-blue); }
 
-/* detail ------------------------------------------------------------------
-   一つの国道について語る箱。地図の上に浮かせ、地図のほうは padding でその
+/* 詳細パネル --------------------------------------------------------------
+   一つの国道について述べるパネル。地図の上に浮かせ、地図のほうは padding でその
    ぶんだけ空ける (app.js の applyMapPadding)。#map を細くして横に並べる
    と canvas の寸法が変わり、開くたびに全部描き直しになる。
 
-   大きさは固定する。路線によって中身の量は違うが、箱が伸び縮みすると地図の
+   大きさは固定する。路線によって中身の量は違うが、パネルが伸び縮みすると地図の
    ずれ幅も毎回変わってしまう。入り切らないぶんは .detail-scroll が飲む。 */
 #detail {
   /* 位置は #left-stack が決める。列の中では下端に沿わせ、余りは上の
@@ -650,7 +651,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   border: 1px solid var(--line); border-radius: 6px;
   box-shadow: 0 6px 26px rgba(0,0,0,.26);
 }
-/* display:flex は hidden の既定 (display:none) より強い。閉じている箱が
+/* display:flex は hidden の既定 (display:none) より強い。閉じているパネルが
    出たままにならないよう、ここで明示的に伏せる。 */
 #detail[hidden] { display: none; }
 /* × は共有ダイアログのそれと同じ見た目でよい。.icon-btn と同じ考え方で、
@@ -663,14 +664,14 @@ input[type="search"]::placeholder { font-size: .82em; }
   padding: 12px 44px 12px 14px;
   border-bottom: 1px solid var(--line-2);
 }
-/* ポップアップの標識 (30px) より大きく。これが箱のタイトルである——番号を
+/* ポップアップの標識 (30px) より大きく。これがパネルのタイトルである——番号を
    書いた標識が路線の名前そのものなので、隣に「国道N号」と書き添えない。 */
 .detail-hd .shield { height: 44px; }
 /* 標識の空けた場所には、その路線について次にできることを置く。 */
 .detail-acts { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .detail-scroll {
   flex: 1; min-height: 0; overflow-y: auto;
-  /* 箱の中を読み切ってもページごと動かさない。 */
+  /* パネルの中を読み切ってもページごと動かさない。 */
   overscroll-behavior: contain;
   padding: 12px 14px 14px;
   display: flex; flex-direction: column; gap: 12px;
@@ -692,7 +693,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 .detail-termini {
   display: flex; align-items: center; gap: 6px;
   /* 押せる範囲は字面より広く取る。その食み出したぶんを外へ逃がして、
-     左右の端をこの箱の他の欄と揃える。 */
+     左右の端をこのパネルの他の欄と揃える。 */
   margin: 0 -6px;
 }
 /* 両端は地名ぶんだけ取る。余りは矢印が飲むので、字数が少ない路線ほど矢印が
@@ -743,7 +744,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   font-family: ui-monospace, Consolas, monospace;
 }
 .detail-stats dt { color: var(--ink-3); }
-/* 数の列は右で揃える。左揃えだと桁の違う km が単位ごとばらける — ポップアップ
+/* 数の列は右で揃える。左揃えだと桁の違う km が単位ごとばらける——ポップアップ
    の .pop-row が dt と dd を両端に振り分けているのと同じ理由である。 */
 .detail-stats dd {
   margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums;
@@ -758,13 +759,13 @@ input[type="search"]::placeholder { font-size: .82em; }
 
 /* 関わりのある国道 --------------------------------------------------------
    .detail-kinds と同じ組み方をする。見出し(.detail-sub)の下に中身を置く欄が
-   箱の中で三つ続くので、欄どうしの間隔は .detail-scroll の gap が持つ。 */
+   パネルの中で三つ続くので、欄どうしの間隔は .detail-scroll の gap が持つ。 */
 .detail-rel { display: flex; flex-direction: column; gap: 5px; }
 /* 標識は折り返す。交差する路線は 31 まであり、一列には収まらない。行間は
    標識の影(--shield-shadow)が下へ落ちるぶんだけ列の隙間より広く取る。 */
 .rel-shields { display: flex; flex-wrap: wrap; gap: 5px 3px; }
 
-/* dialogs ------------------------------------------------------------------
+/* ダイアログ --------------------------------------------------------------
    ネイティブの <dialog> を使う。どちらのダイアログにも表示状態を変更する口は
    無いので、独自のフォーカストラップやキー処理を書く理由が無い —
    showModal() 自身が Esc とフォーカスの往復を面倒みる。
@@ -778,7 +779,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   box-shadow: 0 8px 32px rgba(0,0,0,.28);
 }
 /* 後ろの暗がり。紙の側が明るくても暗くても、紙とその後ろの隔たりが読めるだけ
-   の濃さが要る。押せば閉じる (app.js) ので、暗がりは「ここは紙の外」と
+   の濃さが必要である。押せば閉じる (app.js) ので、暗がりは「ここは紙の外」と
    述べてもいる。 */
 .sheet::backdrop { background: rgba(8, 12, 18, .66); }
 .sheet form {
@@ -796,11 +797,11 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .sheet section { margin: 0; }
 
-/* about dialog ------------------------------------------------------------
+/* 「国道マップについて」 --------------------------------------------------
    出典はここに無い。地図の上の表示が一度だけ述べている。 */
 #about-dialog { width: min(480px, 92vw); }
 .about-lead { margin: 0; font-size: .82rem; color: var(--ink-2); }
-/* .mini の骨格を借りる。リンクなので、下線ではなく釦の形で立たせる。 */
+/* .mini の骨格を借りる。リンクなので、下線ではなくボタンの形で立たせる。 */
 .about-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .mini.about-link {
   text-decoration: none;
@@ -874,7 +875,7 @@ input[type="search"]::placeholder { font-size: .82em; }
      選択子で書く——@media は詳細度を足さないので、#legend-bar だけでは
      #app:not(.panel-off) #legend-bar に負ける。 */
   #legend-bar, #app:not(.panel-off) #legend-bar { left: 8px; right: 8px; }
-  /* 詳細の箱はこの幅では下端に出る。凡例と場所を取り合うので、開いているあいだ
+  /* 詳細パネルはこの幅では下端に出る。凡例と場所を取り合うので、開いているあいだ
      は凡例を譲る——詳細を読んでいる人が見ているのはその路線であって、線の色
      の一覧ではない。 */
   #app.detail-open #legend-bar { display: none; }

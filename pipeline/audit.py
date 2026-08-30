@@ -2,31 +2,30 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Find suspicious routes mechanically — no reference data, no judgement.
+"""怪しい路線を機械的に探す——参照データも判断も使わない。
 
-A national route is a chain from 起点 to 終点. Where our data is missing a
-piece, the chain breaks, and a break is a fact a script can state:
+国道は起点から終点までひと続きである。こちらのデータが一部を欠けば、その続きは
+途切れる。途切れはスクリプトが断定できる事実である。
 
-  components   how many disconnected pieces the route falls into
-  loose ends   arc endpoints the route simply stops at
-  gaps         distance from a loose end to the nearest piece of the same route
+  components   その路線が幾つの繋がらない塊に分かれるか
+  loose ends   路線がそこで単に終わっているアークの端点
+  gaps         端点から、同じ路線の最も近い塊までの距離
 
-Gap length sorts the causes, and the buckets matter more than the raw number:
+隙間の長さが原因を仕分ける。生の数より、どの段に入るかが効く。
 
-  < 50 m       the two sides are not sharing a node. Almost never a missing
-               road — either an OSM authoring slip, or two carriageways that
-               are correctly separate.
-  50 m – 2 km  a missing short link, a bypass junction, or the boundary of an
-               under-construction section (legitimately not connected yet).
-  > 2 km       a missing section, or a genuine break: 点線国道, 未開通, 海上国道.
+  50 m 未満    両側がノードを共有していない。道の欠落であることはまず無い——
+               OSM の記入の取りこぼしか、正しく分かれている上下線である。
+  50 m〜2 km   短い接続の欠落、バイパスの分岐、または工事中区間の境界(まだ繋がって
+               いないのが正しい)。
+  2 km 超      区間の欠落か、本物の断絶である。点線国道、未開通、海上国道など。
 
-Each gap is then checked against the raw OSM objects in the cache. If a way
-claiming that route number sits in the gap and is *not* in our output, our
-admission rules dropped it — a rule bug, fixable once for the whole country.
-If no such way exists, the road is absent from OSM and no rule change will
-conjure it; only reference data (国土数値情報 N13) can find that case.
+続いて、隙間ごとにキャッシュの生の OSM の物と突き合わせる。その番号を主張する
+way が隙間の中にあり、こちらの出力に無ければ、判定ルールがそれを落としている
+——ルールの不具合で、一度直せば全国に効く。そんな way が無ければ、道は OSM に
+無いのであって、ルールをどう変えても現れない。その場合を見つけられるのは参照
+データ(国土数値情報 N13)だけである。
 
-Usage:  uv run pipeline/audit.py [region] [--route N ...] [--all]
+使い方:  uv run pipeline/audit.py [地域] [--route N ...] [--all]
 """
 from __future__ import annotations
 
@@ -65,7 +64,7 @@ class DSU:
 
 
 def key(pt):
-    """Node identity from a [lon, lat] pair."""
+    """[経度, 緯度] の対からノードの同一性を作る。"""
     return (round(pt[1], 7), round(pt[0], 7))
 
 
@@ -128,7 +127,7 @@ def analyse_route(ref, feats, bbox):
                 "kinds": kinds,
                 "name": endpoint_arcs[k][0].get("name"),
             })
-    # Both ends of one gap show up as two entries; keep the shorter view first.
+    # 1 つの隙間は両端が 2 件として現れる。短く見えるほうを先に置く。
     gaps.sort(key=lambda g: g["m"])
     seen = set()
     uniq = []
@@ -171,7 +170,7 @@ def load_cache(region):
 
 
 def claims(tags):
-    """Route numbers a way asserts about itself, by any means."""
+    """その way が自分について主張する路線番号。経路は問わない。"""
     out = {int(x) for x in (tags.get("ref") or "").split(";") if x.strip().isdigit()}
     blob = " ".join(tags.get(k, "") for k in ("name", "name:ja", "official_name"))
     out |= {int(m) for m in NAME_NUM.findall(blob)}
@@ -198,7 +197,7 @@ def why_excluded(wid, tags, cache, corroborated):
 
 
 def missing_ways_in_gap(cache, out_ids, ref, gap, corroborated):
-    """OSM ways claiming this route inside the gap that our output lacks."""
+    """隙間の中でこの路線を主張していて、こちらの出力に無い OSM の way。"""
     lo, hi = gap["from"], gap["to"]
     mid = ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)
     radius = max(gap["m"], 150)

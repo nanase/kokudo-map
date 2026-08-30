@@ -20,7 +20,7 @@ clone した直後は次で作れます。
 mise run pack
 ```
 
-タイルは geojson-vt で切ります。MapLibre が GeoJSON ソースに使うのと同じ実装なので、描かれる形の求め方は以前と変わりません。tippecanoe には Windows 版が無く、これには要りません。
+タイルは geojson-vt で切ります。MapLibre が GeoJSON ソースに使うのと同じ実装なので、描かれる形の求め方は以前と変わりません。tippecanoe には Windows 版が無く、これには不要です。
 
 集計は指定の組み合わせごとに 1 行です。路線別の表では足りません。重用区間のアークは複数の路線に属するので、路線の行を足すと共有部分を二重に数えます。それは地図が隠すのをやめさせたい数そのものです。
 
@@ -52,7 +52,7 @@ mise run publish-data   # web/data/ を R2(data.nanase.cc)に上げる
 | 配信データ | R2 バケット `kokudo-map-data` → `data.nanase.cc` |
 | 組み立てと配信 | `.github/workflows/pages.yml` |
 
-データの更新に Pages の再デプロイは要りません。`data.nanase.cc` は上げた直後から新しい内容を返します。コードを `main` に push したときは Pages だけが作り直ります。そのときデータには触りません。
+データの更新に Pages の再デプロイは不要です。`data.nanase.cc` は上げた直後から新しい内容を返します。コードを `main` に push したときは Pages だけが作り直ります。そのときデータには触りません。
 
 ## 初回セットアップ
 

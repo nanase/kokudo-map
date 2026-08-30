@@ -1,30 +1,26 @@
-/* Turn the per-region builds into the two files the viewer actually fetches.
+/* 地域ごとの生成物を、閲覧側が実際に取る 2 ファイルにする。
  *
- * Nationwide the arcs come to tens of megabytes of GeoJSON, which is neither
- * shippable as one file nor loadable as 47. So the viewer stops holding the
- * features at all:
+ * 全国のアークは GeoJSON にすると数十 MB になり、1 ファイルでは配れず、47 個に
+ * 分けても読み込めない。だから閲覧側は特徴量を持つこと自体をやめる。
  *
- *   national-routes.pmtiles  vector tiles — only what is on screen is in memory
- *   national.meta.json       every total the panel shows, computed here instead
+ *   national-routes.pmtiles  ベクタタイル。画面に出ている物しか手元に載らない
+ *   national.meta.json       画面が出す合計。代わりにここで計算する
  *
- * The second file is what makes the first possible. app.js used to derive the
- * route list, the concurrency ranking and the selection totals by walking every
- * feature. With tiles it never has the full set, so those totals are computed
- * once here, over the deduplicated arcs, and shipped as data.
+ * 2 つ目が 1 つ目を成り立たせている。app.js はかつて、路線の一覧も重用ランキング
+ * も選択の合計も、特徴量を全部辿って求めていた。タイルでは全体が手元に無いので、
+ * その合計は重複排除したアークに対してここで一度だけ計算し、データとして配る。
  *
- * The aggregate is one table: every distinct *combination* of designations,
- * with its length, arc count, extent, and what that length is made of — split
- * by `kind` and by 旧道. Route totals, the ranking and the selection stats are
- * all sums over its rows, so there is one set of numbers rather than three that
- * can disagree. Concurrency is why a per-route table would not do: an arc
- * carrying 18 and 117 belongs to both, and adding the two route rows would
- * count it twice.
+ * 集計は 1 枚の表である。指定の組み合わせごとに 1 行で、延長・アーク数・広がりと、
+ * その延長が何でできているか——`kind` 別と旧道別——を持つ。路線の合計もランキング
+ * も選択の集計も、その行の部分和である。だから数の出どころは三つではなく一つで、
+ * 食い違いようがない。路線別の表では足りないのは重用のためである。18 号と 117 号
+ * を持つアークは両方に属するので、二つの路線の行を足すと二重に数える。
  *
- * Tiles are cut with geojson-vt — the same code MapLibre uses for GeoJSON
- * sources, so the geometry the browser draws is arrived at the same way it
- * always was. tippecanoe has no Windows build; this does not need one.
+ * タイルは geojson-vt で切る——MapLibre が GeoJSON ソースに使うのと同じコード
+ * なので、ブラウザが描く形の求め方は今までと変わらない。tippecanoe に Windows
+ * 版は無く、これには不要である。
  *
- * Usage:  node pipeline/pack_web.mjs [--maxzoom 14]
+ * 使い方:  node pipeline/pack_web.mjs [--maxzoom 14]
  */
 import {
   closeSync,
@@ -48,16 +44,16 @@ const arg = (name, dflt) => {
   const i = process.argv.indexOf(name);
   return i < 0 ? dflt : Number(process.argv[i + 1]);
 };
-// The deepest zoom cut. Below it MapLibre overzooms, keeping this zoom's
-// geometry, so this is where the detail stops improving. Nothing else states
-// it: the archive carries it and the style asks the archive.
+// 切る最も深いズーム。これより深く(z がこれより大きく)寄ると MapLibre はこの
+// ズームの形を引き伸ばすので、詳しさが増えるのはここまでである。これを述べる
+// 場所は他に無い。アーカイブが持ち、スタイルはアーカイブに訊く。
 const MAXZOOM = arg('--maxzoom', 14);
-// Above this zoom the country is cut into independent pyramids, one per tile,
-// so geojson-vt never holds the whole deep pyramid at once.
+// このズームより深いぶんは、全国をタイルごとの独立したピラミッドに分けて切る。
+// geojson-vt が深いピラミッド全体を一度に抱えずに済む。
 const SPLIT = 8;
 const EXTENT = 4096;
 
-/* ------------------------------------------------------------------ merge --- */
+/* ----------------------------------------------------------------- merge --- */
 const index = JSON.parse(readFileSync(join(REGIONS, 'regions.json'), 'utf8'));
 if (!index.length) throw new Error('build/regions/regions.json is empty');
 
@@ -71,8 +67,8 @@ for (const r of index) {
     readFileSync(join(REGIONS, `${r.region}.geojson`), 'utf8'),
   );
   for (const f of geo.features) {
-    // Boxes are rectangles, so seams hand back the same road twice. The OSM way
-    // id is the identity; no geometry comparison is needed.
+    // bbox は矩形なので、継ぎ目では同じ道が二度返ってくる。同一性を決めるのは
+    // OSM の way id で、形を比べる必要は無い。
     if (byId.has(f.properties.id)) continue;
     byId.set(f.properties.id, f);
   }
@@ -82,9 +78,9 @@ console.log(
   `${index.length} regions -> ${features.length.toLocaleString()} arcs after dedupe`,
 );
 
-/* Tile properties. `refs_list` is dropped: MVT has no array type, and the list
- * is recoverable from the delimiter-wrapped key that the filters already use.
- * `label` is materialised here because a symbol layer needs a plain property. */
+/* タイルが持つ属性。`refs_list` は落とす。MVT に配列の型は無く、その一覧は
+ * 絞り込みが既に使っている、区切り文字で囲んだ値から復元できる。`label` を
+ * ここで作っておくのは、symbol の層が素の属性を必要とするためである。 */
 for (const f of features) {
   const p = f.properties;
   const list = p.refs_list;
@@ -96,10 +92,10 @@ for (const f of features) {
     kind: p.kind,
     src: p.src,
     former: p.former,
-    // A region built before `revoked` existed has no such key (it arrived
-    // with #51, and most of build/regions predates it). 0 is what the field
-    // means when nobody has checked — 未確認, not 現役 — so it is the honest
-    // stand-in as well as the only one MVT can carry.
+    // `revoked` が出来る前に生成した地域はこの欄を持たない(#51 で入った欄で、
+    // build/regions の大半はそれより古い)。0 は誰も確認していないという意味
+    // ——未確認であって現役ではない——なので、正直な代用であり、しかも MVT が
+    // 運べる唯一の値でもある。
     revoked: p.revoked || 0,
     name: p.name || '',
     updated: p.updated,
@@ -109,11 +105,11 @@ for (const f of features) {
   f.refs_list = list;
 }
 
-/* MVT has no null. vt-pbf writes a missing property as a value with no field
- * set, and MapLibre answers "unknown feature value" and throws the whole tile
- * away — so one absent property on one arc costs every road in that tile. It
- * fails in the browser, long after the build said it was done, which is why it
- * is worth a pass over 130,000 features to say it here instead. */
+/* MVT に null は無い。欠けた属性を vt-pbf は「どの field も立っていない値」と
+ * して書き、MapLibre は "unknown feature value" と答えてタイルを丸ごと捨てる
+ * ——アーク 1 本の欄が 1 つ欠けるだけで、そのタイルの道が全部消える。しかも
+ * それが起きるのはブラウザの中、ビルドが完了を告げたずっと後である。13 万件を
+ * 一巡してでも、ここで言う値打ちがあるのはそのためである。 */
 for (const f of features) {
   for (const [k, v] of Object.entries(f.properties)) {
     if (v === null || v === undefined) {
@@ -149,22 +145,21 @@ const dataBbox = features.reduce(
   [Infinity, Infinity, -Infinity, -Infinity],
 );
 
-/* -------------------------------------------------------------- aggregate --- */
+/* ---------------------------------------------------------------- 集計 --- */
 const km2 = (v) => Math.round(v * 100) / 100;
 
-/** One row per distinct set of designations. Everything the panel shows is a
- *  sum over a subset of these rows.
+/** 指定の集合ごとに 1 行。画面が出す物はどれも、この行の部分和である。
  *
- *  A row also carries what its length is made of, because the total on its own
- *  cannot answer "how much of 国道152号 can you actually drive". `kinds` splits
- *  the length by the same `kind` the tiles carry, and `former_km` says how much
- *  of it is 旧道. The two are separate keys because they are separate axes: a
- *  旧道 is a road of some kind that is no longer the current alignment, so
- *  folding it into `kinds` would lose the expressway and foot 旧道 (#26).
+ *  行はその延長が何でできているかも持つ。合計だけでは「国道152号のうち実際に
+ *  走れるのはどれだけか」に答えられないためである。`kinds` は延長をタイルが
+ *  持つのと同じ `kind` で分け、`former_km` はそのうち旧道がどれだけかを述べる。
+ *  二つを別の欄にしてあるのは、別の軸だからである。旧道は「どれかの区分の道で
+ *  あって、現道ではなくなった物」なので、`kinds` に畳むと自動車専用道路の旧道も
+ *  徒歩道の旧道も見えなくなる(#26)。
  *
- *  Zero is written as absence in both. There are ~1,200 rows and seven kinds,
- *  and a row names one or two of them; spelling out the five that are zero
- *  would triple the table to say nothing. */
+ *  どちらも 0 は書かずに欠落で表す。行は約 1,200、区分は七つあり、1 行が名指し
+ *  するのは 1 つか 2 つである。0 の五つを書き並べれば、何も述べないまま表が
+ *  三倍になる。 */
 function combinationsOf(feats) {
   const by = new Map();
   for (const f of feats) {
@@ -197,9 +192,9 @@ function combinationsOf(feats) {
   }
   return [...by.values()]
     .map((e) => {
-      // Rounded first, then dropped: a kind that rounds away is under 5 m and
-      // has nothing to say. The names are whatever the build classified the
-      // arcs as; nothing here invents a vocabulary of its own.
+      // 先に丸めてから落とす。丸めて消える区分は 5 m 未満で、述べることが無い。
+      // 名前はビルドがアークを分類したときの物で、ここが独自の語彙を作ることは
+      // しない。
       const kinds = [...e.kinds.entries()]
         .map(([k, v]) => [k, km2(v)])
         .filter(([, v]) => v > 0)
@@ -237,7 +232,7 @@ function combinationsOf(feats) {
  * 最初にその節点を踏んだアークの refs_list は、複製せずそのまま置く。二本目が
  * 来て初めて Set に起こす。全国の節点は 160 万あり、その大半は一本しか踏まない
  * ので、この一手で置き場のほとんどが参照だけで済む。同時に、一本しか踏まない
- * 節点(＝交差点ではない)が組を作らないことが、この形そのものから従う。
+ * 節点(交差点ではない)が組を作らないことが、この形そのものから従う。
  *
  * 重用したことのある組は落とす。重用は重用として述べる場所があり、同じことを
  * 二箇所で言わないためである。落とす相手は「同じアークに載ったことがある組」
@@ -284,8 +279,8 @@ function crossingsOf(feats) {
     .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
 }
 
-/** Termini merged across regions: a point inside an overlap is reported twice,
- *  and points keyed by position union the route numbers that meet there. */
+/** 地域をまたいで結合した起終点。重なりの内側にある点は二度報告されるので、
+ *  位置を鍵にして、そこで出会う路線番号を合わせる。 */
 function mergeTermini(ms) {
   const at = (t) => `${t.lat.toFixed(5)},${t.lon.toFixed(5)}`;
   const single = new Map();
@@ -309,10 +304,10 @@ function mergeTermini(ms) {
   };
 }
 
-/* The decree's own 起点 / 終点 / 重要な経過地, put here by pipeline/decree.py.
- * It is a column beside the endpoints, not a replacement: the endpoints say
- * where a route's arcs stop, this says where the route legally begins. Routes
- * whose coordinate could not be found keep their place name and say why. */
+/* 政令自身の起点・終点・重要な経過地。pipeline/decree.py がここへ置く。
+ * これは端点の置き換えではなく、隣に並ぶ別の欄である。端点は路線のアークが
+ * どこで終わるかを述べ、こちらは路線が法令上どこから始まるかを述べる。座標が
+ * 当たらなかった路線は地名だけを持ち、その理由を述べる。 */
 const decree = JSON.parse(readFileSync(join(DECREE, 'decree.json'), 'utf8'));
 if (decree.routes.length !== 459)
   throw new Error(
@@ -326,8 +321,8 @@ const combos = combinationsOf(features);
 const crossings = crossingsOf(features);
 const termini = mergeTermini(metas);
 const meta = {
-  // Freshness is reported at its worst: the map is only as current as its
-  // stalest region, and saying otherwise would overstate it.
+  // 新しさは最も悪い側で報告する。地図の新しさは最も古い地域の新しさでしかなく、
+  // それ以外の言い方はすべて過大である。
   osm_timestamp: min(metas.map((m) => m.osm_timestamp)),
   oldest_edit: min(metas.map((m) => m.oldest_edit)),
   newest_edit: max(metas.map((m) => m.newest_edit)),
@@ -342,7 +337,7 @@ const meta = {
     maxzoom: MAXZOOM,
   },
   combinations: combos,
-  // 路線どうしの関わりのうち、組み合わせ表にも起終点にも出ないもの。詳細の箱
+  // 路線どうしの関わりのうち、組み合わせ表にも起終点にも出ないもの。詳細パネル
   // が、いま見ている路線と交わる路線を並べるのに読む。
   crossings,
   ...termini,
@@ -367,14 +362,14 @@ console.log(
   `decree: ${decree.routes.length} routes, both termini located for ${located}`,
 );
 
-/* ------------------------------------------------------------------ tiles --- */
+/* ----------------------------------------------------------------- tiles --- */
 const lonX = (lon, z) => ((lon + 180) / 360) * 2 ** z;
 const latY = (lat, z) => {
   const s = Math.sin((lat * Math.PI) / 180);
   return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 2 ** z;
 };
 
-/** Tile ranges the data covers at one zoom. */
+/** あるズームで、データが覆うタイルの範囲。 */
 function tileRange(bbox, z) {
   const n = 2 ** z;
   const clamp = (v) => Math.max(0, Math.min(n - 1, Math.floor(v)));
@@ -451,8 +446,8 @@ function emit(z, x, y, tile) {
   bytes += buf.length;
 }
 
-/* Zooms 0..SPLIT-1 come from one index over everything. Few tiles, and each is
- * simplified hard enough that holding them all is nothing. */
+/* ズーム 0 から SPLIT-1 までは、全体を 1 つの索引から作る。タイルの数が少なく、
+ * どれも十分に簡略化されているので、全部抱えても何ということはない。 */
 console.log(`tiling z0-${SPLIT - 1} (whole country)`);
 const low = geojsonvt(fc(features), {
   maxZoom: SPLIT - 1,
@@ -469,9 +464,9 @@ for (let z = 0; z < SPLIT; z++) {
 }
 console.log(`  ${total} tiles`);
 
-/* Below that, one pyramid per SPLIT-level tile. Features are selected by
- * bounding box, never cut: geojson-vt does its own clipping, and pre-cutting
- * would leave seams it could not heal. */
+/* それより下は、SPLIT のタイルごとに 1 つのピラミッドを作る。特徴量は bbox で
+ * 選ぶだけで、切らない。切り取りは geojson-vt 自身が行うので、先に切ると、
+ * あちらでは繕えない継ぎ目が残る。 */
 const r8 = tileRange(dataBbox, SPLIT);
 const cells = [];
 for (let x = r8.x0; x <= r8.x1; x++) {
@@ -485,7 +480,7 @@ const cellBox = (x, y) => {
   return [b[0] - margin, b[1] - margin, b[2] + margin, b[3] + margin];
 };
 
-/* どのセルがどの弧を要るかを、先に一度だけ振り分ける。
+/* どのセルにどの弧が必要かを、先に一度だけ振り分ける。
  *
  * セルごとに features を端から見ていた。日本は z8 で 16×20 の 320 セルに
  * 収まり、うち弧があるのは 70 だけである。つまり 130,000 件の走査を 320 回、
@@ -547,9 +542,9 @@ for (const [cx, cy] of cells) {
 }
 process.stdout.write('\n');
 
-/* The packer takes one blob and one index rather than a hundred thousand small
- * files, which Windows would spend longer creating than we spent tiling. The
- * blob is already on disk (see emit); only the index is left.
+/* PMTiles にまとめる側は、10 万個の小さなファイルではなく 1 つの blob と 1 つの
+ * 索引を受け取る。Windows では、そのファイルを作る時間のほうがタイルを切る時間
+ * より長くなる。blob は既にディスクにある(emit を参照)。残るのは索引だけである。
  *
  * 古い索引を先に落としてから、blob を本物の名前へ移し、最後に索引を書く。
  * この順なら、どこで落ちても残るのは「前回の対」か「索引の無い blob」の

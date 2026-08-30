@@ -1,29 +1,27 @@
-/* Draw the site's own images: the tab icon, the home-screen icon manifest.
- * webmanifest points at, and the card link previews show.
+/* このサイト自身の絵を描く。タブのアイコン、manifest.webmanifest が指すホーム
+ * 画面のアイコン、そしてリンクの共有カードである。
  *
- * All three are the 国道番号標識, because that is what the map is about — and
- * all are drawn from `SHIELD_PATH` in web/shield.mjs, the same outline the
- * panel and the popups use. Tracing the triangle a second time here would be
- * a second answer to what the sign looks like.
+ * 三つとも国道番号標識である。この地図が扱っているのがそれだからで、どれも
+ * web/shield.mjs の `SHIELD_PATH`——操作面とポップアップが使うのと同じ輪郭——
+ * から描く。ここで三角形をもう一度写せば、標識の形に二つ目の答えを持つことに
+ * なる。
  *
- * The favicon is SVG: one file, no sizes to keep in step, and the sign is a
- * flat shape that loses nothing by being drawn rather than sampled. It carries
- * no number — at 16 px a number is a smudge, and the map is about all of them.
+ * favicon は SVG である。1 ファイルで済み、揃えるべき寸法も無く、標識は平らな
+ * 形なので、標本化せず描いて失う物が無い。番号は載せない——16 px では番号は
+ * 滲みでしかなく、この地図が扱うのは番号の全部である。
  *
- * The home-screen icon and the card are PNG, both rendered in the Chromium
- * already here rather than by a drawing library. The icon is a cropped-square
- * telling of the same scene the card tells wide: three signs standing on a
- * road that deepens in colour as more routes join it. It reuses the real
- * `shield()` function — not a hand-drawn number — so a numbered sign never
- * has two answers for what it looks like.
+ * ホーム画面のアイコンと共有カードは PNG で、どちらも作図ライブラリではなく、
+ * 既にここにある Chromium で描く。アイコンは、カードが横長で述べる場面を正方形に
+ * 切り出した物である。三枚の標識が道の上に立ち、路線が合流するほど道の色が
+ * 深くなる。本物の `shield()` をそのまま使う——手で描いた番号ではない——ので、
+ * 番号入りの標識の見た目に二つの答えが生まれることはない。
  *
- * All of them are committed: a few tens of kB that change only when the sign
- * or the wording does. That is why the street grid below is drawn from a
- * seeded generator rather than a live random: two runs must produce the same
- * bytes, or every run would show up as a diff.
+ * どれも追跡する。数十 kB しかなく、標識か文言が変わったときにしか動かない。
+ * 下の街路を、その場の乱数ではなく種を渡した生成器で引いているのはそのため
+ * である。二度走らせて同じバイト列にならなければ、走らせるたびに差分になる。
  *
- * Usage:  node scripts/make_brand.mjs
- *         node scripts/make_brand.mjs --card 1280x640 --out build/social.png
+ * 使い方:  node scripts/make_brand.mjs
+ *          node scripts/make_brand.mjs --card 1280x640 --out build/social.png
  */
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -107,7 +105,7 @@ const line = (x1, y1, x2, y2, color, w) =>
 
 /* Roboto は番号だけに使う。style.css と同じ vendor の woff2 を埋め込むので、
  * この機械に何が入っているかに関わらず、番号は画面の標識と同じ字形になる。
- * アイコンとカードの両方が要るので、どちらより先に読む。 */
+ * アイコンとカードの両方に必要なので、どちらより先に読む。 */
 const ROBOTO = join(WEB, 'vendor', 'roboto-latin-700-normal.woff2');
 const roboto = readFileSync(ROBOTO).toString('base64');
 const fontFace =
@@ -118,14 +116,14 @@ const fontFace =
  * ブラウザを起こす。起動・終了を繰り返す理由が無い。 */
 const browser = await chromium.launch();
 
-/* ---------------------------------------------------------------- favicon --- */
+/* --------------------------------------------------------------- favicon --- */
 /* --card はカードだけを求めている。favicon・アイコンは寸法を持たないので、
  * 書き直して何かが変わる場面が無い。 */
 if (!opt.card) {
-  /* The sign sits on its own; there is no page behind it to blend into, so
-   * `paint-order="stroke"` paints the fill over the stroke's inward half.
-   * Without it the default paint order (stroke over fill) eats the border's
-   * full width into the face, and the face reads as visibly smaller. */
+  /* 標識は単独で置かれ、後ろに溶け込む相手のページが無い。だから
+   * `paint-order="stroke"` で、縁の内側半分の上に面を塗る。これが無いと既定の
+   * 塗り順(面の上に縁)になり、縁の幅ぶんが面を食って、面が目に見えて小さく
+   * 読める。 */
   const favicon = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ICON_VIEWBOX}">`,
     `<path d="${SHIELD_PATH}" fill="${FACE}" stroke="${EDGE}"`,
@@ -140,8 +138,8 @@ if (!opt.card) {
 /* ---------------------------------------------------------- home icon --- *
  *
  * ホーム画面に追加したときのアイコン(manifest.webmanifest が参照する)。
- * favicon(標識1枚だけ)ではなく、共有カードの一番深い区間——単独指定→
- * 二重用→三重用——を正方形に切り出した絵にする。標識1枚だけでは一般的な
+ * favicon (標識 1 枚だけ) ではなく、共有カードの一番深い区間——単独指定→
+ * 二重用→三重用——を正方形に切り出した絵にする。標識 1 枚だけでは一般的な
  * 道路標識アプリに見え、重用区間という着想が伝わらない。
  *
  * 視点は左から右へ動くので、若い番号(73)を左・手前・大きく、大きい番号
@@ -269,7 +267,7 @@ if (!opt.card) {
 
   /* iOS の「ホーム画面に追加」は manifest.webmanifest をほぼ見ず、この
    * ファイルだけを見る。角を自動で丸めるだけで任意形にはくり抜かないので、
-   * maskable の安全域は要らない——他の 2 枚と同じ絵をそのまま縮小する。 */
+   * maskable の安全域は不要である——他の 2 枚と同じ絵をそのまま縮小する。 */
   const apple = await renderIconPng(iconHtml(180), 180);
   writeFileSync(join(iconDir, 'apple-touch-icon.png'), apple);
   console.log(
@@ -279,17 +277,17 @@ if (!opt.card) {
 
 /* ------------------------------------------------------------------- card ---
  *
- * The card shows the one thing the map exists for: a stretch of road carrying
- * more than one route number. Two national routes run into the main line at
- * T-junctions, and the line goes 単独 → 二重用 → 三重用. The depth is said
- * three ways at once — the colour of the line, how many signs sit on it, and
- * how big those signs are. The deepest stretch is the largest, because that
- * is the part worth looking at.
+ * カードは、この地図が存在する理由そのものを出す。複数の路線番号を持つひと続き
+ * の道である。二本の国道が本線に丁字路で入り、線は単独指定 → 二重用 → 三重用
+ * と深くなる。深さは三つの言い方で同時に述べる——線の色、その上に載る標識の数、
+ * そして標識の大きさである。最も深い区間を最も大きく描く。見る値打ちがあるのは
+ * そこだからである。
  *
- * The numbers are 73, 110 and 215. All three are numbers no general national
- * route has (`VALID` in pipeline/build_routes.py: 1-58 and 101-507 less the
- * six abolished), so nobody can read the picture as a claim about a real
- * concurrency, and the drawing is free to be composed rather than surveyed.
+ * 番号は 73・110・215 である。三つとも一般国道に無い番号なので
+ * (pipeline/build_routes.py の `VALID`。1〜58 と 101〜507 から、廃止された 6 つの
+ * 番号を除いた集合である)、
+ * この絵を実在の重用についての主張として読むことはできない。だから絵は測量では
+ * なく、構図として自由に組める。
  */
 const CARD = { w: 1200, h: 630 };
 

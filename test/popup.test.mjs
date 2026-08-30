@@ -1,8 +1,8 @@
-/* What a clicked arc says about itself.
+/* 押したアークが自分について述べること。
  *
- * Two things here have been wrong before in ways that looked fine on screen:
- * which arc a click is about when several lie under one pixel, and whether
- * OSM's own text reaches the page as text.
+ * ここでは二つが、画面上は問題なく見える形で間違っていたことがあります。
+ * 1 画素の下に複数が重なるとき、その押下がどのアークを指すのか。そして OSM の
+ * 文字が、文字のままページへ届くかどうかです。
  */
 import { describe, expect, test } from 'bun:test';
 
@@ -32,7 +32,7 @@ describe('deepest', () => {
 
   test('最も深い重用のアークを選ぶ', () => {
     // 交差点や立体交差では複数のアークが 1 画素の下に重なります。返る順はタイル
-    // 次第で、福岡の四重用では 国道202号 が単独で報告されました。
+    // 次第で、福岡の四重用では国道 202 号が単独で報告されました。
     expect(deepest([hit(1), hit(4), hit(2)]).n).toBe(4);
   });
 
@@ -102,7 +102,7 @@ describe('popupHTML', () => {
   });
 
   test('長さは区間長であって延長ではない', () => {
-    // クリックした 1 本の way の長さです。延長と書くと 国道4号 が 0.13 km に
+    // クリックした 1 本の way の長さです。延長と書くと国道 4 号が 0.13 km に
     // 見えます。
     const html = popupHTML(arc({ km: 0.1276 }));
     expect(html).toContain('<dt>区間長</dt><dd>0.13 km</dd>');

@@ -1,4 +1,4 @@
-/* The sidebar's markup, as a function of the data behind it. */
+/* サイドパネルの markup を、後ろにあるデータの関数として見る。 */
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -58,7 +58,7 @@ describe('statsHTML', () => {
   const totals = { arcs: 151101, km: 70290, conc: 22188 };
 
   test('選択が空なら全路線を分子にする', () => {
-    // 何も選んでいない状態は「全部出ている」ことであって、0 本ではない。
+    // 何も選んでいない状態は「全部出ている」ことであって、0 本ではありません。
     expect(statsHTML(0, 459, totals)).toContain(
       '<dt>選択路線</dt><dd>459 / 459</dd>',
     );
@@ -89,7 +89,7 @@ describe('clearLabel', () => {
   });
 
   test('選択があれば数を自分で言う', () => {
-    // これがあるので、選択数を述べる行が別に要りません。
+    // これがあるので、選択数を述べる行は別に不要です。
     expect(clearLabel(1)).toBe('1 路線を選択解除');
     expect(clearLabel(12)).toBe('12 路線を選択解除');
   });

@@ -1,28 +1,27 @@
-/* Build the SDF glyphs the map's labels need, so no one else has to serve them.
+/* 地図のラベルに必要な SDF グリフを作る。他人に配ってもらわずに済ませるためで
+ * ある。
  *
- * The style pointed `glyphs` at 国土地理院's demo endpoint. That is someone
- * else's GitHub Pages site, offered as a demonstration and under no obligation
- * to keep answering — and every label on this map would vanish the day it
- * stopped. A map that is otherwise static files has no business depending on
- * it.
+ * スタイルの `glyphs` は、かつて国土地理院のデモ用の配布元を指していた。他人の
+ * GitHub Pages のサイトが実演として出している物で、答え続ける義務は無い——
+ * 止まった日に、この地図のラベルは全部消える。他が静的ファイルだけでできて
+ * いる地図が、そんな物に依存する理由は無い。
  *
- * Self-hosting a Japanese font normally means tens of megabytes of glyph
- * ranges. It does not here, because of what the labels actually say: a route
- * label is `refs.join('・')` and a terminus label is the same, so the entire
- * alphabet this map can ever draw is ten digits and one separator. Eleven
- * glyphs, in two of the 256-codepoint ranges MapLibre asks for.
+ * 日本語の書体を自前で配るとなれば、ふつうは何十 MB ものグリフ範囲になる。
+ * ここではそうならない。ラベルが実際に述べる内容のためである。路線のラベルは
+ * `refs.join('・')` で、起終点のラベルも同じなので、この地図が描きうる字は
+ * 数字十個と区切り一つで全部である。11 字が、MapLibre の求める 256 符号位置
+ * ずつの範囲のうち 2 つに入る。
  *
- * The glyphs are rasterised with TinySDF — the same code MapLibre itself uses
- * for locally rendered CJK — inside the Chromium that is already here for the
- * render check. fontnik would be the conventional tool, but it ships no
- * prebuilt binary for win32-x64, and this project already declined tippecanoe
- * for that reason.
+ * グリフは TinySDF で描き出す——MapLibre 自身が CJK を端末側で描くのに使うのと
+ * 同じコードである——実描画の確認のために既にここにある Chromium の中で走らせる。
+ * 定番の道具は fontnik だが、win32-x64 向けの実行ファイルを配っておらず、この
+ * プロジェクトは同じ理由で tippecanoe も見送っている。
  *
- * The result is committed. It is ~10 kB that changes only if the labels learn
- * a new character, and keeping it out of the repository would mean a browser
- * download on every deploy to rebuild something that never moves.
+ * 結果は追跡する。約 10 kB しかなく、ラベルが新しい字を覚えたときにしか変わら
+ * ない。リポジトリの外に置けば、動きもしない物を作り直すために、配信のたび
+ * ブラウザを落としてくることになる。
  *
- * Usage:  node scripts/make_glyphs.mjs
+ * 使い方:  node scripts/make_glyphs.mjs
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -34,36 +33,36 @@ import { chromium } from 'playwright';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const OUT = join(ROOT, 'web', 'glyphs');
 
-/* Must match FONT in web/mapspec.mjs: MapLibre asks for `{fontstack}/{range}`
- * and the fontstack is the name written there. */
+/* web/mapspec.mjs の FONT と一致していなければならない。MapLibre は
+ * `{fontstack}/{range}` を要求し、その fontstack はあちらに書いてある名前で
+ * ある。 */
 const STACK = 'NotoSansJP-Regular';
 const FAMILY = 'Noto Sans JP';
 
-/* Every character a label can contain. Route numbers are digits; `・` joins
- * the designations on a concurrent section. Checked against the built data
- * below rather than trusted. */
+/* ラベルに入りうる字の全部。路線番号は数字で、`・` は重用区間の指定どうしを
+ * 繋ぐ。信用せず、下で生成済みのデータに対して確かめる。 */
 const CHARS = [...'0123456789・'];
 
-/* The server convention: 24 px em, 3 px of padding around the glyph box, and a
- * distance field that runs 8 px either side of the edge. */
+/* グリフサーバの約束事。em は 24 px、字の枠の周りに 3 px の余白、距離場は縁の
+ * 両側 8 px ぶんである。 */
 const SDF = { fontSize: 24, buffer: 3, radius: 8, cutoff: 0.25 };
 
-/* MapLibre states a glyph's `top` against an origin above the em box, while
- * TinySDF states it against the alphabetic baseline. These are the constants
- * MapLibre itself applies when it has to place its own glyphs among
- * server-provided ones (see _drawGlyph in glyph_manager). */
+/* MapLibre はグリフの `top` を em の枠より上にある原点から述べるが、TinySDF は
+ * アルファベットのベースラインから述べる。この定数は、MapLibre 自身が端末で
+ * 描いたグリフをサーバ由来のグリフに混ぜて置くときに当てている値である
+ * (glyph_manager の _drawGlyph を参照)。 */
 const TOP_ADJUSTMENT = 27.5;
 const LEFT_ADJUSTMENT = 0.5;
 
 const RANGE_SIZE = 256;
 
-/* ------------------------------------------------------- what the data says --- */
+/* ------------------------------------------------------ データが述べる字 --- */
 /**
- * Refuse to build a set of glyphs the map would outgrow.
+ * 地図が使い切ってしまうようなグリフの組は作らずに断る。
  *
- * The alphabet above is a claim about the data, so it is checked against the
- * data. Every label the viewer can draw is a join of route numbers, and the
- * designations are in the aggregate table the build already wrote.
+ * 上の字の集合はデータについての主張なので、データに対して確かめる。閲覧側が
+ * 描きうるラベルはどれも路線番号を繋いだ物であり、その指定はビルドが既に書いた
+ * 集計表の中にある。
  */
 function checkAlphabet() {
   const meta = join(ROOT, 'web', 'data', 'national.meta.json');
@@ -89,7 +88,7 @@ function checkAlphabet() {
   console.log(`  ${labels.length} 件のラベルを照合、使う字は ${seen.size} 種`);
 }
 
-/* ------------------------------------------------------------ rasterising --- */
+/* ---------------------------------------------------------------- 描き出す --- */
 async function rasterise() {
   const tinySdfSrc = readFileSync(
     join(ROOT, 'node_modules', '@mapbox', 'tiny-sdf', 'index.js'),
@@ -98,8 +97,8 @@ async function rasterise() {
 
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  // `text=` makes Google Fonts return one face carrying exactly these glyphs,
-  // so nothing is downloaded that is not about to be drawn.
+  // `text=` を付けると、Google Fonts はこの字だけを載せた書体を 1 つ返す。
+  // これから描かない物は何も落ちてこない。
   const css = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(FAMILY).replace(/%20/g, '+')}:wght@400&text=${encodeURIComponent(CHARS.join(''))}`;
   await page.setContent(`<link rel="stylesheet" href="${css}">`);
   await page.addScriptTag({
@@ -111,8 +110,8 @@ async function rasterise() {
       const spec = `${sdf.fontSize}px "${family}"`;
       await document.fonts.load(spec, chars.join(''));
       await document.fonts.ready;
-      // If the face did not arrive, canvas silently falls back to a system
-      // font and the glyphs would be someone else's shapes.
+      // 書体が届かなかった場合、canvas は何も言わずに端末の書体へ落ちる。
+      // グリフは別人の字形になってしまう。
       if (!document.fonts.check(spec))
         throw new Error(`${family} が読めていない`);
 
@@ -140,7 +139,7 @@ async function rasterise() {
   return glyphs;
 }
 
-/* -------------------------------------------------------------- encoding --- */
+/* -------------------------------------------------------------- 符号化する --- */
 function writeGlyph(g, pbf) {
   pbf.writeVarintField(1, g.id);
   pbf.writeBytesField(2, g.bitmap);
@@ -170,8 +169,8 @@ checkAlphabet();
 console.log('Chromium で SDF を焼く');
 const drawn = await rasterise();
 
-// MapLibre fetches glyphs 256 codepoints at a time and names the file after
-// the block, so the glyphs are grouped the same way.
+// MapLibre はグリフを 256 符号位置ずつ取り、その範囲でファイルに名前を付ける
+// ので、こちらも同じ単位でまとめる。
 const byRange = new Map();
 for (const g of drawn) {
   const start = Math.floor(g.id / RANGE_SIZE) * RANGE_SIZE;
@@ -200,8 +199,8 @@ for (const [range, glyphs] of byRange) {
   console.log(`  ${STACK}/${range}.pbf  ${glyphs.length} 字  ${buf.length} B`);
 }
 
-/* Noto Sans JP is SIL Open Font License 1.1, and these glyphs are derived from
- * it, so its terms travel with them. */
+/* Noto Sans JP は SIL Open Font License 1.1 で、このグリフはそこから作った物
+ * なので、条件も一緒に運ぶ。 */
 let ofl = '';
 try {
   const res = await fetch('https://openfontlicense.org/documents/OFL.txt');

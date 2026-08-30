@@ -1,11 +1,11 @@
-/* 絞り込みと表示状態をURLのクエリ文字列に載せる。
+/* 絞り込みと表示状態を URL のクエリ文字列に載せる。
  *
- * 地図の位置・角度はMapLibre自身がハッシュ(#zoom/lat/lng/...)に書いているので、
+ * 地図の位置・角度は MapLibre 自身がハッシュ(#zoom/lat/lng/...)に書いているので、
  * ここはそれと衝突しないようクエリ文字列(?...)側だけを扱う。
  *
- * 既定値と同じ項目はURLに出さない。典型的な共有——「この1路線だけ見せたい」
+ * 既定値と同じ項目は URL に出さない。典型的な共有——「この 1 路線だけ見せたい」
  * ——では選択路線が少なく、他の項目はほぼ既定値のままなので、これだけで
- * URLは短く保たれる。選択が多いときは encodeRoutes の範囲表記が効く。
+ * URL は短く保たれる。選択が多いときは encodeRoutes の範囲表記が効く。
  */
 
 export const DEFAULTS = {
@@ -27,10 +27,9 @@ const TOGGLE_KEYS = [
   'former',
 ];
 
-// Every query key this module reads or writes. `?region=` is a separate
-// concern (app.js's initial-view hint) and deliberately not here, so a sync
-// that rewrites the query string can tell "ours" from "someone else's" and
-// leave the latter alone.
+// このモジュールが読み書きするクエリの鍵。`?region=` は別の役目(app.js の
+// 初期表示の指定)なので、意図してここに入れない。クエリ文字列を書き直す同期が
+// 「こちらの鍵」と「他人の鍵」を見分け、後者に触らずに済む。
 export const MANAGED_KEYS = ['routes', 'conc', ...TOGGLE_KEYS];
 
 /**
@@ -63,7 +62,7 @@ export function encodeRoutes(refs) {
 
 /**
  * encodeRoutes の逆。壊れた項目(数字でない、範囲が逆順)は読み飛ばす —
- * 手で書き換えられたURLでも、有効な項目だけは復元したい。
+ * 手で書き換えられた URL でも、有効な項目だけは復元したい。
  */
 export function decodeRoutes(text) {
   if (!text) return [];
@@ -92,7 +91,7 @@ export function encodeState(state) {
 
 /**
  * クエリ文字列から、既定値との差分だけを返す。書かれていない項目は結果に
- * 出ない — 呼び出し側が state に直接上書きできる形で、触れなかった項目を
+ * 出ない——呼び出し側が state に直接上書きできる形で、触れなかった項目を
  * 誤って既定値へ戻すことがない。
  */
 export function decodeURLState(search) {

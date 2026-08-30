@@ -2,19 +2,18 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Run the whole build for one region, stopping at the first failure.
+"""1 地域ぶんの生成を通しで走らせ、最初の失敗で止まる。
 
-The stage order is fixed, so it lives here rather than in the skill document.
+段の順番は決まっているので、スキルの文書ではなくここが持つ。
 
-This is the one-region path, and it fetches that region from Overpass. For the
-whole country use extract_pbf.py once and then build_all.py: 47 prefectures is
-about 140 Overpass queries and a gigabyte of response off public mirrors, which
-is not what those mirrors are for.
+これは 1 地域の経路で、その地域を Overpass から取得する。全国なら
+extract_pbf.py を一度走らせてから build_all.py を使う。47 都道府県は約 140 件の
+Overpass クエリと 1 GB の応答になり、公開ミラーの用途から外れる。
 
-Packing runs last because web/data is nationwide. Rebuilding one region and
-leaving it out would put the map a region behind its own data.
+パックを最後に置くのは、web/data が全国ぶんだからである。1 地域を作り直して
+パックを省くと、地図が自分のデータより 1 地域ぶん遅れる。
 
-Usage:  uv run pipeline.py [region] [--skip-fetch] [--skip-n13] [--no-pack]
+使い方:  uv run pipeline.py [地域] [--skip-fetch] [--skip-n13] [--no-pack]
 """
 from __future__ import annotations
 
@@ -51,7 +50,7 @@ def main() -> None:
          ["uv", "run", str(HERE / "build_routes.py"), region]),
     )
     if not skip_n13:
-        # N13(国土数値情報)への都度ネットワーク取得が要る — オフライン反復時は
+        # N13(国土数値情報)への都度ネットワーク取得が必要 — オフライン反復時は
         # --skip-n13 で飛ばす。ミラーは無く、単一の政府サイトのみを見る。
         stages.append(
             ("指定解除確認 — N13 と照合し revoked を書き込む",

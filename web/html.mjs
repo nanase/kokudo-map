@@ -1,15 +1,13 @@
-/* Putting untrusted text into HTML safely.
+/* 信用できない文字列を、安全に HTML へ入れる。
  *
- * The panel and the popups are assembled as strings, and some of what goes
- * into them was written by whoever last edited the road in OpenStreetMap:
- * `name` above all, but also `kind` and `src` where the lookup falls through
- * to the raw tag value. Anyone can edit OSM, so a name is untrusted input that
- * arrives by way of the build, and pasting it into `innerHTML` unescaped is
- * script injection with a mapper as the author.
+ * 操作面もポップアップも文字列として組み立てており、そこへ入る値の一部は、
+ * その道を最後に編集した OSM の誰かが書いたものである。筆頭は `name`、対応表
+ * から外れて生のタグ値に落ちる `kind` と `src` も同じである。OSM は誰でも
+ * 編集できるので、名前はビルドを経て届く信用できない入力であり、エスケープ
+ * せずに `innerHTML` へ貼るのは、投稿者を著者とするスクリプト混入である。
  *
- * Numbers computed here — arc counts, lengths, designations that have been
- * through `Number()` — cannot carry markup and are left alone. Everything that
- * reached the viewer as a string goes through this.
+ * ここで計算した数——アーク数、延長、`Number()` を通した指定——は markup を
+ * 持ちえないので、そのまま置く。文字列のまま閲覧者へ届くものだけがここを通る。
  */
 
 const REPLACEMENTS = {
@@ -20,6 +18,6 @@ const REPLACEMENTS = {
   "'": '&#39;',
 };
 
-/** Escape a value for interpolation into HTML. Nullish becomes empty. */
+/** HTML へ差し込む値をエスケープする。null と undefined は空文字になる。 */
 export const esc = (v) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => REPLACEMENTS[c]);

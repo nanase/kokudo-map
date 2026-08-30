@@ -1,4 +1,4 @@
-/* 起点・終点 as a GeoJSON source. */
+/* 起点・終点を GeoJSON にする。 */
 import { describe, expect, test } from 'bun:test';
 
 import { hasRef } from '../web/mapspec.mjs';

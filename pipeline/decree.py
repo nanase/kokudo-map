@@ -2,56 +2,53 @@
 # requires-python = ">=3.12"
 # dependencies = ["requests", "pyshp"]
 # ///
-"""Read the 起点 and 終点 the decree itself states, and put a coordinate on them.
+"""政令自身が述べる起点・終点を読み、それに座標を当てる。
 
-What the map calls 端点 today is a graph fact: a node where a route's own arcs
-stop. Nationwide there are 5,706 of them, about 12 per route, and most are
-places where OSM runs out or a prefecture box cuts the road — not where the
-route legally begins or ends. Nothing in that set says which end is the 起点.
+地図が今 端点 と呼んでいる物は、グラフ上の事実である。その路線のアークが終わって
+いるノードのことで、全国に 5,706 個、1 路線あたり約 12 個ある。その大半は OSM が
+尽きた場所か、県の bbox が道を切った場所であって、路線が法令上どこで始まりどこで
+終わるかではない。どちらの端が起点かも、その集合は述べていない。
 
-The ledger does say. 一般国道の路線を指定する政令 (昭和40年政令第58号) carries a
-別表 of 459 rows: 路線名, 起点, 終点, 重要な経過地. e-Gov 法令検索 serves it as
-XML. This script reads that table and writes it as data, as a column of its own
-next to the endpoints rather than a replacement for them.
+台帳のほうは述べている。一般国道の路線を指定する政令(昭和 40 年政令第 58 号)は、
+459 行の別表を持つ。列は 路線名・起点・終点・重要な経過地 である。e-Gov 法令検索
+はそれを XML で配る。このスクリプトはその表を読み、データとして書く。端点の
+置き換えではなく、その隣に並ぶ独立した欄としてである。
 
-The table names places, not coordinates — 「東京都中央区」, 「大阪市」. A point
-has to be found, and the rule here is the narrow one:
+表が名指しするのは地名であって座標ではない——「東京都中央区」「大阪市」といった
+具合である。だから点を見つけねばならず、ここでの規則は狭い。
 
-    the coordinate of a decree terminus is one of that route's own endpoints,
-    the one that lies inside the municipality the decree names.
+    政令の起終点の座標は、その路線自身の端点のうち、政令が名指しする市区町村の
+    中に在る物である。
 
-So a coordinate is never invented. It is always a node the route really stops
-at, and it is always inside the named municipality. When no endpoint is in
-there, the row keeps its place name and says it has no coordinate. Half-right
-coordinates wearing the name 台帳上の起点 would be worse than none.
+だから座標が作られることは無い。必ず路線が実際に終わっているノードであり、必ず
+その市区町村の中にある。中に端点が無ければ、その行は地名だけを持ち、座標が無いと
+述べる。半分だけ正しい座標が「台帳上の起点」の名を着ているより、無いほうがよい。
 
-Two sources are needed to run that rule:
+この規則を回すには二つの出どころが必要である。
 
-  行政区域 (国土数値情報 N03)   the municipality's polygon. Two vintages are
-      read, current first. The decree's place names are the ones in force when
-      the row was last amended — the newest amendment is 平成16年 — and 平成の
-      大合併 has since erased about a fifth of them from the map. 清水市 and
-      中村市 are not missing data; they are municipalities that stopped
-      existing. The 2000-10-01 vintage, the last one before that wave, still
-      draws them, and a town's ground does not move when its name changes.
+  行政区域(国土数値情報 N03)   市区町村の多角形。二つの年版を、現行から順に
+      読む。政令の地名は、その行が最後に改正された時点で効力を持っていた物で
+      あり——最も新しい改正は平成 16 年である——平成の大合併はその後、およそ
+      五分の一を地図から消した。清水市と中村市はデータの欠落ではない。存在
+      しなくなった市区町村である。その波の直前、2000-10-01 の年版は今もそれを
+      描いており、名前が変わっても土地が動くわけではない。
 
-  端点                          build/regions/*.meta.json. A route's endpoints
-      are unioned across the regions that report them: prefecture boxes
-      overlap, so the same node is reported by both neighbours.
+  端点                          build/regions/*.meta.json。路線の端点は、それを
+      報告する地域すべてで和を取る。県の bbox は重なるので、同じノードが隣り
+      合う二県から報告される。
 
-Ties are broken twice. Endpoints where another national route also ends win
-first — a legal terminus is usually a junction of national routes, and 日本橋
-is the endpoint of six of them. What is left is settled by taking the endpoint
-farthest from the centre of the route's own endpoints, because 起点 and 終点 are
-the far ends of a route and not somewhere along it.
+同点は二段で解く。まず、別の国道もそこで終わっている端点が勝つ——法令上の起終点
+はたいてい国道どうしの交点であり、日本橋は六つの路線の端点である。残ったものは、
+その路線自身の端点の中心から最も遠い端点を選んで決める。起点と終点は路線の両端で
+あって、途中のどこかではないためである。
 
-A route that begins and ends in the same municipality is a ring — 国道16号 and
-国道302号 are the clear cases — and for those the far-end rule has nothing to
-say. Those rows keep their names and no coordinate.
+同じ市区町村で始まり終わる路線は環状である——国道16号と国道302号が分かりやすい
+例である——ので、遠い側を選ぶ規則は何も言えない。その行は地名だけを持ち、座標を
+持たない。
 
-Usage:  uv run pipeline/decree.py [--refresh]
+使い方:  uv run pipeline/decree.py [--refresh]
 
-`--refresh` re-fetches the decree even if the cache is fresh.
+`--refresh` は、キャッシュが新しくても政令を取り直す。
 """
 from __future__ import annotations
 
@@ -74,19 +71,18 @@ from build_routes import TERMINI_CLUSTER_M, VALID
 from geo import haversine
 
 # 一般国道の路線を指定する政令(昭和40年政令第58号). e-Gov 法令検索 API v1 hands
-# back the whole law as XML, 別表 included, at a stable id.
+# 安定した id で、別表を含む法令全体を XML として返す。
 LAW_ID = "340CO0000000058"
 LAW_URL = f"https://laws.e-gov.go.jp/api/1/lawdata/{LAW_ID}"
 
-# The decree is amended a few times a year, so asking e-Gov on every build would
-# be a request per build for an answer that changes quarterly. The cache is
-# re-fetched once it is this old, which lands near the amendment rate without
-# anyone having to remember to pass --refresh.
+# 政令の改正は年に数回なので、生成のたびに e-Gov へ訊くのは、四半期に一度しか
+# 変わらない答えを毎回求めることになる。キャッシュはこの古さになったら取り直す。
+# 誰も --refresh を覚えていなくても、改正の頻度に近いところへ落ち着く。
 DECREE_MAX_AGE_S = 90 * 24 * 3600
 
-# 国土数値情報 N03(行政区域), tried in this order. The shapefile carries the same
-# five columns in both vintages — 都道府県名, 支庁名, 郡・政令市名, 市区町村名,
-# 政令市の区名 — but the older one predates the switch to UTF-8 in the DBF.
+# 国土数値情報 N03(行政区域)。この順に試す。shapefile はどちらの年版でも同じ
+# 五つの列を持つ——都道府県名、支庁名、郡・政令市名、市区町村名、政令市の区名
+# ——が、古いほうの年版は DBF が UTF-8 へ移る前の物である。
 N03_BASE = "https://nlftp.mlit.go.jp/ksj/gml/data/N03"
 VINTAGES = (
     ("2026", f"{N03_BASE}/N03-2026/N03-20260101_{{code}}_GML.zip", "utf-8"),
@@ -96,18 +92,18 @@ PREF_CODES = tuple(f"{i:02d}" for i in range(1, 48))
 
 UA = {"User-Agent": "NationalRouteMap/0.2 (build pipeline)"}
 
-# N03 field positions. The names are N03_001..N03_007 per the KSJ encoding
-# convention, so only the ones this script reads get a name here.
+# N03 の欄の位置。名前は KSJ の符号化の約束に従って N03_001..N03_007 なので、
+# ここで名前を付けるのは、このスクリプトが読む物だけである。
 F_PREF, F_GUN, F_MUNI, F_WARD = 0, 2, 3, 4
 
-# A record with no municipality of its own. 所属未定地 is ground whose
-# municipality is undecided; it has a prefecture and nothing else.
+# 自分の市区町村を持たないレコード。所属未定地は市区町村が決まっていない土地で、
+# 都道府県だけを持ち、他に何も持たない。
 NO_MUNICIPALITY = {"", "所属未定地"}
 
 
 # ------------------------------------------------------------------ fetch ---
 def cached(url: str, path: Path, max_age_s: float | None = None) -> bytes:
-    """GET once, then read from disk. `max_age_s` re-fetches a stale file."""
+    """一度 GET し、以後はディスクから読む。`max_age_s` を過ぎた物は取り直す。"""
     fresh = path.exists() and (
         max_age_s is None or time.time() - path.stat().st_mtime < max_age_s
     )
@@ -118,11 +114,11 @@ def cached(url: str, path: Path, max_age_s: float | None = None) -> bytes:
         r = requests.get(url, headers=UA, timeout=120)
         r.raise_for_status()
     except requests.RequestException as e:
-        # A stale copy beats stopping a nationwide build because a ministry's
-        # server is down. Only the absence of any copy is fatal.
+        # 省庁のサーバが落ちているせいで全国の生成を止めるより、古い写しの
+        # ほうがましである。致命的なのは、写しが 1 つも無いときだけである。
         if not path.exists():
             raise
-        print(f"WARN  {url} を取れませんでした（{e}）。古いキャッシュを使います。")
+        print(f"WARN  {url} を取れませんでした({e})。古いキャッシュを使います。")
         return path.read_bytes()
     path.write_bytes(r.content)
     return r.content
@@ -135,7 +131,7 @@ KANJI_UNITS = {"十": 10, "百": 100}
 
 
 def route_number(name: str) -> int:
-    """`五百七号` -> 507. The 別表 writes route numbers as kanji numerals."""
+    """`五百七号` を 507 にする。別表は路線番号を漢数字で書く。"""
     total = 0
     digit = 0
     for ch in name.removesuffix("号"):
@@ -150,7 +146,7 @@ def route_number(name: str) -> int:
 
 
 def decree_table(refresh: bool) -> tuple[dict, list[dict]]:
-    """The 別表, one row per route, plus what the law calls itself."""
+    """別表を、路線ごとに 1 行で。あわせて法令自身の名前も返す。"""
     path = DECREE / f"{LAW_ID}.xml"
     raw = cached(LAW_URL, path, 0 if refresh else DECREE_MAX_AGE_S)
     root = ET.fromstring(raw)
@@ -184,19 +180,18 @@ def decree_table(refresh: bool) -> tuple[dict, list[dict]]:
 
 # -------------------------------------------------------------- gazetteer ---
 class Gazetteer:
-    """One N03 vintage: which municipality a place name means, and its outline.
+    """N03 の 1 つの年版。地名がどの市区町村を指すかと、その輪郭を持つ。
 
-    Only the DBF is read to build the index — 1,900 rows of text nationwide —
-    and a municipality's polygons are read from the SHP only once something
-    asks for them.
+    索引を組むのに読むのは DBF だけである——全国で 1,900 行の文字列である——
+    市区町村の多角形は、誰かが求めたときに初めて SHP から読む。
     """
 
     def __init__(self, vintage: str, url: str, encoding: str) -> None:
         self.vintage = vintage
         self.url = url
         self.encoding = encoding
-        # (code, pref, gun, muni, ward) -> the SHP record numbers it spans;
-        # an island municipality is many records.
+        # (code, 都道府県, 郡, 市区町村, 区) -> それが跨ぐ SHP のレコード番号。
+        # 島嶼の市区町村は多数のレコードになる。
         self.units: list[tuple] = []
         self.by_name: dict[str, set[int]] = collections.defaultdict(set)
         self._rings: dict[int, list] = {}
@@ -229,30 +224,29 @@ class Gazetteer:
                 self._name(idx, *key)
 
     def _name(self, idx: int, pref: str, gun: str, muni: str, ward: str) -> None:
-        """Every way the 別表 might spell this municipality.
+        """別表がこの市区町村を書きうる形すべて。
 
-        The table is inconsistent by design: it writes 大阪市 bare, 東京都中央区
-        with its prefecture, and 熊本県鹿本郡植木町 with its 郡. All of those
-        forms have to point at the same outline.
+        表の書き方は元から揃っていない。大阪市は単独で、東京都中央区は都を付けて、
+        熊本県鹿本郡植木町は郡まで付けて書く。そのどれもが同じ輪郭を指さねば
+        ならない。
         """
         for name in {pref + gun + muni + ward, pref + muni + ward,
                      (gun + muni + ward) if gun else "", muni + ward}:
             if name:
                 self.by_name[name].add(idx)
         if ward:
-            # 政令市 as a whole, for rows that name the city without a ward —
-            # and for 大阪市東区, a ward abolished in 1989 whose city still
-            # exists.
+            # 政令市を全体として指す形。区を付けずに市だけを名指しする行の
+            # ため、そして 1989 年に廃止された区で、市のほうは今も在る
+            # 大阪市東区のためである。
             for name in {pref + muni, muni}:
                 self.by_name[name].add(idx)
 
     def lookup(self, place: str) -> tuple[str, set[int]] | None:
-        """The longest administrative name this place name starts with.
+        """その地名が始まりとして持つ、最も長い行政区域の名前。
 
-        The 別表 often writes a terminus finer than a municipality —
-        「川崎市川崎区宮前町」, 「岩国市麻里布町一丁目」 — and the 丁目 is below
-        anything N03 draws. The longest prefix that is a municipality is as
-        far down as this can honestly go.
+        別表は起終点を市区町村より細かく書くことが多い——「川崎市川崎区宮前町」
+        「岩国市麻里布町一丁目」といった具合で、丁目は N03 が描くどの単位よりも
+        細かい。市区町村になる最も長い接頭辞が、正直に降りられる限界である。
         """
         for cut in range(len(place), 1, -1):
             head = place[:cut]
@@ -283,13 +277,12 @@ class Gazetteer:
 
 
 def contains(rings: list, lat: float, lon: float) -> bool:
-    """Even-odd ray casting over every ring at once.
+    """すべての環をまとめて数える、偶奇の判定。
 
-    Counting all the rings together is what makes holes and islands both come
-    out right. A point on one island crosses that island's outline once and is
-    in; a point in an enclave crosses the enclosing outline and the enclave's
-    own ring, twice, and is out. Testing each ring on its own would put the
-    enclave inside the municipality that surrounds it.
+    環を全部まとめて数えることが、穴と島の両方を正しく出す。ある島の上の点は
+    その島の輪郭を 1 回横切って中に入り、飛地の中の点は、囲む側の輪郭と飛地
+    自身の環を 2 回横切って外になる。環ごとに別々に判定すると、飛地はそれを
+    囲む市区町村の中に入ってしまう。
     """
     inside = False
     for ring in rings:
@@ -303,8 +296,8 @@ def contains(rings: list, lat: float, lon: float) -> bool:
 
 # ------------------------------------------------------------------ termini ---
 def endpoints_by_route() -> dict[int, list[tuple[float, float]]]:
-    """Every region's termini, unioned. Boxes overlap, so a node on a shared
-    border is reported by both neighbours as the identical pair of numbers."""
+    """全地域の起終点の和。bbox は重なるので、県境上のノードは隣り合う二県から
+    まったく同じ数の対として報告される。"""
     index = json.loads((REGIONS / "regions.json").read_text(encoding="utf-8"))
     seen: dict[int, set[tuple[float, float]]] = collections.defaultdict(set)
     for entry in index:
@@ -316,8 +309,8 @@ def endpoints_by_route() -> dict[int, list[tuple[float, float]]]:
 
 
 def centre_of(points: list[tuple[float, float]]) -> tuple[float, float]:
-    """The middle of the box the route's endpoints span. A plain mean would
-    lean toward whichever stretch OSM has broken into the most pieces."""
+    """路線の端点が張る範囲の中心。単純な平均を使うと、OSM が最も細かく分けた
+    区間の側へ寄ってしまう。"""
     lats = [p[0] for p in points]
     lons = [p[1] for p in points]
     return ((min(lats) + max(lats)) / 2, (min(lons) + max(lons)) / 2)
@@ -325,34 +318,33 @@ def centre_of(points: list[tuple[float, float]]) -> tuple[float, float]:
 
 # ------------------------------------------------------------------- match ---
 def choose(candidates: list, meeting: dict, centre: tuple) -> tuple[dict, str]:
-    """Which of a municipality's endpoints is the one the decree means."""
+    """市区町村の中の端点のうち、政令が指しているのはどれか。"""
     if len(candidates) == 1:
         return candidates[0], "sole"
-    # A legal terminus is usually where national routes meet, and the more of
-    # them meet there the more clearly it is that place: 日本橋 is the end of
-    # six routes, and the OSM breaks a few streets away are the end of none.
+    # 法令上の起終点はたいてい国道どうしが出会う場所で、集まる数が多いほど、
+    # そこだとはっきりする。日本橋は六つの路線の端で、数本先の通りにある OSM の
+    # 切れ目はどの路線の端でもない。
     best = max(meeting.get(p, 0) for p in candidates)
     pool = [p for p in candidates if meeting.get(p, 0) == best] if best else candidates
     if best and len(pool) == 1:
         return pool[0], "junction"
-    # 起点 and 終点 are the far ends of a route, so of what is left, take the
-    # endpoint farthest from the middle of the route.
+    # 起点と終点は路線の両端なので、残ったものからは、路線の中心から最も遠い
+    # 端点を選ぶ。
     return max(pool, key=lambda p: haversine(p, centre)), "farthest"
 
 
 def meeting_counts(routes: dict[int, list]) -> dict[int, dict]:
-    """Per route, how many *other* national routes end at each of its endpoints.
+    """路線ごとに、その端点それぞれで幾つの他の国道が終わっているか。
 
-    Same cluster distance the map already uses for shared termini: one crossing
-    is several nodes, so the ends that meet there do not coincide exactly.
+    まとめる距離は、地図が起終点の共有に既に使っているのと同じである。1 つの交差点
+    は複数のノードでできているので、そこで出会う端どうしはぴたりとは重ならない。
     """
     lat_cell = TERMINI_CLUSTER_M / 111_320  # degrees of latitude
-    # A degree of longitude is shorter the further north it is, so the same
-    # number of degrees makes a narrower cell in 宗谷 than in 八重山 — 105 m
-    # against 150 m. Two endpoints 150 m apart would then land two cells apart
-    # and the neighbour scan below, which only looks one cell out, would miss
-    # them. Sizing the longitude cell at the northernmost endpoint in the data
-    # keeps every cell at least TERMINI_CLUSTER_M wide.
+    # 経度 1 度の長さは北へ行くほど短いので、同じ度数でも宗谷のセルは八重山の
+    # セルより狭くなる——105 m に対して 150 m である。すると 150 m 離れた二つの
+    # 端点が二つ隣のセルに落ち、隣を 1 つしか見ない下の走査はそれを見落とす。
+    # 経度側のセルの大きさを、データの中で最も北にある端点で決めておけば、
+    # どのセルも TERMINI_CLUSTER_M 以上の幅を保つ。
     top = max(abs(p[0]) for pts in routes.values() for p in pts)
     lon_cell = lat_cell / math.cos(math.radians(top))
     grid: dict[tuple, list] = collections.defaultdict(list)
@@ -401,7 +393,7 @@ def main() -> None:
         if not left:
             break
         g = Gazetteer(vintage, url, encoding)
-        print(f"N03 {vintage} 年版を読みます（{len(left)} 件の地名が未解決）", flush=True)
+        print(f"N03 {vintage} 年版を読みます({len(left)} 件の地名が未解決)", flush=True)
         g.load()
         gazetteers.append(g)
         for place in left:
@@ -427,7 +419,7 @@ def main() -> None:
                 # ことに変わりはないので、一つの理由にまとめる。
                 cell["how"] = "no-boundary"
             elif same:
-                # 環状の路線。起点も終点も同じ市区町村なので、遠い側を採る規則が
+                # 環状の路線。起点も終点も同じ市区町村なので、遠い側を採用する規則が
                 # 二つの端点を区別できない。
                 cell["how"] = "ring"
             else:

@@ -1,15 +1,14 @@
-/* What a clicked arc says about itself.
+/* 押したアークが自分について述べること。
  *
- * The map holds no attributes of its own: everything in a popup comes out of
- * the vector tile the arc was drawn from. Turning those raw properties into
- * something readable is a plain function of them, so it lives here where it
- * can be checked, and app.js is left with the part that needs a live map —
- * hit-testing the click and putting the result on screen.
+ * 地図は自前の属性を持たない。ポップアップに出るものは、そのアークを描いた
+ * ベクタタイルから出てくる。生の属性を読める形に直すのはその純関数なので、
+ * 検査できるようにここへ置く。app.js に残るのは生きた地図が必要な部分——
+ * 押された地点の当たり判定と、結果を画面に出すこと——だけである。
  */
 import { esc } from './html.mjs';
 import { shield } from './shield.mjs';
 
-/** OSM's own words for what kind of way this is, in the reader's. */
+/** その way が何かを OSM が述べる言い方を、読む人の言い方に直したもの。 */
 export const KIND_LABELS = {
   road: '車道',
   expressway: '車道（自動車専用道路）',
@@ -20,8 +19,9 @@ export const KIND_LABELS = {
   ferry: '海上国道（航路）',
 };
 
-/** Which OSM tagging the designation was read out of. `ref タグ` means no route
- *  relation lists this road, so the number is inferred from its own tags. */
+/** その指定を OSM のどのタグから読んだか。`ref タグ` は、その番号を述べる
+ *  ルートリレーションが無く——所属していないか、所属先の番号を解決できないか
+ *  ——way 自身の `ref` から読んだという意味である。 */
 export const SRC_LABELS = {
   relation: 'ルートリレーション',
   name: '名称（国道N号）',
@@ -29,13 +29,12 @@ export const SRC_LABELS = {
 };
 
 /**
- * The arc a click is about, out of everything under the cursor.
+ * 押した地点の下にあるもののうち、その押下が指しているアーク。
  *
- * A junction, a parallel alignment or a grade separation puts several arcs
- * under one pixel, and they come back in the tile's order, which is arbitrary:
- * a click on the four-fold stack in 福岡 reported 国道202号 alone. The deepest
- * one is the one drawn on top (`line-sort-key`) and the one the map exists to
- * keep, so that is the one described.
+ * 交差点・並走・立体交差では複数のアークが 1 画素の下に重なる。返る順はタイル
+ * の順で、深さとは無関係である。福岡の四重用を押したとき、国道 202 号の単独
+ * 指定と報告されたのがこの形だった。最も深いアークが上に描かれているもので
+ * (`line-sort-key`)、地図が守ろうとしているものでもあるので、それを説明する。
  */
 export function deepest(hits) {
   return hits.reduce((a, b) =>
@@ -44,10 +43,10 @@ export function deepest(hits) {
 }
 
 /**
- * The designations on an arc, as numbers.
+ * アークが持つ指定を、数の並びにする。
  *
- * A vector tile has no array type, so they travel as the same
- * delimiter-wrapped string the filters test.
+ * ベクタタイルに配列の型は無いので、絞り込み式が検査するのと同じ、区切り文字
+ * で囲んだ文字列のまま運ばれてくる。
  */
 export const refsOf = (refs) =>
   String(refs ?? '')
@@ -58,14 +57,13 @@ export const refsOf = (refs) =>
 const row = (dt, dd) =>
   `<div class="pop-row"><dt>${dt}</dt><dd>${dd}</dd></div>`;
 
-/** The popup body for one arc's tile properties. */
+/** タイルが持つ 1 本ぶんの属性から、ポップアップの中身を組む。 */
 export function popupHTML(p) {
   const refs = refsOf(p.refs);
 
-  // Each sign in the header opens what the map has to say about that one
-  // route (detail.mjs). A road carrying six designations is exactly where that
-  // is worth asking for, and the sign is already the name of the route in the
-  // reader's hand.
+  // 見出しの標識はどれも、その路線 1 本について地図が述べること(detail.mjs)
+  // を開く。六重用の道こそ、それを訊きたくなる場所である。標識は読む人の手の
+  // 中にある路線の名前そのものでもある。
   //
   // 押しても選択は変わらない。「その路線だけを表示」は詳細の中のボタンが持つ
   // ——標識を押しただけで地図から他の 458 路線が消えるのは、詳細を読みたい
@@ -84,9 +82,8 @@ export function popupHTML(p) {
     '<dl style="margin:0;display:grid;gap:3px">' +
     row('名称', esc(p.name) || '—') +
     row('区分', esc(KIND_LABELS[p.kind] || p.kind)) +
-    // Not the route's length: the length of the one road that was clicked,
-    // which is one OSM way. Labelled 延長 it read as though 国道4号 were
-    // 0.13 km long.
+    // 路線の延長ではなく、押した道 1 本、つまり OSM の way 1 本の長さである。
+    // 「延長」と書くと、国道 4 号が 0.13 km しかないように読めた。
     row('区間長', `${Number(p.km).toFixed(2)} km`) +
     row('最終更新', esc(p.updated) || '—') +
     row('典拠', esc(SRC_LABELS[p.src] || p.src)) +

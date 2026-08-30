@@ -1,23 +1,21 @@
-/* Copy the browser libraries and web fonts out of node_modules into web/vendor/.
+/* ブラウザ用ライブラリと書体を node_modules から web/vendor/ へ複製する。
  *
- * The page used to load MapLibre and PMTiles from unpkg at a floating major
- * version. That is two problems at once: a release nobody here made could
- * change what a published map runs, and an outage at unpkg takes the map down
- * with it. Neither is acceptable for a site that otherwise consists of static
- * files and nothing else. The same reasoning rules out loading a typeface from
- * Google Fonts.
+ * かつてこのページは MapLibre と PMTiles を、メジャー版だけ固定した形で unpkg
+ * から読んでいた。それは二つの問題を同時に抱える。ここにいる誰も作っていない
+ * リリースが、公開済みの地図の動きを変えうること。そして unpkg が落ちれば地図も
+ * 一緒に落ちることである。静的ファイルだけでできているサイトに、どちらも許され
+ * ない。Google Fonts から書体を読まないのも同じ理屈である。
  *
- * So everything is served from the same origin as the map. The version is
- * stated once, in package.json, and pinned exactly; bun.lock records what that
- * resolved to. web/vendor/ is a copy of that resolution and is not tracked —
- * a tracked copy would be a second statement of the version, free to disagree
- * with the first.
+ * だから全部を地図と同じオリジンから配る。版は package.json が一度だけ、正確に
+ * 述べる。それが何に解決したかは bun.lock が記録する。web/vendor/ はその解決の
+ * 写しなので追跡しない——追跡すれば版を述べる二つ目の場所になり、一つ目と食い
+ * 違えるようになる。
  *
- * There is no bundler. The page loads these as it always did: two plain
- * <script> tags that define `maplibregl` and `pmtiles` as globals, plus two
- * stylesheets, plus one @font-face src. Only the URLs changed.
+ * バンドラは使わない。ページは今までどおり読む。`maplibregl` と `pmtiles` を
+ * グローバルに定義する素の <script> が二つ、スタイルシートが二つ、@font-face の
+ * src が一つである。変わったのは URL だけである。
  *
- * Usage:  node scripts/vendor_web.mjs
+ * 使い方:  node scripts/vendor_web.mjs
  */
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -27,8 +25,8 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const MODULES = join(ROOT, 'node_modules');
 const VENDOR = join(ROOT, 'web', 'vendor');
 
-/* The `.map` files are deliberately left behind: they are several megabytes
- * apiece and serve a debugger nobody runs against the published site. */
+/* `.map` は意図して置いていく。1 つ数 MB あり、公開したサイトに対して誰も
+ * 走らせないデバッガのための物である。 */
 const FILES = [
   ['maplibre-gl', 'dist/maplibre-gl.js'],
   ['maplibre-gl', 'dist/maplibre-gl.css'],
@@ -36,19 +34,18 @@ const FILES = [
   ['@fontsource/roboto', 'files/roboto-latin-700-normal.woff2'],
 ];
 
-/* The UI typeface. A Japanese face covers ~7000 glyphs and cannot be shipped
- * as one file the way the Latin-only Roboto is, so Fontsource splits it into
- * ~120 pieces and lets `unicode-range` decide which ones a page actually
- * fetches. The map draws its own labels from web/glyphs/, so this is the
- * chrome only — but the chrome states place names that come from the data,
- * and those can hold any kanji. That rules out subsetting to the strings in
- * the source: the pieces have to stay complete.
+/* 操作面の書体。日本語 1 書体は約 7000 字あり、ラテン文字だけの Roboto のよう
+ * に 1 ファイルでは配れない。だから Fontsource が約 120 片に分け、どれを実際に
+ * 取るかは `unicode-range` に決めさせる。地図のラベルは web/glyphs/ から描く
+ * ので、ここで必要になるのは操作面だけである——ただし操作面はデータ由来の地名を
+ * 述べ、そこにはどんな漢字も入りうる。ソースにある文字列へ絞り込むことは、
+ * それでできない。片は完全なまま置く。
  *
- * Only the weights the stylesheet asks for are copied. 800 is not among them;
- * the two rules that ask for it fall back to 700 by the normal CSS weight
- * matching, which is what LINE Seed JP's Bold is.
+ * 複製するのはスタイルシートが求める weight だけである。800 はその中に無い。
+ * 800 を求める二つの規則は、CSS のふつうの weight の対応づけで 700 へ落ちる。
+ * それが LINE Seed JP の Bold である。
  *
- * `.woff` is left behind. Every browser that runs MapLibre reads `.woff2`. */
+ * `.woff` は置いていく。MapLibre が動くブラウザはどれも `.woff2` を読む。 */
 const FONT_CSS = ['400.css', '700.css'];
 const FONT_PKG = '@fontsource/line-seed-jp';
 const FONT_OUT = 'line-seed-jp.css';
@@ -75,10 +72,10 @@ for (const [name, rel] of FILES) {
   console.log(`  ${name}@${meta.version}  ${rel.split('/').pop()}`);
 }
 
-/* Fontsource's stylesheets point at `./files/…`; web/vendor/ is flat, so the
- * `src` is rewritten as the sheets are joined into one. The set of files to
- * copy is read out of that same `src` — a hand-kept list would be a second
- * statement of which pieces exist, free to disagree with the first. */
+/* Fontsource のスタイルシートは `./files/…` を指す。web/vendor/ は平らなので、
+ * シートを 1 つに繋ぎながら `src` を書き換える。複製するファイルの集合もその
+ * 同じ `src` から読む——手で持つ一覧は、どの片が在るかを述べる二つ目の場所に
+ * なり、一つ目と食い違える。 */
 {
   const meta = pkg(FONT_PKG);
   used.set(FONT_PKG, meta);
@@ -103,7 +100,7 @@ for (const [name, rel] of FILES) {
   );
 }
 
-/* Redistributing someone else's code means carrying its terms with it. */
+/* 他人のコードを再配布するなら、その条件も一緒に運ぶ。 */
 const notice = [
   'web/vendor/ は node_modules から複製した物である。',
   'scripts/vendor_web.mjs が作る。手で編集しない。',

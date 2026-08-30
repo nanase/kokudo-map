@@ -1,20 +1,19 @@
-/* Keep the lists of commands from disagreeing with each other.
+/* 命令の一覧どうしが食い違わないようにする。
  *
- * There are two task runners here, on purpose. mise owns the data pipeline and
- * the server, because those are Python started by uv and take arguments; bun
- * owns the code and the assets, because those are JavaScript. The split is by
- * what the task is made of, not by taste.
+ * task runner が二つあるのは意図してのことである。データの生成と配信は mise が
+ * 持つ。uv が起動する Python で、引数を取るからである。コードと資材は bun が
+ * 持つ。JavaScript だからである。分け方は作る物によるのであって、好みではない。
  *
- * What goes wrong is not the split but the copies of it. A task's name lives in
- * mise.toml, and again in docs/development.md's table, and once lived in
- * CLAUDE.md as well; `mise run build` had already fallen out of both tables
- * without anyone noticing, because nothing was reading them. This does.
+ * 壊れるのは分け方ではなく、その写しである。タスクの名前は mise.toml にあり、
+ * docs/development.md の表にもあり、かつては CLAUDE.md にもあった。`mise run
+ * build` は誰にも気付かれないまま両方の表から落ちていた。誰もそれを読んで
+ * いなかったからである。ここが読む。
  *
- * The parsing is deliberately shallow — task headers and table rows, by line.
- * It is checking that two lists of names agree, and a TOML parser would not
- * make that answer any truer.
+ * 読み取りは意図して浅くしてある——タスクの見出しと表の行を、行単位で見る。
+ * 確かめているのは二つの名前の一覧が一致することであり、TOML の parser を
+ * 使ってもその答えが確かになるわけではない。
  *
- * Usage:  node scripts/check_docs.mjs
+ * 使い方:  node scripts/check_docs.mjs
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -28,7 +27,7 @@ const list = (names) => [...names].sort().join(', ') || '(なし)';
 
 const fails = [];
 /* 検査の数は数える。末尾の「合格: 9/9」の 9 を書いていたころ、検査を足すか
- * 減らすかしたときに、その 1 行だけが黙って古くなる経路が残っていた。
+ * 減らすかしたときに、その 1 行だけが暗黙のうちに古くなる経路が残っていた。
  * これはこの検査そのものが防ごうとしている形である。 */
 let checks = 0;
 const ok = (cond, msg) => {
@@ -77,7 +76,7 @@ ok(
   `package.json に無いのに development.md が挙げている: ${list(unknown)}`,
 );
 
-/* ---- 4. 黙って半分しか実行されないタスクが無い --------------------------- */
+/* ---- 4. エラーも出さず半分しか実行されないタスクが無い ------------------- */
 /* mise は Windows では inline の run を `cmd /c` に渡す。複数行を書くと 1 行目
  * しか実行されず、しかも終了コードは 0 になる。`mise run pack` はそれで、タイル
  * を切ったあと PMTiles にも全国検証にも届かないまま成功を名乗っていた。
@@ -105,7 +104,7 @@ ok(
 );
 
 /* ---- 5. 命令の一覧は 1 か所にしかない ------------------------------------ */
-// CLAUDE.md がタスクの表を持っていた頃、README と二重に古くなりました。
+// CLAUDE.md がタスクの表を持っていた頃、README と二重に古くなった。
 const claude = read('CLAUDE.md');
 ok(!/^\| `mise run /m.test(claude), 'CLAUDE.md がタスクの表を持ち直していない');
 
@@ -130,7 +129,7 @@ ok(
 /* ---- 7. 更新手順が挙げる mise タスクが実在する --------------------------- */
 // UPDATE.md は development.md の表とは別の問いに答える(どの順で、どれだけ
 // かかるか)ので、タスク名は重なる。重なる以上、改名したとき development.md
-// だけが上の 2 に叱られて直り、こちらは実在しない名前を指したまま黙って
+// だけが上の 2 に叱られて直り、こちらは実在しない名前を指したまま暗黙のうちに
 // 古くなる経路が残る。手順書は間が空いてから読む物なので、その頃には誰も
 // 覚えていない。
 const updateDoc = read('.claude/skills/national-route-data/UPDATE.md');

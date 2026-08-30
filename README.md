@@ -27,7 +27,9 @@ bun install
 
 ## ライセンス
 
-- コードは [MIT](LICENSE.md)。適用範囲は `web/`・`scripts/`・`pipeline/`・`test/` 等で、道路データ(`web/data/`)は含みません
+- コード: [MIT](LICENSE.md)
+  - 適用範囲: `web/`・`scripts/`・`pipeline/`・`test/` など
+  - 道路データ(`web/data/`)は含まず
 - 道路データ: © OpenStreetMap contributors, ODbL 1.0
 - 背景地図: 国土地理院
 - ラベルのグリフ: Noto Sans JP, SIL Open Font License 1.1

@@ -27,9 +27,9 @@ UV_PYTHON = "3.14"
 PYTHONIOENCODING = ":replace"
 
 [tasks.fetch-pbf]
-description = "Geofabrik から japan-latest.osm.pbf を取得する（約 2.5 GB）"
+description = "Geofabrik から japan-latest.osm.pbf を取得する(約 2.5 GB)"
 # 1 行で書きます。mise は Windows では cmd に渡すので、複数行の run は 1 行目しか
-# 実行されず、しかも黙って成功します。--create-dirs が mkdir の代わりをします。
+# 実行されず、しかもエラーを出さずに成功します。--create-dirs が mkdir の代わりをします。
 run = "curl -L --retry 3 -C - --create-dirs -o build/pbf/japan-latest.osm.pbf https://download.geofabrik.de/asia/japan-latest.osm.pbf"
 
 [tasks.extract]
@@ -45,14 +45,14 @@ description = "1 地域を取得から検証まで通す"
 run = "uv run {{env.PIPELINE}}/pipeline.py {{arg(name='region', default='nagano')}}"
 
 [tasks.rebuild]
-description = "1 地域をキャッシュから再生成する（取得しない）"
+description = "1 地域をキャッシュから再生成する(取得しない)"
 run = "uv run {{env.PIPELINE}}/pipeline.py {{arg(name='region', default='nagano')}} --skip-fetch"
 
 [tasks.pack]
 description = "build/regions/ から web/data/ を作り直す"
 # 段の順番は build_all.py が持っています。ここに書き写した複製は、複数行の
 # run が Windows で 1 行目しか実行されないせいで、タイルを切っただけで
-# 黙って終わっていました。PMTiles にも全国検証にも届いていませんでした。
+# エラーも出さずに終わっていました。PMTiles にも全国検証にも届いていませんでした。
 run = "uv run {{env.PIPELINE}}/build_all.py --pack-only"
 
 [tasks.publish-data]
@@ -67,7 +67,7 @@ description = "政令の別表から起点・終点を取り込み、座標を�
 run = "uv run {{env.PIPELINE}}/decree.py {{arg(name='flags', var=true, default='')}}"
 
 [tasks.audit]
-description = "鎖が切れている路線を機械的に探す"
+description = "途切れている路線を機械的に探す"
 run = "uv run {{env.PIPELINE}}/audit.py {{arg(name='region', default='nagano')}}"
 
 [tasks.compare]
@@ -93,6 +93,6 @@ description = "ローカルサーバを起動する (http://localhost:8000/)"
 run = "uv run {{env.PIPELINE}}/serve.py {{arg(name='port', default='8000')}}"
 
 [tasks.render-check]
-description = "ブラウザで実描画を確認する（serve を先に起動）"
+description = "ブラウザで実描画を確認する(serve を先に起動)"
 # 引数なしなら一時ディレクトリに撮ります。保存先を指定するときだけ渡します。
 run = "node {{env.PIPELINE}}/render_check.mjs {{arg(name='outdir', default='')}}"

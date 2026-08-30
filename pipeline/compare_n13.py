@@ -2,80 +2,70 @@
 # requires-python = ">=3.12"
 # dependencies = ["requests", "pyshp"]
 # ///
-"""Compare a region's output against 国土数値情報 N13 (道路), the one reference
-that shares an origin with 地理院地図.
+"""地域の生成物を、国土数値情報 N13(道路)と突き合わせる。地理院地図と出どころを
+共有する唯一の参照データである。
 
-audit.py finds breaks in a route's own chain, but it can only reason about
-roads that already have *some* trace in our OSM cache. A road entirely absent
-from OSM leaves no trace to reason about, and only an independent source can
-find that case — see TRIAGE.md. N13 is that source: same origin as 地理院地図
-(電子国土基本図), covers every 一般国道 in the country, but carries no route
-number, only a 道路分類 flag (国道 / 都道府県道 / 市区町村道等 / …). It cannot
-tell us *which* number is missing, only *where* something is.
+audit.py は路線自身の連なりの切れ目を見つけるが、こちらの OSM のキャッシュに何らか
+の痕跡がある道についてしか推論できない。OSM に丸ごと無い道は推論する痕跡を残さず、
+その場合を見つけられるのは独立した出どころだけである——TRIAGE.md を参照。N13 が
+その出どころである。地理院地図と同じ電子国土基本図に由来し、国内の一般国道をすべて
+覆うが、路線番号は持たず、道路分類の区分(国道 / 都道府県道 / 市区町村道等 / …)しか
+持たない。だから、どの番号が欠けているかは言えない。何かがどこに在るかだけを言える。
 
-Two comparisons, both point-in-the-other-direction of the same question:
+突き合わせは二つあり、同じ問いを互いに逆向きから指している。
 
-  gap        an N13 国道 segment with nothing of ours nearby — a candidate for
-             "OSM doesn't have this road at all", the TRIAGE.md case audit.py
-             cannot reach.
-  orphan     one of our own `former`-flagged arcs with no N13 国道 segment
-             nearby — a candidate for "地理院地図 has already delisted this,
-             our former flag is stale". Checking former arcs against N13
-             *directly* (is this arc, current or former, near an N13 line at
-             all) is the useful signal; checking whether N13 agrees an arc is
-             specifically "former" is not, because N13 has no former/current
-             distinction of its own — every legally-designated 旧道 still
-             carries 道路分類=国道 until 指定解除, exactly like a live one, so
-             that comparison would flag every correctly-tagged 旧道 as a
-             "mismatch" and mean nothing.
+  gap        近くにこちらの物が何も無い N13 の国道の線分——「その道は OSM に
+             そもそも無い」の候補で、audit.py が届かない TRIAGE.md の場合である。
+  orphan     近くに N13 の国道の線分が無い、こちらの旧道フラグ付きのアーク——
+             「地理院地図は既に指定解除しており、こちらの旧道フラグが古い」の
+             候補である。旧道のアークを N13 と直接突き合わせること(現道であれ旧道
+             であれ、そのアークが N13 の線の近くに在るか)が使える手掛かりである。
+             N13 が「旧道である」ことに同意するかを見ても意味は無い。N13 は現道と
+             旧道の区別を持たず、法令上指定されている旧道は、指定解除まで現道と
+             まったく同じく 道路分類=国道 を持つからである。それでは、正しくタグ
+             付けされた旧道が残らず「食い違い」として挙がるだけである。
 
-The orphan direction is rated by coverage, not one point (issue #27): each
-arc is resampled every SAMPLE_INTERVAL_M along its length, and the ratio of
-samples within ORPHAN_THRESHOLD_M of N13 is the arc's coverage. A single
-midpoint (the old rule) or its own endpoint vertices (which sit near N13 by
-construction — a former arc reconnects to the current road) both mean
-something different from "how much of this road is still N13-backed".
-Contiguous arcs — one physical road split into many short OSM ways, or one
-still split by a prefecture-adjacent duplicate before dedup — are merged into
-one cluster (cluster_former_arcs, sharing cluster_by_endpoint with the gap
-direction's cluster_gaps) with one length-weighted ratio, so triage happens
-per road, not per way. `region all` additionally dedups the same way id
-across every prefecture whose padded bbox includes it before rating anything
-— see national_orphan_report.
+orphan の側は、1 点ではなく被覆率で評価する(issue #27)。アークを長さに沿って
+SAMPLE_INTERVAL_M ごとに取り直し、N13 から ORPHAN_THRESHOLD_M 以内にある標本の
+割合を、そのアークの被覆率とする。中点 1 点(旧来の規則)も、アーク自身の端点の頂点
+(旧道は現道と繋がり直すので、作りからして N13 の近くに在る)も、「この道のどれだけ
+が今も N13 に裏付けられているか」とは別のことを述べてしまう。繋がったアーク——
+1 本の道が短い OSM の way に分かれている場合や、重複排除の前で県境の写しに分かれて
+いる場合——は 1 つのクラスタにまとめ(cluster_former_arcs。gap 側の cluster_gaps と
+cluster_by_endpoint を共有する)、長さで重み付けした 1 つの割合を持たせる。仕分けを
+way ごとではなく道ごとに行うためである。`region all` はさらに、余白を付けた bbox が
+その way を含むすべての県について、同じ way id を評価の前に重複排除する——
+national_orphan_report を参照。
 
-A low-coverage cluster only says "not much 国道 nearby" — it does not say
-what, if anything, N13 draws in its place. This script also looks up the
-nearest N13 line of *any* 道路分類 for each cluster's sample point and reports
-its classification and distance. A definite non-国道 classification (都道府県
-道 / 市区町村道等 / 高速自動車国道等 / その他) sitting within a tight distance
-is a stronger signal than absence alone: it means N13 draws something
-specific, not-国道, exactly where our road runs, which is what 指定解除 (a
-road handed down to a lower category, not simply erased) looks like from this
-source. 不明 does not count toward this — it asserts nothing to corroborate
-with.
+被覆率の低いクラスタが述べるのは「近くに国道があまり無い」ことだけで、その代わりに
+N13 が何を描いているかは述べない。そこでこのスクリプトは、クラスタの標本の点に
+最も近い N13 の線を、道路分類を問わず引き、その分類と距離も報告する。国道でないと
+はっきり分かる分類(都道府県道 / 市区町村道等 / 高速自動車国道等 / その他)が近くに
+在ることは、単に無いことより強い手掛かりである。こちらの道が走るまさにその場所に、
+N13 が国道でない特定の物を描いている、という意味だからである。指定解除——道が単に
+消されるのではなく、下位の区分へ移されること——は、この出どころからはそう見える。
+不明 はここに数えない。裏付ける物を何も主張していないためである。
 
-Both directions reuse the same grid: a region's own arcs are short OSM ways,
-N13 records are shorter still (cut at every attribute change, not just every
-junction), so nearest-*segment* distance is measured with a local
-equirectangular projection rather than nearest-vertex — vertex spacing on
-either side would otherwise read as false disagreement.
+どちらの向きも同じ格子を使う。地域のアークは短い OSM の way で、N13 のレコードは
+さらに短い(交差点ごとではなく、属性が変わるたびに切られている)ので、最近傍の頂点
+ではなく最近傍の線分までの距離を、局所的な正距円筒で測る。頂点だけを見ると、どちら
+の側の頂点の間隔も、そのまま偽の食い違いに読めてしまう。
 
-Distances are not proof by themselves. A gap can be a real absence, an OSM
-tagging exclusion (check `why` — reused from audit.py's exclusion reasoning),
-or two independent digitisations of the same painted line — a human with
-地理院地図 open still decides which, and which route number applies, for gaps
-and for clusters this script cannot classify. TRIAGE.md's "N13 は路線番号を
-持たないので…ここが人の出番です" is still the load-bearing sentence for those.
-A confirmed cluster (marked in the report) is the one place that manual step
-is no longer needed to establish *that* 指定解除 happened; which number the
-road used to carry is still a human's call. Whether to bake this confirmation
-into build data (making N13 a build dependency) is a separate decision,
-deliberately left open — see issue #9.
+距離だけでは証明にならない。隙間は、本物の欠落かもしれないし、OSM のタグによる
+除外(`why` を参照。audit.py の除外の理由をそのまま使う)かもしれないし、同じ 1 本の
+線を二つの出どころが別々に描いただけかもしれない。どれなのか、そしてどの路線番号
+なのかは、隙間についても、このスクリプトが分類しきれないクラスタについても、
+地理院地図を開いた人が決める。TRIAGE.md の「N13 は路線番号を持たないので…ここが
+人の出番です」は、今もその部分を支える一文である。確認済みと印の付いたクラスタは、
+指定解除が起きたこと自体を述べるのに、その手作業がもう不要な唯一の場所である。
+その道がかつて何号だったかは、今も人が決める。この確認を生成データに焼き込むか
+(N13 を生成の依存に加えるか)は別の判断で、意図して開いたままにしてある——issue #9
+を参照。
 
-Usage:  uv run pipeline/compare_n13.py [region|all] [--refresh]
+使い方:  uv run pipeline/compare_n13.py [地域|all] [--refresh]
 
-`all` runs the orphan direction only, nationwide, deduped by way id.
-`--refresh` re-downloads and re-parses every mesh even if a cache exists.
+`all` は orphan の向きだけを、way id で重複排除しながら全国で走らせる。
+`--refresh` は、キャッシュが在ってもすべてのメッシュを取り直して解析し直す。
 """
 from __future__ import annotations
 
@@ -96,20 +86,20 @@ from geo import EARTH_RADIUS_M, haversine
 from regions import REGIONS as PREFECTURES
 
 # https://nlftp.mlit.go.jp/ksj/gml/data/N13/N13-24/N13-24_<mesh>_SHP.zip serves
-# a shapefile per 1次メッシュ (~80 km square). The site also offers GML, but
-# the shapefile schema is smaller and pyshp is pure Python — no GDAL, no new
-# system dependency, in keeping with every other script here.
+# 1 次メッシュ(約 80 km 四方)ごとの shapefile を配る。GML も置いてあるが、
+# shapefile のほうがスキーマが小さく、pyshp は純 Python である——GDAL も不要で、
+# 新しいシステム依存も増えない。ここの他のスクリプトと同じ方針である。
 BASE_URL = "https://nlftp.mlit.go.jp/ksj/gml/data/N13/N13-24"
 UA = {"User-Agent": "NationalRouteMap/0.2 (build pipeline)"}
 
-# The shapefile's own field names are opaque (N13_001..N13_008, per the KSJ
-# encoding convention, not the product-spec's Japanese names). Verified by
-# downloading mesh 5438 and reading record #0 by hand against the product
-# spec (KS-PS-N13-v1_1.pdf ×4.1.3.2): index 0 is 整備データ登録日, 1 is 種別,
-# 2 is 道路分類(rdCtg), 3 is 道路状態, 4 is 階層順, 5 is 幅員区分, 6 is 有料区分,
-# 7 is 2次メッシュ番号. Only the one this script needs gets a name. Confirmed
-# Character-type in the DBF (sf.fields), so it always reads back as str — not
-# a Numeric field that would silently compare unequal to "1".
+# shapefile 自身の欄の名前は意味を伝えない(KSJ の符号化の約束に従った
+# N13_001..N13_008 であって、製品仕様の日本語名ではない)。メッシュ 5438 を落とし、
+# 0 番のレコードを製品仕様(KS-PS-N13-v1_1.pdf 4.1.3.2)と手で突き合わせて確かめた。
+# 0 番が整備データ登録日、1 番が種別、2 番が道路分類(rdCtg)、3 番が道路状態、
+# 4 番が階層順、5 番が幅員区分、6 番が有料区分、7 番が 2 次メッシュ番号である。
+# 名前を付けるのは、このスクリプトが使う物だけである。DBF では Character 型で
+# あることも確認済み(sf.fields)なので、必ず文字列として読み戻る——"1" と何も
+# 言わずに不一致になる Numeric ではない。
 RDCTG_FIELD = 2
 RDCTG_KOKUDO = "1"
 
@@ -127,11 +117,11 @@ RDCTG_LABELS = {
     "6": "不明",
 }
 
-# 1次メッシュ code: p = floor(lat*1.5) (2 digits), q = floor(lon)-100 (2
-# digits), concatenated. Standard 地域メッシュ統計 first-level mesh, unrelated
-# to N13 specifically. Measured against 長野県's bbox this returns the same 8
-# codes TRIAGE.md already names, which is the cross-check that the formula
-# (not just the memorised list) is right.
+# 1 次メッシュの符号。p = floor(緯度 * 1.5)(2 桁)と q = floor(経度) - 100
+# (2 桁)を繋いだ物である。地域メッシュ統計の標準の 1 次メッシュであって、N13 に
+# 固有の物ではない。長野県の bbox に対して測ると、TRIAGE.md が既に挙げているのと
+# 同じ 8 個の符号を返す。式そのもの(覚えた一覧ではなく)が正しいことは、それで
+# 裏が取れる。
 def mesh_codes_for_bbox(bbox: list[float]) -> list[str]:
     west, south, east, north = bbox
     p_lo, p_hi = math.floor(south * 1.5), math.floor(north * 1.5)
@@ -140,32 +130,30 @@ def mesh_codes_for_bbox(bbox: list[float]) -> list[str]:
 
 
 def neighbor_mesh_codes(pt: tuple[float, float]) -> list[str]:
-    """Same p/q formula as mesh_codes_for_bbox, for the mesh a single (lat,
-    lon) point falls in plus its 8 neighbours in the p/q grid.
+    """mesh_codes_for_bbox と同じ p/q の式で、(緯度, 経度) の 1 点が落ちる
+    メッシュと、p/q の格子の上でその 8 近傍を返す。
 
-    A road is cut at every 1次メッシュ boundary, so a sample point within
-    CONFIRM_THRESHOLD_M of one can have its truly-nearest N13 line sitting in
-    the mesh next door rather than its own — checking only the containing
-    mesh (an earlier version of this function did) under-counts confirmed
-    clusters near an edge. See classify_clusters_beneath, which checks every
-    mesh here that it already knows about."""
+    道は 1 次メッシュの境界ごとに切られているので、境界から CONFIRM_THRESHOLD_M
+    以内にある標本の点は、本当に最も近い N13 の線が自分のメッシュではなく隣の
+    メッシュに在ることがある——含んでいるメッシュだけを見ると(この関数の以前の版が
+    そうだった)、縁の近くで確認済みのクラスタを数え落とす。ここが返すメッシュの
+    うち、既に知っている物をすべて見る classify_clusters_beneath を参照。"""
     lat, lon = pt
     p, q = math.floor(lat * 1.5), math.floor(lon) - 100
     return [f"{p + dp}{q + dq:02d}" for dp in (-1, 0, 1) for dq in (-1, 0, 1)]
 
 
-# Mesh codes confirmed by hand to 404 — KSJ publishes no N13 shapefile for
-# them at all, because they hold no land and N13 covers roads only. This is
-# every 404 that turned up touching all 47 regions.py prefectures on
-# 2026-08-22 (272 unique meshes; 125 of them here) — cross-checked against
-# build/n13/ on disk (a mesh with a cached kokudo.raw.json but no extracted
-# .shp directory only ever got there via the 404 branch below), not just
-# grepped from run logs, after an initial hand-collected list missed 5 meshes
-# whose confirming run never got redirected to a file. A 404 for a mesh NOT in
-# this set is not assumed to be more of the same — see ensure_mesh. Confirming
-# a new one belongs here means checking it by hand (the KSJ URL 404s, and the
-# mesh is open ocean on a map), the same way these were confirmed, then adding
-# it — not extending the reasoning to every future 404 unseen.
+# 404 になることを手で確認したメッシュの符号——KSJ はそのメッシュの N13
+# shapefile を配っていない。陸が無く、N13 は道路しか覆わないためである。2026-08-22
+# に regions.py の 47 都道府県すべてに触れて出た 404 の全部である(相異なるメッシュ
+# 272 個のうち、ここに 125 個)。実行時のログを grep しただけでなく、ディスクの
+# build/n13/ とも突き合わせてある(kokudo.raw.json のキャッシュはあるのに展開した
+# .shp のディレクトリが無いメッシュは、下の 404 の分岐を通ってしかそうならない)。
+# 最初に手で集めた一覧は、確認の実行がファイルへ流れていなかったメッシュを 5 つ
+# 取り落としていた。この集合に無いメッシュの 404 は、同類だとは仮定しない——
+# ensure_mesh を参照。新しい符号をここへ加えてよいと確かめるには、これらを確かめた
+# のと同じように手で見る(KSJ の URL が 404 を返し、そのメッシュが地図の上で外洋で
+# ある)しかない。これから出る 404 すべてへ、見ないまま理屈を広げてはいけない。
 KNOWN_OCEAN_MESHES = frozenset({
     "3522", "3523", "3524", "3525", "3526", "3527", "3528", "3529", "3530", "3531",
     "3625", "3626", "3627", "3628", "3629", "3630", "3722", "3723", "3726", "3727",
@@ -184,15 +172,15 @@ KNOWN_OCEAN_MESHES = frozenset({
 
 
 def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
-    """Download and unzip one mesh's SHP bundle if not already cached.
+    """メッシュ 1 つの SHP 一式を、キャッシュに無ければ落として展開する。
 
-    Returns None for a mesh in KNOWN_OCEAN_MESHES that 404s — confirmed
-    no-shapefile-published, not a transient failure; the caller treats it the
-    same as a shapefile with zero 国道 records, and the print below keeps it
-    visible per mesh rather than swallowing it. A 404 for any other mesh
-    raises instead of guessing: nothing here can tell an all-ocean mesh apart
-    from a KSJ outage or a renamed URL, so an unrecognised 404 is a reason to
-    stop and check by hand, not a reason to cache an empty result.
+    KNOWN_OCEAN_MESHES にあるメッシュが 404 を返したときは None を返す——
+    shapefile が配られていないことを確認済みであって、一時的な失敗ではない。呼ぶ側
+    は、国道のレコードが 0 件の shapefile と同じに扱う。下の print はそれをメッシュ
+    ごとに見せ、握りつぶさない。それ以外のメッシュの 404 は、推測せずに例外を投げる。
+    全部が海のメッシュと、KSJ の障害や URL の変更とを、ここでは見分けられない。
+    だから見覚えの無い 404 は、空の結果をキャッシュする理由ではなく、止まって手で
+    確かめる理由である。
     """
     out_dir = N13 / mesh
     shp = out_dir / f"N13-24_{mesh}_SHP" / f"N13-24_{mesh}.shp"
@@ -218,9 +206,9 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
     zip_path = out_dir / "shp.zip"
     zip_path.write_bytes(r.content)
     with zipfile.ZipFile(zip_path) as z:
-        # The zip already contains a top-level N13-24_<mesh>_SHP/ folder —
-        # extracting into out_dir directly (not into a same-named subfolder)
-        # avoids doubling it.
+        # zip は最上位に N13-24_<mesh>_SHP/ のフォルダを既に持っている——
+        # 同じ名前の下位ディレクトリを作らず out_dir へ直接展開すれば、二重に
+        # ならずに済む。
         z.extractall(out_dir)
     zip_path.unlink()
     if not shp.exists():
@@ -230,9 +218,9 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
 
 def segment_intersects_bbox(p0, p1, west: float, south: float, east: float,
                              north: float) -> bool:
-    """Liang-Barsky test: true if segment p0-p1 (lon, lat) touches the
-    rectangle at all, including a chord that crosses it with both endpoints
-    outside — the case a per-vertex "is either endpoint inside" test misses.
+    """Liang-Barsky の判定。線分 p0-p1(経度, 緯度)が矩形に少しでも触れていれば
+    真を返す。両端とも外にありながら矩形を横切る弦も含む——頂点ごとに「どちらかの
+    端が中にあるか」を見る判定が取り落とす場合である。
     """
     x0, y0 = p0
     x1, y1 = p1
@@ -258,11 +246,11 @@ def segment_intersects_bbox(p0, p1, west: float, south: float, east: float,
 
 def line_touches_bbox(line: list[tuple[float, float]], west: float, south: float,
                        east: float, north: float) -> bool:
-    """line is (lat, lon) points, kept whole (not clipped) if any of its
-    segments touches the bbox — a per-vertex test would still drop a short
-    chord that crosses a bbox edge with both endpoints outside. Records are
-    2-3 points (see module docstring), so the sliver a kept-whole record adds
-    outside the bbox is a few tens of metres at most."""
+    """line は (緯度, 経度) の点の並びである。線分のどれかが bbox に触れていれば、
+    切らずに丸ごと残す——頂点ごとの判定では、両端とも外にありながら bbox の辺を
+    横切る短い弦を落としてしまう。レコードは 2〜3 点なので(モジュールの docstring
+    を参照)、丸ごと残したレコードが bbox の外へはみ出す長さは、せいぜい数十 m で
+    ある。"""
     pts = [(lon, lat) for lat, lon in line]
     if not pts:
         return False
@@ -272,23 +260,21 @@ def line_touches_bbox(line: list[tuple[float, float]], west: float, south: float
 
 def load_classified_raw(mesh: str, refresh: bool
                          ) -> list[tuple[str, list[tuple[float, float]]]]:
-    """This mesh's full record set — every 道路分類, not just 国道 — uncut by
-    any bbox.
+    """そのメッシュのレコード全部——国道だけでなくすべての道路分類——を、bbox で
+    切らずに返す。
 
-    One cache per mesh covers every classification, rather than one cache per
-    (mesh, classification we happen to want): the shapefile parse is the
-    expensive part (~8 s per mesh), and a second cache keyed on a filtered
-    subset would mean re-parsing the same shapefile to answer a question
-    ("what's the *other* classification here") this cache already has the
-    answer to.
+    「メッシュとそのとき欲しい分類」ごとではなく、メッシュごとに 1 つのキャッシュ
+    で全分類を覆う。高く付くのは shapefile の解析(1 メッシュ約 8 秒)であり、絞った
+    後の物を鍵にした二つ目のキャッシュを持つと、このキャッシュが既に答えを持って
+    いる問い(「ではここに在る国道以外は何か」)に答えるために、同じ shapefile を
+    解析し直すことになる。
 
-    The cache holds the mesh's raw, unfiltered records and is keyed by mesh
-    alone — a 1次メッシュ regularly spans a border between two regions (see
-    regions.py on rectangles spilling into neighbours), and keying by mesh
-    only while filtering at write time meant the *second* region to touch a
-    shared mesh would silently reuse the *first* region's bbox-filtered
-    subset instead of its own. Filtering (by bbox, or to 国道 alone) is left
-    to the call site, same as load_kokudo_raw below.
+    キャッシュはメッシュの生の、絞っていないレコードを保ち、鍵はメッシュだけで
+    ある——1 次メッシュは二つの地域の境をまたぐことが珍しくない(矩形が隣県へ食み
+    込むことは regions.py を参照)。鍵をメッシュだけにしたまま書き込み時に絞ると、
+    共有するメッシュに二番目に触れた地域が、自分の bbox ではなく最初の地域の bbox
+    で絞った物を、何も言われないまま使い回すことになっていた。絞り込み(bbox でも、
+    国道だけに絞る場合でも)は呼ぶ側に任せる。下の load_kokudo_raw と同じである。
     """
     cache_path = N13 / f"{mesh}.classified.raw.json"
     if cache_path.exists() and not refresh:
@@ -304,17 +290,17 @@ def load_classified_raw(mesh: str, refresh: bool
                 pts = sf.shape(i).points
                 records.append((rec[RDCTG_FIELD], [(lat, lon) for lon, lat in pts]))
         finally:
-            # try/finally rather than a `with` block: the pinned dependency
-            # (pyshp, unversioned in the script header) is not guaranteed to
-            # be a version whose Reader supports the context-manager protocol.
+            # `with` ではなく try/finally にする。依存(pyshp。スクリプトの
+            # ヘッダで版を固定していない)が、Reader の context manager に対応した
+            # 版であるとは限らないためである。
             sf.close()
     N13.mkdir(parents=True, exist_ok=True)
-    # Write to a temp file in the same directory and rename into place,
-    # rather than writing cache_path directly — a run interrupted mid-write
-    # (Ctrl-C, OOM kill) would otherwise leave a truncated JSON file that
-    # crashes the next run's json.loads above instead of just re-parsing
-    # (CodeRabbit review on this PR). Same directory keeps the rename on one
-    # filesystem, which is what makes it atomic.
+    # cache_path へ直接書かず、同じディレクトリの一時ファイルへ書いてから名前を
+    # 付け替える——書き込みの途中で実行が止まると(Ctrl-C、メモリ不足による強制
+    # 終了)、そうしなければ途中までの JSON が残り、次の実行は解析し直すのではなく
+    # 上の json.loads で落ちる(この PR への CodeRabbit のレビュー)。同じ
+    # ディレクトリにしておけば名前の付け替えが 1 つのファイルシステムの中で済み、
+    # それが不可分になる理由である。
     tmp_path = cache_path.with_name(cache_path.name + f".{os.getpid()}.tmp")
     tmp_path.write_text(json.dumps(records), encoding="utf-8")
     os.replace(tmp_path, cache_path)
@@ -322,8 +308,8 @@ def load_classified_raw(mesh: str, refresh: bool
 
 
 def load_kokudo_raw(mesh: str, refresh: bool) -> list[list[tuple[float, float]]]:
-    """The 国道-only subset of load_classified_raw, uncut by any bbox — see
-    that function's docstring for the caching rationale, which this shares."""
+    """load_classified_raw のうち国道だけを取り出した物。bbox では切らない——
+    キャッシュの考え方はあちらの docstring にあり、ここもそれを共有する。"""
     return [line for rdctg, line in load_classified_raw(mesh, refresh)
             if rdctg == RDCTG_KOKUDO]
 
@@ -332,9 +318,8 @@ def load_kokudo_raw(mesh: str, refresh: bool) -> list[list[tuple[float, float]]]
 # haversine と地球半径は geo.py の、DSU は audit.py のものである。写さずに
 # import しているので、直せばこちらへ伝わる。
 def point_segment_distance_m(p, a, b) -> float:
-    """Distance from p to segment a-b, via a local equirectangular projection
-    centred on p. Accurate to centimetres at the scale of one arc (tens of
-    metres to a few km) — no need for anything heavier."""
+    """p から線分 a-b までの距離。p を中心とする局所的な正距円筒で測る。アーク
+    1 本の尺度(数十 m から数 km)では cm の精度があり、これより重い物は不要である。"""
 
     def xy(pt):
         x = math.radians(pt[1] - p[1]) * math.cos(math.radians(p[0])) * EARTH_RADIUS_M
@@ -351,40 +336,37 @@ def point_segment_distance_m(p, a, b) -> float:
     return math.hypot(cx, cy)
 
 
-# Calibrated against mesh 5438 (長野県中心部): point-to-vertex distances came
-# back with a 6.6 m median and a 31.6 m 90th percentile against N13's own
-# claimed 25 m positional stddev. Point-to-segment tightens that further.
-# 100 m gives real digitisation slack on both sides room without hiding a
-# short missing link the way audit.py's own 50 m/2 km split would.
+# メッシュ 5438(長野県中心部)で較正した。点から頂点までの距離は中央値 6.6 m、
+# 90 パーセンタイル 31.6 m で、N13 自身が公称する位置の標準偏差 25 m に対する値で
+# ある。点から線分までにすればさらに縮む。100 m は、両側の描き分けの揺れに実際の
+# 余裕を与えつつ、audit.py の 50 m と 2 km の切り分けのように短い欠落を隠すことも
+# ない値である。
 GAP_THRESHOLD_M = 100
 ORPHAN_THRESHOLD_M = 100
 
-# A single sample per arc (the old rule used the midpoint) lets a road whose
-# only near-N13 stretch is its junction with the current road read as fully
-# orphaned, and lets one with a real gap in the middle read as fully backed
-# — see issue #27, which measured 45/804 candidates under the old rule as
-# "more than half N13-covered" despite being flagged as orphans outright.
-# 50 m is fine enough to catch either without over-sampling a road this
-# short.
+# アークにつき標本 1 点(旧来の規則は中点を使っていた)では、N13 の近くを通るのが
+# 現道との接続だけである道が、完全に孤立していると読めてしまう。逆に、真ん中に
+# 本物の隙間がある道が、完全に裏付けられていると読めてもしまう——issue #27 は、
+# 旧来の規則で孤立と断じられた候補 804 件のうち 45 件が、実は「半分以上 N13 に
+# 覆われている」ことを実測している。50 m はそのどちらも捉えるのに十分細かく、
+# しかもこの短さの道を取り過ぎない間隔である。
 SAMPLE_INTERVAL_M = 50
 
-# Below this, a former arc is a candidate for a stale former flag; at or
-# above it, it is left alone. Issue #27 measured the layered distribution as
-# clearly bimodal — 501 arcs at exactly 0%, 104 more under 20%, then a
-# 20-80% grey band a human has to look at either way, then 746 at 80-100%
-# that 地理院地図 already draws as national — so 20% is the low edge of that
-# grey band, not an arbitrary round number. Arcs at or above this line are
-# excluded from clustering entirely (see cluster_by_endpoint's caller in
-# national_orphan_report/main), mirroring how the gap direction only ever
-# clusters unmatched N13 records, never matched ones.
+# これを下回る旧道のアークは、旧道フラグが古いままである候補になる。これ以上なら
+# そのままにする。issue #27 が測った分布ははっきり二つの山に分かれていた——ちょうど
+# 0% が 501 本、20% 未満がさらに 104 本、そこから人がどのみち目で見るしかない
+# 20〜80% の灰色の帯、そして地理院地図が既に国道として描いている 80〜100% が
+# 746 本である。20% はその灰色の帯の下端であって、切りのよい適当な数ではない。
+# この線以上のアークはクラスタ化からまるごと外す(national_orphan_report と main
+# にある cluster_by_endpoint の呼び出しを参照)。gap の向きが、一致しなかった N13 の
+# レコードだけをクラスタ化し、一致した物は決してクラスタ化しないのと同じ形である。
 ORPHAN_CANDIDATE_RATIO = 0.2
 
-# Same calibration as ORPHAN_THRESHOLD_M above — this is the distance within
-# which "some other classification sits right where our cluster's sample
-# point falls" is a real match and not two unrelated lines that happen to be
-# close. 国道(1) and 不明(6) are excluded: a nearby 国道 does not fit here
-# (the cluster is already a low-coverage candidate), and 不明 asserts nothing
-# to confirm with.
+# 較正は上の ORPHAN_THRESHOLD_M と同じである——「クラスタの標本の点が落ちるまさに
+# その場所に、別の分類の物が在る」ことが、たまたま近い無関係な二本の線ではなく
+# 本物の一致だと言える距離である。国道(1)と不明(6)は外す。近くに国道が在ることは
+# ここに当てはまらない(そのクラスタは既に低被覆率の候補である)し、不明は裏付けに
+# なる主張を何もしていない。
 CONFIRM_THRESHOLD_M = 100
 CONFIRMABLE_RDCTG = {"2", "3", "4", "5"}
 
@@ -396,16 +378,14 @@ def cell_of(pt: tuple[float, float]) -> tuple[float, float]:
 
 
 def cells_for_segment(a: tuple[float, float], b: tuple[float, float]) -> set:
-    """Every grid cell a-b passes through, not just its midpoint's.
+    """線分 a-b が通る格子のセルを全部返す。中点のセルだけではない。
 
-    N13 records are short enough that midpoint-only registration would have
-    been fine for them, but our own arcs are plain OSM ways — a mountain-pass
-    stretch between two sparse nodes can run several km, well past one
-    CELL. A query point near the far end of such a segment would then search
-    around a midpoint cell it was never registered in and come back empty.
-    Sampling roughly every CELL along the segment is enough to catch every
-    cell it crosses; anything finer buys nothing since `nearest_segment`
-    already re-checks the true distance for every candidate it finds.
+    N13 のレコードは短いので、中点だけで登録しても差し支えなかった。しかしこちらの
+    アークは素の OSM の way である——ノードのまばらな峠区間は数 km に及び、CELL
+    1 つを大きく超える。すると、その線分の遠い端の近くを問う点は、登録されていない
+    中点のセルの周りを探して空を返す。線分に沿っておよそ CELL ごとに標本を取れば、
+    横切るセルを漏れなく捉えられる。それより細かくしても得る物は無い。
+    `nearest_segment` が、見つけた候補ごとに本当の距離を測り直すからである。
     """
     steps = max(1, math.ceil(max(abs(b[0] - a[0]), abs(b[1] - a[1])) / CELL))
     return {
@@ -440,29 +420,27 @@ def nearest_segment(pt, grid, radius=1):
 def nearest_classified_in_records(pt: tuple[float, float],
                                    records: list[tuple[str, list[tuple[float, float]]]]
                                    ) -> tuple[tuple[float, str] | None, tuple[float, str] | None]:
-    """Exact nearest-segment search over one mesh's full classified record
-    set — every segment, not a cell-radius neighbourhood.
+    """メッシュ 1 つの全分類のレコードに対する、厳密な最近傍線分の探索。セルの
+    半径の近傍ではなく、線分を全部見る。
 
-    A cell-radius search (an earlier version of this function used one, and
-    the grid/CELL scheme every *other* nearest-segment search in this file
-    still uses) is only safe when the caller is a threshold comparison whose
-    threshold is tiny next to the search span — true for every other grid
-    lookup here (100 m thresholds against a multi-km span), but not true for
-    classify_beneath's "beneath" text, which reports the genuinely nearest
-    line's distance even when that is well past CONFIRM_THRESHOLD_M. Any
-    fixed radius, however generous, is a guess about how sparse a mesh's
-    classified roads can get, and CodeRabbit review on this PR flagged that
-    guess twice (once at ~1 km, again at ~4 km) as still possibly missing a
-    real segment. Scanning every segment removes the guess entirely.
+    セルの半径で探すやり方(この関数の以前の版がそうで、このファイルの他の最近傍
+    線分の探索は今もその格子と CELL の仕組みを使っている)が安全なのは、呼ぶ側が
+    しきい値との比較をしていて、そのしきい値が探索の広がりに比べて十分小さいとき
+    だけである。ここの他の格子の参照はどれもそうだが(数 km の広がりに対して 100 m
+    のしきい値である)、classify_beneath の「直下」の文面はそうではない。あちらは
+    本当に最も近い線までの距離を、それが CONFIRM_THRESHOLD_M をはるかに超えていて
+    も報告する。どれだけ大きく取った半径も、メッシュの分類済みの道がどこまで
+    まばらになりうるかについての当て推量であり、この PR への CodeRabbit のレビュー
+    は、その当て推量を二度(約 1 km と約 4 km で)、まだ本物の線分を見落としうると
+    指摘した。線分を全部走査すれば、当て推量そのものが無くなる。
 
-    Cheap enough to afford: this runs once per (cluster, candidate mesh)
-    pair — at most a few hundred times for a nationwide run — not once per
-    arc or per resampled point, and one mesh's classified set (tens to a
-    couple hundred thousand short records, see load_classified_raw) scans in
-    a small fraction of a second.
+    その費用は払える。これが走るのは (クラスタ, 候補のメッシュ) の対ごとに 1 回
+    ——全国の実行でも多くて数百回である——であって、アークごとでも取り直した点
+    ごとでもない。しかも 1 メッシュの分類済みの集合(数万から 20 万件ほどの短い
+    レコード。load_classified_raw を参照)は、1 秒に満たない時間で走査できる。
 
-    Returns (nearest_any, nearest_confirmable) — see classify_beneath for
-    what each means. Each is (distance, rdCtg) or None.
+    返すのは (nearest_any, nearest_confirmable) である——それぞれの意味は
+    classify_beneath を参照。どちらも (距離, rdCtg) か None である。
     """
     best_any = None
     best_confirmable = None
@@ -478,57 +456,50 @@ def nearest_classified_in_records(pt: tuple[float, float],
 
 def classify_beneath(nearest_any: tuple[float, str] | None,
                       nearest_confirmable: tuple[float, str] | None) -> tuple[str, bool]:
-    """Format a nearest_classified_in_records result into a report string (what
-    N13 draws closest to the sample point, whatever its classification) and
-    a mechanical 指定解除 confirmation flag (whether a *confirmable*
-    classification — see CONFIRMABLE_RDCTG — exists within
-    CONFIRM_THRESHOLD_M, independently of what's closest overall). See the
-    module docstring's paragraph on this. Shared by main()'s single-region
-    report and national_orphan_report so the two never drift on what
-    "confirmed" means.
+    """nearest_classified_in_records の結果を、報告の文字列と、指定解除の機械確認
+    のフラグに整える。文字列は、分類を問わず N13 が標本の点の最も近くに描いている
+    物である。フラグは、全体で最も近い物が何かとは独立に、裏付けになる分類
+    (CONFIRMABLE_RDCTG を参照)が CONFIRM_THRESHOLD_M 以内に在るかどうかである。
+    考え方はモジュールの docstring の該当の段落にある。main() の 1 地域の報告と
+    national_orphan_report が共有するので、「確認済み」の意味が二つに割れることは
+    ない。
     """
     confirmed = nearest_confirmable is not None and nearest_confirmable[0] <= CONFIRM_THRESHOLD_M
     if nearest_any is None:
-        return "N13分類なし", confirmed
+        return "N13 分類なし", confirmed
     dist, rdctg = nearest_any
     label = RDCTG_LABELS.get(rdctg, f"コード{rdctg!r}")
     mark = " [指定解除を機械確認]" if confirmed else ""
-    return f"直下 {dist:.0f}m に{label}{mark}", confirmed
+    return f"直下 {dist:.0f} m に{label}{mark}", confirmed
 
 
 def classify_clusters_beneath(clusters: list[dict], refresh: bool,
                                known_meshes: set[str]) -> None:
-    """Attach "beneath" (str) and "confirmed" (bool) to every cluster in
-    place, from the nearest N13 line of any classification to each cluster's
-    sample point.
+    """クラスタそれぞれに "beneath"(文字列)と "confirmed"(真偽)を、その場で
+    付ける。値は、クラスタの標本の点に最も近い、分類を問わない N13 の線から作る。
 
-    One mesh's classified (全分類, not just 国道) record set runs 30-50x
-    larger than its 国道-only subset — measured at 74k-137k records per mesh
-    against 2-3k 国道 (issue #28) — so combining every mesh a caller's
-    clusters might span into one combined set, the way the 国道-only grid
-    safely does, holds tens of millions of line records at once for a
-    nationwide call and exhausted memory in practice. Loading and discarding
-    one mesh's classified records at a time keeps peak memory to a single
-    mesh's worth regardless of how many meshes the full cluster list spans —
-    the tradeoff is doing the classification pass separately from the
-    coverage_ratio pass (which does still read every mesh's 国道-only subset
-    into one grid; that one stays small enough to be fine, see
-    load_kokudo_raw's callers) rather than in the same mesh loop.
+    1 メッシュの全分類(国道だけではない)のレコードは、国道だけの部分集合の 30〜50
+    倍になる——メッシュあたり 74,000〜137,000 件に対し、国道は 2,000〜3,000 件で
+    ある(issue #28)。だから、国道だけの格子が安全にやっているように、呼ぶ側の
+    クラスタが跨りうるメッシュを全部 1 つにまとめると、全国の実行では数千万件の線の
+    レコードを同時に抱えることになり、実際にメモリを使い果たした。1 メッシュぶんを
+    読んでは捨てる形にすれば、クラスタの一覧が幾つのメッシュに跨ろうと、山は
+    1 メッシュぶんに収まる。引き換えに、分類を見る処理を coverage_ratio の処理と
+    同じメッシュの繰り返しの中では行えず、別にすることになる(coverage_ratio の
+    ほうは今もメッシュごとの国道だけの部分集合を 1 つの格子へ読み込む。そちらは
+    十分小さいままである。load_kokudo_raw を呼ぶ側を参照)。
 
-    A road is cut at every mesh boundary, so a sample point within
-    CONFIRM_THRESHOLD_M of one can have its truly-nearest N13 line sitting in
-    the mesh next door — an earlier version of this function checked only
-    the sample's own containing mesh and under-counted confirmations near an
-    edge (CodeRabbit review on this PR). Each cluster is checked against its
-    own mesh and its 8 neighbours (neighbor_mesh_codes) instead, keeping the
-    single best match across all of them. Only neighbours already in
-    known_meshes — the caller's own already-resolved mesh set (region's own
-    `meshes`, or `all_meshes` nationwide) — are checked: every mesh a real
-    cluster can be near is already in that set, since prefecture bboxes
-    overlap generously, so restricting to it costs nothing while avoiding a
-    request for a mesh ensure_mesh has never validated (a genuinely new mesh
-    404ing there is a reason to stop and confirm by hand, not something this
-    function should risk triggering on a guess).
+    道はメッシュの境界ごとに切られているので、境界から CONFIRM_THRESHOLD_M 以内に
+    ある標本の点は、本当に最も近い N13 の線が隣のメッシュに在ることがある——この
+    関数の以前の版は標本を含むメッシュだけを見ており、縁の近くで確認済みを数え
+    落としていた(この PR への CodeRabbit のレビュー)。代わりに、クラスタごとに自分の
+    メッシュとその 8 近傍(neighbor_mesh_codes)を見て、その中で最も良い一致を 1 つ
+    残す。見るのは known_meshes——呼ぶ側が既に解決済みのメッシュの集合(地域自身の
+    `meshes` か、全国の `all_meshes`)——に既に在る近傍だけである。県の bbox は
+    大きく重なるので、本物のクラスタが近づきうるメッシュはその集合に既に入って
+    いる。だから絞っても失う物は無く、ensure_mesh が一度も検証していないメッシュ
+    への要求を避けられる(そこで本当に新しいメッシュが 404 を返すことは、止まって
+    手で確かめる理由であって、この関数が当て推量で引き当ててよい物ではない)。
     """
     for c in clusters:
         c["_nearest_any"] = None
@@ -552,8 +523,8 @@ def classify_clusters_beneath(clusters: list[dict], refresh: bool,
                 or nearest_confirmable[0] < c["_nearest_confirmable"][0]
             ):
                 c["_nearest_confirmable"] = nearest_confirmable
-        # `records` is dropped here, before the next mesh's records are
-        # loaded — this loop never holds two meshes' classified data at once.
+        # `records` はここで捨てる。次のメッシュを読む前である——この繰り返しが
+        # 二つのメッシュの分類済みデータを同時に抱えることはない。
 
     for c in clusters:
         c["beneath"], c["confirmed"] = classify_beneath(
@@ -588,22 +559,21 @@ def resample_line(coords: list[tuple[float, float]],
 
 def coverage_ratio(coords: list[tuple[float, float]], grid,
                     threshold_m: float) -> tuple[int, int, float | None]:
-    """(matched, total, min_dist) for coords resampled every SAMPLE_INTERVAL_M.
+    """SAMPLE_INTERVAL_M ごとに取り直した点についての (matched, total, min_dist)。
 
-    Not the arc's own vertices, and not one midpoint (the old rule): a
-    former arc reconnects to the current road at both ends by construction,
-    so its two endpoint vertices sit inside threshold_m of N13 regardless of
-    whether the road itself still does, and its midpoint alone can land
-    anywhere along a road that is only partly still N13-backed. Sampling
-    along the whole length is what makes the ratio mean "how much of this
-    road" rather than "does one arbitrary point on it".
+    アーク自身の頂点でもなく、中点 1 点(旧来の規則)でもない。旧道のアークは作り
+    からして両端で現道と繋がり直すので、その二つの端点は、道そのものが今も N13 に
+    裏付けられているかどうかに関わらず threshold_m 以内に入る。中点だけを見れば、
+    一部しか裏付けの残っていない道のどこにでも落ちうる。全長に沿って標本を取ること
+    が、この割合を「その道のどれだけか」にする。「その道の適当な 1 点がどうか」では
+    なくなる。
 
-    min_dist is the closest any sample came to N13, even when that is past
-    threshold_m — a CodeRabbit review on issue #27's own PR caught that
-    ratio == 0 does not mean "no N13 nearby": an N13 line sitting just
-    outside threshold_m of every 50 m sample still reads as 0% coverage, but
-    it is not "N13 なし". Only min_dist being None — no sample found
-    anything within nearest_segment's own search radius — means that.
+    min_dist は、どの標本が N13 に最も近づいたかであり、それが threshold_m を
+    超えていても返す——issue #27 の PR への CodeRabbit のレビューが、割合 0 は
+    「近くに N13 が無い」を意味しないことを捉えた。50 m ごとのどの標本からも
+    threshold_m のすぐ外に在る N13 の線は、被覆率 0% と読めるが、「N13 なし」では
+    ない。それを意味するのは、min_dist が None のとき——nearest_segment 自身の
+    探索半径の中で、どの標本も何も見つけられなかったとき——だけである。
     """
     points = resample_line(coords)
     matched = 0
@@ -624,15 +594,15 @@ def ratio_of(arc: dict) -> float:
 
 
 def coverage_label(cluster: dict) -> str:
-    """"N13 なし" only when min_dist is None — no sample found anything
-    within nearest_segment's own search radius. 0% coverage on its own does
-    not mean that: an N13 line just past ORPHAN_THRESHOLD_M of every sample
-    still reads as 0% covered but is not absent (see coverage_ratio)."""
+    """「N13 なし」とするのは min_dist が None のときだけである——nearest_segment
+    自身の探索半径の中で、どの標本も何も見つけられなかったときである。被覆率 0%
+    だけではそれを意味しない。どの標本からも ORPHAN_THRESHOLD_M のすぐ外に在る
+    N13 の線は、被覆率 0% と読めるが無いわけではない(coverage_ratio を参照)。"""
     if cluster["min_dist"] is None:
         return "N13 なし"
     label = f"被覆率 {cluster['ratio'] * 100:.0f}%"
     if cluster["ratio"] == 0:
-        label += f"(最寄N13 {cluster['min_dist']:.0f}m)"
+        label += f"(最寄 N13 {cluster['min_dist']:.0f} m)"
     return label
 
 
@@ -642,12 +612,11 @@ def node_key(pt):
 
 
 def cluster_by_endpoint(lines: list[list[tuple[float, float]]]) -> list[list[int]]:
-    """Indices into lines, grouped by shared start/end point via a DSU over
-    endpoints. N13 cuts a continuous road into many short records at every
-    attribute change, and a former route is routinely split into many short
-    OSM ways too, so one real road is routinely dozens of consecutive
-    records/arcs, not one — shared by both the gap and orphan directions
-    (issue #27 added the orphan side; the gap side already had it)."""
+    """lines への添字を、端点の DSU によって始点・終点の共有でまとめる。N13 は
+    連続した道を、属性が変わるたびに短いレコードへ切る。旧道の路線も、短い OSM の
+    way に分かれているのが普通である。だから 1 本の実在する道は、たいてい 1 件では
+    なく数十件の連続したレコードやアークになる——gap と orphan の両方の向きで共有
+    する(orphan 側は issue #27 で足した。gap 側は元から持っていた)。"""
     dsu = DSU()
     for line in lines:
         dsu.union(node_key(line[0]), node_key(line[-1]))
@@ -671,14 +640,13 @@ def cluster_gaps(gap_lines: list[list[tuple[float, float]]]):
 
 
 def cluster_former_arcs(arcs: list[dict]):
-    """Group former arcs sharing an endpoint into one triage unit, with a
-    length-weighted coverage ratio for the merged whole.
+    """端点を共有する旧道のアークを 1 つの仕分けの単位にまとめ、まとめた全体に
+    ついて長さで重み付けした被覆率を持たせる。
 
-    Each arc dict needs id, feature, coords, matched, total (see
-    coverage_ratio). Grouping first and rating second — rather than rating
-    each arc and grouping the ratings — is what lets a cluster whose
-    individual arcs sample unevenly (a short arc contributes as few as 2
-    points) still add up to one honest ratio for the road as a whole.
+    アークの dict には id・feature・coords・matched・total が必要である(coverage_ratio
+    を参照)。先にまとめてから評価する——アークごとに評価してからその評価をまとめる
+    のではない——ことが、標本の数が揃わないクラスタ(短いアークは 2 点しか出さない
+    こともある)でも、道全体について 1 つの正直な割合になる理由である。
     """
     lines = [a["coords"] for a in arcs]
     clusters = []
@@ -711,10 +679,9 @@ def nearby_osm_ways(cache, out_ids, point, radius_m):
         t = w.get("tags", {})
         if not claims(t):
             continue
-        # Distance to the way's segments, not just its vertices — a way with
-        # widely-spaced nodes could otherwise pass right by `point` without
-        # any single vertex landing inside radius_m, and get reported as
-        # "absent from OSM" when it is really just excluded.
+        # 頂点だけでなく way の線分までの距離を測る——ノードの間隔が広い way は、
+        # そうしないと `point` のすぐ脇を通っているのに、どの頂点も radius_m の
+        # 中に落ちず、ただ除外されているだけなのに「OSM に無い」と報告されうる。
         geometry = [(p["lat"], p["lon"]) for p in w["geometry"]]
         if len(geometry) < 2:
             hit = geometry and haversine(point, geometry[0]) <= radius_m
@@ -727,15 +694,15 @@ def nearby_osm_ways(cache, out_ids, point, radius_m):
 
 
 def region_former_clusters(meta: dict, gj: dict, refresh: bool) -> tuple[list[dict], int]:
-    """This region's own former arcs, clustered and classified against N13 —
-    mesh-wide, not bbox-cut (a region's former arc can sit near its own
-    border; see main()'s own comment on n13_grid_raw for why a bbox cut here
-    would reproduce the false "N13 なし" issue #27 fixed nationally).
+    """この地域自身の旧道のアークを、N13 と突き合わせてクラスタ化し、分類する
+    ——メッシュ全体で見るのであって、bbox では切らない(地域の旧道のアークは自分の
+    県境の近くに在りうる。ここで bbox で切ると、issue #27 が全国で直した偽の
+    「N13 なし」が再現する理由は、main() の n13_grid_raw についてのコメントを参照)。
 
-    Shared by main()'s single-region report and apply_n13.py's write path, so
-    the report a human reads and the `revoked` property a build actually
-    writes never drift on which arcs count as confirmed — see issue #9.
-    Returns (clusters, former_arc_count).
+    main() の 1 地域の報告と、apply_n13.py の書き込みの経路が共有する。人が読む
+    報告と、生成物が実際に書く `revoked` 属性とで、どのアークを確認済みと数えるか
+    が離れていかないようにするためである——issue #9 を参照。返すのは
+    (clusters, former_arc_count) である。
     """
     meshes = mesh_codes_for_bbox(meta["bbox"])
     kokudo_raw: list[list[tuple[float, float]]] = []
@@ -757,14 +724,13 @@ def region_former_clusters(meta: dict, gj: dict, refresh: bool) -> tuple[list[di
 
 
 def national_orphan_report(refresh: bool) -> None:
-    """former 孤立候補を全国横断・重複排除・被覆率・クラスタ単位で出す — issue #27。
+    """former 孤立候補を全国横断・重複排除・被覆率・クラスタ単位で出す——issue #27。
 
-    A single region's own run can't dedup: the same way turns up once per
-    prefecture whose padded bbox happens to include it (issue #27 measured
-    3,546 raw listings from #9 collapsing to 1,644 unique way ids, 1,301 of
-    them duplicated across 2+ prefectures). Only a run that has every
-    region's output in hand at once can tell "the same arc, listed twice"
-    from "two different arcs".
+    1 地域だけの実行では重複排除ができない。同じ way は、余白を付けた bbox が
+    たまたまそれを含む県の数だけ現れる(issue #27 は、#9 が挙げた延べ 3,546 件が、
+    相異なる way id 1,644 本に畳まれ、うち 1,301 本が 2 県以上に重複していることを
+    実測した)。「同じアークが二度並んでいる」のか「別々の二つのアーク」なのかを
+    言えるのは、全地域の出力を同時に手元に持つ実行だけである。
     """
     per_way: dict[int, dict] = {}
     raw_count = 0
@@ -783,12 +749,11 @@ def national_orphan_report(refresh: bool) -> None:
 
     print(f"loading {len(all_meshes)} N13 mesh(es) nationwide (mesh-wide, no bbox cut — "
           "see load_kokudo_raw)...")
-    # Only the 国道-only subset is accumulated across every mesh at once —
-    # nationwide that stays small enough for one grid (issue #27 already
-    # proved this out). The 全分類 (all classifications) reads used for
-    # classify_clusters_beneath below are deliberately *not* held here too;
-    # see that function's docstring for why combining every mesh's full
-    # classification set nationwide exhausts memory.
+    # 全メッシュを同時に積み上げるのは、国道だけの部分集合に限る——全国でも
+    # 1 つの格子に収まる大きさに留まる(issue #27 が既に実地で確かめている)。下の
+    # classify_clusters_beneath が使う全分類の読み込みは、意図してここに抱えない。
+    # 全メッシュの全分類を全国ぶん束ねるとメモリを使い果たす理由は、あの関数の
+    # docstring を参照。
     kokudo_raw: list[list[tuple[float, float]]] = []
     for mesh in sorted(all_meshes):
         kokudo_raw.extend(load_kokudo_raw(mesh, refresh))
@@ -819,10 +784,10 @@ def national_orphan_report(refresh: bool) -> None:
     for k in ("0%", "0-20%", "20-80%", "80-100%"):
         print(f"  {k}: {counts[k]}")
 
-    # Cluster only candidate arcs (ratio_of < ORPHAN_CANDIDATE_RATIO) — an
-    # arc that is itself well N13-backed never joins a cluster, the same way
-    # cluster_gaps only ever sees N13 records already classified as
-    # unmatched, never matched ones.
+    # クラスタ化するのは候補のアークだけである(ratio_of < ORPHAN_CANDIDATE_RATIO)
+    # ——自分自身が N13 に十分裏付けられているアークがクラスタに加わることはない。
+    # cluster_gaps が、一致しないと分類済みの N13 のレコードしか見ず、一致した物を
+    # 決して見ないのと同じである。
     candidates = [a for a in arcs if ratio_of(a) < ORPHAN_CANDIDATE_RATIO]
     clusters = cluster_former_arcs(candidates)
     print(f"\nclassifying what N13 draws beneath {len(clusters)} cluster(s), "
@@ -854,8 +819,8 @@ def national_orphan_report(refresh: bool) -> None:
 
 
 def main() -> None:
-    # Windows terminals default stdout to cp932, which lacks glyphs this
-    # script prints (em dash, 一部の記号). build_all.py hits the same wall.
+    # Windows の端末は標準出力の既定が cp932 で、このスクリプトが出す字(ダッシュ
+    # や一部の記号)を持たない。build_all.py も同じ壁に当たる。
     sys.stdout.reconfigure(errors="replace")
     args = [a for a in sys.argv[1:] if a != "--refresh"]
     refresh = "--refresh" in sys.argv[1:]
@@ -877,11 +842,10 @@ def main() -> None:
     west, south, east, north = bbox
     kokudo: list[list[tuple[float, float]]] = []       # bbox-filtered: gap direction
     kokudo_raw: list[list[tuple[float, float]]] = []   # mesh-wide: orphan direction
-    # 全分類 (all 道路分類, not just 国道) is *not* accumulated across meshes
-    # here — see classify_clusters_beneath's docstring on why holding every
-    # mesh's full classification set at once is the thing that exhausted
-    # memory. classify_clusters_beneath re-reads it later, one mesh at a
-    # time, from load_classified_raw's on-disk cache instead.
+    # 全分類(国道だけでなくすべての道路分類)は、ここではメッシュをまたいで積み
+    # 上げない——全メッシュの全分類を同時に抱えることこそメモリを使い果たした原因
+    # である理由は、classify_clusters_beneath の docstring を参照。あちらは後から、
+    # load_classified_raw のディスク上のキャッシュから 1 メッシュずつ読み直す。
     for mesh in meshes:
         raw = load_kokudo_raw(mesh, refresh)
         filtered = [line for line in raw if line_touches_bbox(line, west, south, east, north)]
@@ -896,7 +860,7 @@ def main() -> None:
     ]
     our_grid = build_segment_grid(our_lines)
 
-    # ---- gaps: N13 国道 with nothing of ours nearby -----------------------
+    # ---- gap。近くにこちらの物が無い N13 の国道 --------------------------
     gap_lines = []
     matched = 0
     for line in kokudo:
@@ -937,9 +901,9 @@ def main() -> None:
         else:
             print("    no excluded OSM way here - absent from OSM itself")
 
-    # ---- orphans: our former arcs with no N13 backing nearby --------------
-    # For cross-region dedup of the same way id, run with region "all"
-    # instead — see national_orphan_report.
+    # ---- orphan。近くに N13 の裏付けが無いこちらの旧道のアーク -------------
+    # 同じ way id を地域をまたいで重複排除したいときは、地域に "all" を渡して
+    # 走らせる——national_orphan_report を参照。
     clusters, former_count = region_former_clusters(meta, gj, refresh)
     candidate_count = sum(len(c["members"]) for c in clusters)
 

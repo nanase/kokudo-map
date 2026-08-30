@@ -12,14 +12,14 @@ build/
 web/data/
 
 # ブラウザ用ライブラリの複製。版は package.json と bun.lock が述べる。
-# 複製を追跡すると版を二箇所で述べることになり、片方が黙って古くなる。
+# 複製を追跡すると版を二箇所で述べることになり、片方が暗黙のうちに古くなる。
 web/vendor/
 
 node_modules/
 __pycache__/
 .venv/
 
-# Machine-local Claude Code settings, not shared
+# この機械だけの Claude Code の設定。共有しない。
 .claude/settings.local.json
 
 # dev-flow が作る作業ツリー。clone のたびに作り直すので追跡しない。

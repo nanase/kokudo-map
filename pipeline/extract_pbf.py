@@ -2,35 +2,33 @@
 # requires-python = ">=3.12"
 # dependencies = ["osmium>=4.0"]
 # ///
-"""Cut every region's raw OSM objects out of one nationwide .osm.pbf.
+"""全国 1 つの .osm.pbf から、地域ごとの生の OSM の物を切り出す。
 
-This replaces the Overpass fetch for nationwide builds. It answers exactly the
-same three questions per region, and writes exactly the same cache file, so
-build_routes.py, verify.py and audit.py do not know the difference:
+全国を生成するとき、これが Overpass からの取得の代わりになる。地域ごとにまったく
+同じ三つの問いに答え、まったく同じキャッシュファイルを書くので、build_routes.py
+も verify.py も audit.py も違いに気付かない。
 
-  1. core        — national route relations touching the box, their child
-                   relations, and the member ways inside the box;
-  2. candidates  — national-grade ways with a numeric `ref`, and any way named
-                   国道N号, inside the box;
-  3. competing   — non-national route=road relations touching the box, with
-                   their tags and members, as a negative signal. 都道府県道
-                   relations are the bulk of these; operator-branded ones
-                   (network=首都高速道路 etc.) are the same signal for the
-                   same reason — see CASES.md 20.
+  1. core        — bbox に触れる国道のルートリレーション、その子リレーション、
+                   そして bbox の中にあるメンバーの way
+  2. candidates  — bbox の中の、国道の格を持ち数字だけの `ref` を持つ way と、
+                   国道N号 という名前の way
+  3. competing   — bbox に触れる、国道でない route=road のリレーションと、その
+                   タグとメンバー。負の証拠である。大半は都道府県道のリレーション
+                   だが、事業者が自分の番号を名乗る物(network=首都高速道路 など)
+                   も同じ理由で同じ証拠になる——CASES.md 20 を参照。
 
-Why not keep using Overpass: 47 prefectures is ~140 queries and about a
-gigabyte of response off public mirrors, for hours. One 2.5 GB file downloaded
-once is both faster and within what the mirrors are for.
+Overpass を使い続けない理由。47 都道府県は約 140 件の問い合わせと約 1 GB の応答
+になり、公開ミラーから何時間もかけて取ることになる。2.5 GB のファイルを一度
+落とすほうが速く、しかもミラーの用途にも合う。
 
-What is deliberately *not* changed: the region stays the unit of work. The
-corroboration guard in build_routes.py only filters because the set of route
-numbers a region's relations vouch for is small. Judged over the whole country
-that set approaches all 459 numbers and the guard stops filtering — 長野県道372号
-would come back as 国道372号. Acquisition goes nationwide; adjudication stays
-boxed. See RULES.md 裏取り and CASES.md 1・2.
+意図して変えていないこと。作業の単位は地域のままである。build_routes.py の裏取り
+が濾せるのは、その地域のリレーションが保証する路線番号の集合が小さいからである。
+全国でまとめて判定するとその集合は 459 番すべてに近づき、裏取りは何も濾さなくなる
+——長野県道372号がふたたび国道372号として戻る。取得は全国、判定は bbox の中の
+ままである。RULES.md 裏取り と CASES.md 1・2 を参照。
 
-Usage:  uv run pipeline/extract_pbf.py [region ...]   (default: every region)
-        uv run pipeline/extract_pbf.py --pbf path/to/japan-latest.osm.pbf
+使い方:  uv run pipeline/extract_pbf.py [地域 ...]   (既定: 全地域)
+         uv run pipeline/extract_pbf.py --pbf path/to/japan-latest.osm.pbf
 """
 from __future__ import annotations
 
@@ -45,46 +43,46 @@ import osmium
 from _paths import CACHE, PBF
 from regions import REGIONS, named_regions
 
-# The build reads these way tags and no others. Keeping the rest would triple
-# the memory this pass needs for nothing. build_routes.TAGS_USED is the
-# authority; it is imported rather than restated so the two cannot drift.
+# 生成が読む way のタグはこれだけで、他は読まない。残りを保つと、何の役にも
+# 立たないままこの処理の使うメモリが三倍になる。正典は build_routes.TAGS_USED で
+# ある。書き写さず import するので、二つが離れていくことはない。
 #
-# `tokens` is imported for the same reason: whether a `ref` carries a national
-# route number is answered once, by build_routes.py, and read here rather than
-# re-answered with a second pattern. A second pattern is how 第二神明道路
-# (`ref=E93;2`, no 国道2号 relation) and 神戸淡路鳴門自動車道 (`ref=E28;28`, no
-# relation at all) went missing nationwide: a full-string `^[0-9]+(;[0-9]+)*$`
-# match rejected the whole `ref` the moment one semicolon-token carried an
-# E-road prefix, so the road never became a candidate and build_routes.py never
-# saw it to corroborate. `tokens()` already tests token by token — it has to,
-# to accept `ref=4;6;14;17` — so it accepts `E93;2` for the same reason it
+# `tokens` を import するのも同じ理由である。`ref` が国道番号を持つかどうかは
+# build_routes.py が一度だけ答えており、二つ目の正規表現で答え直すのではなく、
+# ここではその答えを読む。二つ目の正規表現こそ、第二神明道路(`ref=E93;2`、国道2号
+# のリレーションが無い)と神戸淡路鳴門自動車道(`ref=E28;28`、リレーションが 1 つも
+# 無い)が全国から消えた原因である。全体一致の `^[0-9]+(;[0-9]+)*$` は、セミコロン
+# で区切られたトークンの 1 つが E ナンバーの接頭辞を持った瞬間に `ref` 全体を
+# 拒否した。だからその道は候補にすらならず、build_routes.py は裏取りの前にそれを
+# 見ることが無かった。`tokens()` は元からトークンごとに検査する——`ref=4;6;14;17`
+# を受け入れるにはそうするしかない——ので、同じ理由で `E93;2` も受け入れる。
 # accepts `2;28;250`.
 from build_routes import TAGS_USED, tokens
 
 SOURCE_URL = "https://download.geofabrik.de/asia/japan-latest.osm.pbf"
 
-# Same shapes the Overpass queries use, so the two paths admit the same ways.
+# Overpass の問い合わせが使うのと同じ形。二つの経路が同じ way を認めるように。
 CANDIDATE_GRADES = {"trunk", "motorway", "construction"}
 NAME_KOKUDO = re.compile(r"^国道[0-9]+号")
 
-# The same pattern for relation names, but tolerant of full-width digits — one
-# relation really is named 国道３２５号（阿蘇大橋）の応急的な迂回路.
+# リレーションの名前についても同じ形だが、全角数字を許す——実際に
+# 「国道３２５号（阿蘇大橋）の応急的な迂回路」という名前のリレーションがある。
 REL_KOKUDO = re.compile(r"^国道\s*\d+\s*号")
 
 NATIONAL = "JP:national"
 PREFECTURAL = "JP:prefectural"
 
-# libosmium spells member types 'n'/'w'/'r'; the cache is in Overpass's spelling
-# because build_routes.py reads it. Translating here keeps that file untouched.
+# libosmium はメンバーの種別を 'n'・'w'・'r' と綴る。キャッシュは build_routes.py
+# が読むので Overpass の綴りにする。ここで訳しておけば、あちらに手を入れずに済む。
 MEMBER_TYPE = {"n": "node", "w": "way", "r": "relation"}
 
 
 # ------------------------------------------------------------------ storage ---
 class Ways:
-    """Way geometry for the whole country, without a Python object per node.
+    """全国ぶんの way の形を、ノードごとの Python オブジェクトを作らずに持つ。
 
-    Roughly 8 million coordinates survive the filters. As tuples in lists that
-    is well over a gigabyte; as two flat float arrays it is 128 MB.
+    絞り込みを抜けてくる座標は約 800 万点ある。リストに入れた tuple では 1 GB を
+    大きく超えるが、平らな浮動小数の配列 2 本なら 128 MB で済む。
     """
 
     def __init__(self) -> None:
@@ -94,7 +92,7 @@ class Ways:
         self.count: dict[int, int] = {}
         self.tags: dict[int, dict[str, str]] = {}
         self.ts: dict[int, str] = {}
-        # bounding box per way, for the region test
+        # way ごとの bbox。地域の判定に使う。
         self.box: dict[int, tuple[float, float, float, float]] = {}
 
     def add(self, wid: int, tags: dict[str, str], ts: str, pts: list[tuple[float, float]]) -> None:
@@ -113,10 +111,10 @@ class Ways:
         return [{"lat": self.lat[j], "lon": self.lon[j]} for j in range(i, i + n)]
 
     def in_box(self, wid: int, box: tuple[float, float, float, float]) -> bool:
-        """True when any node of the way lies inside the box.
+        """way のノードが 1 つでも bbox の中にあれば真。
 
-        Overpass's own bbox filter is the same test, so the cheap rectangle
-        rejection below only skips ways it would also have skipped.
+        Overpass 自身の bbox の絞り込みも同じ判定なので、下の安価な矩形による
+        除外が飛ばすのは、あちらでも飛ばされていた way だけである。
         """
         south, west, north, east = box
         ws, ww, wn, we = self.box[wid]
@@ -135,10 +133,10 @@ def kept_tags(tags) -> dict[str, str]:
 
 # -------------------------------------------------------------------- passes ---
 def read_header(path: str) -> str:
-    """The moment the extract was cut, as an OSM base timestamp.
+    """切り出した時刻を、OSM の基準時刻として返す。
 
-    verify.py insists the data is under a week old and the page prints it as
-    データ基準. A pbf has to state the same thing an Overpass mirror does.
+    verify.py はデータが 1 週間以内であることを求め、ページはそれを データ基準
+    として出す。pbf も Overpass のミラーと同じことを述べねばならない。
     """
     header = osmium.io.Reader(path, osmium.osm.osm_entity_bits.NOTHING).header()
     ts = header.get("osmosis_replication_timestamp") or header.get("timestamp")
@@ -151,10 +149,10 @@ def read_header(path: str) -> str:
 
 
 def pass_relations(path: str) -> tuple[dict[int, dict], set[int]]:
-    """Every road route relation, plus the ids of relations they hold.
+    """道路のルートリレーションすべてと、それが抱えるリレーションの id。
 
-    Two passes: a child relation need not be tagged as a route itself, so which
-    ones matter is only known once the parents have been read.
+    二度読む。子リレーションは自分がルートだとタグ付けされているとは限らないので、
+    どれが効くかは親を読み終えて初めて分かる。
     """
     rels: dict[int, dict] = {}
     wanted: set[int] = set()
@@ -194,16 +192,15 @@ def pass_relations(path: str) -> tuple[dict[int, dict], set[int]]:
 
 
 def pass_ways(path: str, member_ways: set[int], member_nodes: set[int], idx: str):
-    """Way geometry for members and candidates, and the member nodes' positions."""
+    """メンバーと候補の way の形、そしてメンバーのノードの位置。"""
     ways = Ways()
     nodes: dict[int, tuple[float, float]] = {}
     print("  pass 3/3: node locations and way geometry", flush=True)
 
-    # Japan is ~270 million nodes. The location cache still has to see every one
-    # of them, but that happens in C++; letting them cross into Python to be
-    # rejected one at a time costs more than the rest of the pass put together.
-    # The filter keeps the cache and skips the hand-off. Member nodes are read
-    # back out of the cache afterwards.
+    # 日本には約 2 億 7000 万のノードがある。位置のキャッシュはその全部を見る
+    # 必要があるが、それは C++ の中で起きる。1 つずつ Python 側へ渡して捨てると、
+    # この処理の残り全部を合わせたより高く付く。この絞り込みはキャッシュを残した
+    # まま受け渡しだけを飛ばす。メンバーのノードは、後からキャッシュに読みに行く。
     proc = (
         osmium.FileProcessor(
             path, osmium.osm.osm_entity_bits.NODE | osmium.osm.osm_entity_bits.WAY
@@ -237,9 +234,9 @@ def pass_ways(path: str, member_ways: set[int], member_nodes: set[int], idx: str
             continue
         ways.add(o.id, kept_tags(tags), o.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"), pts)
 
-    # Relations may hold nodes as members — a junction a route passes through.
-    # They are few, and a relation whose only presence in a box is such a node
-    # still counts as being there, the same way Overpass counted it.
+    # リレーションはノードをメンバーに持つことがある——路線が通る交差点などで
+    # ある。数は少ないが、bbox の中に在る物がそのノードだけであっても、その
+    # リレーションはそこに在ると数える。Overpass もそう数えていた。
     store = proc.node_location_storage
     for nid in member_nodes:
         try:
@@ -251,25 +248,24 @@ def pass_ways(path: str, member_ways: set[int], member_nodes: set[int], idx: str
     return ways, nodes
 
 
-# ---------------------------------------------------------------- per region ---
+# -------------------------------------------------------------- 地域ごと ---
 def write_region(region: str, box, rels, national, competing, ways, nodes, base_ts, fetched):
-    """Reproduce the three Overpass queries over the in-memory country."""
-    # Which ways touch this box, asked once.
+    """三つの Overpass の問い合わせを、メモリ上の全国に対して再現する。"""
+    # どの way がこの bbox に触れるかを、一度だけ訊く。
     #
-    # `in_box` walks a way's nodes until one lands inside, and the three queries
-    # below asked the same way that question four or five times over — once per
-    # national relation holding it, again for the core list, and twice more for
-    # the competing relations. The answer cannot change inside one region, so it
-    # is taken once here and looked up after.
+    # `in_box` は way のノードを、1 つが中に落ちるまで辿る。下の三つの問い合わせ
+    # は同じ way に同じ問いを四、五回ずつ訊いていた——その way を抱える国道の
+    # リレーションごとに 1 回、core の一覧でもう 1 回、競合するリレーションで
+    # さらに 2 回である。1 つの地域の中で答えが変わることはないので、ここで一度
+    # だけ取り、後は引くだけにする。
     #
-    # A set of the ways that *are* inside, rather than a yes/no for all 355,570:
-    # one prefecture's box holds a few tens of thousands, so this is the smaller
-    # of the two shapes as well as the one that reads better. `wid in inside`
-    # also folds in the `wid in ways.start` test the callers used to carry,
-    # since nothing outside ways.start can be in here.
+    # 355,570 本すべてに真偽を持たせるのではなく、中に在る way の集合を持つ。
+    # 1 県の bbox に入るのは数万本なので、こちらのほうが小さく、読みやすくもある。
+    # `wid in inside` は、呼ぶ側が持っていた `wid in ways.start` の判定も畳み
+    # 込む。ways.start に無い物がここに入ることはないからである。
     inside_box = {wid for wid in ways.start if ways.in_box(wid, box)}
 
-    # Query 1: national relations touching the box, then their children.
+    # 問い合わせ 1。bbox に触れる国道のリレーションと、その子。
     parents = [
         rid for rid in national
         if any(m["type"] == "way" and m["ref"] in inside_box
@@ -286,19 +282,19 @@ def write_region(region: str, box, rels, national, competing, ways, nodes, base_
         if m["type"] == "way" and m["ref"] in inside_box
     })
 
-    # Query 2: candidates, whether or not a relation holds them. The Overpass
-    # query has no such exclusion, but a way returned by both `out` statements
-    # is deduplicated by build_routes.py anyway, and skipping it here halves the
-    # cache. Ways held only by a *competing* relation are still candidates.
+    # 問い合わせ 2。候補。リレーションが抱えているかどうかは問わない。Overpass の
+    # 問い合わせにこの除外は無いが、二つの `out` が返した way はどのみち
+    # build_routes.py が重複排除するので、ここで飛ばせばキャッシュが半分になる。
+    # 競合するリレーションだけが抱えている way は、今も候補である。
     core_set = set(core_way_ids)
     cand_ids = sorted(
         wid for wid in inside_box
         if wid not in core_set and is_candidate(ways.tags[wid])
     )
 
-    # Query 3: the negative signal, kept as whole relations (tags + members)
-    # rather than a flat way-id set — see build_routes.resolve_competing_claims
-    # for why mere membership cannot be the disqualifying signal.
+    # 問い合わせ 3。負の証拠。平らな way id の集合ではなく、リレーションのまま
+    # (タグとメンバー)保つ——ただ所属していることが失格の証拠になり得ない理由は
+    # build_routes.resolve_competing_claims を参照。
     competing_relations = [
         rel for rel in (
             {
@@ -344,20 +340,19 @@ def write_region(region: str, box, rels, national, competing, ways, nodes, base_
 
 
 def is_national_relation(tags: dict[str, str]) -> bool:
-    """Is this route relation a 国道 relation?
+    """このルートリレーションは国道のリレーションか。
 
-    `network=JP:national` is the usual evidence. It is not the only evidence:
-    measured over the whole country, 582 route=road relations named 国道N号 carry
-    that network and 43 carry no `network` tag at all. Most of the 43 are 旧道,
-    バイパス or 支線 of routes some other relation already vouches for, but two
-    route numbers have nothing else — and for 国道478号 (京都縦貫自動車道) the
-    untagged relation is the only one that exists, so the whole route was
-    missing from 京都府.
+    ふつうの証拠は `network=JP:national` である。それが唯一の証拠ではない。全国で
+    測ると、国道N号 という名前の route=road のリレーションのうち 582 がその
+    network を持ち、43 は `network` タグを 1 つも持たない。43 の大半は、他の
+    リレーションが既に保証している路線の旧道・バイパス・支線だが、二つの路線番号
+    には他に何も無い——国道478号(京都縦貫自動車道)については、タグの無い
+    リレーションが唯一の存在なので、路線が丸ごと京都府から欠けていた。
 
-    A relation named 国道N号 is therefore admitted on its name, which is the
-    evidence RULES.md 問1 規則 b already accepts from a way. The name is read
-    from `name` and `name:ja` only, never `official_name` — that is the field
-    that put a Mie route number into Yamanashi (CASES.md 2).
+    だから 国道N号 という名前のリレーションは、その名前で認める。RULES.md 問 1
+    規則 b が way について既に認めているのと同じ証拠である。名前を読むのは `name`
+    と `name:ja` だけで、`official_name` は決して読まない——三重県の路線番号を
+    山梨県へ持ち込んだのがその欄である(CASES.md 2)。
     """
     net = tags.get("network") or ""
     if net.startswith(NATIONAL):
@@ -369,22 +364,20 @@ def is_national_relation(tags: dict[str, str]) -> bool:
     )
 
 
-# A route=road relation that can make a *competing* number claim under a way
-# it shares with a real national route — 都道府県道 relations are the bulk of
-# these, but they are not the only kind. way/560259106 (首都高速都心環状線,
-# `ref=1`) sits on relation/4256244, `network=首都高速道路`, `ref=1`; nothing in
-# its own name says 高速N号 (CASES.md 9's guard needs that string, and
-# 都心環状線 does not have it), so the collision with 国道1号 went through
-# uncaught. `network` present but not `JP:`-prefixed is the same shape as
-# 県道's `JP:prefectural` — an authority naming its own route numbering
-# scheme, just not Japan's admin-boundary one.
+# 本物の国道と共有する way の下で、競合する番号を主張しうる route=road の
+# リレーション。大半は都道府県道のリレーションだが、それだけではない。
+# way/560259106(首都高速都心環状線、`ref=1`)は relation/4256244 に載っており、
+# そちらは `network=首都高速道路`、`ref=1` である。way 自身の名前は 高速N号 と
+# 述べていない(CASES.md 9 の見張りはその文字列を必要とし、都心環状線は持たない)
+# ので、国道1号との衝突は捕まらずに通っていた。`network` が在って `JP:` で
+# 始まらない形は、県道の `JP:prefectural` と同じ形である——ある主体が自分の路線
+# 番号の体系を名乗っており、それが日本の行政区画の体系ではない、というだけである。
 #
-# Measured nationwide: 34 route=road relations carry a `network` tag that is
-# non-empty and not `JP:`-prefixed (首都高速道路, 阪神高速道路, 名古屋高速道路
-# and similar). 33 of them claim a `ref` that collides with a real
-# JP:national route number somewhere in Japan, covering 1,009 member ways —
-# almost all of them 都市高速 route families (1〜11 for 首都高速, 33〜46 for
-# 阪神高速, and so on). See CASES.md 20.
+# 全国で測ると、`network` タグが空でなく `JP:` で始まらない route=road の
+# リレーションは 34 件ある(首都高速道路、阪神高速道路、名古屋高速道路など)。
+# そのうち 33 件が、日本のどこかに実在する JP:national の路線番号と衝突する `ref`
+# を主張しており、メンバーの way は 1,009 本に及ぶ——ほぼすべて都市高速の路線群
+# である(首都高速の 1〜11、阪神高速の 33〜46 など)。CASES.md 20 を参照。
 def is_competing_relation(tags: dict[str, str]) -> bool:
     net = tags.get("network") or ""
     if net.startswith(PREFECTURAL):
@@ -447,10 +440,10 @@ def main() -> None:
     member_nodes = {m["ref"] for r in rels.values() for m in r["members"] if m["type"] == "node"}
     print(f"  ways held by a road route relation: {len(member_ways):,}")
 
-    # Japan is ~150 million node positions. In memory that is 2-3 GB and the
-    # pass is I/O bound on the pbf alone; on disk it is a 2.4 GB index file and
-    # several times slower. Machines that cannot spare the memory pass
-    # --index sparse_file_array,build/pbf/nodes.idx.
+    # 日本には約 1 億 5000 万のノードの位置がある。メモリに載せれば 2〜3 GB で、
+    # この処理は pbf の入出力だけで頭打ちになる。ディスクに置けば 2.4 GB の索引
+    # ファイルになり、数倍遅くなる。メモリを割けない機械では
+    # --index sparse_file_array,build/pbf/nodes.idx を渡す。
     PBF.mkdir(parents=True, exist_ok=True)
     ways, nodes = pass_ways(path, member_ways, member_nodes, node_index)
     print(f"  ways kept: {len(ways.start):,}  coordinates: {len(ways.lat):,}")
@@ -461,12 +454,12 @@ def main() -> None:
         write_region(region, REGIONS[region]["bbox"], rels, national, competing,
                      ways, nodes, base_ts, fetched)
 
-    # Completeness: a way no region's box covers is a way the map cannot show.
-    # This is the failure a set of hand-drawn rectangles would otherwise hide.
+    # 網羅の確認。どの地域の bbox も覆わない way は、地図が出せない way である。
+    # 手で引いた矩形の組であれば隠してしまう類の失敗が、これである。
     #
-    # Only national members count. Prefectural ones are expected to fall out:
-    # the 東京都 box is the mainland alone, and the 都道 of 三宅島 and 小笠原 are
-    # outside every box by design. A *national* orphan means a box is wrong.
+    # 数えるのは国道のメンバーだけである。都道府県道が外へ落ちるのは想定どおりで
+    # ある。東京都の bbox は本土だけで、三宅島と小笠原の都道は、設計としてどの
+    # bbox の外にもある。取りこぼしが国道であれば、bbox のほうが誤っている。
     boxes = [REGIONS[r]["bbox"] for r in REGIONS]
     national_ways = {
         m["ref"] for rid in national for m in rels[rid]["members"] if m["type"] == "way"

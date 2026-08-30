@@ -1,10 +1,10 @@
-/* The 国道番号標識 the map draws wherever it names a route.
+/* 地図が路線を名指しするところで描く国道番号標識。
  *
- * SHIELD_PATH is traced from a real sign's proportions, not computed, so
- * there is no formula to re-derive here. What's worth checking instead is
- * that the string stays a well-formed closed path whose points sit inside
- * its own viewBox — a corrupted edit (a dropped digit, a wrong sign) would
- * otherwise only show up as a visibly broken shape in the browser.
+ * SHIELD_PATH は実物の標識の比率を写した物で、計算した物ではありません。だから
+ * ここで導き直せる式はありません。代わりに確かめる値打ちがあるのは、その文字列
+ * が閉じた正しい形のパスであり続けること、点が自分の viewBox の中に収まって
+ * いることです。編集で壊れても(桁の脱落、符号の誤り)、そうでなければブラウザで
+ * 形が崩れて初めて分かります。
  */
 import { describe, expect, test } from 'bun:test';
 
@@ -18,15 +18,15 @@ import {
   shieldRow,
 } from '../web/shield.mjs';
 
-/** Every number in a path, in order. */
+/** パスに出てくる数を、順に全部。 */
 const nums = (d) =>
   [...d.matchAll(/-?\d+(?:\.\d+)?/g)].map((m) => Number(m[0]));
 
 /**
- * Every point a `M`/`c` segment names — endpoints and the two control points
- * each `c` carries — resolving the relative `c` deltas by walking the path
- * from its `M` start. A cubic curve never leaves the convex hull of these
- * points, so checking them bounds the curve itself, not just its endpoints.
+ * `M`・`c` の区間が名指しする点をすべて——端点と、`c` が持つ二つの制御点——
+ * 返します。`c` の相対の差分は、`M` の始点からパスを辿って解きます。三次曲線は
+ * これらの点の凸包から出ないので、点を検査すれば端点だけでなく曲線そのものを
+ * 抑えられます。
  */
 function anchors(d) {
   const points = [];

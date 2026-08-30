@@ -2,22 +2,21 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Build every region from cache, then pack and check the nationwide product.
+"""全地域をキャッシュから生成し、続けて全国の生成物をパックして検査する。
 
-The per-region half is deliberately unchanged: each prefecture is judged inside
-its own box, because the corroboration guard only filters while the set of route
-numbers it trusts is a prefecture's worth rather than the country's. What is new
-is the second half — merging the regions, cutting tiles, and asking the
-questions that only exist once the map is nationwide.
+地域ごとの前半は意図してそのままである。県はそれぞれ自分の bbox の中で判定する。
+裏取りが濾せるのは、信用する路線番号の集合が全国ぶんではなく 1 県ぶんであるあいだ
+だけだからである。新しいのは後半——地域を結合し、タイルを切り、地図が全国になって
+初めて成り立つ問いを訊くこと——である。
 
-Every region is built and checked before anything is packed, and the failures
-are reported together. Stopping at the first one would mean learning about 47
-prefectures one run at a time. Packing still only happens if all of them passed:
-a half-built set packed into an archive looks exactly like a complete one.
+パックの前に全地域を生成して検査し、失敗はまとめて報告する。最初の失敗で止めれば、
+47 県のことを 1 回の実行につき 1 県ずつ知ることになる。それでもパックは全県が
+通ったときにしか走らない。半分だけ生成した集合をアーカイブに詰めた物は、完全な物と
+見分けが付かない。
 
-Usage:  uv run pipeline/build_all.py [region ...]   (default: every region)
-        uv run pipeline/build_all.py --skip-verify  (build and pack only)
-        uv run pipeline/build_all.py --no-pack      (per-region only)
+使い方:  uv run pipeline/build_all.py [地域 ...]   (既定: 全地域)
+         uv run pipeline/build_all.py --skip-verify  (生成とパックだけ)
+         uv run pipeline/build_all.py --no-pack      (地域ごとの処理だけ)
 """
 from __future__ import annotations
 
@@ -32,10 +31,11 @@ from regions import REGIONS, named_regions
 
 HERE = Path(__file__).resolve().parent
 
-# What comes back is read as UTF-8, so the child has to write UTF-8. A pipe is
-# not a console, so Python otherwise falls back to the system locale — cp932 on
-# a Japanese Windows — and 尾駮バイパス has a kanji cp932 does not contain. 青森県
-# died printing its own progress line, and it was reported as a build failure.
+# 返ってくる物を UTF-8 として読むので、子プロセスも UTF-8 で書かねばならない。
+# pipe はコンソールではないため、そうしないと Python は端末のロケール——日本語
+# Windows では cp932——へ落ちる。「尾駮バイパス」には cp932 に無い漢字が入って
+# いる。青森県は自分の進捗の行を出そうとして落ち、それが生成の失敗として報告
+# された。
 CHILD_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
 
@@ -48,7 +48,7 @@ def run(cmd: list[str]) -> tuple[int, str]:
 
 
 def stage(label: str, cmd: list[str]) -> None:
-    """A whole-country stage. These do stop at the first failure."""
+    """全国を相手にする段。こちらは最初の失敗で止まる。"""
     print(f"\n{'=' * 70}\n{label}\n{'=' * 70}", flush=True)
     r = subprocess.run(cmd, cwd=ROOT)
     if r.returncode != 0:
@@ -65,28 +65,28 @@ def failures(out: str) -> list[str]:
 
 
 def outcome(label: str, code: int, out: str) -> list[str]:
-    """A subprocess's verdict, folding in exit codes that FAIL lines miss.
+    """子プロセスの判定。FAIL 行が捉えない終了コードも畳み込む。
 
-    verify.py itself exits 1 whenever it prints FAIL lines, so `code != 0`
-    is not evidence of anything beyond what `failures()` already found.
-    Only a nonzero exit with no FAIL line at all — a traceback, a crash —
-    is new information, and it is reported once, not per FAIL line.
+    verify.py は FAIL 行を出せば自分で終了コード 1 を返すので、`code != 0` は
+    `failures()` が既に見つけた以上のことを示さない。新しい情報になるのは、
+    FAIL 行が 1 つも無いまま 0 でない終了コードが返ったとき——traceback や
+    異常終了——だけである。それは FAIL 行ごとにではなく、一度だけ報告する。
     """
     bad = failures(out)
     if code != 0 and not bad:
-        bad.append(f"{label} が終了コード {code} で異常終了しました（FAIL 行なし）")
+        bad.append(f"{label} が終了コード {code} で異常終了しました(FAIL 行なし)")
     return bad
 
 
 def main() -> None:
-    # A road name this terminal cannot encode must not be what stops the build.
+    # この端末が符号化できない道の名前で、生成が止まってはならない。
     sys.stdout.reconfigure(errors="replace")
     args = sys.argv[1:]
     skip_verify = "--skip-verify" in args
     no_pack = "--no-pack" in args
-    # --pack-only は、生成済みの地域から配信データだけを作り直します。
-    # 地域ごとの判定は回しません。段の順番を知っているのはこの関数だけに
-    # したいので、`mise run pack` もここを呼びます。
+    # --pack-only は、生成済みの地域から配信データだけを作り直す。地域ごとの
+    # 判定は回さない。段の順番を知っているのはこの関数だけにしたいので、
+    # `mise run pack` もここを呼ぶ。
     pack_only = "--pack-only" in args
     wanted = (
         []
@@ -110,8 +110,8 @@ def main() -> None:
         # revoked は検証ではなくデータそのものなので、--skip-verify でも飛ばさ
         # ない。この後のパックは --skip-verify の有無に関係なく走るので、ここを
         # 飛ばすと revoked が反映されないデータがそのまま配信物になる
-        # (CodeRabbit review on this PR)。N13 側の障害(ネットワーク・KSJ 側の
-        # 不具合)はこの県だけの失敗として扱い、他県の続行は止めない —
+        # (この PR への CodeRabbit のレビュー)。N13 側の障害(ネットワーク・KSJ 側の
+        # 不具合)はこの県だけの失敗として扱い、他県の続行は止めない——
         # build_routes.py の失敗とは別扱い。
         code, out = run(["uv", "run", str(HERE / "apply_n13.py"), region])
         bad = outcome("apply_n13.py", code, out)
@@ -161,8 +161,8 @@ def main() -> None:
     # pack_web.mjs はこれが無いと meta を書けないので、失敗はここで止める。
     stage("台帳 — 政令の別表から起点・終点を取り込む",
           ["uv", "run", str(HERE / "decree.py")])
-    # 47 prefectures of GeoJSON, the merged features and the whole tile pyramid
-    # are live at once here; the default heap is not enough.
+    # 47 県ぶんの GeoJSON、結合した特徴量、タイルのピラミッド全体がここで同時に
+    # 生きている。既定のヒープでは足りない。
     stage("配信データ — 地域を結合してタイルを切る",
           ["node", "--max-old-space-size=6144", str(HERE / "pack_web.mjs")])
     stage("配信データ — PMTiles にまとめる",
@@ -174,7 +174,7 @@ def main() -> None:
     print(f"\n{'=' * 70}")
     print(f"すべて通った。{time.time() - started:.0f}s")
     print("ブラウザでの実描画は次で確認する。")
-    print("  mise run serve   （別の端末で）")
+    print("  mise run serve   (別の端末で)")
     print("  mise run render-check")
 
 

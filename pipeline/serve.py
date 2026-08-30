@@ -2,17 +2,17 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Serve web/ with byte-range support.
+"""web/ を、バイト範囲の要求に答えられる形で配る。
 
-`python -m http.server` ignores `Range` and answers 200 with the whole file.
-That is fine for GeoJSON and fatal for PMTiles, whose whole point is that the
-browser fetches the few kilobytes it needs out of a large archive. Without this
-the viewer would pull the entire archive on the first tile and fail to parse it.
+`python -m http.server` は `Range` を無視し、200 でファイル全体を返す。GeoJSON
+なら構わないが、PMTiles には致命的である。大きなアーカイブから必要な数 kB だけを
+ブラウザが取ることこそ、あの形式の眼目だからである。これが無いと、閲覧側は最初の
+1 タイルでアーカイブを丸ごと引き、解析に失敗する。
 
-Every static host worth deploying to answers ranges; only the development server
-did not.
+配信先として使えるだけの静的ホストはどれも範囲要求に答える。答えていなかったのは
+開発用サーバだけだった。
 
-Usage:  uv run pipeline/serve.py [port]
+使い方:  uv run pipeline/serve.py [ポート]
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ class RangeHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         self.send_header("Accept-Ranges", "bytes")
-        # The dev server is read once per edit; caching only hides the edit.
+        # 開発用サーバは編集のたびに読まれる。キャッシュはその編集を隠すだけ。
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
@@ -53,8 +53,8 @@ class RangeHandler(SimpleHTTPRequestHandler):
         if os.path.isdir(path):
             return super().send_head()
         try:
-            # The file outlives this method — it's read later via the _Slice
-            # returned below, so a context manager here would close it too soon.
+            # このファイルはこのメソッドより長く生きる——下で返す _Slice を通して
+            # 後から読まれるので、ここで with を使うと早く閉じすぎる。
             f = open(path, "rb")  # noqa: SIM115
         except OSError:
             self.send_error(404, "File not found")
@@ -66,8 +66,8 @@ class RangeHandler(SimpleHTTPRequestHandler):
             start = int(first)
             end = int(last) if last else size - 1
         else:
-            # A suffix range: the last N bytes. PMTiles does not use it, but a
-            # half-implemented Range header is worse than none.
+            # 末尾からの範囲、つまり最後の N バイト。PMTiles は使わないが、
+            # 中途半端な Range の実装は、無いよりたちが悪い。
             start = max(0, size - int(last or 0))
             end = size - 1
         end = min(end, size - 1)
@@ -88,7 +88,7 @@ class RangeHandler(SimpleHTTPRequestHandler):
 
 
 class _Slice:
-    """A file restricted to the requested range, for copyfile()."""
+    """要求された範囲に限ったファイル。copyfile() に渡す。"""
 
     def __init__(self, f, length: int) -> None:
         self.f = f
@@ -110,7 +110,7 @@ class _Slice:
 def main() -> None:
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     handler = partial(RangeHandler, directory=str(ROOT / "web"))
-    print(f"http://localhost:{port}/  (serving web/, byte ranges enabled)")
+    print(f"http://localhost:{port}/  (web/ を配信、バイト範囲に対応)")
     ThreadingHTTPServer(("", port), handler).serve_forever()
 
 

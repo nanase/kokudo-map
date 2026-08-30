@@ -22,7 +22,7 @@
             "type": "command",
             "command": "node \"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/guard-data-dirs.mjs\"",
             "timeout": 10,
-            "statusMessage": "生成物を消す命令か見ています"
+            "statusMessage": "生成物を消す命令かどうかを見ています"
           }
         ]
       }

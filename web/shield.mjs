@@ -1,25 +1,24 @@
-/* The 国道番号標識 — the sign a Japanese national route is known by — drawn
- * once and used everywhere the map names a route: in the panel, in a popup
- * header, and as the site's own icon.
+/* 国道番号標識——日本の一般国道がそれで知られている標識——を一度だけ描き、
+ * 地図が路線を名指しするところすべてで使う。操作面の一覧、ポップアップの
+ * 見出し、そしてこのサイト自身のアイコンである。
  *
- * The outline is traced from the real sign's proportions (Japanese_National_
- * Route_Sign_Blank.svg, Wikimedia Commons, public domain — the number itself
- * is left out here because a traced digit would carry the source font's
- * licence).
+ * 輪郭は実物の標識の比率を写した(Japanese_National_Route_Sign_Blank.svg、
+ * Wikimedia Commons、パブリックドメイン)。数字そのものはここに含めない。
+ * 字を写すと元の書体のライセンスが付いてくるためである。
  *
- * Its own module because scripts/make_brand.mjs draws the favicon and the
- * share image from the same path. A second copy of the outline would be a
- * second answer to what the sign looks like, free to drift from the first.
+ * 独立したモジュールにしてあるのは、scripts/make_brand.mjs が favicon と
+ * 共有画像を同じパスから描くためである。輪郭の写しをもう 1 つ持つことは、
+ * 標識の形に二つ目の答えを持つことであり、片方だけずれていく。
  */
 
-/** The sign's own coordinate system; every consumer draws inside this box. */
+/** 標識自身の座標系。使う側はどれもこの枠の中に描く。 */
 export const SHIELD_VIEWBOX = '0 0 455 435';
 
 /**
- * The outline of the sign, drawn once.
+ * 標識の輪郭。一度だけ描く。
  *
- * Margin to the viewBox edge is about 10 units on every side, which is what
- * lets the white border below bleed outward without being clipped.
+ * viewBox の縁までの余白は四方とも約 10 単位ある。下の白い縁が外へ滲んでも
+ * 切られずに済むのはそのためである。
  */
 export const SHIELD_PATH =
   'M227,423.604c25.117,0 47.688,-9.475 65.617,-25.328c66.496,-68.349 116.87,' +
@@ -31,50 +30,47 @@ export const SHIELD_PATH =
   '65.743,25.853Z';
 
 /**
- * Border thickness, in the same units as `SHIELD_PATH`, for every drawing of
- * the sign except the favicon — `shield()` below (panel row, popup) and the
- * share card scripts/make_brand.mjs renders to og.png.
+ * 縁の太さ。単位は `SHIELD_PATH` と同じで、favicon を除くすべての標識——下の
+ * `shield()`(操作面の行、ポップアップ)と、scripts/make_brand.mjs が og.png へ
+ * 描く共有カード——が使う。
  *
- * What differs by context is how much of it shows: make_brand.mjs paints the
- * card with `paint-order="stroke"` so the face keeps its full size with
- * nothing behind it to blend into; `shield()` does not, since its background
- * is always the panel or a popup, and the border blending into that edge is
- * the point (see the CSS comment above `.shield`).
+ * 場面ごとに違うのは、そのうちどれだけが見えるかである。make_brand.mjs は
+ * `paint-order="stroke"` で描くので、面は縮まず、後ろに溶け込む相手も無い。
+ * `shield()` はそうしない。背景が必ず操作面かポップアップであり、縁がその地に
+ * 溶けることこそ狙いだからである(`.shield` の上の CSS のコメントを参照)。
  */
 export const SHIELD_STROKE_WIDTH = 15.94;
 
 /**
- * Border thickness for the favicon and the panel's own title icon —
- * `web/favicon.svg`, drawn by scripts/make_brand.mjs and reused by both.
+ * favicon と、操作面の見出しアイコンが使う縁の太さ。どちらも
+ * scripts/make_brand.mjs が描く `web/favicon.svg` を共有する。
  *
- * The mark carries no number, so unlike `SHIELD_STROKE_WIDTH` there is no
- * text for a heavier border to crowd, and it can afford to read clearly at
- * favicon size. `SHIELD_VIEWBOX`'s ~10-unit margin is too tight for a border
- * this heavy on its own, so make_brand.mjs pads the viewBox by
- * `SHIELD_ICON_PAD` before drawing it. The share card keeps the lighter
- * `SHIELD_STROKE_WIDTH` instead — its border is invisible against the card's
- * white background regardless, so there is nothing to gain by thickening it,
- * only a smaller-looking mark from the extra padding.
+ * この印は番号を持たないので、`SHIELD_STROKE_WIDTH` と違って太い縁が押し潰す
+ * 文字が無く、favicon の大きさでもはっきり読める太さにできる。`SHIELD_VIEWBOX`
+ * の約 10 単位の余白はこの太さには足りないので、make_brand.mjs は
+ * `SHIELD_ICON_PAD` ぶん viewBox を広げてから描く。共有カードのほうは細い
+ * `SHIELD_STROKE_WIDTH` のままにする。カードの白い地では縁がどのみち見えず、
+ * 太くしても得るものは無く、余白のぶん印が小さく見えるだけである。
  */
 export const SHIELD_ICON_STROKE_WIDTH = 56;
 
-/** viewBox padding paired with `SHIELD_ICON_STROKE_WIDTH` — see above. */
+/** `SHIELD_ICON_STROKE_WIDTH` と対で使う viewBox の余白。上を参照。 */
 export const SHIELD_ICON_PAD = 20;
 
 /**
- * A route marker ("おにぎり") with the number inside.
+ * 番号を中に入れた標識(「おにぎり」)。
  *
- * Coloured like the real 国道番号標識 — a white number on the sign blue, inside
- * the white border the sign carries — rather than as blue text on the panel
- * colour, which left it competing with whatever the map showed behind a popup.
+ * 配色は実物の国道番号標識に合わせる——標識の青地に白い番号、その外に標識が
+ * 持つ白い縁である。操作面の地色に青い文字を置く形にすると、ポップアップの
+ * 後ろに出ている地図と見た目を競うことになる。
  *
- * The number is SVG text with `textLength` rather than an HTML span, because a
- * three-digit number is wider than the sign at the height it sits: it used
- * to spill onto the panel behind, and white on white would be nothing at all.
+ * 番号は HTML の span ではなく `textLength` を付けた SVG の text にする。
+ * 3 桁の番号は、この高さでは標識より広くなるためである。以前は後ろの操作面へ
+ * 食み出しており、白地に白では何も見えない。
  *
- * Position, per-digit-count width, and the `font-size` in style.css's
- * `.shield text` rule were all tuned together, by eye, against
- * `SHIELD_VIEWBOX`. Re-tune all three together if the viewBox ever changes.
+ * 位置、桁数ごとの幅、style.css の `.shield text` が持つ `font-size` は、
+ * `SHIELD_VIEWBOX` に対して目で三つまとめて合わせてある。viewBox を変える
+ * なら、三つとも合わせ直す。
  */
 export function shield(ref, small) {
   const digits = String(ref).length;

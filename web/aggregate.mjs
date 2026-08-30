@@ -1,13 +1,12 @@
-/* Reading the panel's numbers out of what the build counted.
+/* 画面が出す数を、ビルドが数えた表から読む。
  *
- * The viewer never holds the arcs — nationwide they are ~130,000 features that
- * arrive as vector tiles — so it cannot count features to fill the panel in.
- * Everything it displays is a sum over `national.meta.json`, and these are
- * those sums.
+ * 閲覧側はアークを手元に持たない——全国で約 13 万件がベクタタイルとして届く
+ * ——ので、特徴量を数えて操作面を埋めることはできない。画面に出る数はすべて
+ * `national.meta.json` の部分和であり、その部分和がここにある。
  *
- * Kept apart from the panel that shows them so they can be checked directly.
- * What they get right is the whole point of the map, and it is exactly the
- * thing that is easy to get wrong by accident: see test/aggregate.test.mjs.
+ * 出す側の操作面と分けてあるのは、直接検査できるようにするためである。ここが
+ * 正しく出す数はこの地図の存在理由そのもので、しかも不用意に間違えやすい。
+ * test/aggregate.test.mjs を参照。
  */
 
 /* 組み合わせ表の km は小数第 1 位まで。足し合わせた浮動小数の尾を、同じ
@@ -21,13 +20,12 @@ const touched = (c, selected) =>
   !selected.size || c.refs.some((r) => selected.has(r));
 
 /**
- * The build ships one table: every distinct *combination* of designations, with
- * its length, arc count and extent. Everything the panel shows is a sum over a
- * subset of its rows.
+ * ビルドが配るのは 1 枚の表である。指定の組み合わせごとに 1 行で、延長・
+ * アーク数・広がりを持つ。画面が出すものは、どれもその行の部分和である。
  *
- * A per-route table would not do. Concurrency means an arc belongs to several
- * routes at once, so adding two route rows counts the shared arcs twice —
- * which is exactly the number the map exists to stop hiding.
+ * 路線別の表では足りない。重用区間のアークは複数の路線に同時に属するので、
+ * 路線の行を足すと共有部分を二重に数える——それは地図が隠すのをやめさせたい
+ * 数そのものである。
  */
 export function routesOf(combos) {
   const by = new Map();
@@ -53,11 +51,11 @@ export function routesOf(combos) {
   return out;
 }
 
-/** Totals over the combinations a selection touches. An empty selection means
- *  everything, which is what the map is already showing.
+/** 選択が触れる組み合わせの合計。選択が空なら全部で、それが地図の見せている
+ *  ものである。
  *
- *  Takes the table rather than reading it off the module's state: a sum with
- *  no hidden input can be checked by handing it rows and comparing. */
+ *  表はモジュールの状態から読まず、引数で受け取る。隠れた入力を持たない和は、
+ *  行を渡して突き合わせるだけで検査できる。 */
 export function statsFor(combos, selected) {
   let arcs = 0;
   let km = 0;
@@ -72,16 +70,15 @@ export function statsFor(combos, selected) {
 }
 
 /**
- * The concurrent sections a selection is asking about.
+ * 選択が問うている重用区間。
  *
- * Concurrency is a property of the road, so `n >= 2` is asked of the arc and
- * not of the selection; the selection only narrows which of those sections are
- * listed. An empty selection lists them all — the same reading of an empty
- * selection the three sums above take, because it is the same `touched`.
+ * 重用は道の性質なので、`n >= 2` はアークに聞くのであって選択に聞くのでは
+ * ない。選択は並べる区間を絞るだけである。選択が空なら全部を並べる——上の
+ * 三つの和と同じ読み方で、同じ `touched` を使っているためである。
  *
- * A row, not a number, but it is still a read of the combination table under
- * the same rule, so it belongs beside the sums rather than beside the markup
- * that lays it out (panel.mjs's rankingHTML).
+ * 返すのは数ではなく行だが、同じ規則で組み合わせ表を読むことに変わりはない。
+ * だから、並べ方を組み立てる markup(panel.mjs の rankingHTML)の側ではなく、
+ * 和の側に置く。
  */
 export const concurrencies = (combos, selected) =>
   combos.filter((c) => c.n >= 2 && touched(c, selected));

@@ -1,7 +1,7 @@
-/* Style and filter definitions, kept free of any browser dependency so that
- * pipeline/check_expressions.mjs validates the *same* objects the viewer uses.
- * An earlier version duplicated them, and the duplicate quietly passed while
- * the real layers were rejected by MapLibre.
+/* スタイルと絞り込み式の定義。ブラウザに依存しないので、
+ * pipeline/check_expressions.mjs が閲覧側の使う物そのものを検査できる。
+ * 以前は式を書き写した複製を検査しており、複製が通るのに本物の層は MapLibre に
+ * 拒否されていた。
  */
 
 export const N_COLORS = ['#1B62C4', '#D98324', '#C2352B', '#7B3E9D']; // n = 1,2,3,4+
@@ -14,9 +14,8 @@ export const KIND_UNOPENED = ['unopened'];
 export const KIND_FERRY = ['ferry'];
 export const KIND_EXPRESSWAY = ['expressway'];
 
-// Kinds that are not driveable carriageway. Each gets its own dashed layer and
-// is taken out of the solid road layers, so none of them can be mistaken for a
-// road you could drive down.
+// 走れる車道ではない区分。どれも破線の層を自分で持ち、実線の道路層からは外す。
+// 走れる道と取り違えられないようにするためである。
 export const SPECIAL_KINDS = [
   ...KIND_CONSTRUCTION,
   ...KIND_UNOPENED,
@@ -24,12 +23,11 @@ export const SPECIAL_KINDS = [
   ...KIND_FERRY,
 ];
 
-// `expressway` (highway=motorway: 第二神明道路, 神戸淡路鳴門自動車道, …) is real,
-// driveable carriageway — it does not belong with the dashed kinds above — but
-// it is its own layer rather than folding into `roads`, because it is a
-// different kind of road (grade-separated, no at-grade access, its own route
-// number) that a reader may want to switch off independently of construction
-// or 点線国道.
+// `expressway`(highway=motorway: 第二神明道路、神戸淡路鳴門自動車道 など)は
+// 走れる本物の車道なので、上の破線の区分には入らない。それでも `roads` に畳まず
+// 自分の層を持つのは、平面交差が無く、平面からの出入りも無く、高速道路としての
+// 路線番号を別に持つ、別種の道だからである。工事中や点線国道とは独立に消したい
+// 読み手がいる。
 export const EXCLUDE_FROM_ROADS_LAYER = [...SPECIAL_KINDS, ...KIND_EXPRESSWAY];
 
 export const COLOR_CONSTRUCTION = '#8A6A2F';
@@ -40,10 +38,10 @@ export const COLOR_FERRY = '#0E7490';
 export const GSI_TILES =
   'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png';
 
-/* The base map's tile source can be swapped for another 地理院タイル without
- * touching the routes above it — same tiling scheme, same attribution holder,
- * only the imagery differs. All three are drawn as their own raster layer
- * (see baseStyle) so switching is a visibility flip, not a source rebuild. */
+/* 下地図のタイルは、上に載る国道に触れないまま別の地理院タイルへ差し替えられる
+ * ——タイルの切り方も出典の持ち主も同じで、違うのは絵だけである。三つとも
+ * それぞれのラスタ層として描くので(baseStyle を参照)、切り替えは表示・非表示の
+ * 反転であって、ソースの作り直しではない。 */
 export const GSI_BASEMAPS = {
   pale: { label: '淡色地図', tiles: GSI_TILES },
   std: {
@@ -58,19 +56,17 @@ export const GSI_BASEMAPS = {
 export const GSI_BASEMAP_ORDER = ['pale', 'std', 'photo'];
 export const DEFAULT_BASEMAP = 'pale';
 
-/* How dark the base map sits under the routes, shared by all three basemap
- * layers so a basemap switch keeps whatever shade was chosen — there is no
- * separate dimming layer.
+/* 国道の下に敷く地図をどれだけ濃くするか。三つの下地図の層が同じ値を使うので、
+ * 下地図を切り替えても選んだ濃さは残る。暗くするための層は別に持たない。
  *
- * `raster-opacity` alone cannot do this reliably: it blends the tile with
- * whatever is behind the map canvas, which is the page background — near-
- * white in the light theme but near-black in the dark one — so raising
- * opacity made the map lighter for one reader and darker for another,
- * exactly backwards for half of them. `raster-brightness-max` instead scales
- * the tile's own pixels before that blend, so lowering it darkens the tile
- * on any backdrop. Opacity is left at the flat 0.82 the site always shipped
- * with — `light` keeps it exactly, so existing impressions of the map do not
- * shift under anyone — and only brightness moves for the two darker steps. */
+ * `raster-opacity` だけでは確かに決まらない。これはタイルを canvas の後ろに
+ * ある物、つまりページの地と混ぜる。明るい配色では白に近く、暗い配色では黒に
+ * 近いので、不透明度を上げると、ある人には明るく、別の人には暗くなった——
+ * 半分の人にはちょうど逆である。`raster-brightness-max` は混ぜる前にタイル自身の
+ * 画素を縮めるので、下げればどの地の上でもタイルが暗くなる。不透明度は、この
+ * サイトがずっと配ってきた 0.82 のままにする——`light` はその値をそのまま保つ
+ * ので、今まで見えていた絵は誰の手元でも動かない——濃い側の二段だけが明るさを
+ * 動かす。 */
 export const GSI_SHADE_LEVELS = ['light', 'normal', 'dark'];
 export const GSI_SHADE_PAINT = {
   light: { opacity: 0.82, brightnessMax: 1 },
@@ -80,32 +76,30 @@ export const GSI_SHADE_PAINT = {
 export const GSI_SHADE_LABELS = { light: '薄い', normal: '通常', dark: '濃い' };
 export const DEFAULT_SHADE = 'light';
 
-/* Served from this site. The labels are route numbers joined with `・`, so the
- * whole alphabet is ten digits and one separator — eleven glyphs in two range
- * files, about 5 kB. scripts/make_glyphs.mjs bakes them from Noto Sans JP.
+/* このサイトから配る。ラベルは路線番号を `・` で繋いだ物なので、使う字は数字
+ * 十個と区切り一つ、合わせて 11 字しかない。2 つの範囲ファイル、約 5 kB である。
+ * scripts/make_glyphs.mjs が Noto Sans JP から焼く。
  *
- * It used to be 国土地理院's demo endpoint: someone else's Pages site, offered
- * as a demonstration, whose disappearance would take every label with it. */
+ * 以前は国土地理院のデモ用の配布元を指していた。他人の Pages サイトが実演として
+ * 出している物で、それが消えればラベルも全部消える。 */
 const GLYPHS = 'glyphs/{fontstack}/{range}.pbf';
 
-/* The arcs arrive as vector tiles. Nationwide they are ~130,000 features, so
- * the viewer cannot hold them: it draws what is on screen and reads every total
- * it displays out of national.meta.json instead. */
+/* アークはベクタタイルとして届く。全国で約 13 万件あり、閲覧側は手元に持てない。
+ * 画面に出ている物だけを描き、出す合計はすべて national.meta.json から読む。 */
 export const PMTILES_URL = 'data/national-routes.pmtiles';
 export const SOURCE_LAYER = 'routes';
 
-/** The sources the route layers expect. The checker builds its style from this
- *  same function, so a layer can never be validated against a source shape the
- *  viewer does not actually create. */
+/** 国道の層が前提とするソース。検査スクリプトもこの同じ関数からスタイルを組む
+ *  ので、閲覧側が実際には作らないソースの形に対して層を検査することがない。 */
 export function routeSources(url) {
   return {
-    // No `maxzoom` here on purpose. The archive states its own, and the
-    // protocol hands MapLibre a TileJSON that carries it. Repeating the number
-    // here once made the style ask for a zoom the archive did not contain, and
-    // everything below it silently stopped drawing.
+    // `maxzoom` を意図して書かない。アーカイブが自分で述べており、protocol が
+    // それを載せた TileJSON を MapLibre に渡す。ここへ数を書き写したせいで、
+    // アーカイブに無いズームをスタイルが要求し、それより下が何も描かれなく
+    // なったことがある。
     routes: { type: 'vector', url: `pmtiles://${url}` },
-    // Termini are a few thousand points and every one of them is in the panel
-    // already, so they stay plain GeoJSON.
+    // 起終点は数千点しかなく、どれも操作面に既に出ているので、素の GeoJSON の
+    // まま置く。
     termini: {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },
@@ -115,22 +109,21 @@ export function routeSources(url) {
 
 /* ------------------------------------------------------------- filtering --- */
 
-/** Membership test that cannot be fooled by substrings: ",4," never hits ",14,". */
+/** 部分文字列に騙されない所属の検査。`,4,` が `,14,` に当たることはない。 */
 export const hasRef = (ref) => ['in', `,${ref},`, ['get', 'refs']];
 
 /**
- * The filter every road layer shares.
- * `selected` narrows which routes are drawn; `conc` narrows to concurrency;
- * `showFormer` (default on) narrows out 旧道 when switched off.
+ * どの道路層も共有する絞り込み式。
+ * `selected` はどの路線を描くかを絞り、`conc` は重用区間に絞り、`showFormer`
+ * (既定は入)は切ったときに旧道を落とす。
  *
- * Concurrency is a property of the road, not of the selection: an arc carrying
- * 18 and 117 is a 重用区間 whether or not both numbers happen to be ticked.
+ * 重用は道の性質であって選択の結果ではない。18 号と 117 号を持つアークは、
+ * 両方に印が付いているかどうかに関わらず重用区間である。
  *
- * 旧道 is a property of the road too, not of a layer — it cuts across `kind`
- * (road/expressway/foot/construction all have former arcs), so it belongs here
- * rather than in FILTERED_LAYERS. Folding it into the shared filter also means
- * pickedFilter picks it up for free: a former arc taken off the map loses its
- * shadow along with everything else.
+ * 旧道も層ではなく道の性質である。`kind` を横切る(road・expressway・foot・
+ * construction のどれにも旧道のアークがある)ので、FILTERED_LAYERS ではなく
+ * ここに置く。共有の式に畳んでおくと pickedFilter もそのまま従う——地図から
+ * 外れた旧道のアークは、他と一緒に影も失う。
  */
 export function buildFilter(selected, conc, showFormer = true) {
   const parts = [];
@@ -143,22 +136,22 @@ export function buildFilter(selected, conc, showFormer = true) {
 
 export const kindTest = (kinds) => ['in', ['get', 'kind'], ['literal', kinds]];
 
-/** Combine the shared filter with a kind restriction. */
+/** 共有の絞り込み式に、区分の限定を重ねる。 */
 export function withKind(base, kinds, negate) {
   const k = negate ? ['!', kindTest(kinds)] : kindTest(kinds);
   return base === true ? k : ['all', base, k];
 }
 
-/** A filter that matches nothing, for hiding a layer without removing it. */
+/** 何にも当たらない式。層を消さずに隠すのに使う。 */
 export const NOTHING = ['==', ['get', 'n'], -1];
 
 /**
- * The shadow under the arc a popup is describing.
+ * ポップアップが説明しているアークの下に敷く影。
  *
- * The OSM way id identifies an arc on its own — the build keys its deduplication
- * on it — so no other test is needed to pick out one road. The shared filter is
- * still folded in: an arc the selection has taken off the map must not keep a
- * shadow where it used to be.
+ * OSM の way id はそれだけでアークを一意に指す——ビルドの重複排除もこれを鍵に
+ * している——ので、1 本を選び出すのに他の検査は不要である。それでも共有の式を
+ * 畳み込む。選択によって地図から外れたアークが、元の場所に影だけを残しては
+ * ならないためである。
  */
 export function pickedFilter(base, id) {
   if (id == null) return NOTHING;
@@ -166,7 +159,7 @@ export function pickedFilter(base, id) {
   return base === true ? test : ['all', base, test];
 }
 
-/* ------------------------------------------------------------------ paint --- */
+/* ----------------------------------------------------------------- paint --- */
 
 export const colorByN = [
   'match',
@@ -180,17 +173,16 @@ export const colorByN = [
   N_COLORS[3],
 ];
 
-/* 旧道 is drawn as the same line, dimmed, rather than dashed: `line-dasharray`
- * takes no data-driven expression, so dashing it would need a duplicate layer
- * per kind, and a new dash would collide with the meaning dashes already carry
- * — 点線国道・工事中・海上国道・未開通 use them for "not driveable", which is
- * beside the point former is making (almost every 旧道 arc is ordinary
- * driveable carriageway; kind and former status are independent facts).
- * Colour is already carrying concurrency depth and width is already carrying
- * both that and zoom, so opacity is what is left. */
+/* 旧道は破線にせず、同じ線を薄くして描く。`line-dasharray` はデータ駆動の式を
+ * 取らないので、破線にするには区分ごとに層を複製することになる。そのうえ新しい
+ * 破線は、破線が既に持っている意味とぶつかる——点線国道・工事中・海上国道・
+ * 未開通は「走れない」の印に破線を使っており、旧道が述べたいことはそこではない
+ * (旧道のアークはほとんどが普通に走れる車道で、区分と旧道かどうかは別々の
+ * 事実である)。色は既に重用の深さを、太さは深さとズームの両方を運んでいるので、
+ * 残るのは不透明度である。 */
 export const FORMER_OPACITY = 0.4;
 
-/** Scale a layer's opacity down to `FORMER_OPACITY` for 旧道 arcs. */
+/** 旧道のアークだけ、層の不透明度を `FORMER_OPACITY` 倍に落とす。 */
 export const formerOpacity = (base = 1) => [
   'case',
   ['==', ['get', 'former'], 1],
@@ -198,8 +190,8 @@ export const formerOpacity = (base = 1) => [
   base,
 ];
 
-// Concurrency reads as weight as well as hue, so depth survives zooming out
-// far enough that colour alone is hard to judge.
+// 重用は色だけでなく太さでも読ませる。色の違いが判じにくいところまで引いても、
+// 深さが残るようにするためである。
 const N_MULT = ['match', ['get', 'n'], 1, 1, 2, 1.5, 3, 2, 2.4];
 const ZOOM_STOPS = [
   [6, 0.9],
@@ -209,11 +201,10 @@ const ZOOM_STOPS = [
 ];
 
 /**
- * Zoom-interpolated line width.
+ * ズームで補間する線の太さ。
  *
- * A `zoom` expression is only legal as the direct input of a top-level
- * `interpolate`/`step`, so the per-route arithmetic has to live in the
- * interpolation *outputs* rather than wrapping the interpolation.
+ * `zoom` の式は、最上位の `interpolate`・`step` の直接の入力としてしか書けない。
+ * だから路線ごとの掛け算は、補間を包むのではなく補間の出力の側に置く。
  */
 function lineWidth({ add = 0, scaleByN = true } = {}) {
   const out = ['interpolate', ['linear'], ['zoom']];
@@ -226,7 +217,7 @@ function lineWidth({ add = 0, scaleByN = true } = {}) {
 
 /* ----------------------------------------------------------------- style --- */
 
-/** A basemap layer's id, e.g. `gsi-pale`. Also used to pick which one is on. */
+/** 下地図の層の id。`gsi-pale` のような形で、どれを出すかを選ぶのにも使う。 */
 export const gsiLayerId = (basemap) => `gsi-${basemap}`;
 
 export function baseStyle(basemap = DEFAULT_BASEMAP, shade = DEFAULT_SHADE) {
@@ -236,10 +227,9 @@ export function baseStyle(basemap = DEFAULT_BASEMAP, shade = DEFAULT_SHADE) {
 
   const sources = {};
   const layers = [];
-  // All three basemaps are always in the style, one visible at a time, so
-  // switching is `setLayoutProperty('visibility', …)` rather than tearing
-  // down and rebuilding a source — the source of a raster layer already on
-  // screen cannot be swapped in place.
+  // 三つの下地図は常にスタイルの中にあり、見えるのは一度に一つである。
+  // 切り替えはソースの作り直しではなく `setLayoutProperty('visibility', …)` に
+  // なる——画面に出ているラスタ層のソースは、その場では差し替えられない。
   for (const id of GSI_BASEMAP_ORDER) {
     sources[id] = {
       type: 'raster',
@@ -264,23 +254,21 @@ export function baseStyle(basemap = DEFAULT_BASEMAP, shade = DEFAULT_SHADE) {
 }
 
 /**
- * The route layers, in draw order.
- * `line-dasharray` accepts no data-driven expression, so the dashed kinds get
- * one layer each rather than a `match` inside a single layer.
+ * 国道の層を、描く順に並べる。
+ * `line-dasharray` はデータ駆動の式を取らないので、破線の区分は 1 層にまとめた
+ * `match` ではなく、区分ごとに 1 層を持つ。
  */
 export function routeLayers() {
   return [
     {
-      // The one arc a popup is describing, lifted off the basemap by a shadow.
-      // A map line takes no CSS drop-shadow, so the shadow is a line of its
-      // own: wider than the road, blurred, black, drawn underneath everything
-      // else so the road keeps its own colour on top. It draws nothing until
-      // an arc is clicked; app.js narrows it to that arc's OSM way id.
+      // ポップアップが説明している 1 本を、影で下地図から浮かせる。地図の線に
+      // CSS の drop-shadow は効かないので、影も線として持つ。道より太く、ぼかし、
+      // 黒く、他のすべての下に描くので、道は自分の色のまま上に残る。アークが
+      // 押されるまで何も描かない。押されたら app.js がその way id に絞る。
       //
-      // It has to clear the white casing, which is already 2.6 px wider than
-      // the road: at +9 px and a 5 px blur the ring that was left outside the
-      // casing was too thin and too diffuse to see at all. Widening it and
-      // tightening the blur is what made it read.
+      // 影は白い縁取りの外へ出なければならない。縁取りは既に道より 2.6 px 太い。
+      // +9 px、ぼかし 5 px では、縁取りの外に残る輪が細く淡すぎて見えなかった。
+      // 太くしてぼかしを締めたことで、ようやく読めるようになった。
       id: 'picked',
       type: 'line',
       source: 'routes',
@@ -295,7 +283,7 @@ export function routeLayers() {
       },
     },
     {
-      // A white casing keeps the lines legible over the raster basemap.
+      // 白い縁取りが、ラスタの下地図の上でも線を読めるようにする。
       id: 'casing',
       type: 'line',
       source: 'routes',
@@ -315,12 +303,12 @@ export function routeLayers() {
       layout: {
         'line-cap': 'round',
         'line-join': 'round',
-        // Concurrency draws over single designations. Without a sort key the
-        // order is whatever the tile happens to hold, so a four-fold section
-        // could be buried under a lone number — and clicked as one, which is
-        // how a stack of four reported 国道202号 alone in 福岡. `line-sort-key`
-        // sorts ascending and draws the highest last, so `n` puts the deepest
-        // stack on top. One layer per depth would say the same thing four times.
+        // 重用は単独指定の上に描く。並べ替えの鍵が無いとタイルが持っている順
+        // のままになり、四重用の区間が単独指定の下に埋もれる——押したときも
+        // そう扱われ、福岡の四重用が国道 202 号の単独指定と報告された。
+        // `line-sort-key` は昇順に並べて最後に一番大きい物を描くので、`n` を
+        // 渡せば最も深い重なりが上に来る。深さごとに層を分けると、同じことを
+        // 四度言うことになる。
         'line-sort-key': ['get', 'n'],
       },
       paint: {
@@ -330,10 +318,9 @@ export function routeLayers() {
       },
     },
     {
-      // 高速道路として指定された国道 (highway=motorway): real carriageway, styled
-      // exactly like `roads` — concurrency is still the point — but its own
-      // layer so it can be switched off on its own, the same way 点線国道 or
-      // 工事中 can.
+      // 高速道路として指定された国道(highway=motorway)。走れる本物の車道なので
+      // `roads` とまったく同じ体裁で描く——重用を見せることに変わりはない——が、
+      // 点線国道や工事中と同じように単独で消せるよう、層は分けてある。
       id: 'expressway-casing',
       type: 'line',
       source: 'routes',
@@ -375,10 +362,10 @@ export function routeLayers() {
       },
     },
     {
-      // 未開通区間: `highway=planned`/`proposed`, a line drawn to keep the
-      // route relation continuous where no road has been built. The finest
-      // dash of the four, since less exists here than at any other kind —
-      // even a foot path is a real thing to walk on.
+      // 未開通区間。`highway=planned`・`proposed` で、道が造られていない場所で
+      // ルートリレーションを繋ぐために引かれた線である。四つのうち最も細かい
+      // 破線にする。どの区分よりも実体が薄いためで、徒歩道でさえ実際に歩ける
+      // 道ではある。
       id: 'unopened',
       type: 'line',
       source: 'routes',
@@ -405,9 +392,8 @@ export function routeLayers() {
       },
     },
     {
-      // 海上国道: the designation continues across water with no road under
-      // it. The longest dash of the three dashed kinds, because it is the one
-      // that runs for kilometres at a stretch.
+      // 海上国道。下に道が無いまま、指定だけが海を渡る。破線の三区分のうち最も
+      // 長い破線にする。ひと続きで何 km も伸びるのはこれだけだからである。
       id: 'ferry',
       type: 'line',
       source: 'routes',
@@ -421,8 +407,8 @@ export function routeLayers() {
       },
     },
     {
-      // The point of the whole project: numbers stay on screen regardless of
-      // scale, and every designation is listed, not just the lowest.
+      // この地図の存在理由そのもの。縮尺によらず番号を画面に残し、番号の若い
+      // ものだけでなく全指定を並べる。
       id: 'route-labels',
       type: 'symbol',
       source: 'routes',
@@ -434,10 +420,9 @@ export function routeLayers() {
         'text-font': FONT,
         'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12, 13, 16],
         'symbol-spacing': 220,
-        // Labels are placed in sort-key order and a label that collides with an
-        // already-placed one is dropped. Negating `n` places the deepest stack
-        // first, so the label a conventional map rounds down is the last one to
-        // be given up rather than the first.
+        // ラベルは並べ替えの鍵の順に置かれ、既に置かれたラベルとぶつかった物は
+        // 捨てられる。`n` の符号を反転すると最も深い重なりから置かれるので、
+        // ふつうの地図が丸めてしまうラベルが、真っ先にではなく最後に諦められる。
         'symbol-sort-key': ['-', 0, ['get', 'n']],
         'text-rotation-alignment': 'viewport',
         'text-pitch-alignment': 'viewport',
@@ -494,7 +479,7 @@ export function routeLayers() {
   ];
 }
 
-/** Which layers the shared filter is applied to, and how. */
+/** 共有の絞り込み式を、どの層にどう当てるか。 */
 export const FILTERED_LAYERS = [
   { id: 'casing', kinds: EXCLUDE_FROM_ROADS_LAYER, negate: true },
   { id: 'roads', kinds: EXCLUDE_FROM_ROADS_LAYER, negate: true },

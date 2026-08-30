@@ -2,21 +2,20 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Compare two builds of the same region, arc by arc.
+"""同じ地域の二つの生成物を、アークごとに突き合わせる。
 
-Changing where the OSM objects come from is the kind of change that can look
-fine and be wrong: fewer arcs, a lost tag, a designation that quietly stopped
-being read. The way to know is to build the same prefecture both ways and
-require the answers to match.
+OSM の物をどこから取るかを変える作業は、問題なく見えて実は誤っている、という形に
+なりやすい。アークが減る、タグが落ちる、指定が何も言わずに読まれなくなる、と
+いった具合である。確かめるには、同じ県を両方のやり方で作り、答えの一致を求める
+しかない。
 
-That is what this is for. 長野県 and 新潟県 were built from Overpass before the
-move to the .osm.pbf, and those outputs are kept as the baseline. A difference
-here is either a real defect in the new path or a genuine edit to OSM between
-the two moments the data was cut — and the script separates the two by
-reporting *what* differs, not just how many.
+それがこれの役目である。長野県と新潟県は .osm.pbf へ移る前に Overpass から
+生成してあり、その出力を基準として残してある。ここで出る差は、新しい経路の
+本物の不具合か、二回の切り出しのあいだに OSM が本当に編集されたかのどちらかで
+ある——このスクリプトは、件数だけでなく何が違うかを報告して、その二つを分ける。
 
-Usage:  uv run pipeline/compare_sources.py nagano
-        uv run pipeline/compare_sources.py nagano --baseline build/overpass-baseline
+使い方:  uv run pipeline/compare_sources.py nagano
+         uv run pipeline/compare_sources.py nagano --baseline build/overpass-baseline
 """
 from __future__ import annotations
 
@@ -26,9 +25,8 @@ from collections import Counter
 
 from _paths import REGIONS, ROOT
 
-# Properties that describe the road. `updated` is excluded on purpose: it is the
-# way's own last-edit date and differs legitimately whenever a mapper touches
-# the road between the two cuts.
+# 道を述べる属性。`updated` は意図して外す。way 自身の最終編集日で、二回の
+# 切り出しのあいだに誰かがその道を触れば、正当に違ってくるためである。
 COMPARED = ("refs", "n", "kind", "src", "former", "name")
 
 

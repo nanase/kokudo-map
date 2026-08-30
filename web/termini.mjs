@@ -1,13 +1,12 @@
-/* 起点・終点 as a GeoJSON source.
+/* 起点・終点を GeoJSON にする。
  *
- * These are a few thousand points and every one of them is already in the
- * panel, so they stay plain GeoJSON rather than joining the arcs in the tile
- * archive. The build hands over two lists — termini that belong to one route,
- * and places where several routes begin or end together — and the map draws
- * them from one source, telling them apart by a `shared` flag.
+ * 数千点しかなく、どれも操作面に既に出ているので、タイルのアークに混ぜず素の
+ * GeoJSON のまま置く。ビルドが渡すのは二つの一覧——1 路線に属する起終点と、
+ * 複数の路線が一緒に始まる・終わる地点——で、地図は一つのソースから両方を描き、
+ * `shared` フラグで見分ける。
  *
- * `refs` is written with the same delimiters the arcs use, so the one filter
- * that narrows the map to a route narrows these too.
+ * `refs` はアークと同じ区切り文字で書く。地図を 1 路線に絞る式が、そのまま
+ * ここにも効く。
  */
 
 const feature = (refs, shared, lon, lat) => ({
@@ -21,7 +20,7 @@ const feature = (refs, shared, lon, lat) => ({
   geometry: { type: 'Point', coordinates: [lon, lat] },
 });
 
-/** The whole termini layer, shared points first. */
+/** 起終点の層まるごと。共有する地点を先に置く。 */
 export function terminiFeatures(meta) {
   return {
     type: 'FeatureCollection',

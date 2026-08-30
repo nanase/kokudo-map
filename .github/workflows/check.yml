@@ -59,7 +59,7 @@ jobs:
           test -s web/vendor/pmtiles.js
 
       # 配信の workflow は index.html の %SITE_URL% を実際の URL に差し替えます。
-      # 差し替える先が消えていれば、共有カードは黙って壊れたまま公開されます。
+      # 差し替える先が消えていれば、共有カードは壊れたまま気付かれずに公開されます。
       - name: 埋める先が残っている
         run: grep -q '%SITE_URL%' web/index.html
 

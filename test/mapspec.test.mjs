@@ -1,12 +1,10 @@
-/* The filter expressions, and the wiring between the layers and the code that
- * switches them.
+/* 絞り込み式と、層とそれを切り替えるコードの対応づけ。
  *
- * check_expressions.mjs already asks MapLibre whether these are *legal*, and
- * evaluates them over real arcs when a region has been built. What it cannot
- * ask is whether they mean the right thing when nothing is selected, or
- * whether the table app.js drives the layers from still names layers that
- * exist. Those are questions about the shape of the code, so they live here
- * and run everywhere.
+ * これが MapLibre の仕様に適合するかは check_expressions.mjs が既に訊いており、
+ * 地域が生成済みなら実データのアークで評価もします。そちらが訊けないのは、
+ * 何も選んでいないときに式が正しい意味になるか、app.js が層を動かすのに使う表が
+ * 実在する層を指しているか、です。どちらもコードの形についての問いなので、
+ * ここに置いてどこでも走らせます。
  */
 import { describe, expect, test } from 'bun:test';
 
@@ -26,7 +24,7 @@ import {
   withKind,
 } from '../web/mapspec.mjs';
 
-/* ------------------------------------------------------------- filtering --- */
+/* -------------------------------------------------------------- 絞り込み --- */
 describe('buildFilter', () => {
   test('選択も強調も無ければ、絞り込まない', () => {
     // `true` は「全部通す」であって、空の ['all'] ではありません。ここを配列にすると
@@ -125,7 +123,7 @@ test('NOTHING は実在しない n を要求する', () => {
   expect(NOTHING).toEqual(['==', ['get', 'n'], -1]);
 });
 
-/* ------------------------------------------------------------ the wiring --- */
+/* ---------------------------------------------------------------- 対応づけ --- */
 describe('レイヤーと絞り込みの対応', () => {
   const layers = routeLayers();
   const ids = new Set(layers.map((l) => l.id));
@@ -202,7 +200,7 @@ describe('旧道の不透明度', () => {
   const layers = routeLayers();
   const byId = (id) => layers.find((l) => l.id === id);
   // 影(picked)は「押されているアークの下」を示す層で、former の性質そのものを
-  // 表すものではないので対象に含めない。
+  // 表すものではないので対象に含めません。
   const lineLayers = layers.filter(
     (l) => l.type === 'line' && l.id !== 'picked',
   );
@@ -227,7 +225,7 @@ describe('ソース', () => {
 
   test('アーカイブに maxzoom を書き足さない', () => {
     // アーカイブ自身が持つ範囲を TileJSON が伝えます。ここで重ねて述べると、
-    // 実際には無い zoom を要求して、それより下が黙って消えます。
+    // 実際には無い zoom を要求して、それより下が何も出ないまま消えます。
     expect(sources.routes.maxzoom).toBeUndefined();
     expect(sources.routes.url).toBe('pmtiles://data/national-routes.pmtiles');
   });

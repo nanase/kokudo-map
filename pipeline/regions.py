@@ -1,23 +1,21 @@
-"""The regions the map can be built for: the 47 prefectures.
+"""この地図を生成できる地域、すなわち 47 都道府県。
 
-Bounding boxes are south, west, north, east. A rectangle cannot follow a
-prefecture outline, so neighbouring prefectures spill in; that is a known
-limitation, not a defect.
+bbox は南・西・北・東の順である。矩形は県の輪郭に沿えないので隣県が食み込む。
+これは既知の制約であって不具合ではない。
 
-The boxes are measured, not typed. `prefecture_boxes.py` reads the
-`admin_level=4` boundary relations out of the same .osm.pbf the roads come from
-and pads each extent by 0.05° — enough that a terminus on a prefecture border
-clears the 0.02° edge tolerance in build_routes.py and is reported as the real
-terminus it is. Forty-seven boxes typed by hand would be forty-seven chances to
-leave a strip of the country uncovered with nothing to say so; extract_pbf.py
-additionally reports any national-route way that falls outside every box.
+bbox は手で打つのではなく測る。`prefecture_boxes.py` が、道と同じ .osm.pbf から
+`admin_level=4` の境界リレーションを読み、それぞれの広がりを 0.05 度ぶん広げる
+——県境上の端点が build_routes.py の 0.02 度の縁の許容差を越え、本物の端点として
+報告されるだけの余裕である。47 個を手で打てば、国土のどこかに覆われない帯を残す
+機会が 47 回あり、しかも誰もそれを言わない。extract_pbf.py はさらに、どの bbox
+にも入らなかった国道の way を報告する。
 
-Why a prefecture at all, now that acquisition is nationwide: the corroboration
-guard in build_routes.py only filters while the set of route numbers it trusts
-is small. Over the whole country that set approaches all 459 numbers and stops
-filtering, and 長野県道372号 is 国道372号 again. The box is what keeps it sharp.
+取得が全国になった今、なぜ都道府県で区切るのか。build_routes.py の裏取りが濾せる
+のは、信用する路線番号の集合が小さいあいだだけである。全国で見るとその集合は
+459 番すべてに近づいて何も濾さなくなり、長野県道372号がふたたび国道372号になる。
+bbox はその切れ味を保つための物である。
 
-Three boxes are not the measured ones. Each says why.
+三つの bbox は測った値ではない。それぞれ理由を述べてある。
 """
 from __future__ import annotations
 
@@ -43,15 +41,15 @@ REGIONS: dict[str, dict] = {
     "tokyo": {"label": "東京都", "bbox": (35.45, 138.87, 35.98, 140.00)},
     "kanagawa": {"label": "神奈川県", "bbox": (34.91, 138.87, 35.72, 139.91)},
     # ---- 中部 -------------------------------------------------------------
-    # 測った箱ではなく、Overpass 時代からの箱をそのまま使います。佐渡島と粟島が
-    # 入る高さで、南東の角が栃木県と福島県に及びます。そこから 121・352・400 号が
-    # 入っています。既存の期待値はこの箱の中身に対して確かめてあります。
+    # 測った bbox ではなく、Overpass 時代からの bbox をそのまま使います。佐渡島と
+    # 粟島が入る高さで、南東の角が栃木県と福島県に及びます。そこから 121・352・400 号が
+    # 入っています。既存の期待値はこの bbox の中身に対して確かめてあります。
     "niigata": {"label": "新潟県", "bbox": (36.65, 137.55, 38.65, 140.00)},
     "toyama": {"label": "富山県", "bbox": (36.22, 136.72, 37.30, 137.81)},
     "ishikawa": {"label": "石川県", "bbox": (36.02, 136.03, 38.18, 137.92)},
     "fukui": {"label": "福井県", "bbox": (35.29, 135.40, 36.50, 136.88)},
     "yamanashi": {"label": "山梨県", "bbox": (35.12, 138.13, 36.02, 139.18)},
-    # 同じく Overpass 時代からの箱です。測った箱とは 0.03 度しか違いません。
+    # 同じく Overpass 時代からの bbox です。測った bbox とは 0.03 度しか違いません。
     "nagano": {"label": "長野県", "bbox": (35.15, 137.30, 37.05, 138.80)},
     "gifu": {"label": "岐阜県", "bbox": (35.08, 136.23, 36.52, 137.70)},
     "shizuoka": {"label": "静岡県", "bbox": (34.32, 137.42, 35.70, 139.47)},
@@ -97,12 +95,12 @@ def for_region(region: str) -> dict:
 
 
 def named_regions(args: list[str]) -> list[str]:
-    """The regions named on a command line, or every region if none were.
+    """コマンドラインが名指しした地域。名指しが無ければ全地域。
 
-    A task runner that fills an omitted variadic argument in hands the script an
-    empty token, and on Windows the quotes come through as characters: `mise run
-    extract` arrived as the single argument `''`. That names no region rather
-    than a region called `''`, which is what it was reported as.
+    省略された可変長引数を埋める task runner は、スクリプトに空のトークンを渡す。
+    Windows では引用符が文字のまま届き、`mise run extract` は引数 1 つ `''` として
+    到着した。それは `''` という名の地域ではなく、地域を名指ししていないという意味
+    である。以前はそう報告していた。
     """
     named = [a for a in args if a.strip("'\"")]
     for r in named:

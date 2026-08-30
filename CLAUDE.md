@@ -10,15 +10,15 @@
 
 これらを含む汎用スキルは [nanase/claude-skills](https://github.com/nanase/claude-skills) から入ります。対話セッションでこのリポジトリを信頼した時点で有効になります。ここに置いてあるのは national-route-data だけです。
 
-`claude -p` などの非対話セッションでは登録が走りません。CI で回すなら、先に `claude plugin marketplace add https://github.com/nanase/claude-skills.git` が要ります。
+`claude -p` などの非対話セッションでは登録が走りません。CI で回すなら、先に `claude plugin marketplace add https://github.com/nanase/claude-skills.git` が必要です。
 
 ## コマンド
 
 データと配信は mise が、コードと資材は bun が持ちます。作る物が Python か JavaScript かで分けます。
 
-一覧は `mise tasks` と `bun run` が出します。何をする物かは [docs/development.md](docs/development.md) にあります。ここに書き写すと、片方が黙って古くなります。
+一覧は `mise tasks` と `bun run` が出します。何をする物かは [docs/development.md](docs/development.md) にあります。ここに書き写すと、片方が暗黙のうちに古くなります。
 
-初回は `mise trust` と `mise install` が要ります。`serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが要ります。
+初回は `mise trust` と `mise install` が必要です。`serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが必要です。
 
 ## 変えてはいけない判断
 
@@ -38,7 +38,7 @@
 - 検証スクリプトは本物の定義を読み込んで検査する
   - 式を書き写した複製を検査しても検証にはならない
 - 同じ問いに二箇所で答えない
-  - 片方が黙って古くなる
+  - 片方が暗黙のうちに古くなる
 - build/ と web/data/ を木ごと消さない
   - 追跡していないので git では戻らない
   - pbf 2.5 GB と 47 都道府県ぶんの生成物が入っており、取り直しと再生成に何時間もかかる

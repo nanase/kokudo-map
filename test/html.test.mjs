@@ -1,8 +1,8 @@
-/* The one place untrusted text becomes HTML.
+/* 信用できない文字列が HTML になる唯一の場所。
  *
- * OpenStreetMap is editable by anyone, so a road's `name` is input written by
- * a stranger that arrives here by way of the build. Every string the panel and
- * the popups display goes through `esc`, and this file is what says so.
+ * OpenStreetMap は誰でも編集できるので、道の `name` は見知らぬ誰かが書いた
+ * 入力で、ビルドを経てここへ届きます。操作面とポップアップが出す文字列は
+ * すべて `esc` を通ります。それを述べているのがこのファイルです。
  */
 import { describe, expect, test } from 'bun:test';
 

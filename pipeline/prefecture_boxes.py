@@ -2,19 +2,17 @@
 # requires-python = ">=3.12"
 # dependencies = ["osmium>=4.0"]
 # ///
-"""Measure every prefecture's bounding box from the .osm.pbf and print the
-regions.py table.
+""".osm.pbf から都道府県ごとの bbox を測り、regions.py の表を出力する。
 
-Forty-seven boxes typed by hand is forty-seven chances to leave a strip of the
-country uncovered, and nothing downstream would say so. These come from the
-`admin_level=4` boundary relations in the same file the roads come from, so the
-boxes and the roads cannot disagree.
+47 個の bbox を手で打つことは、国土のどこかに覆われない帯を残す機会が 47 回ある
+ということで、しかも後段の誰もそれを言わない。ここで出す bbox は、道と同じ
+ファイルにある `admin_level=4` の境界リレーションから作るので、bbox と道が食い
+違いようがない。
 
-Names are not measured. The ISO 3166-2:JP code is the identity, and the slug and
-Japanese label for each code are fixed, so they are stated here and matched
-against what the file contains.
+名前は測らない。同一性を決めるのは ISO 3166-2:JP の符号で、符号ごとの slug と
+日本語ラベルは決まっている。だからここで述べ、ファイルの中身と突き合わせる。
 
-Usage:  uv run pipeline/prefecture_boxes.py [--pbf path] [--pad 0.05]
+使い方:  uv run pipeline/prefecture_boxes.py [--pbf path] [--pad 0.05]
 """
 from __future__ import annotations
 
@@ -24,8 +22,8 @@ import osmium
 
 from _paths import PBF
 
-# ISO 3166-2:JP -> (slug, 日本語ラベル). Official and fixed; the file supplies
-# only the geometry.
+# ISO 3166-2:JP -> (slug, 日本語ラベル)。公式で固定である。ファイルが与えるのは
+# 形だけである。
 JP = {
     "JP-01": ("hokkaido", "北海道"), "JP-02": ("aomori", "青森県"),
     "JP-03": ("iwate", "岩手県"), "JP-04": ("miyagi", "宮城県"),
