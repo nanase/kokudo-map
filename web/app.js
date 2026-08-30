@@ -27,6 +27,7 @@
  * test/wiring.test.mjs が地図を作らずに happy-dom の実物の index.html へ
  * 配線できるからである。
  *
+ *   dataurl.mjs    配信データの URL の基点
  *   mapspec.mjs    スタイル、層、絞り込み式
  *   aggregate.mjs  画面が出す数を組み合わせ表から読む
  *   panel.mjs      サイドパネルの markup

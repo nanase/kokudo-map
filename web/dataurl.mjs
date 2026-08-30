@@ -9,4 +9,5 @@
  */
 const DATA_BASE_URL = 'data/';
 
+/** 配信データの 1 ファイルの URL。手元では相対パス、Pages では絶対 URL になる。 */
 export const dataURL = (name) => `${DATA_BASE_URL}${name}`;
