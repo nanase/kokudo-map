@@ -57,12 +57,15 @@ mise run serve        # http://localhost:8000/
 | `mise run apply-n13 <地域>` | former のうち N13 で指定解除を機械確認できたものに revoked を書き込む |
 | `mise run compare-annual-report` | 道路統計年報と延長を突き合わせ、差の内訳を出す |
 | `mise run survey-pref` | 都道府県道になりうる way を全国から測り、`build/survey/` に残す |
+| `mise run build-pref [地域…]` | `build/survey/` から都道府県道を判定し、`build/prefectural/` を作る |
 | `mise run compare-annual-report-pref` | 都道府県道の延長を年報と突き合わせ、差の内訳と重用の復元率を出す |
 | `mise run compare-n13-pref` | N13 と突き合わせ、OSM に無い都道府県道の量を測る |
 | `mise run serve` | ローカルサーバを起動する |
 | `mise run render-check` | Chromium で実描画を確認する |
 
-`mise run survey-pref` は pbf を一度読み、都道府県道になりうる way を `build/survey/` に県ごとに残します。47 ファイル約 200 MB です。都道府県道の突き合わせはそこを読むので、何度やり直しても pbf を読み直しません。
+`mise run survey-pref` は pbf を一度読み、都道府県道になりうる way を `build/survey/` に県ごとに残します。47 ファイル約 200 MB です。都道府県道の判定と突き合わせはそこを読むので、何度やり直しても pbf を読み直しません。
+
+`mise run build-pref` は判定して `build/prefectural/` に GeoJSON と meta を書きます。国道の `build/regions/` とは木を分けてあります。判定ルールは [PREFECTURAL.md](../.claude/skills/national-route-data/PREFECTURAL.md) にあります。配信への組み込みはまだありません。
 
 国土数値情報 N03(行政区域)は初回に取ります。`mise run extract` は way の所属都道府県を決めるのに現行の年版を、`mise run decree` は政令の地名を引くのに 2000 年版も使います。47 都道府県ぶん二つで約 530 MB です。以後はキャッシュから読みます。
 
@@ -119,7 +122,7 @@ uvx ruff check pipeline      # Python の静的検査
 | `test/` | データを持たずに答えられることの単体テスト |
 | `docs/` | この文書から辿る詳細文書 |
 | `.github/workflows/` | 検査と GitHub Pages への配信 |
-| `.claude/skills/national-route-data/` | 生成と品質管理の手順、判定ルール |
+| `.claude/skills/national-route-data/` | 生成と品質管理の手順、国道と都道府県道の判定ルール |
 | `.claude/hooks/guard-data-dirs.mjs` | build/ と web/data/ を木ごと消す命令を手前で止める |
 | `build/` | pbf、キャッシュ、地域ごとの中間成果。作り直せるので成果物ではない |
 

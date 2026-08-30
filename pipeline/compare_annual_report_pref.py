@@ -37,6 +37,10 @@ primary の 95.5% が `ref` 100 以下、secondary の 99.5% が 101 以上で�
 格付けを述べるのではない。二つが食い違う way は、下の「番号帯と道路の格」で
 そのまま報告する。数えるのに使わなかった側を、代わりに見張りに使う。
 
+境目そのものは build_prefectural.MAJOR_MAX から読む。判定と検証で別々に書くと、
+書き写した複製を検査することになる。番号帯が北海道と沖縄県で崩れることは実測して
+あり、量と理由は PREFECTURAL.md にある。
+
 県別の突き合わせでは、年報は県の行と政令指定都市の行を分ける。地図は道路管理者を区別しないので、
 突き合わせる相手は両方の和である(annual_report.Prefecture)。
 
@@ -61,6 +65,7 @@ from collections import defaultdict
 
 import annual_report
 from _paths import SURVEY
+from build_prefectural import GENERAL, MAJOR, MAJOR_MAX, RANK_LABEL, rank_of
 from compare_annual_report import (
     KIND_GROUP,
     SAMPLE_M,
@@ -72,20 +77,14 @@ from compare_annual_report import (
 )
 from regions import REGIONS
 
-# 主要地方道の番号帯の上限。実測では primary の 95.5% が 100 以下、secondary の
-# 99.5% が 101 以上である。境目はこの二つの分布が交わる所にあり、好みで決めた値
-# ではない。
-MAJOR_MAX = 100
-
-MAJOR, GENERAL = "major", "general"
-RANKS = (MAJOR, GENERAL)
-RANK_LABEL = {MAJOR: "主要地方道", GENERAL: "一般都道府県道"}
-RANK_TABLE = {MAJOR: 12, GENERAL: 13}
-
-
 # --------------------------------------------------------------------- 種別 ---
-def rank_of(ref: int) -> str:
-    return MAJOR if ref <= MAJOR_MAX else GENERAL
+# 境目(MAJOR_MAX)と呼び名は判定が持つ。ここで同じ値を書き直すと、書き写した複製を
+# 検査することになる。境目を選んだ理由と、その選択が北海道と沖縄県で生む誤りは
+# PREFECTURAL.md にある。
+#
+# どの表と突き合わせるかだけは、この突き合わせ自身の問いなのでここにある。
+RANKS = (MAJOR, GENERAL)
+RANK_TABLE = {MAJOR: 12, GENERAL: 13}
 
 
 def is_national(doc: dict) -> bool:

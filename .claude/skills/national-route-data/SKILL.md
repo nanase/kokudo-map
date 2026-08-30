@@ -38,6 +38,21 @@ mise run fetch-pbf
 
 画面写真は一時ディレクトリに書き出し、最後にその場所を表示します。作業ツリーには残しません。手元に置きたいときだけ、保存先のディレクトリを引数で渡します。
 
+## 都道府県道を生成する
+
+都道府県道は別の段です。pbf を 1 度読んで候補を県ごとに落とし、そこから判定します。
+
+```sh
+mise run survey-pref     # pbf から build/survey/ を作る
+mise run build-pref      # 判定して build/prefectural/ を作る
+```
+
+`build/survey/` は国道にとっての `build/cache/` に当たります。作り直すのは pbf を取り直したときだけです。`mise run build-pref` はそれを読むので、pbf を読み直しません。
+
+判定のルールは [PREFECTURAL.md](PREFECTURAL.md) にあります。国道の判定は変わりません。同じ way が国道のアークにも都道府県道のアークにもなります。
+
+配信への組み込みと画面はまだありません。issue #100 と #101 です。
+
 ## 判定は地域ごとに閉じている
 
 取得は全国ですが、裏取りは地域の中で閉じたままにします。ここを崩すと過去の不具合がまとめて戻ります。
@@ -96,6 +111,7 @@ way 自身が主張する番号は、同じ地域の国道リレーションが�
 
 - 公開データを作り直して上げる手順 → [UPDATE.md](UPDATE.md)
 - 国道かどうか、何号かの判定 → [RULES.md](RULES.md)
+- 都道府県道かどうか、どの県の何号かの判定 → [PREFECTURAL.md](PREFECTURAL.md)
 - 不具合の検出と切り分け → [TRIAGE.md](TRIAGE.md)
 - 過去に見つけた不具合と判断 → [CASES.md](CASES.md)
 

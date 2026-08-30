@@ -28,5 +28,10 @@ SURVEY = ROOT / "build" / "survey"
 # 約 70 MB になり、閲覧側は代わりに詰めたタイルを読む。
 REGIONS = ROOT / "build" / "regions"
 
+# 都道府県道の判定の生成物。国道と同じ形の GeoJSON と meta である。木を分けるのは、
+# build_routes.py が REGIONS の `*.meta.json` を数え上げて地域の索引を作るからで
+# ある。同じ木に置くと、県道の meta が国道の索引に混ざる。
+PREFECTURAL = ROOT / "build" / "prefectural"
+
 # 閲覧側が実際に取る物。
 DATA = ROOT / "web" / "data"
