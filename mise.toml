@@ -87,6 +87,19 @@ description = "道路統計年報と延長を突き合わせ、差の内訳を�
 # 渡せるのは上下線分離を見る側方の距離だけです。既定の 40 m を疑うときに使います。
 run = "uv run {{env.PIPELINE}}/compare_annual_report.py {{arg(name='flags', var=true, default='')}}"
 
+[tasks.survey-pref]
+description = "都道府県道になりうる way を全国から測り、build/survey に残す"
+# 判定(#98)ではなく、判定より先に立てる検証の土台です。pbf を一度だけ読みます。
+run = "uv run {{env.PIPELINE}}/survey_prefectural.py {{arg(name='flags', var=true, default='')}}"
+
+[tasks.compare-annual-report-pref]
+description = "都道府県道の延長を年報の表11・表12・表13 と突き合わせ、差の内訳と重用の復元率を出す"
+run = "uv run {{env.PIPELINE}}/compare_annual_report_pref.py {{arg(name='flags', var=true, default='')}}"
+
+[tasks.compare-n13-pref]
+description = "国土数値情報 N13 と突き合わせ、OSM に無い都道府県道の量を測る"
+run = "uv run {{env.PIPELINE}}/compare_n13_pref.py {{arg(name='flags', var=true, default='')}}"
+
 [tasks.serve]
 description = "ローカルサーバを起動する (http://localhost:8000/)"
 # PMTiles は Range 要求で読むので、http.server では配れません。

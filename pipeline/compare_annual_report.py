@@ -42,25 +42,24 @@
 いようと、way は id で一度だけ数えるからである。
 
 その障害は取り除いてある。way は行政区域の面で決めた所属都道府県 `pref` を持って
-いる(prefectures.py)ので、県ごとに数えられる。年報の県別の表と突き合わせるのは
-別の作業なので、ここではまだやらない。
+いる(prefectures.py)ので、県ごとに数えられる。それでもここが全国計だけを見るのは、
+国道の番号が全国で一意だからである。県別に割っても、全国計より細かい問いに答える
+だけで、番号の取り違えは見つからない。県別でしか答えられないのは都道府県道のほう
+で、そちらは compare_annual_report_pref.py が県ごとに突き合わせている。
 
 使い方:  uv run pipeline/compare_annual_report.py
          uv run pipeline/compare_annual_report.py --distance 60
 """
 from __future__ import annotations
 
-import csv
 import json
 import math
 import sys
 from collections import defaultdict
-from pathlib import Path
 
+import annual_report
 from _paths import CACHE, REGIONS as REGION_DIR
 from regions import REGIONS
-
-REPORT_CSV = Path(__file__).with_name("annual_report_2025.csv")
 
 # 1 本の道の二つの車道が、どれだけ離れていてもなお 1 本の道と見なせるか。
 # 日本の上下線分離は、市街地で 5〜20 m、車道が別々の切り通しやトンネルに入る所で
@@ -91,36 +90,6 @@ KIND_GROUP = {
     "road": "open", "expressway": "open",
     "construction": "build", "unopened": "build",
 }
-
-LENGTH_COLUMNS = ("total_m", "concurrent_m", "unopened_m", "unopened_sea_m",
-                  "ferry_m", "actual_m", "current_m", "former_m", "new_m",
-                  "median_m")
-
-
-# ------------------------------------------------------------------ ledger ---
-def load_report() -> dict[str, float]:
-    """写し取った表 8 の行を合計し、km で返す。
-
-    kind=pref と kind=city は互いに交わらない。政令指定都市は自分の国道を自分で
-    管理し、県の行の中には入らないので、両方を足す。表自身の合計の行も写し取って
-    あり、この和と突き合わせる。写し間違いを機械的に防げるのはそこだけである。
-    """
-    lines = [ln for ln in REPORT_CSV.read_text(encoding="utf-8").splitlines()
-             if not ln.startswith("#")]
-    rows = list(csv.DictReader(lines))
-    parts = [r for r in rows if r["kind"] in ("pref", "city")]
-    stated = [r for r in rows if r["kind"] == "total"]
-    if len(stated) != 1:
-        raise SystemExit(f"{REPORT_CSV}: expected exactly one kind=total row")
-    for col in LENGTH_COLUMNS:
-        summed, total = sum(int(r[col]) for r in parts), int(stated[0][col])
-        if summed != total:
-            raise SystemExit(
-                f"{REPORT_CSV}: the 47+20 rows sum to {summed:,} for {col}, but the "
-                f"sheet's 合計 row says {total:,}")
-    out = {col.removesuffix("_m"): int(stated[0][col]) / 1000 for col in LENGTH_COLUMNS}
-    out["routes"] = int(stated[0]["routes"])
-    return out
 
 
 # ---------------------------------------------------------------- geometry ---
@@ -357,23 +326,59 @@ def measure(reach: float) -> dict:
             "arcs_by_kind": dict(arcs_by_kind), "paired_km": dict(paired_km)}
 
 
-# ------------------------------------------------------------------ report ---
-def base_timestamp() -> str:
-    """地域を生成した元の OSM の切り出し時刻。平均は取らない。
+# ------------------------------------------------------------------ 引数 ---
+def take_distance(args: list[str]) -> tuple[float, list[str]]:
+    """`--distance` の値と、それを取り除いた残りの引数。
 
-    別々の切り出しから作った地域が混ざると、全国計は意味を失うが、合計そのものは
-    それを決して示さない。だから混ざった生成物は、隠さずに名指しする。
+    都道府県道の側(compare_annual_report_pref.py)も同じ旗を同じ意味で取るので、
+    読み取りはここに一つだけ置く。値を検査するのは、`--distance` を末尾に書いた
+    ときや `--distance --no-pairing` と書いたときに、添字の失敗ではなく使い方の
+    誤りとして落とすためである。extract_pbf.take と同じ形である。
     """
-    stamps = {json.loads((REGION_DIR / f"{r}.meta.json").read_text(encoding="utf-8"))
-              ["osm_timestamp"] for r in REGIONS}
+    if "--distance" not in args:
+        return PAIR_DISTANCE_M, args
+    i = args.index("--distance")
+    if i + 1 >= len(args) or args[i + 1].startswith("--"):
+        raise SystemExit("--distance needs a value")
+    try:
+        reach = float(args[i + 1])
+    except ValueError:
+        raise SystemExit(f"--distance needs a number, not {args[i + 1]!r}") from None
+    # 0 も負も nan も inf も float() は受け取る。0 は build_grid のセルの一辺に
+    # そのまま渡り、セルを数えるところで 0 除算になる。nan と inf はその先の
+    # 整数への変換で落ちる。どれも側方の探る距離としては意味を持たないので、
+    # 落ちる場所ではなくここで断る。
+    if not math.isfinite(reach) or reach <= 0:
+        raise SystemExit(f"--distance needs a positive finite number, not {reach}")
+    return reach, args[:i] + args[i + 2:]
+
+
+# ------------------------------------------------------------------ report ---
+def one_timestamp(stamps: set[str]) -> str:
+    """一つに定まる基準時刻。定まらなければ、混ざっている旨を名指しする。
+
+    別々の切り出しから作った物が混ざると、全国計は意味を失うが、合計そのものは
+    それを決して示さない。だから混ざった生成物は、隠さずに名指しする。読む側は
+    地域の meta と build/survey の二人いるので、述べ方はここに一つだけ置く。
+    """
     return stamps.pop() if len(stamps) == 1 else "mixed: " + ", ".join(sorted(stamps))
 
 
-def row(label: str, ledger: float | None, map_km: float | None) -> str:
+def base_timestamp() -> str:
+    """地域を生成した元の OSM の切り出し時刻。平均は取らない。"""
+    return one_timestamp(
+        {json.loads((REGION_DIR / f"{r}.meta.json").read_text(encoding="utf-8"))
+         ["osm_timestamp"] for r in REGIONS})
+
+
+def row(label: str, ledger: float | None, map_km: float | None, width: int = 28) -> str:
     """突き合わせの 1 行。台帳の値、地図の値、そしてその差である。
 
     どちらの側も None になりうる——徒歩道には突き合わせる欄が台帳に無い。そう
     述べることは、0 と述べることとは違う。
+
+    `width` は見出しの幅である。都道府県道の側は種別ごとに一段下げた見出しを
+    持つので、そこだけ狭くする。
     """
     if ledger is None or map_km is None:
         gap = ""
@@ -382,21 +387,18 @@ def row(label: str, ledger: float | None, map_km: float | None) -> str:
         gap = f"{map_km - ledger:+12,.1f}{pct}"
     left = "" if ledger is None else f"{ledger:12,.1f}"
     right = "" if map_km is None else f"{map_km:12,.1f}"
-    return f"  {label:28} {left:>12} {right:>12}  {gap}"
+    return f"  {label:{width}} {left:>12} {right:>12}  {gap}"
 
 
 def main() -> None:
-    args = sys.argv[1:]
-    reach = PAIR_DISTANCE_M
-    if "--distance" in args:
-        i = args.index("--distance")
-        reach = float(args[i + 1])
-        args = args[:i] + args[i + 2:]
+    reach, args = take_distance(sys.argv[1:])
     if args:
         raise SystemExit(f"unexpected argument: {args[0]}")
 
-    report = load_report()
-    print(f"道路統計年報2025 表8〈一般国道〉 令和6年3月31日現在 ({REPORT_CSV.name})")
+    ledger = annual_report.total(8)
+    report = ledger.km
+    print(f"道路統計年報2025 表8〈一般国道〉 令和6年3月31日現在 "
+          f"({annual_report.REPORT_CSV.name})")
     print(f"地図 build/regions データ基準 {base_timestamp()}")
     print(f"上下線の判定: 側方 {reach:.0f} m 以内、{SAMPLE_M:.0f} m ごとに測る\n")
 
@@ -445,7 +447,7 @@ def main() -> None:
     print(row("実延長+未供用+渡船 / 重複排除", comparable, dedup_km))
     print(row("重用延長", report["concurrent"], m["designated_km"] - dedup_km))
     print(row("旧道", report["former"], m["former_km"]))
-    print(f"  {'路線数':26} {report['routes']:>12} {'459':>12}")
+    print(f"  {'路線数':26} {ledger.routes:>12} {'459':>12}")
 
     print("\n区分ごと(足すと上の重複排除の延長になる)")
     print(row("海上区間", sea_report, sea_km))
