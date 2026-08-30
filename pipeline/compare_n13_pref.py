@@ -119,6 +119,10 @@ def main() -> None:
     stamp = one_timestamp(stamps)
     print(f"候補 {len(lines):,} 本  データ基準 {stamp}")
 
+    print("\nreading N03 municipal boundaries", flush=True)
+    prefs = Prefectures()
+    print(f"  {prefs.polygon_count:,} polygons", flush=True)
+
     # 見るメッシュは、47 の bbox が覆う物と、候補が触れる物の和である。前者だけ
     # では足りない——東京都の bbox は本土だけなので、三宅島と小笠原の都道が落ちる。
     # 後者だけでも足りない。候補が 1 本も無い所こそ、探している欠落だからである。
@@ -126,11 +130,26 @@ def main() -> None:
     for region in REGIONS:
         south, west, north, east = REGIONS[region]["bbox"]
         meshes.update(mesh_codes_for_bbox([west, south, east, north]))
-    meshes = sorted(meshes)
 
-    print("\nreading N03 municipal boundaries", flush=True)
-    prefs = Prefectures()
-    print(f"  {prefs.polygon_count:,} polygons", flush=True)
+    # それでも、N03 が陸だと述べるメッシュの全部にはならない。この二つの和は
+    # どちらも道のデータから来ているので、道が 1 本も無い島は入らない。分母から
+    # 落ちるほうへしか効かない差なので、隠さずに数えて名指しする。
+    #
+    # 2026-08-30 に実測した。差は 21 メッシュで、沖ノ鳥島・南鳥島・硫黄島・
+    # 鳥島などの無人島と北方領土である。KSJ が配っているのはそのうち 8 メッシュ
+    # で、都道府県道のレコードは 1 件も無く 0.00 km だった。残る 13 は 404 を
+    # 返す。だから今のところ、この差は被覆率を 1 km も動かさない。動き始めたら
+    # 下の行がそう述べる。
+    land: set[str] = set()
+    for west, south, east, north in prefs.bounds:
+        land.update(mesh_codes_for_bbox([west, south, east, north]))
+    unexamined = sorted(land - meshes)
+    meshes = sorted(meshes)
+    if unexamined:
+        print(f"  N03 が陸だと述べるのに候補も bbox も触れないメッシュ "
+              f"{len(unexamined)}: {' '.join(unexamined)}")
+        print("    このメッシュの N13 は読まない。分母に入らないので、被覆率は"
+              "そのぶん高く出る。")
 
     n13_km: dict[str, float] = defaultdict(float)
     covered_km: dict[str, float] = defaultdict(float)

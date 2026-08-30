@@ -119,6 +119,17 @@ class Prefectures:
     def polygon_count(self) -> int:
         return len(self._geoms)
 
+    @property
+    def bounds(self) -> list[tuple[float, float, float, float]]:
+        """面ごとの外接矩形。西・南・東・北の順(shapely の並び)である。
+
+        「日本のどこに陸があるか」を、道のデータとは独立に述べられる唯一の物が
+        この面である。N13 と突き合わせる側(compare_n13_pref.py)が、候補の有無と
+        無関係に見るべき範囲を数えるのに使う。候補が 1 本も無い島こそ、探して
+        いる欠落だからである。
+        """
+        return [g.bounds for g in self._geoms]
+
     def assign_ways(
         self,
         lat: Sequence[float],
