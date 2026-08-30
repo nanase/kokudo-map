@@ -119,8 +119,10 @@ def relation_numbers(rels: dict[int, dict], prefectural: list[int]) -> dict[int,
     own = {rid: numbers(rels[rid]["tags"].get("ref")) for rid in prefectural}
     members = {rid: [m["ref"] for m in rels[rid]["members"] if m["type"] == "relation"]
                for rid in prefectural}
-    # 親から子へ配る。深さは実際には 2 段までだが、繰り返して落ち着かせる。
-    for _ in range(4):
+    # 親から子へ配る。実測では 2 周で落ち着く。落ち着かないまま打ち切ると、番号を
+    # 継承しそこねた子が黙って残るので、その場合は報告する。
+    rounds = 8
+    for _ in range(rounds):
         changed = False
         for rid in prefectural:
             for kid in members[rid]:
@@ -129,6 +131,9 @@ def relation_numbers(rels: dict[int, dict], prefectural: list[int]) -> dict[int,
                     changed = True
         if not changed:
             break
+    else:
+        print(f"  WARNING: relation numbers did not settle in {rounds} rounds; "
+              f"some child relations may be missing an inherited number", flush=True)
     return own
 
 
