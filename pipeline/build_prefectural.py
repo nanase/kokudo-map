@@ -322,6 +322,11 @@ def build(region: str) -> dict:
         "region": region,
         "arcs": arcs,
         "routes": routes,
+        # 全国の合計はここを足す。`meta` の側は小数第 1 位に丸めてあるので、47 県ぶんを
+        # 足すと 1 県あたり最大 0.05 km の誤差が積み上がり、全アークを足してから丸めた
+        # 値と合わない。
+        "arc_km": arc_km,
+        "designated_km": designated_km,
         "meta": {
             "region": region,
             "label": REGIONS[region]["label"],
@@ -403,11 +408,10 @@ def main() -> None:
     for region in regions:
         built = build(region)
         write(built)
-        m = built["meta"]
-        total["arcs"] += m["arc_count"]
-        total["routes"] += len(m["routes"])
-        total["km"] += m["arc_km"]
-        total["designated_km"] += m["designated_km"]
+        total["arcs"] += built["meta"]["arc_count"]
+        total["routes"] += len(built["routes"])
+        total["km"] += built["arc_km"]
+        total["designated_km"] += built["designated_km"]
         print()
     if len(regions) > 1:
         print(f"{len(regions)} regions: {total['arcs']:,} arcs, "
