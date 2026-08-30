@@ -19,6 +19,11 @@ N03 = ROOT / "build" / "n03"
 # 一般国道の路線を指定する政令の生 XML と、そこから作った参照表。
 DECREE = ROOT / "build" / "decree"
 
+# 都道府県道になりうる way を全国から測った結果。県ごとに 1 ファイルである。
+# pbf から作り直せる中間データなので build/ 配下に置く。survey_prefectural.py を
+# 参照。
+SURVEY = ROOT / "build" / "survey"
+
 # 地域ごとの GeoJSON と meta。中間成果であって配信物ではない。全国では 47 ファイル
 # 約 70 MB になり、閲覧側は代わりに詰めたタイルを読む。
 REGIONS = ROOT / "build" / "regions"
