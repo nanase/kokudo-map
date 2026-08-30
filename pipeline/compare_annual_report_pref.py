@@ -14,9 +14,8 @@
      作ると、判定に合わせた検証になる。だからここが読むのは生成物ではなく、
      survey_prefectural.py が OSM から測ったそのままの値である
 
-## 台帳の定義を、そのまま計算の骨にする
-
-年報はどの表でも 実延長 = 総延長 - 重用延長 - 未供用延長 - 渡船延長 と述べる。
+台帳の定義を、そのまま計算の骨にする。年報はどの表でも
+実延長 = 総延長 - 重用延長 - 未供用延長 - 渡船延長 と述べる。
 総延長は路線ごとの延長の和で、重用区間はその路線の数だけ数えられる。実延長は
 道そのものの長さで、重なりは一度しか数えない。
 
@@ -30,9 +29,7 @@
 これは年報の定義そのものであって、こちらが考えた近似ではない。この置き方だと
 表11 = 表12 + 表13 が計算のうえでも成り立つ。
 
-## 種別は番号帯で分ける
-
-主要地方道か一般都道府県道かは、政令で決まる法令上の区別である。OSM はそれを
+種別は番号帯で分ける。主要地方道か一般都道府県道かは、政令で決まる法令上の区別である。OSM はそれを
 直接持たない。持っているのは道の格(primary・secondary)と番号で、実測では
 primary の 95.5% が `ref` 100 以下、secondary の 99.5% が 101 以上である。
 
@@ -40,9 +37,7 @@ primary の 95.5% が `ref` 100 以下、secondary の 99.5% が 101 以上で�
 格付けを述べるのではない。二つが食い違う way は、下の「番号帯と道路の格」で
 そのまま報告する。数えるのに使わなかった側を、代わりに見張りに使う。
 
-## 県別の突き合わせ
-
-年報は県の行と政令指定都市の行を分ける。地図は道路管理者を区別しないので、
+県別の突き合わせでは、年報は県の行と政令指定都市の行を分ける。地図は道路管理者を区別しないので、
 突き合わせる相手は両方の和である(annual_report.Prefecture)。
 
 県境を跨ぐ way は、長さの過半が入る県に寄せてある(prefectures.py)。寄せた結果
@@ -68,10 +63,12 @@ import annual_report
 from _paths import SURVEY
 from compare_annual_report import (
     KIND_GROUP,
-    PAIR_DISTANCE_M,
     SAMPLE_M,
     build_grid,
+    one_timestamp,
     paired_fraction,
+    row,
+    take_distance,
 )
 from regions import REGIONS
 
@@ -86,6 +83,7 @@ RANK_LABEL = {MAJOR: "主要地方道", GENERAL: "一般都道府県道"}
 RANK_TABLE = {MAJOR: 12, GENERAL: 13}
 
 
+# --------------------------------------------------------------------- 種別 ---
 def rank_of(ref: int) -> str:
     return MAJOR if ref <= MAJOR_MAX else GENERAL
 
@@ -110,6 +108,7 @@ def is_national(doc: dict) -> bool:
     return doc["national_relation"] or (doc["grade"] is None and doc["national_tag"])
 
 
+# --------------------------------------------------------------------- 集計 ---
 class Tally:
     """1 県ぶん、あるいは全国ぶんの集計。
 
@@ -280,15 +279,9 @@ def measure_pairs(docs: list[dict], reach: float) -> dict[tuple[str, str, bool],
 
 
 # ----------------------------------------------------------------- 報告 ---
-def row(label: str, ledger: float | None, map_km: float | None, width: int = 26) -> str:
-    if ledger is None or map_km is None:
-        gap = ""
-    else:
-        pct = f" ({(map_km - ledger) / ledger:+.1%})" if ledger else ""
-        gap = f"{map_km - ledger:+12,.1f}{pct}"
-    left = "" if ledger is None else f"{ledger:12,.1f}"
-    right = "" if map_km is None else f"{map_km:12,.1f}"
-    return f"  {label:{width}} {left:>12} {right:>12}  {gap}"
+# 見出しの幅。compare_annual_report.row の既定より狭い。こちらは種別ごとに一段
+# 下げた見出しを持つので、同じ幅だと右の列が押し出される。
+LABEL_WIDTH = 26
 
 
 def report_mismatched_band(rows: list[tuple], limit: int = 10) -> None:
@@ -342,15 +335,11 @@ def report_number_range(per_region: dict[str, Tally],
 
 def main() -> None:
     args = sys.argv[1:]
-    reach = PAIR_DISTANCE_M
     pairing = True
     if "--no-pairing" in args:
         pairing = False
         args.remove("--no-pairing")
-    if "--distance" in args:
-        i = args.index("--distance")
-        reach = float(args[i + 1])
-        args = args[:i] + args[i + 2:]
+    reach, args = take_distance(args)
     if args:
         raise SystemExit(f"unexpected argument: {args[0]}")
 
@@ -390,7 +379,7 @@ def main() -> None:
         nation.merge(tally)
         print(f"  {region:12} {len(docs):7,} ways", flush=True)
 
-    stamp = base.pop() if len(base) == 1 else "mixed: " + ", ".join(sorted(base))
+    stamp = one_timestamp(base)
     print(f"\n測ったもの build/survey  データ基準 {stamp}")
 
     # ---- 全国 --------------------------------------------------------------
@@ -398,10 +387,11 @@ def main() -> None:
     comparable = whole["total"] - whole["concurrent"]
     print("\n年報と地図(全国)")
     print(f"  {'項目':26} {'年報':>12} {'地図':>12}   差")
-    print(row("総延長 / 指定延長", whole["total"], nation.designated_total))
-    print(row("実延長+未供用+渡船 / 重複排除", comparable, nation.dedup_km))
-    print(row("重用延長 / 復元できた重用", whole["concurrent"], nation.concurrent_km()))
-    print(row("旧道", whole["former"], nation.former_km))
+    print(row("総延長 / 指定延長", whole["total"], nation.designated_total, LABEL_WIDTH))
+    print(row("実延長+未供用+渡船 / 重複排除", comparable, nation.dedup_km, LABEL_WIDTH))
+    print(row("重用延長 / 復元できた重用", whole["concurrent"], nation.concurrent_km(),
+              LABEL_WIDTH))
+    print(row("旧道", whole["former"], nation.former_km, LABEL_WIDTH))
     print(f"  {'路線数':26} {ledger[11].routes:>12} "
           f"{sum(len(nation.numbers[r]) for r in RANKS):>12}"
           "   ※ 地図は(県, 番号)の組の数")
@@ -410,11 +400,12 @@ def main() -> None:
     for rank in RANKS:
         t = ledger[RANK_TABLE[rank]]
         print(f"  表{RANK_TABLE[rank]} {RANK_LABEL[rank]}")
-        print(row("  総延長 / 指定延長", t.km["total"], nation.designated_km[rank]))
+        print(row("  総延長 / 指定延長", t.km["total"], nation.designated_km[rank],
+                  LABEL_WIDTH))
         print(row("  実延長+未供用+渡船 / 重複排除",
-                  t.km["total"] - t.km["concurrent"], nation.actual_km[rank]))
+                  t.km["total"] - t.km["concurrent"], nation.actual_km[rank], LABEL_WIDTH))
         print(row("  重用延長 / 復元できた重用", t.km["concurrent"],
-                  nation.concurrent_km(rank)))
+                  nation.concurrent_km(rank), LABEL_WIDTH))
 
     # ---- 重用の復元 --------------------------------------------------------
     # 年報の重用延長 11,563 km が、重用をどれだけ復元できたかの物差しである。
@@ -460,11 +451,11 @@ def main() -> None:
     build_report = whole["unopened"] - whole["unopened_sea"]
 
     print("\n区分ごと(足すと上の重複排除の延長になる)")
-    print(row("海上区間", whole["unopened_sea"] + whole["ferry"], sea_km))
-    print(row("工事中・未開通 / 未供用の陸上", build_report, build_km))
-    print(row("ランプ・連結路", 0.0, link_km))
-    print(row("徒歩道・階段", None, foot_km))
-    print(row("供用中の車道 / 実延長", whole["actual"], open_km))
+    print(row("海上区間", whole["unopened_sea"] + whole["ferry"], sea_km, LABEL_WIDTH))
+    print(row("工事中・未開通 / 未供用の陸上", build_report, build_km, LABEL_WIDTH))
+    print(row("ランプ・連結路", 0.0, link_km, LABEL_WIDTH))
+    print(row("徒歩道・階段", None, foot_km, LABEL_WIDTH))
+    print(row("供用中の車道 / 実延長", whole["actual"], open_km, LABEL_WIDTH))
 
     # ---- 差の内訳 ----------------------------------------------------------
     paired = nation.paired_km
@@ -498,7 +489,7 @@ def main() -> None:
     print(f"  {'合計(見出しの行だけを足す)':34} {nation.dedup_km - comparable:+12,.1f}")
 
     print("\n裏取り")
-    print(row("中央帯設置 / 上下線分離の実測", whole["median"], dual_km))
+    print(row("中央帯設置 / 上下線分離の実測", whole["median"], dual_km, LABEL_WIDTH))
 
     # ---- 県別 --------------------------------------------------------------
     # 県別の差は、そのままでは上下線分離を含んだままである。都市部の県はそこが

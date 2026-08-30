@@ -326,23 +326,53 @@ def measure(reach: float) -> dict:
             "arcs_by_kind": dict(arcs_by_kind), "paired_km": dict(paired_km)}
 
 
-# ------------------------------------------------------------------ report ---
-def base_timestamp() -> str:
-    """地域を生成した元の OSM の切り出し時刻。平均は取らない。
+# ------------------------------------------------------------------ 引数 ---
+def take_distance(args: list[str]) -> tuple[float, list[str]]:
+    """`--distance` の値と、それを取り除いた残りの引数。
 
-    別々の切り出しから作った地域が混ざると、全国計は意味を失うが、合計そのものは
-    それを決して示さない。だから混ざった生成物は、隠さずに名指しする。
+    都道府県道の側(compare_annual_report_pref.py)も同じ旗を同じ意味で取るので、
+    読み取りはここに一つだけ置く。値を検査するのは、`--distance` を末尾に書いた
+    ときや `--distance --no-pairing` と書いたときに、添字の失敗ではなく使い方の
+    誤りとして落とすためである。extract_pbf.take と同じ形である。
     """
-    stamps = {json.loads((REGION_DIR / f"{r}.meta.json").read_text(encoding="utf-8"))
-              ["osm_timestamp"] for r in REGIONS}
+    if "--distance" not in args:
+        return PAIR_DISTANCE_M, args
+    i = args.index("--distance")
+    if i + 1 >= len(args) or args[i + 1].startswith("--"):
+        raise SystemExit("--distance needs a value")
+    try:
+        reach = float(args[i + 1])
+    except ValueError:
+        raise SystemExit(f"--distance needs a number, not {args[i + 1]!r}") from None
+    return reach, args[:i] + args[i + 2:]
+
+
+# ------------------------------------------------------------------ report ---
+def one_timestamp(stamps: set[str]) -> str:
+    """一つに定まる基準時刻。定まらなければ、混ざっている旨を名指しする。
+
+    別々の切り出しから作った物が混ざると、全国計は意味を失うが、合計そのものは
+    それを決して示さない。だから混ざった生成物は、隠さずに名指しする。読む側は
+    地域の meta と build/survey の二人いるので、述べ方はここに一つだけ置く。
+    """
     return stamps.pop() if len(stamps) == 1 else "mixed: " + ", ".join(sorted(stamps))
 
 
-def row(label: str, ledger: float | None, map_km: float | None) -> str:
+def base_timestamp() -> str:
+    """地域を生成した元の OSM の切り出し時刻。平均は取らない。"""
+    return one_timestamp(
+        {json.loads((REGION_DIR / f"{r}.meta.json").read_text(encoding="utf-8"))
+         ["osm_timestamp"] for r in REGIONS})
+
+
+def row(label: str, ledger: float | None, map_km: float | None, width: int = 28) -> str:
     """突き合わせの 1 行。台帳の値、地図の値、そしてその差である。
 
     どちらの側も None になりうる——徒歩道には突き合わせる欄が台帳に無い。そう
     述べることは、0 と述べることとは違う。
+
+    `width` は見出しの幅である。都道府県道の側は種別ごとに一段下げた見出しを
+    持つので、そこだけ狭くする。
     """
     if ledger is None or map_km is None:
         gap = ""
@@ -351,16 +381,11 @@ def row(label: str, ledger: float | None, map_km: float | None) -> str:
         gap = f"{map_km - ledger:+12,.1f}{pct}"
     left = "" if ledger is None else f"{ledger:12,.1f}"
     right = "" if map_km is None else f"{map_km:12,.1f}"
-    return f"  {label:28} {left:>12} {right:>12}  {gap}"
+    return f"  {label:{width}} {left:>12} {right:>12}  {gap}"
 
 
 def main() -> None:
-    args = sys.argv[1:]
-    reach = PAIR_DISTANCE_M
-    if "--distance" in args:
-        i = args.index("--distance")
-        reach = float(args[i + 1])
-        args = args[:i] + args[i + 2:]
+    reach, args = take_distance(sys.argv[1:])
     if args:
         raise SystemExit(f"unexpected argument: {args[0]}")
 

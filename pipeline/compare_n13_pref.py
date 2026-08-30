@@ -17,15 +17,11 @@ compare_n13.py が国道について答えている問いを、道路分類 都�
 ある。逆向き(orphan。旧道フラグが古いままの候補)は生成物の `former` を必要と
 するので、判定(#98)より後にしか立てられない。
 
-## 県ごとに分ける方法
-
-N13 のレコードは県を持たない。だから prefectures.py に訊く——way に所属都道府県を
+県ごとに分ける方法。N13 のレコードは県を持たない。だから prefectures.py に訊く——way に所属都道府県を
 与えているのと同じ N03 の面である。両側を同じ面で分けるので、県別の割合は矩形の
 食み込みを含まない。
 
-## 進め方
-
-1 次メッシュごとに進む。メッシュ 1 つぶんの N13 を読み、そのメッシュに触れる候補
+進め方は 1 次メッシュごとである。メッシュ 1 つぶんの N13 を読み、そのメッシュに触れる候補
 だけで格子を組む。全国ぶんの N13 を一度に持つと数 GB になるが、こうすれば持つのは
 候補の形(約 470 万点)と、メッシュ 1 つぶんだけで済む。
 
@@ -40,6 +36,7 @@ from collections import defaultdict
 import annual_report
 from _paths import SURVEY
 from compare_annual_report_pref import is_national
+from compare_annual_report import one_timestamp
 from compare_n13 import (
     GAP_THRESHOLD_M,
     build_segment_grid,
@@ -68,6 +65,7 @@ RDCTG_PREFECTURAL = "2"
 MESH_MARGIN_DEG = 0.02
 
 
+# --------------------------------------------------------------------- 入力 ---
 def bbox_of(geometry: list[list[float]]) -> tuple[float, float, float, float]:
     lats = [p[0] for p in geometry]
     lons = [p[1] for p in geometry]
@@ -107,6 +105,7 @@ def load_candidates() -> tuple[list[list[tuple[float, float]]], set[str],
     return lines, stamps, by_mesh
 
 
+# ------------------------------------------------------------------- main ---
 def main() -> None:
     args = sys.argv[1:]
     refresh = "--refresh" in args
@@ -117,7 +116,7 @@ def main() -> None:
 
     print("reading build/survey")
     lines, stamps, by_mesh = load_candidates()
-    stamp = stamps.pop() if len(stamps) == 1 else "mixed: " + ", ".join(sorted(stamps))
+    stamp = one_timestamp(stamps)
     print(f"候補 {len(lines):,} 本  データ基準 {stamp}")
 
     # 見るメッシュは、47 の bbox が覆う物と、候補が触れる物の和である。前者だけ

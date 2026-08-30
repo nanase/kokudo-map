@@ -18,7 +18,7 @@
 突き合わせ(compare_annual_report_pref.py と compare_n13_pref.py)はそちらを読む
 ので、突き合わせを何度やり直しても pbf は読み直さない。
 
-## 何を残すか
+何を残すか。
 
   1. `highway` が primary・secondary(と、その _link・construction)で、数字だけの
      `ref` を持つ way。#98 が候補にする集合を含む
@@ -38,11 +38,10 @@ build_routes.py の物をそのまま読む。道の状態についての問い�
 全国ぶんの座標をノードごとの Python オブジェクトにせず持つ、という同じ問いに
 二度答えないためである。
 
-## 番号の読み方
-
-`build_routes.tokens()` は使えない。あれは一般国道の 459 番だけを通す。
-都道府県道の番号はその外にも実在する(北海道道759号、兵庫県道432号)ので、ここは
-数字だけを見る。上限も置かない。置けば、置いた値そのものが判定になってしまう。
+番号の読み方だけは書き下ろす。`build_routes.tokens()` は使えない。あれは一般国道の
+459 番だけを通す。都道府県道の番号はその外にも実在する(北海道道759号、兵庫県道
+432号)ので、ここは数字だけを見る。上限も置かない。置けば、置いた値そのものが
+判定になってしまう。
 
 使い方:  uv run pipeline/survey_prefectural.py
          uv run pipeline/survey_prefectural.py --pbf path/to/japan-latest.osm.pbf
@@ -78,6 +77,7 @@ PREFECTURAL_GRADES = frozenset({"primary", "secondary"})
 PREFECTURAL_NETWORK = "JP:prefectural"
 
 
+# -------------------------------------------------------------------- 読み方 ---
 def numbers(ref: str | None) -> list[int]:
     """`ref` に入っている都道府県道の番号。トークンごとに読む。
 
@@ -139,6 +139,7 @@ def relation_numbers(rels: dict[int, dict], prefectural: list[int]) -> dict[int,
     return own
 
 
+# ------------------------------------------------------------------- 通し読み ---
 def points(ways: Ways, wid: int) -> list[tuple[float, float]]:
     """way の形を (緯度, 経度) の列で返す。
 
@@ -186,6 +187,7 @@ def pass_ways(path: str, wanted: set[int], index: str) -> Ways:
     return ways
 
 
+# ------------------------------------------------------------------- main ---
 def main() -> None:
     args = sys.argv[1:]
     path = str(PBF / "japan-latest.osm.pbf")
