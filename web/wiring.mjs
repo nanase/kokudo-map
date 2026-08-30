@@ -5,7 +5,7 @@
  * import できる。test/wiring.test.mjs はこの性質を使い、happy-dom に流した
  * index.html へ直接配線して検査する。
  *
- * MapLibre のコントロールと localStorage はここに含めない — 対象は
+ * MapLibre のコントロールと localStorage はここに含めない——対象は
  * 「index.html の要素と state の対応」だけである。wireShare() は
  * navigator.share・navigator.clipboard を呼ぶので、happy-dom では
  * test/wiring.test.mjs の検査対象にしていない。
@@ -66,9 +66,8 @@ export function wireControls(doc, state, applyFilters) {
   const toggle = (id, key) =>
     $(id).addEventListener('change', (e) => {
       state[key] = e.target.checked;
-      // The shadow layer is not restricted by kind, so a toggle that takes the
-      // picked arc off the map would otherwise leave its shadow lying on the
-      // basemap with no road inside it.
+      // 影の層は種別で絞っていない。押されているアークを地図から外す切り替え
+      // があると、そのままでは道の無い影だけが下地図の上に残る。
       state.picked = null;
       applyFilters();
     });
@@ -82,7 +81,7 @@ export function wireControls(doc, state, applyFilters) {
 
 /**
  * 共有ダイアログの配線。dialog.showModal() は happy-dom に無いので、
- * test/wiring.test.mjs はここを直接は検査しない — 対象は #route-list 側の
+ * test/wiring.test.mjs はここを直接は検査しない——対象は #route-list 側の
  * 4 例(検査する例)であり、この関数の切り出しは app.js を import 不要にする
  * ためのものである。
  */
@@ -91,7 +90,7 @@ export function wireShare(doc, state) {
   const dialog = $('#share-dialog');
 
   // index.html が持つラベル文言をそのまま読む。ここで書き直すと、
-  // 表示側を直したときにこちらが黙って古くなる。
+  // 表示側を直したときにこちらが暗黙のうちに古くなる。
   const shareState = () => {
     const toggles = [
       ...doc.querySelectorAll('#display-popover .checks label'),

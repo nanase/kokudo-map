@@ -2,37 +2,37 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Turn cached OSM objects into the map's data files.
+"""キャッシュした OSM の物を、地図のデータファイルにする。
 
-The whole point of this stage is to answer, for every piece of road, the
-question conventional maps refuse to answer: *which* national routes are
-designated over it — all of them, not just the lowest number.
+この段の眼目は、道のひと切れごとに、ふつうの地図が答えようとしない問いへ答える
+ことである。その上にどの国道が指定されているか——番号の若い物だけでなく、全部
+である。
 
-Deciding that has two halves, and they need different evidence:
+判定は二つに分かれ、それぞれ別の証拠を必要とする。
 
-  is it a national route at all?   Any of:
-      (a) a national route relation contains it;
-      (b) its name is 国道N号 — unless it is also graded and gated like an
-          ordinary closed residential street with no relation backing it up
-          (see names_a_closed_residential_road);
-      (c) it is mapped at national grade (trunk / motorway / construction of
-          one) and no *competing* route relation claims the same number
-          for it.
-    (c) exists because route relations lag badly behind the ways: 長野南バイパス
-    (国道19号, open for decades) is 22 trunk ways that no relation contains.
-    A bare numeric `ref` alone proves nothing — 都道府県道 use the same format.
+  そもそも国道か     次のいずれかを満たせばよい。
+      (a) 国道のルートリレーションが含んでいる
+      (b) 名前が 国道N号 である——ただし、リレーションの裏付けが無く、格も通行
+          規制も、ふつうの通り抜けできない生活道路と同じ物を除く
+          (names_a_closed_residential_road を参照)
+      (c) 国道の格(trunk・motorway・それらの construction)で描かれており、
+          競合するルートリレーションが同じ番号をその way について主張していない
+    (c) が在るのは、ルートリレーションの整備が way に大きく遅れるからである。
+    長野南バイパス(国道19号。開通から数十年)は 22 本の trunk で、どのリレーション
+    にも入っていない。数字だけの `ref` は何も証明しない——都道府県道も同じ書式を
+    使う。
 
-  which routes?                    The union of:
-      - the numbers of every relation containing it (inherited through parents);
-      - 国道N号 parsed from its name;
-      - the semicolon-separated tokens of its own `ref`, but only for numbers
-        some national relation in the region independently vouches for, and
-        that no competing relation claims under the same number for this way.
-        競合 relations are mostly 都道府県道, but an operator-branded route
-        numbering scheme (首都高速道路 etc.) makes the identical kind of claim
-        — see resolve_competing_claims and CASES.md 20.
+  何号か             次の和集合である。
+      - その way を含むリレーションすべての番号(親から継承する)
+      - 名前から読んだ 国道N号
+      - way 自身の `ref` を ; で区切ったトークン。ただし、その地域の国道
+        リレーションが独立に保証している番号で、かつ、その way について競合する
+        リレーションが同じ番号を主張していない物に限る。競合するリレーションは
+        大半が都道府県道だが、事業者が自分の路線番号を名乗る体系(首都高速道路
+        など)もまったく同じ形の主張をする——resolve_competing_claims と
+        CASES.md 20 を参照。
 
-Usage:  uv run pipeline/build_routes.py [region]
+使い方:  uv run pipeline/build_routes.py [地域]
 """
 from __future__ import annotations
 
@@ -45,8 +45,8 @@ from _paths import CACHE, REGIONS as OUT
 from geo import haversine, line_length
 from regions import for_region
 
-# Route numbers a general national route can legally have: 1-58 and 101-507,
-# less the six numbers whose routes were abolished or absorbed.
+# 一般国道が法令上持ちうる路線番号。1〜58 と 101〜507 から、廃止または編入され
+# た 6 番を除く。
 ABOLISHED = {109, 110, 111, 214, 215, 216}
 VALID = (set(range(1, 59)) | set(range(101, 508))) - ABOLISHED
 
@@ -55,34 +55,34 @@ NAME_NUM = re.compile(r"国道\s*(\d+)\s*号")
 FOOT_HIGHWAYS = {"path", "footway", "steps", "track", "cycleway", "bridleway"}
 NATIONAL_GRADE = {"trunk", "motorway"}
 
-# The same grades, for a road still being built. `primary` used to be here, and
-# it was the one back door through the rule that keeps primary out: RULES.md
-# excludes it because a bare numeric `ref` on a primary proves nothing — 3,305
-# relation-less primary ways in 長野県 carry one and not one is named 国道.
-# `construction=primary` let exactly that class back in. 北海道道39号奥尻島線 became
-# 国道39号 292 km from where 国道39号 runs, and 京都府の山手幹線 and 岩屋バイパス
-# became 国道2号. Nationwide it admitted 5 legitimate arcs (栗東水口道路, 1.6 km of
-# 国道1号) against those; the road will come back when it opens and is retagged.
+# まだ造っている道についての、同じ格。かつてここには `primary` が入っており、
+# それが primary を締め出す規則の唯一の裏口だった。RULES.md が primary を外すのは、
+# primary に付いた数字だけの `ref` が何も証明しないからである。長野県では、
+# リレーションに属さない primary の way 3,305 本がそれを持ち、国道 と名乗る物は
+# 1 本も無い。`construction=primary` は、まさにその一群を通していた。北海道道39号
+# 奥尻島線が、国道39号の走る場所から 292 km 離れた所で国道39号になり、京都府の
+# 山手幹線と岩屋バイパスが国道2号になった。全国で正しく入ったのは 5 アーク
+# (栗東水口道路、国道1号の 1.6 km)だけである。その道は、開通してタグが付け直され
+# れば戻ってくる。
 NATIONAL_GRADE_UNDER_CONSTRUCTION = {"trunk", "motorway"}
 
-# bbox edge tolerance (deg) for suppressing endpoints that are artefacts of
-# clipping the region rather than real termini
+# bbox の縁の許容差(度)。本物の端点ではなく、地域を切ったせいで生じた端点を
+# 抑えるのに使う。
 EDGE_TOL = 0.02
 
-# How far apart two routes' endpoints may sit and still be the same junction.
-# One crossing is several OSM nodes — one per approach — so the endpoints of the
-# routes that meet there scatter over the intersection rather than coinciding.
-# decree.py reads this too, to tell a legal terminus from an OSM break.
+# 二つの路線の端点が、同じ交差点だと見なせる隔たりの上限。1 つの交差点は複数の
+# OSM のノードでできている——流入方向ごとに 1 つである——ので、そこで出会う路線の
+# 端点はぴたりと重ならず、交差点の上に散らばる。decree.py もこれを読む。法令上の
+# 起終点と、OSM の切れ目とを見分けるためである。
 TERMINI_CLUSTER_M = 150
 
 
-# ------------------------------------------------------------ designations ---
+# ------------------------------------------------------------------ 指定 ---
 def tokens(ref: str | None) -> set[int]:
-    """Numeric national-route numbers in a `ref` value, token by token.
+    """`ref` の値に入っている国道番号を、トークンごとに読む。
 
-    `ref=4;6;14;17` is four designations, not one string. Matching the whole
-    value (the mistake that makes concurrent sections vanish) would drop
-    every one of them.
+    `ref=4;6;14;17` は四つの指定であって、1 つの文字列ではない。値の全体で
+    照合すると(重用区間が消える誤りがこれである)、その四つを全部落とす。
     """
     out: set[int] = set()
     for tok in (ref or "").split(";"):
@@ -92,41 +92,39 @@ def tokens(ref: str | None) -> set[int]:
     return out
 
 
-# `official_name` is not trustworthy for this: way/263470309 (精進ブルーライン,
-# `ref=358`, in the 国道358号 relation) carries `official_name=一般国道368号` — a
-# typo in OSM that put a Mie-prefecture route number into Yamanashi. Only the
-# primary name fields are read, and even those are corroborated below.
+# この用途に `official_name` は信用できない。way/263470309(精進ブルーライン。
+# `ref=358` で、国道358号のリレーションに入っている)は
+# `official_name=一般国道368号` を持つ——三重県の路線番号を山梨県へ持ち込んだ、
+# OSM 側の打ち間違いである。読むのは主たる名前の欄だけで、それさえ下で裏取りする。
 NAME_FIELDS = ("name", "name:ja")
 
-# Where a way may say it is a sea section. Mappers put it in the name about half
-# the time and in `description` the other half, and the two halves are different
-# routes, not the same ones said twice — see SEA_SECTION below.
+# way が海上区間だと述べうる欄。投稿者はおよそ半分を名前に、残り半分を
+# `description` に書く。しかも二つの半分は別々の路線であって、同じ物を二度述べて
+# いるのではない——下の SEA_SECTION を参照。
 SEA_FIELDS = (*NAME_FIELDS, "description", "note")
 
-# Every way tag the rules in this file consult, and therefore the only ones a
-# nationwide extract has to carry. extract_pbf.py imports this rather than
-# restating it: a rule that starts reading a new tag must widen the set here, or
-# the tag will silently be absent from the cache it builds from.
+# このファイルの規則が参照する way のタグの全部であり、したがって全国の切り出しが
+# 運べばよい唯一の集合でもある。extract_pbf.py はこれを書き写さず import する。
+# 新しいタグを読み始める規則は、ここの集合を広げねばならない。さもないと、その
+# タグは、あちらが作るキャッシュから何も言われずに欠ける。
 #
-# `oneway` is the exception: no rule here reads it, and none should — which
-# carriageway a way is has nothing to do with whether it is a national route or
-# which one. compare_annual_report.py reads it, to tell a divided road's two
-# carriageways (two OSM ways, one length in the ledger) from a frontage road
-# that merely runs alongside. It is listed here because this set is what the
-# extract carries, not because this file consults it.
+# `oneway` は例外である。ここのどの規則も読まないし、読むべきでもない——その way
+# がどちらの車道かは、国道かどうかにも何号かにも関わらない。読むのは
+# compare_annual_report.py で、上下線分離の二つの車道(OSM では way 2 本、台帳では
+# 1 本ぶんの延長)と、ただ並んで走る側道とを見分けるのに使う。ここに並べてあるのは、
+# この集合が切り出しの運ぶ物だからであって、このファイルが参照するからではない。
 TAGS_USED = frozenset({
     *SEA_FIELDS, "ref", "highway", "construction", "route", "access", "motor_vehicle",
     "proposed", "planned",
     "historic:highway", "oneway",
 })
 
-# Sections bypassed by a newer alignment. These are deliberately *kept*: a
-# 旧道 stays legally designated until 指定解除, which lags the bypass opening by
-# years, and 地理院地図 shows it as 国道 for exactly that reason. OSM mappers
-# tend to record practical reality instead — dropping `ref`, downgrading
-# `highway`, removing the way from the route relation — so this is a systematic
-# divergence, not a tagging accident. They are flagged rather than filtered so
-# the map can show them distinctly.
+# 新しい線形に迂回された区間。これは意図して残す。旧道は指定解除まで法令上は
+# 国道のままで、解除はバイパスの開通から何年も遅れる。地理院地図が国道として描き
+# 続けるのも、まさにその理由による。OSM の投稿者はむしろ実態を記録する傾向がある
+# ——`ref` を外し、`highway` の格を下げ、ルートリレーションから外す——ので、これは
+# タグ付けの偶発ではなく、系統的な食い違いである。濾さずにフラグを立てるのは、
+# 地図が旧道を区別して出せるようにするためである。
 FORMER_ALIGNMENT = re.compile(r"旧道|廃道|旧国道")
 
 
@@ -135,18 +133,16 @@ def name_numbers(tags: dict[str, str], fields: tuple[str, ...] = NAME_FIELDS) ->
     return {int(m) for m in NAME_NUM.findall(blob) if int(m) in VALID}
 
 
-# way/152895667 (長野・静岡県境, a 19 m bridge) never says 旧道 in its name — it
-# has no `name` at all, only `old_name=国道152号`, `highway=residential` and
-# `route=hiking`/`tourism=yes`: OSM's real-world state is "this is a hiking
-# trail now", recorded the way OSM records that, not with the 旧道/廃道 words
-# this function used to require. It still sits on the *current* 国道152号
-# relation (regel a doesn't distinguish a stale membership from a live one),
-# so without this it drew as an ordinary, non-`former` national route.
-# `historic:highway` is the OSM convention for exactly this claim — "this used
-# to be a road of this grade, not any more" — independent of what the name
-# field says. Measured nationwide against every way a national relation
-# vouches for: one way carries it without already saying 旧道 in its name.
-# See CASES.md 21.
+# way/152895667(長野・静岡県境にある 19 m の橋)は、名前で旧道と述べたことが
+# 一度も無い——`name` を持たず、`old_name=国道152号`、`highway=residential`、
+# `route=hiking`・`tourism=yes` だけを持つ。OSM が記録している実態は「今はハイキング
+# ルートである」であり、この関数がかつて求めていた 旧道・廃道 の語ではなく、OSM が
+# そう記録するときの書き方で書かれている。しかも今も現行の国道152号のリレーション
+# に載っている(規則 a は、古いままの所属と生きた所属を区別しない)ので、これが
+# 無ければ旧道でないふつうの国道として描かれた。`historic:highway` は、まさにこの
+# 主張——「かつてこの格の道だった。今は違う」——を述べる OSM の書き方で、名前の欄が
+# 何と言うかとは独立である。国道リレーションが保証する way 全部に対して全国で
+# 測ると、名前で旧道と述べないままこれを持つ way は 1 本である。CASES.md 21 を参照。
 def is_former(tags: dict[str, str]) -> bool:
     blob = " ".join(tags.get(k, "") for k in NAME_FIELDS)
     if FORMER_ALIGNMENT.search(blob):
@@ -155,10 +151,10 @@ def is_former(tags: dict[str, str]) -> bool:
 
 
 def resolve_relation_routes(rels: dict[int, dict]) -> dict[int, set[int]]:
-    """Route numbers each relation stands for, inheriting through parents.
+    """リレーションごとに、それが表す路線番号。親から継承する。
 
-    Bypass relations (`name=長野バイパス`) routinely have no `ref`; the number
-    has to come from whichever relation holds them as a member.
+    バイパスのリレーション(`name=長野バイパス`)は `ref` を持たないことが多い。
+    番号は、それをメンバーとして抱えるリレーションから来るしかない。
     """
     own: dict[int, set[int]] = {}
     for rid, rel in rels.items():
@@ -171,8 +167,8 @@ def resolve_relation_routes(rels: dict[int, dict]) -> dict[int, set[int]]:
             if m["type"] == "relation" and m["ref"] in rels:
                 children[rid].append(m["ref"])
 
-    # Push parent numbers down to children that resolved to nothing.
-    # Depth is 2-3 in practice; iterate to a fixed point and cap it.
+    # 何も決まらなかった子へ、親の番号を降ろす。実際の深さは 2〜3 なので、
+    # 変化が止まるまで繰り返し、回数に上限を置く。
     for _ in range(5):
         changed = False
         for rid, kids in children.items():
@@ -188,20 +184,19 @@ def resolve_relation_routes(rels: dict[int, dict]) -> dict[int, set[int]]:
 
 
 def resolve_competing_claims(competing_relations: list[dict]) -> dict[int, set[int]]:
-    """Which non-national numbers each member way is claimed under.
+    """メンバーの way ごとに、国道でないどの番号で主張されているか。
 
-    A way can sit on a 県道 relation for reasons that have nothing to do with
-    its own designation — 広島南道路 (国道2号) is still, incidentally, a member
-    of 広島県道243号広島港線. Recording *which number* the relation claims,
-    per way, lets the guard below compare that number against what the way
-    claims for itself instead of treating any competing membership at all
-    as disqualifying.
+    way がある県道のリレーションに載っている理由は、その way 自身の指定とまったく
+    関わりが無いことがある——広島南道路(国道2号)は今も、たまたま広島県道243号
+    広島港線のメンバーである。リレーションが主張している番号を way ごとに記録して
+    おけば、下の裏取りは、競合するリレーションに載っていること自体を失格の理由に
+    せず、その番号と way 自身の主張とを比べられる。
 
-    都道府県道 relations are most of `competing_relations`, but not all of it:
-    an operator-branded route numbering scheme makes the same kind of claim.
-    way/560259106 (首都高速都心環状線, `ref=1`) sits on a relation with
-    `network=首都高速道路`, `ref=1` — the same shape as a 県道 collision, just a
-    different authority naming its own numbers. See CASES.md 20.
+    `competing_relations` の大半は都道府県道のリレーションだが、それだけではない。
+    事業者が自分の路線番号を名乗る体系も、同じ形の主張をする。way/560259106
+    (首都高速都心環状線、`ref=1`)は `network=首都高速道路`、`ref=1` のリレーション
+    に載っている——県道との衝突とまったく同じ形で、自分の番号を名乗っている主体が
+    違うだけである。CASES.md 20 を参照。
     """
     claims: dict[int, set[int]] = defaultdict(set)
     for rel in competing_relations:
@@ -213,66 +208,62 @@ def resolve_competing_claims(competing_relations: list[dict]) -> dict[int, set[i
     return claims
 
 
-# A sea section of a national route: the designation continues across water with
-# no road under it. Most carry no `route=ferry` — nationwide, 20 arcs and 1,390
-# km of open water were classified as carriageway and drawn as solid line,
-# against 2 arcs and 63 km that were tagged as a ferry. A 295 km straight line
-# you appear to be able to drive down is the exact confusion the dashed 海上国道
-# layer exists to prevent, so the words 海上区間 are read as the evidence they
-# plainly are.
+# 国道の海上区間。下に道が無いまま、指定だけが水面を渡る。大半は `route=ferry`
+# を持たない——全国で、20 アーク、1,390 km ぶんの外洋が車道として分類され、実線で
+# 描かれていた。航路としてタグ付けされていたのは 2 アーク、63 km である。走れそうに
+# 見える 295 km の直線こそ、破線の海上国道の層が防ごうとしている取り違えそのもの
+# なので、海上区間 の語は、見たままの証拠として読む。
 #
-# They are not always in the name. Of the 34 ways in Japan that say 海上区間, 20
-# say it in `name` and 14 only in `description` or `note` — and the 14 are other
-# routes, not the same ones said twice: 16, 28, 30, 42, 57, 259, 317, 324 were
-# drawn as solid road across 東京湾, 明石海峡, 備讃瀬戸, 伊勢湾 and 有明海 while the
-# name-only rule was in force. The two fields are one piece of evidence.
+# しかもその語はいつも名前にあるとは限らない。日本で 海上区間 と述べている 34 本の
+# うち、20 本は `name` に書き、14 本は `description` か `note` にしか書いていない
+# ——その 14 本は別の路線であって、同じ物を二度述べているのではない。名前だけを
+# 読む規則が効いていたあいだ、16・28・30・42・57・259・317・324 号が、東京湾・
+# 明石海峡・備讃瀬戸・伊勢湾・有明海を実線の道として渡っていた。二つの欄で
+# 1 つの証拠である。
 SEA_SECTION = re.compile(r"海上区間")
 
-# A designated section with no road built yet — a straight line an OSM mapper
-# drew to keep the route relation continuous, not something you can drive.
-# Nationwide: 86 arcs, 173.3 km (76 `proposed`, 10 `planned`), the longest
-# being 16.4 km of 国道360号 (白山白川郷ホワイトロードの代替路) and 16.1 km of
-# 国道274号 (`description=国道274号不通区間`). Left as `road` it drew as a solid
-# line — CASES.md 8 and 12's "draw a straight line across nothing and it reads
-# as driveable" mistake, this time on land instead of water.
+# 指定はされているが道がまだ造られていない区間——ルートリレーションを繋いでおく
+# ために OSM の投稿者が引いた直線であって、走れる物ではない。全国で 86 アーク、
+# 173.3 km(`proposed` が 76、`planned` が 10)。最長は国道360号の 16.4 km
+# (白山白川郷ホワイトロードが代替路)、次いで国道274号の 16.1 km
+# (`description=国道274号不通区間`)である。`road` のままにすると実線で描かれる
+# ——CASES.md 8 と 12 の「何も無い所に直線を引くと走れる道に読める」誤りが、
+# 今度は海ではなく陸で起きる。
 #
-# This check must come after the sea-section checks above, not before: 32 of
-# the 34 ways that say 海上区間 nationwide (CASES.md 12) carry
-# `highway=planned`, and checking `hw` first would reclassify them back to
-# solid road, undoing that fix.
+# この判定は、上の海上区間の判定より後に置かねばならない。全国で 海上区間 と
+# 述べている 34 本のうち 32 本が `highway=planned` を持つ(CASES.md 12)ので、
+# `hw` を先に見ると、それが実線の道へ戻され、あの修正が帳消しになる。
 UNOPENED_HIGHWAYS = {"planned", "proposed"}
 
-# The same idea, tagged the other way round: a way with no `highway` key at
-# all, only `proposed=trunk` or `planned=*` — "if this gets built, it will be
-# a trunk road", not "this is a road". way/743758644 (岐阜県, layer=-5) is a
-# relation member of 国道257号 with no road under it: no tunnel, nothing in
-# aerial imagery, just a straight line through a mountain pass. `hw` is `None`
-# here, so it falls through UNOPENED_HIGHWAYS above and reads as ordinary
-# `road`. Measured nationwide against every way a national relation vouches
-# for: exactly this one way. See CASES.md 22.
+# 同じことを、逆向きにタグ付けした形。`highway` の鍵を持たず、`proposed=trunk`
+# や `planned=*` だけを持つ way である。「造ればこの格になる」であって「これは道
+# である」ではない。way/743758644(岐阜県、layer=-5)は国道257号のリレーションの
+# メンバーだが、下に道が無い。トンネルも無く、航空写真にも何も無い。峠を貫く直線
+# があるだけである。ここでは `hw` が `None` なので、上の UNOPENED_HIGHWAYS を
+# すり抜けて、ふつうの `road` に読める。国道リレーションが保証する way 全部に
+# 対して全国で測ると、該当はこの 1 本だけである。CASES.md 22 を参照。
 UNOPENED_TAGS = {"proposed", "planned"}
 
-# 高速道路として指定された国道: grade-separated, no at-grade access, mapped
-# `highway=motorway`. These carry an expressway route number of their own
-# (第二神明道路 is `ref=E93;2`, 東海環状自動車道 is `ref=C3;475`) on top of the
-# national-route number, and drive differently from an ordinary at-grade 国道
-# — which is what put them behind the `ref=E93;2`-shaped bug in the first
-# place (see extract_pbf.py's REF_NUMERIC history). They are real, driveable
-# carriageway, so they stay a solid line rather than joining the dashed kinds
-# above; they get their own legend/toggle because the class itself is a
-# different kind of road, not because anything about it is incomplete.
+# 高速道路として指定された国道。平面交差が無く、平面からの出入りも無く、
+# `highway=motorway` で描かれる。国道番号のうえに、高速道路としての路線番号を
+# 自分で持つ(第二神明道路は `ref=E93;2`、東海環状自動車道は `ref=C3;475`)。走り方
+# もふつうの平面国道とは違う——そもそもこの道が `ref=E93;2` の形の不具合の陰に
+# 隠れた理由がそれである(extract_pbf.py の REF_NUMERIC の経緯を参照)。走れる本物の
+# 車道なので、上の破線の区分には加えず実線のままにする。凡例と表示の切り替えを
+# 自分で持つのは、この区分そのものが別種の道だからであって、何かが欠けている
+# からではない。
 #
-# `highway=motorway` alone is the signal, not the presence of an E-prefixed
-# `ref`: measured nationwide, 6,321 candidate ways carry both, 6,619 are
-# motorway-graded under a different numbering prefix (C3, A1, …), and only 199
-# carry an expressway ref without being motorway-graded — all 199 of them
-# `construction=motorway`, already claimed by the `construction` bucket above.
-# Matching on the `ref` shape would miss the C/A-prefixed roads and gain
-# nothing over matching the grade OSM already tags for exactly this class.
+# 手掛かりは `highway=motorway` だけで、E で始まる `ref` の有無ではない。全国で
+# 測ると、候補の way のうち両方を持つ物が 6,321 本、別の接頭辞(C3、A1 など)で
+# motorway の格を持つ物が 6,619 本ある。高速道路番号を持ちながら motorway で
+# ない物は 199 本しかなく、その 199 本はすべて `construction=motorway` で、上の
+# `construction` の区分が既に引き取っている。`ref` の書式で照合すると C・A で
+# 始まる道を取りこぼすうえ、OSM がまさにこの区分のために付けている格で照合する
+# のに比べて得る物が無い。
 
 
 def classify(tags: dict[str, str]) -> str:
-    """Which legend the piece of road belongs in."""
+    """その道のひと切れが、どの凡例に属するか。"""
     if tags.get("route") == "ferry":
         return "ferry"
     if SEA_SECTION.search(" ".join(tags.get(k, "") for k in SEA_FIELDS)):
@@ -293,15 +284,15 @@ def classify(tags: dict[str, str]) -> str:
     return "road"
 
 
-# 都市高速道路 number their own routes, and the number lands in `ref` looking
-# exactly like a national one. 首都高速4号新宿線 carries `ref=4`; 国道4号 is the
-# road to Aomori. Nationwide this put 303 arcs and 208 km of urban expressway on
-# to eleven national routes, and the corroboration guard cannot see it, because
-# 国道4号 really does run through the same prefecture.
+# 都市高速道路は自分の路線に番号を付けており、その番号は国道番号とまったく同じ
+# 見た目で `ref` に載る。首都高速4号新宿線は `ref=4` を持つが、国道4号は青森へ
+# 向かう道である。全国では、これが 303 アーク、208 km の都市高速を十一の国道の
+# 上に載せていた。しかも裏取りはこれを見つけられない。国道4号は実際に同じ都県を
+# 通っているからである。
 #
-# Only rule (c) consults this. A way a relation vouches for is unaffected, and
-# so is one whose own name says 国道N号 — some urban expressway sections really
-# are designated, and they say so.
+# これを参照するのは規則 c だけである。リレーションが保証する way は影響を受けず、
+# 自分の名前で 国道N号 と述べている way も同じである——都市高速の一部は本当に指定
+# を受けており、その場合は名前がそう述べている。
 URBAN_EXPRESSWAY = re.compile(r"高速\s*\d+\s*号")
 
 
@@ -319,32 +310,31 @@ def is_national_grade(tags: dict[str, str]) -> bool:
     return False
 
 
-# A route relation is only supposed to hold road ways, but mapping mistakes
-# put other things on it too: レッドバロン川口南 (a retailer's building outline)
-# sat on 国道122号's relation as a plain member, with no `highway` tag at all,
-# and got drawn as a designated arc. Measured nationwide, 124 relation members
-# carry no `highway` tag; of those, only a handful are closed rings (building
-# footprints, or a tunnel/bridge's outline recorded as a separate feature) —
-# the rest are `国道352号`-named ways with a real road shape that just happens
-# to be missing the tag, and stay in. `route=ferry` is excluded from this
-# check on purpose: a sea-section way legitimately carries no `highway`.
+# ルートリレーションが抱えるのは道路の way だけのはずだが、記入の誤りで別の物も
+# 載る。レッドバロン川口南(小売店の建物の輪郭)は、`highway` タグを 1 つも持たない
+# まま、ふつうのメンバーとして国道122号のリレーションに載っており、指定された
+# アークとして描かれていた。全国で測ると、`highway` タグを持たないリレーションの
+# メンバーは 124 件ある。そのうち閉じた環(建物の外形線や、トンネル・橋の輪郭を
+# 別に記録した物)は数件しかない——残りは `国道352号` のような名前を持ち、実際に
+# 道の形をしていて、たまたまタグが抜けているだけなので、そのまま残す。
+# `route=ferry` を意図してこの検査から外すのは、海上区間の way が `highway` を
+# 持たないのは正当だからである。
 def is_building_like(tags: dict[str, str], geometry: list[dict]) -> bool:
     if "highway" in tags or tags.get("route") == "ferry":
         return False
     return len(geometry) >= 2 and geometry[0] == geometry[-1]
 
 
-# A way whose only claim is its name (国道6号) but whose grade and access tags
-# describe an ordinary, closed-to-traffic residential street, not a road
-# anyone would call a national route. way/497559205 (highway=residential,
-# access=no, motor_vehicle=no) sits deep inland in 福島県, nowhere near 国道6号's
-# actual Pacific-coast alignment, and 地理院地図 draws it as a city street.
+# 主張が名前(国道6号)しかなく、しかも格と通行規制のタグが、誰も国道とは呼ばない
+# 通り抜けできない生活道路を述べている way。way/497559205(highway=residential、
+# access=no、motor_vehicle=no)は福島県の内陸深くにあり、国道6号の実際の太平洋岸の
+# 経路からは大きく外れている。地理院地図もただの市道として描く。
 #
-# This can't be `highway` grade alone: nationwide, rule (b) admits 10,810 ways
-# on name alone, 33 of them `residential`, and every other one of those 33 is
-# either a legitimately-designated 旧道/側道 or a real `ref`-bearing 国道
-# carrying ordinary traffic. Narrowed to residential *and* closed to motor
-# vehicles, exactly one way nationwide matches — this one.
+# `highway` の格だけでは決められない。全国で、規則 b が名前だけで認める way は
+# 10,810 本あり、そのうち `residential` は 33 本である。その 33 本のうち他の 32 本は、
+# 正当に指定された旧道・側道か、`ref` を持ちふつうに車が通る本物の国道である。
+# residential であることと自動車が通れないことの両方に絞ると、全国で当たるのは
+# ちょうど 1 本、この way だけである。
 def names_a_closed_residential_road(tags: dict[str, str]) -> bool:
     return (
         tags.get("highway") == "residential"
@@ -353,7 +343,7 @@ def names_a_closed_residential_road(tags: dict[str, str]) -> bool:
     )
 
 
-# -------------------------------------------------------------------- main ---
+# ------------------------------------------------------------------ main ---
 def main() -> None:
     region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
     raw_path = CACHE / f"{region}.raw.json"
@@ -387,7 +377,7 @@ def main() -> None:
     unresolved = [r for r, v in rel_routes.items() if not v]
     print(f"relations resolved to a route number: {len(rels) - len(unresolved)}/{len(rels)}")
 
-    # Which ways any national relation contains, and with which numbers.
+    # どの way を、どの番号の国道リレーションが含んでいるか。
     by_relation: dict[int, set[int]] = defaultdict(set)
     vouched: set[int] = set()
     for rid, rel in rels.items():
@@ -399,10 +389,10 @@ def main() -> None:
             if nums:
                 by_relation[m["ref"]] |= nums
 
-    # A number read off a way's `ref` is only believed when some relation in
-    # the region independently claims that national route exists here.
-    # Without this, way/31660216 (長野県道372号三才大豆島中御所線, `ref=372`)
-    # would put 国道372号 — a Kyoto/Hyogo route — into Nagano.
+    # way の `ref` から読んだ番号は、その地域のどれかのリレーションが、その国道が
+    # ここに在ると独立に主張しているときだけ信じる。これが無いと、way/31660216
+    # (長野県道372号三才大豆島中御所線、`ref=372`)が、京都から兵庫の路線である
+    # 国道372号を長野に置いてしまう。
     corroborated: set[int] = set()
     for nums in rel_routes.values():
         corroborated |= nums
@@ -421,40 +411,39 @@ def main() -> None:
     for wid, w in ways.items():
         tags = w.get("tags", {})
         from_rel = by_relation.get(wid, set())
-        # Both of the way's own claims are subject to corroboration; only the
-        # relations themselves establish which routes exist in this region.
+        # way 自身の主張は、名前由来も `ref` 由来も裏取りの対象である。この地域に
+        # どの路線が在るかを定めるのはリレーションだけである。
         raw_name = name_numbers(tags)
         raw_tag = tokens(tags.get("ref"))
         from_name = raw_name & corroborated
-        # A number this way's `ref` claims is not believed when some
-        # competing relation claims that same number for it — the
-        # 372号-in-長野 collision rule (b) exists to stop, and 首都高速都心環状線
-        # (`ref=1` under an operator-branded relation, CASES.md 20) is the same
-        # shape. It stays believed when the way merely sits on an unrelated
-        # relation for some other number: 広島南道路 (国道2号) is incidentally
-        # still a member of 広島県道243号広島港線, and 巴橋 (国道375号;433号;434号)
-        # of 広島県道39号 — neither collision is with the number the way itself
-        # claims.
+        # この way の `ref` が主張する番号は、競合するリレーションがその way に
+        # ついて同じ番号を主張しているとき、信じない——規則 b が止めようとしている
+        # 長野の 372 号の衝突がこれであり、首都高速都心環状線(事業者名の
+        # リレーションの下の `ref=1`。CASES.md 20)も同じ形である。無関係な別の
+        # 番号のリレーションに載っているだけなら、信じたままにする。広島南道路
+        # (国道2号)はたまたま今も広島県道243号広島港線のメンバーであり、巴橋
+        # (国道375号;433号;434号)は広島県道39号のメンバーだが、どちらの衝突も、
+        # way 自身が主張している番号との衝突ではない。
         from_tag = (raw_tag & corroborated) - competing_claims.get(wid, set())
         for n in (raw_tag | raw_name) - corroborated:
             rejected[n] += 1
 
-        # --- is it a national route? -------------------------------------
+        # --- そもそも国道か ---------------------------------------------
         if from_rel or from_name:
             if from_rel:
                 source = "relation"
             elif names_a_closed_residential_road(tags):
-                # Named 国道N号 but graded and gated like an ordinary closed
-                # residential street, with no relation to back it up: see
-                # names_a_closed_residential_road.
+                # 名前は 国道N号 だが、格も通行規制も、ふつうの通り抜けできない
+                # 生活道路と同じで、裏付けるリレーションも無い。
+                # names_a_closed_residential_road を参照。
                 dropped.append(wid)
                 continue
             else:
                 source = "name"
         elif (from_tag and not names_an_expressway_route(tags)
               and (wid in vouched or is_national_grade(tags))):
-            # Relation-less but mapped as a national road and unclaimed by any
-            # competing route under this number: this is the bypass case.
+            # リレーションに属さないが国道として描かれており、この番号で主張する
+            # 競合する路線も無い。バイパスの場合がこれである。
             source = "tag"
         else:
             dropped.append(wid)
@@ -489,8 +478,8 @@ def main() -> None:
             "id": wid,
             "former": former,
             "refs": sorted(refs),
-            # delimiter-wrapped so a filter can test membership without
-            # matching 4 inside 14 / 24 / 400
+            # 区切り文字で囲む。絞り込みが、4 を 14・24・400 の中に当てずに
+            # 所属を検査できるようにするためである。
             "refs_key": "," + ",".join(str(r) for r in sorted(refs)) + ",",
             "n": len(refs),
             "kind": kind,
@@ -513,7 +502,7 @@ def main() -> None:
         print(f"  ref tokens rejected as uncorroborated (likely 都道府県道): "
               f"{dict(sorted(rejected.items()))}")
 
-    # What did rule (c) actually add? These are the previously-missing roads.
+    # 規則 c が実際に何を足したか。ここに出るのが、今まで欠けていた道である。
     tag_only = [a for a in arcs if a["src"] == "tag"]
     by_name = Counter((tuple(a["refs"]), a["name"]) for a in tag_only)
     print(f"\n  relation-less roads recovered by rule (c): {len(tag_only)} arcs, "
@@ -521,7 +510,7 @@ def main() -> None:
     for (refs, name), c in by_name.most_common(14):
         print(f"    国道{'・'.join(map(str, refs)):<12} {name!s:<24} x{c}")
 
-    # ---- per-route master ------------------------------------------------
+    # ---- 路線ごとの台帳 --------------------------------------------------
     routes: dict[int, dict] = {}
     for a in arcs:
         for r in a["refs"]:
@@ -536,7 +525,7 @@ def main() -> None:
     print(f"\nroutes present in region: {len(routes)}")
     print("  " + ", ".join(str(r) for r in sorted(routes)))
 
-    # ---- termini: degree-1 nodes within each route's own subgraph --------
+    # ---- 起終点。路線自身の部分グラフの中で次数 1 のノード ---------------
     south, west, north, east = bbox
 
     def on_edge(lat: float, lon: float) -> bool:
@@ -547,16 +536,14 @@ def main() -> None:
             or east - lon < EDGE_TOL
         )
 
-    # How many arc ends of each route meet at each point. A point touched once
-    # is where that route's chain stops; touched twice or more, the chain runs
-    # through it.
+    # 点ごとに、その路線のアークの端が幾つ集まるか。1 回しか触れられない点は、
+    # その路線がそこで終わっている場所である。2 回以上なら、そこを通り抜けている。
     #
-    # One pass over the arcs, not one pass per route. The route loop used to sit
-    # outside and re-read all 13,000 arcs to skip the 12,000 that are not its
-    # own — the arc already names the routes it belongs to, so it can be handed
-    # to all of them as it goes by. The rounding, the order the ends are counted
-    # in, and the order the routes come out in are all unchanged, so this builds
-    # the same list.
+    # アークを 1 回だけ辿る。路線ごとに辿り直さない。かつては路線の繰り返しが外に
+    # あり、1 万 3000 本のアークを読み直しては、自分の物でない 1 万 2000 本を飛ばして
+    # いた——アークは自分が属する路線を最初から名指ししているので、通りがかりに
+    # その全部へ渡せばよい。丸め方も、端を数える順も、路線が出てくる順も変えていない
+    # ので、これが作る一覧は同じ物である。
     ends_of: dict[int, Counter] = defaultdict(Counter)
     for a in arcs:
         ends = [
@@ -586,7 +573,7 @@ def main() -> None:
     shared = [c for c in clusters if len(c["refs"]) > 1]
     print(f"  clusters: {len(clusters)}, shared by 2+ routes: {len(shared)}")
 
-    # ---- concurrency ranking (the "things maps hide" feature) ------------
+    # ---- 重用ランキング(地図が隠している物を出す機能) --------------------
     combos: dict[tuple[int, ...], dict] = {}
     for a in arcs:
         if a["n"] < 2:
@@ -622,11 +609,11 @@ def main() -> None:
                 "kind": a["kind"],
                 "src": a["src"],
                 "former": 1 if a["former"] else 0,
-                # Only apply_n13.py ever sets this to 1 — see issue #9. It is
-                # independent of `former`: a former arc keeps former=1 either
-                # way, since 指定解除 (revoked) can lag OSM's own tagging by
-                # years (RULES.md 旧道). 0 means "not confirmed", not
-                # "confirmed still current".
+                # これを 1 にするのは apply_n13.py だけである——issue #9 を参照。
+                # `former` とは独立で、旧道のアークはどちらにせよ former=1 の
+                # ままである。指定解除(revoked)は OSM 自身のタグ付けより何年も
+                # 遅れうるからである(RULES.md 旧道)。0 は「未確認」であって、
+                # 「現役だと確認済み」ではない。
                 "revoked": 0,
                 "name": a["name"],
                 "updated": a["updated"],
@@ -655,18 +642,18 @@ def main() -> None:
         "osm_timestamp": base_ts,
         "fetched_at": raw["fetched_at"],
         "endpoint": raw["endpoint"],
-        # Every route number the region's relations vouch for. Nothing in
-        # `routes` may fall outside this set — see pipeline/verify.py.
+        # その地域のリレーションが保証する路線番号の全部。`routes` の中身がこの
+        # 集合から外れることはあってはならない——pipeline/verify.py を参照。
         #
-        # This set is what makes the guard a guard, and it only works because it
-        # is regional. Judged over the whole country it would approach all 459
-        # numbers and filter nothing, putting 長野県道372号 back on the map as
-        # 国道372号. verify.py asserts it stays well short of that.
+        # 裏取りを裏取りたらしめているのがこの集合であり、それが効くのは地域ごと
+        # だからである。全国でまとめて判定すれば 459 番すべてに近づいて何も濾さ
+        # なくなり、長野県道372号が国道372号として地図へ戻る。verify.py は、
+        # この集合がそこまで大きくならないことを断定する。
         "corroborated_refs": sorted(corroborated),
-        # Numbers a way claimed for itself that no relation here vouches for,
-        # with how many ways claimed each. Almost all of these are 都道府県道
-        # sharing the bare-number `ref` format. Recorded so the guard's effect
-        # is a measured number rather than an assurance.
+        # way が自分について主張したが、この地域のどのリレーションも保証しなかった
+        # 番号と、それぞれを主張した way の数。ほとんどは、数字だけの `ref` の書式
+        # を共有する都道府県道である。裏取りの効果を、口約束ではなく実測した数に
+        # するために記録する。
         "rejected_refs": {str(k): v for k, v in sorted(rejected.items())},
         "oldest_edit": edits[0] if edits else None,
         "newest_edit": edits[-1] if edits else None,
@@ -709,8 +696,8 @@ def main() -> None:
         json.dumps(meta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
     )
 
-    # Index of everything built so far, so the viewer can offer a region picker
-    # without being told which regions exist.
+    # ここまでに生成した物の索引。どの地域が在るかを教えられなくても、閲覧側が
+    # 地域を選ばせられるようにするためである。
     index = []
     for p in sorted(OUT.glob("*.meta.json")):
         m = json.loads(p.read_text(encoding="utf-8"))

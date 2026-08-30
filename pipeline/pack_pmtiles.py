@@ -2,18 +2,18 @@
 # requires-python = ">=3.12"
 # dependencies = ["pmtiles>=3.4"]
 # ///
-"""Pack the tiles cut by pack_web.mjs into one PMTiles archive.
+"""pack_web.mjs が切ったタイルを、1 つの PMTiles アーカイブにまとめる。
 
-A hundred thousand loose .pbf files is not something to keep in a repository or
-to serve. PMTiles is one file that a plain static host can answer range requests
-against, which is what the viewer asks for.
+ばらばらの .pbf が 10 万個あっても、リポジトリに置ける物でも配れる物でもない。
+PMTiles は 1 ファイルで、素の静的ホストが範囲要求に答えられる。閲覧側が求めるの
+はそれである。
 
-The split between this and pack_web.mjs is only about libraries: geojson-vt and
-vt-pbf are JavaScript, the PMTiles writer is Python. The handover is a blob and
-an index, not a directory, because creating a hundred thousand small files on
-Windows takes longer than cutting the tiles did.
+これと pack_web.mjs が分かれているのはライブラリの都合だけである。geojson-vt と
+vt-pbf は JavaScript、PMTiles を書く側は Python である。受け渡しがディレクトリ
+ではなく blob と索引なのは、Windows では 10 万個の小さなファイルを作るほうが、
+タイルを切るより時間がかかるからである。
 
-Usage:  uv run pipeline/pack_pmtiles.py
+使い方:  uv run pipeline/pack_pmtiles.py
 """
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ from _paths import DATA, ROOT
 TILEDIR = ROOT / "build" / "tiles"
 OUT = DATA / "national-routes.pmtiles"
 
-# Which properties ride in the tiles, and what the viewer does with each. Stated
-# here because a PMTiles archive is expected to describe its own layers.
+# どの属性がタイルに載り、閲覧側がそれぞれをどう使うか。PMTiles のアーカイブは
+# 自分の層を自分で述べることになっているので、ここで述べる。
 FIELDS = {
     "id": "Number",     # OSM way id — identity, and the link out to osm.org
     "refs": "String",   # ",18,117," — every filter tests membership in this
@@ -52,9 +52,9 @@ def main() -> None:
     print(f"{len(rows):,} tiles, z{idx['minzoom']}-{idx['maxzoom']}, "
           f"{len(blob) / 1e6:.1f} MB uncompressed")
 
-    # PMTiles addresses tiles on a Hilbert curve, and a clustered archive — one
-    # where the ids only ever increase — is what makes a range request able to
-    # find a tile without walking the directory.
+    # PMTiles はヒルベルト曲線の上でタイルを指す。id が増える一方になっている
+    # 整列済みのアーカイブであることが、範囲要求が目録を辿らずにタイルを見つけ
+    # られる理由である。
     rows.sort(key=lambda r: zxy_to_tileid(r[0], r[1], r[2]))
 
     e7 = lambda v: int(v * 1e7)  # noqa: E731

@@ -50,11 +50,11 @@
 </script>
 
 <!-- style.css の解析を待たずに路線番号シールドの書体を取り始める。
-     待つと HTML→style.css→woff2 の依存鎖が 1 段伸びる。 -->
+     待つと HTML→style.css→woff2 の依存の連なりが 1 段伸びる。 -->
 <link rel="preload" href="vendor/roboto-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <!-- 操作面の書体 (LINE Seed JP)。日本語 1 書体は 7000 字あり 1 ファイルには
-     ならないので、Fontsource が分けた ~120 片の @font-face を並べた表になって
+     ならないので、Fontsource が分けた約 120 片の @font-face を並べた表になって
      いる。どれを取るかは unicode-range を見てブラウザが決めるので、実際に降りて
      くるのは画面に出ている字を含む片だけである。
      scripts/vendor_web.mjs が node_modules から作る。 -->
@@ -63,9 +63,9 @@
 </head>
 <body>
 
-<!-- 二度以上出てくる絵は、ここで一度だけ描いて <use> で呼ぶ。共有の鎖は
+<!-- 二度以上出てくる絵は、ここで一度だけ描いて <use> で呼ぶ。共有のリンクアイコンは
      サイドパネルの見出しと共有ダイアログの「文章で共有」に出る。同じ形を
-     二箇所に写すと、片方だけ直したときに黙って食い違う。
+     二箇所に写すと、片方だけ直したときに暗黙のうちに食い違う。
      寸法は呼ぶ側の svg が持つので、ここは形だけを述べる。 -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="icon-share" viewBox="0 0 24 24">
@@ -89,15 +89,15 @@
               stroke-width="2.2" stroke-linecap="round"/>
       </svg>
     </button>
-    <!-- 地図の上に浮かぶ二つの箱。上が操作面、下が路線の詳細で、地図のほうは
-         padding でこの列のぶんだけずらす (app.js の applyMapPadding) — 地図の
+    <!-- 地図の上に浮かぶ二つのパネル。上が操作面、下が路線の詳細で、地図のほうは
+         padding でこの列のぶんだけずらす (app.js の applyMapPadding)——地図の
          要素を細くすると canvas ごと描き直しになる。 -->
     <div id="left-stack">
       <aside id="panel">
         <header>
           <img src="favicon.svg" alt="" class="brand-icon" width="495" height="475">
           <h1>国道マップ</h1>
-          <!-- 名札はダイアログの見出しと同じ文言にする。押す前と押した後で
+          <!-- ラベルはダイアログの見出しと同じ文言にする。押す前と押した後で
                呼び名が変わると、同じものだと分かるのに一手かかる。 -->
           <button type="button" id="about-btn" class="icon-btn about-btn" title="国道マップについて" aria-label="国道マップについて">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -109,7 +109,7 @@
           <button type="button" id="share-btn" class="icon-btn share-btn" title="共有" aria-label="共有">
             <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-share"/></svg>
           </button>
-          <!-- 詳細の箱と同じく、浮いている箱は自分で閉じられる。開き直す口は
+          <!-- 詳細パネルと同じく、浮いているパネルは自分で閉じられる。開き直す口は
                地図の上に残る #panel-toggle である。 -->
           <button type="button" id="panel-close" class="icon-btn" title="サイドパネルを閉じる" aria-label="サイドパネルを閉じる">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -131,7 +131,7 @@
                残るのは summary の行なので、見える場所はそこにする。
 
                ただし <summary> の中には入れない。開閉が先に手を取るので、
-               中に置いた釦はキーボードや支援技術から確実には届かない。節を
+               中に置いたボタンはキーボードや支援技術から確実には届かない。節を
                土台にして、その行の上へ重ねて出す(style.css の #sel-none)。
 
                文言は updateStats() が title と aria-label に入れる。
@@ -205,12 +205,12 @@
         <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
       </div>
     </div>
-    <!-- 地図の上の釦から出る面。「何が地図に描かれるか」を決めるものは残らず
+    <!-- 地図の上のボタンから出る面。「何が地図に描かれるか」を決めるものは残らず
          ここに集める——切り替えた結果は地図にしか現れないので、操作面ではなく
          地図の側に置く。節を分けて一つの面に収めてあるのは、どれも同じ問いの
-         答えだからである。釦を分けると、どちらを押すか毎回考えることになる。
+         答えだからである。ボタンを分けると、どちらを押すか毎回考えることになる。
 
-         位置は app.js が釦の台へ移してから CSS が決める。中身をここに置いて
+         位置は app.js がボタンの台へ移してから CSS が決める。中身をここに置いて
          あるのは、データが届く前から state と結べるようにするためである。 -->
     <div id="display-popover" class="map-popover" hidden>
       <section>
@@ -266,7 +266,7 @@
 
 
 <!-- この地図について。データがいつのものか、どこで作られているかは、地図を
-     読むあいだ要らない。要るのは知りたくなったときだけなので、操作面に常時
+     読むあいだは不要である。必要になるのは知りたくなったときだけなので、操作面に常時
      置かず、ここへ寄せる。
 
      出典はここに書かない。地図の上の表示が一度だけ述べている。 -->

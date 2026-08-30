@@ -1,8 +1,9 @@
-/* Load the real page in Chromium and confirm it actually renders:
- * no console errors, layers present, features queryable, filters switching.
+/* 本物のページを Chromium で開き、実際に描かれることを確かめる。コンソールに
+ * エラーが出ないこと、層が在ること、特徴量を問い合わせられること、絞り込みが
+ * 切り替わることである。
  *
- * The page joins every built region into one map, so the probes here are
- * derived from the same join rather than from a single region's file. */
+ * ページは生成済みの地域を全部 1 枚の地図に結合するので、ここで使う手掛かりも、
+ * 1 地域のファイルではなく同じ結合から作る。 */
 import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,39 +12,39 @@ import { chromium } from 'playwright';
 
 import { DATA, REGIONS, ROOT } from './_paths.mjs';
 
-// Read the basemap URL from the real style rather than restating it, for the
-// same reason the expression checker imports mapspec: a copy stops checking
-// the thing it was written to check.
+// 下地図の URL は書き写さず本物のスタイルから読む。式の検査スクリプトが
+// mapspec を import するのと同じ理由である。写しは、検査するために書いた当の
+// 物を検査しなくなる。
 const { GSI_TILES } = await import(
   pathToFileURL(join(ROOT, 'web', 'mapspec.mjs')).href
 );
-// Same reason: the box's three sections are a rule over three meta fields, and
-// a copy of that rule here would stop checking the one the page runs.
-// detailHTML is imported alongside it so the former-designation check below
-// can build its expected row through the real formatting rule (fmtKm, and
-// formerRowHTML's "0.0 → no row") instead of retyping that rule here.
+// 同じ理由である。パネルの三つの節は meta の三つの欄に対する規則で、その写しを
+// ここに置けば、ページが走らせている当の規則を検査しなくなる。detailHTML を
+// 併せて import してあるのは、下の旧道の検査が、期待する行を本物の整形規則
+// (fmtKm と、formerRowHTML の「0.0 なら行を出さない」)を通して組めるように
+// するためである。規則をここへ書き写さずに済む。
 const { relatedRoutesOf, detailHTML } = await import(
   pathToFileURL(join(ROOT, 'web', 'detail.mjs')).href
 );
-// Same reason again: former_km's meta → DOM path (#84) is otherwise the one
-// part of the detail box bun test never walks with a real field name — it
-// only ever hands detailHTML() a literal. formerKmFor() is the function that
-// actually reads the field, so importing it is what lets this file notice a
-// rename the way it already notices one in decree.routes or crossings.
-// routesOf comes along because detailHTML() needs a route object, not just
-// the former_km number.
+// これも同じ理由である。former_km の meta から DOM までの経路(#84)は、bun test
+// が実際の欄名で辿ることのない、詳細パネルの唯一の部分である——bun test が
+// detailHTML() に渡すのはいつも直値だからである。欄を実際に読む関数は
+// formerKmFor() なので、それを import することで、decree.routes や crossings の
+// 改名に気付くのと同じようにこのファイルが気付ける。routesOf が一緒に来るのは、
+// detailHTML() が former_km の数だけでなく路線のオブジェクトを必要とするためで
+// ある。
 const { formerKmFor, routesOf } = await import(
   pathToFileURL(join(ROOT, 'web', 'aggregate.mjs')).href
 );
 const TILE_HOST = new URL(GSI_TILES).host;
 
-// Not named URL — that would shadow the global URL constructor used below.
-// PORT follows serve.py, for when something else already holds 8000.
+// URL という名前は付けない。下で使うグローバルの URL を隠してしまう。PORT は
+// serve.py に合わせる。8000 を他が既に握っている場合のためである。
 const PAGE =
   process.env.MAP_URL || `http://localhost:${process.env.PORT || 8000}/`;
 
-// The screenshots are evidence for one run, not a build product, so they are
-// written outside the working tree. Pass a directory to keep them somewhere.
+// 画面写真は 1 回の実行の証拠であって生成物ではないので、作業ツリーの外へ書く。
+// 手元に残したいときは、置き場所をディレクトリで渡す。
 const OUTDIR =
   process.argv[2] || mkdtempSync(join(tmpdir(), 'national-route-map-'));
 mkdirSync(OUTDIR, { recursive: true });
@@ -51,16 +52,15 @@ const shot = (name) => join(OUTDIR, `${name}.png`);
 
 const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
 
-// The same join the packer performed. It is redone here from the per-region
-// builds rather than read back out of the tiles, so the probes below are
-// derived from what the build decided and not from what the archive happens to
-// contain — the point of the run is to find out whether those agree.
+// パックした側が行ったのと同じ結合である。タイルから読み戻さず、地域ごとの
+// 生成物からここでやり直す。下の手掛かりが、アーカイブにたまたま入っている物
+// ではなく、ビルドが決めた物から作られるようにするためである——この実行の目的は、
+// その二つが一致するかを知ることである。
 const index = read(join(DATA, 'regions.json'));
 const meta = read(join(DATA, 'national.meta.json'));
 const byId = new Map();
-// Where each region's roads actually are. A region's box is a rectangle drawn
-// around a prefecture outline — 東京都 reaches 南鳥島 — so flying to the box
-// would point the camera at open sea.
+// 地域の道が実際にどこに在るか。地域の bbox は県の輪郭に外接する矩形で——
+// 東京都は南鳥島まで及ぶ——bbox へ飛ぶと視点が大海原を向く。
 const extents = new Map();
 for (const r of index) {
   const box = [Infinity, Infinity, -Infinity, -Infinity];
@@ -146,16 +146,16 @@ const settle = () =>
     SETTLE_CAP_MS,
   );
 
-// 国土地理院 serves no raster tile where there is nothing to draw, so panning
-// out over open sea answers 404. That is the basemap working as designed, and
-// the ferry checks go there deliberately. Every *other* failed request is a
-// real fault and is reported with its URL.
+// 国土地理院は描く物が無い場所にラスタタイルを置かないので、大海原へ引くと
+// 404 が返る。それは下地図が設計どおりに動いている姿であり、海上国道の検査は
+// そこへ意図して行く。それ以外の失敗した要求は本物の不具合なので、URL 付きで
+// 報告する。
 const blankTiles = [];
 
 page.on('console', (m) => {
   if (m.type() !== 'error') return;
-  // Resource failures carry no URL in the console text. They are caught below
-  // with one, so keeping both would only duplicate them.
+  // 資源の取得失敗はコンソールの文面に URL を持たない。下で URL 付きで捕まえる
+  // ので、両方を残すと同じ物が二度並ぶだけである。
   if (m.text().startsWith('Failed to load resource')) return;
   errors.push(m.text());
 });
@@ -168,8 +168,8 @@ page.on('response', (r) => {
 
 await page.goto(PAGE, { waitUntil: 'networkidle', timeout: 90000 });
 
-// The veil is display:none once boot() finishes, so wait on the class rather
-// than on visibility.
+// 覆いは boot() が終われば display:none になるので、見えるかどうかではなく
+// クラスで待つ。
 await page.waitForFunction(
   () => document.querySelector('#loading')?.classList.contains('done'),
   null,
@@ -203,19 +203,18 @@ const report = await page.evaluate(() => {
   out.routeCount = document.querySelectorAll('#route-list label').length;
   out.rankingRows = document.querySelectorAll('#ranking .row').length;
   out.sharedRows = document.querySelectorAll('#shared .row').length;
-  // #stats now lives inside the 国道マップについて dialog, which is closed —
-  // a closed <dialog> renders nothing, and `innerText` reports empty for
-  // anything unrendered. `textContent` does not care about layout, so the
-  // four numbers are read straight off the <dd>s.
+  // #stats は今、閉じている「国道マップについて」のダイアログの中に居る。
+  // 閉じた <dialog> は何も描かず、描かれていない物に対して `innerText` は空を
+  // 返す。`textContent` は配置を気にしないので、四つの数は <dd> から直接読む。
   out.stats = [...document.querySelectorAll('#stats dd')]
     .map((s) => s.textContent)
     .join(' | ');
-  // The three UI decisions this page is built around.
+  // このページが土台にしている、画面についての三つの判断。
   out.regionPickers = document.querySelectorAll('select#region').length;
   out.concOptions = [...document.querySelectorAll('input[name=conc]')].map(
     (i) => i.value,
   );
-  // 地図の上の釦。現在位置は MapLibre 自身の部品なので、あるかどうかだけを見る
+  // 地図の上のボタン。現在位置は MapLibre 自身の部品なので、あるかどうかだけを見る
   // (押すと端末の許可を求めるので、ここでは押さない)。方位は拡大・縮小とは
   // 別の台に乗っている——同じ群に並んでいると、拡大を連打する指が地図を回す。
   // 重用区間と表示は地図の側にある。同じものが操作面にも残っていれば、
@@ -256,7 +255,7 @@ console.log(
 );
 console.log('stats:', report.stats);
 
-/* ---- the UI contract ------------------------------------------------------ */
+/* ---- 画面が守るべきこと -------------------------------------------------- */
 ok(
   report.regionPickers === 0,
   'no region picker: the map is not scoped to one prefecture',
@@ -265,9 +264,9 @@ ok(
   report.routeCount >= Math.max(...index.map((r) => r.routes)),
   `the route list covers every region at once (${report.routeCount} routes)`,
 );
-// The panel no longer counts features — it cannot, since most of them are not
-// loaded — so what it states has to be the build's number rather than whatever
-// happened to be on screen when it was drawn.
+// 操作面はもう特徴量を数えない——大半が読み込まれていないので数えられない——
+// ので、そこが述べる数は、描いた時点でたまたま画面に出ていた物ではなく、ビルド
+// が出した数でなければならない。
 ok(
   report.stats.includes(meta.arc_count.toLocaleString()),
   `the panel states the nationwide arc count, not the loaded one ` +
@@ -342,8 +341,8 @@ ok(
   report.compassApart,
   'the compass sits on its own group, apart from the zoom buttons',
 );
-// Reference lists are folded shut, but a fold that hides its own existence is
-// worse than the height it saves, so each summary must still state its size.
+// 参照用の一覧は畳んであるが、畳んだこと自体を隠す畳み方は、節約した高さより
+// 害が大きい。だからどの見出しも自分の大きさを述べ続けなければならない。
 for (const b of report.folded) {
   ok(b.open === false, `the ${b.name} list starts folded`);
   ok(
@@ -353,11 +352,11 @@ for (const b of report.folded) {
 }
 
 /* 操作面は地図の上に浮いている。畳んでも canvas の寸法は変わらない——変わる
- * のは地図の padding、つまり「地図が中心と見なす点」が箱をどれだけ避けるか
+ * のは地図の padding、つまり「地図が中心と見なす点」がパネルをどれだけ避けるか
  * である。ここが守るのはその対応で、畳めば padding が消え、開き直せば戻る。
  *
  * 開いているあいだ閉じる口はパネル自身の × で、閉じているあいだ開き直す口は
- * 地図の上の釦である。どちらか一方だけが出ていることも併せて見る。 */
+ * 地図の上のボタンである。どちらか一方だけが出ていることも併せて見る。 */
 const folding = await page.evaluate(async () => {
   /* padding の変化は easeTo なので、押した瞬間はまだ途中である。MapLibre が
    * 落ち着いたと言うまで待つ。上限を置いて、来なければそのまま返す——下の
@@ -414,12 +413,12 @@ ok(
   `unfolding puts the map back (${folding.back} vs ${folding.open.padding})`,
 );
 
-// The clear button is the only place the size of the selection is stated. A
-// hint line under the list used to say "1 路線を選択中。" as well — a second
-// answer to one question, and the one free to go stale. The button also has to
-// go unavailable when there is nothing to undo rather than sit there doing
-// nothing when pressed.
-// 文字を持たない釦なので、どれだけ取り消すかは名札(title/aria-label)が述べる。
+// 選択の大きさを述べるのは、選択解除のボタンだけである。かつては一覧の下の
+// 補助の行も「1 路線を選択中。」と述べていた。一つの問いへの二つ目の答えで、
+// しかも古くなり放題だった。取り消す物が無いとき、ボタンは押しても何も起きない
+// のではなく、押せなくならなければならない。
+// 文字を持たないボタンなので、どれだけ取り消すかはラベル (title/aria-label)
+// が述べる。
 const clearBtn = () =>
   page.evaluate(() => {
     const b = document.querySelector('#sel-none');
@@ -448,7 +447,7 @@ ok(
 await page.click('#sel-none');
 await settle();
 const back = await clearBtn();
-// 釦は summary の中に居る。押して折りたたみまで開け閉てしては、押した人が
+// ボタンは summary の中に居る。押して折りたたみまで開け閉てしては、押した人が
 // 頼んでいないことが起きる。
 ok(back.open, 'clearing the selection does not fold the list away');
 ok(
@@ -466,7 +465,7 @@ ok(
 
 await page.screenshot({ path: shot('1-all') });
 
-/* 重用区間と表示は、地図の上の釦から出る面の中にある。中の操作は面が開いて
+/* 重用区間と表示は、地図の上のボタンから出る面の中にある。中の操作は面が開いて
  * いなければ届かないので、押す前に開ける。開いていれば何もしない——もう一度
  * 押すと畳んでしまう。 */
 const openPane = async (btn) => {
@@ -478,7 +477,7 @@ const openPane = async (btn) => {
   if (shut) await page.click(btn);
 };
 
-// --- switch to "concurrent sections only" -----------------------------------
+// --- 「重用区間のみ」へ切り替える -------------------------------------------
 await openPane('#display-btn');
 await page.click('input[name=conc][value=all]');
 await settle();
@@ -491,7 +490,7 @@ const concStats = await page.evaluate(() => ({
 console.log(`\nafter "重用区間のみ": renderedRoads=${concStats.roads}`);
 await page.screenshot({ path: shot('2-concurrent') });
 
-// --- unfold the ranking and click its deepest row ---------------------------
+// --- 重用ランキングを開き、最も深い行を押す --------------------------------
 await openPane('#display-btn');
 await page.click('input[name=conc][value=off]');
 await page.click('#ranking-block > summary');
@@ -500,11 +499,11 @@ ok(
   await page.evaluate(() => document.querySelector('#ranking-block').open),
   'the ranking unfolds when its summary is clicked',
 );
-// A row names one concurrency and states where it is. Clicking it has to go
-// there and leave the list alone — both used to fail. The camera was framed on
-// the union of every combination sharing two of the row's numbers, which for
-// the 高知市 row spanned 132.5°E–134.7°E, most of 四国; and selecting the row's
-// routes rebuilt the list under the cursor, moving the row that was clicked.
+// 行は 1 つの重用を名指しし、それがどこに在るかを述べる。押したらそこへ行き、
+// 一覧には手を触れないことが必要である——かつてはどちらも破れていた。視点は、
+// 番号のうち 2 つを共有する組み合わせ全部の和に合わされ、高知市の行では東経
+// 132.5 度から 134.7 度、四国の大半に及んだ。しかも行の路線が選択されるので、
+// 指の下で一覧が組み直され、押した行そのものが動いた。
 const before = await page.evaluate(() => {
   const rows = [...document.querySelectorAll('#ranking .row')];
   return {
@@ -536,8 +535,8 @@ console.log(
     `camera ${clng.toFixed(4)}, ${clat.toFixed(4)} @z${jumped.zoom.toFixed(2)}, ` +
     `${jumped.roads} roads on screen`,
 );
-// A degenerate box — one arc long, no extent at all — leaves the camera on its
-// own centre, so the tolerance is what the padding can move it by.
+// 潰れた bbox——アーク 1 本ぶんで広がりを持たない——では視点はその中心に留まる
+// ので、許容差は padding が動かしうる量である。
 ok(
   clng >= bw - 0.02 &&
     clng <= be + 0.02 &&
@@ -559,10 +558,10 @@ ok(
 );
 await page.screenshot({ path: shot('3-ranking-jump') });
 
-// --- zoom in where the most routes run together -----------------------------
-// The route-number labels have a minzoom, so they only prove themselves close
-// in. The spot is derived from the data rather than hard-coded to one region.
-// Nothing to clear here: going to a ranking row no longer selects anything.
+// --- 最も多くの路線が一緒に走る場所へ寄る ----------------------------------
+// 路線番号のラベルは minzoom を持つので、寄らなければ自分を証明できない。場所は
+// 1 地域に決め打ちせず、データから作る。ここで解除する物は無い。ランキングの行へ
+// 行っても、もう何も選択されない。
 const deepest = features.reduce((a, b) =>
   b.properties.n > a.properties.n ? b : a,
 );
@@ -596,13 +595,13 @@ console.log(
 console.log(`  rendered terminus labels: ${labelled.termini}`);
 await page.screenshot({ path: shot('4-labels') });
 
-// --- clicking an arc: what the popup says, and the shadow that marks it -----
-// The camera is on the deepest concurrency, so the arc under the middle of the
-// canvas is the demanding case: several designations, one popup.
+// --- アークを押す。ポップアップが述べることと、押した印の影 ----------------
+// 視点は最も深い重用の上に在るので、canvas の中央の下にあるアークは厳しい場合に
+// なる。指定が複数あって、ポップアップは 1 つである。
 const target = await page.evaluate(() => {
   const m = window.map;
   const r = m.getCanvas().getBoundingClientRect();
-  // 浮いている箱のぶん、地図の中心は画面の真ん中には無い。据えた地点が
+  // 浮いているパネルのぶん、地図の中心は画面の真ん中には無い。据えた地点が
   // 実際に落ちる画素から探し始める。
   const pad = m.getPadding();
   const cx = Math.round((r.width + pad.left - pad.right) / 2);
@@ -653,8 +652,8 @@ if (!target) {
   console.log('');
   console.log(`clicked an arc: ${opened.text}`);
   ok(opened.text !== null, 'clicking an arc opens a popup');
-  // The figure is one OSM way's length, not the route's, and the label has to
-  // say so: as 延長 it read as though 国道4号 were 0.13 km long.
+  // この数は OSM の way 1 本の長さであって路線の延長ではない。ラベルもそう述べ
+  // なければならない。「延長」と書くと、国道 4 号が 0.13 km に読めた。
   ok(
     /区間長/.test(opened.text ?? '') && !/延長/.test(opened.text ?? ''),
     'the popup calls the arc length 区間長, not 延長',
@@ -739,8 +738,8 @@ if (!target) {
       `(${badTips.map((t) => `${t.anchor}: ${t.why}`).join('; ') || 'all 8 anchors'})`,
   );
 
-  // Closing the popup has to take the shadow with it, or the map keeps a dark
-  // smear over a road nothing is describing any more.
+  // ポップアップを閉じたら影も一緒に消えなければならない。そうでないと、もう
+  // 誰も説明していない道の上に、黒い滲みが残る。
   await page.click('.maplibregl-popup-close-button');
   await settle();
   const closed = await page.evaluate(
@@ -748,17 +747,17 @@ if (!target) {
   );
   ok(closed === 0, `closing the popup clears the shadow (${closed} left)`);
 
-  // 同じアークをもう一度開く。ここから先は標識を押して箱を出すところを見るが、
-  // 箱を出すこと自体がポップアップを閉じるので、開き直さないと押す標識が無い。
+  // 同じアークをもう一度開く。ここから先は標識を押してパネルを出すところを見るが、
+  // パネルを出すこと自体がポップアップを閉じるので、開き直さないと押す標識が無い。
   await page.mouse.click(target.x, target.y);
   await settle();
 
-  // The sign is the button: pressing it opens the box that talks about that one
-  // route. It used to narrow the selection instead, and this check still said
-  // so long after #65 moved that to the box's own 「…だけを表示」 — the page had
-  // changed and the check had not, so it failed on a page that was working.
+  // 標識がボタンである。押せば、その路線 1 本について述べるパネルが開く。以前は
+  // 代わりに選択を絞っており、#65 がその役目をパネル自身の「…だけを表示」へ
+  // 移した後も、この検査は長らく絞り込みを求め続けていた。動いているページに
+  // 対して落ちたのは、画面が変わり、検査が変わっていなかったからである。
   const ref = target.refs[0];
-  // 箱を開ける前の padding。閉じたときにここへ戻ることが、下の「滑らない」と
+  // パネルを開ける前の padding。閉じたときにここへ戻ることが、下の「滑らない」と
   // 対になる不変条件である——左の列には操作面も居るので、戻る先は 0 とは
   // 限らない。
   const paddingBeforeBox = await page.evaluate(() => window.map.getPadding());
@@ -778,8 +777,8 @@ if (!target) {
     box.text.includes(`国道${ref}号`),
     `the box names the route whose sign was pressed (国道${ref}号)`,
   );
-  // 箱はアーク 1 本ではなく路線そのものについて述べる。ポップアップを後ろに
-  // 残すと同じ画面で二つが別のことを語るので、箱を出すときに引き取る。
+  // パネルはアーク 1 本ではなく路線そのものについて述べる。ポップアップを後ろに
+  // 残すと同じ画面で二つが別のことを述べるので、パネルを出すときに引き取る。
   ok(
     box.popups === 0,
     `opening the box closes the popup behind it (${box.popups} left)`,
@@ -788,7 +787,7 @@ if (!target) {
 
   /* 起終点は政令の別表から来る。書く側(pack_web.mjs の decree 欄)と読む側
    * (detail.mjs の decreeTerminiOf)が同じ名前を指しているかは、実データを
-   * 通してしか分からない。名前が食い違っても例外は出ず、欄が黙って空になる
+   * 通してしか分からない。名前が食い違っても例外は出ず、欄が気付かないまま空になる
    * だけである。実際 #64 と #65 は違う名前を選び、両方が main に乗ったまま
    * 誰も転ばなかった。meta が持っている地名を、画面に出ているか直接見る。 */
   const decreeRow = meta.decree?.routes?.find((r) => String(r.ref) === ref);
@@ -831,11 +830,11 @@ if (!target) {
       `(${want.map((g) => `${g.label} ${g.refs.length}`).join(', ') || 'none'})`,
   );
 
-  /* 並べた標識は押せる。押せばその路線の箱に開き直る。
+  /* 並べた標識は押せる。押せばその路線のパネルに開き直る。
    *
    * 関わりは相互なので、開いた先には必ず元の路線の標識がある——重用も、起終点
    * の共有も、交差も、どちらから見ても同じ関わりだからである。押して戻れる
-   * ことまで見て、この後の検査を元の路線の箱で続ける。 */
+   * ことまで見て、この後の検査を元の路線のパネルで続ける。 */
   if (want.length) {
     const other = want[0].refs[0];
     await page.click(`.detail-rel .shield-btn[data-ref="${other}"]`);
@@ -861,7 +860,7 @@ if (!target) {
     }
   }
 
-  // Narrowing the map to one route moved into the box with #65.
+  // 地図を 1 路線に絞る操作は、#65 で詳細パネルの中へ移った。
   await page.click('.detail-only');
   await settle();
   const narrowed = await page.evaluate(() =>
@@ -874,7 +873,7 @@ if (!target) {
     `the box's 「だけを表示」 selects that route alone (${narrowed.join(', ')})`,
   );
 
-  /* 箱は地図の一部を覆うので、開くあいだ地図は覆われたぶん脇へ寄る。開けて
+  /* パネルは地図の一部を覆うので、開くあいだ地図は覆われたぶん脇へ寄る。開けて
    * 読んで閉じるだけなら、閉じたときに寄せたぶんが戻るのが正しい——開く前の
    * 眺めに戻ることだからである。
    *
@@ -926,7 +925,7 @@ if (!target) {
   );
 }
 
-// Back to everything: the checks below count what each prefecture draws.
+// すべてに戻す。以下の検査は、県ごとに何が描かれるかを数える。
 await page.evaluate(() => {
   for (const cb of document.querySelectorAll('#route-list input:checked')) {
     cb.checked = false;
@@ -935,17 +934,17 @@ await page.evaluate(() => {
 });
 await settle();
 
-// --- 点線国道 / 工事中: locate them from the data instead of guessing -------
+// --- 点線国道・工事中。当てずっぽうではなくデータから場所を求める ---------
 const midOf = (f) =>
   f.geometry.coordinates[Math.floor(f.geometry.coordinates.length / 2)];
 const firstOf = (kind) => features.find((f) => f.properties.kind === kind);
 
 for (const [kind, layer, caption] of [
-  ['foot', 'foot', '点線国道（徒歩道）'],
+  ['foot', 'foot', '点線国道(徒歩道)'],
   ['construction', 'construction', '工事中区間'],
   ['unopened', 'unopened', '未開通区間'],
   ['expressway', 'expressway', '自動車専用道路'],
-  ['ferry', 'ferry', '海上国道（航路）'],
+  ['ferry', 'ferry', '海上国道(航路)'],
 ]) {
   const f = firstOf(kind);
   if (!f) {
@@ -978,12 +977,11 @@ for (const [kind, layer, caption] of [
   await page.screenshot({ path: shot(`5-${kind}`) });
 }
 
-// --- 自動車専用道路 must switch off on its own -------------------------------
-// Unlike the dashed kinds, this one is ordinary driveable carriageway styled
-// exactly like `roads` — the toggle is the only thing distinguishing it, so
-// it is the only thing worth exercising here. Navigated explicitly rather than
-// relying on wherever the kind loop above left the camera, so this check does
-// not depend on its position in that loop.
+// --- 自動車専用道路が単独で消せること ---------------------------------------
+// 破線の区分と違い、これは `roads` とまったく同じ体裁で描かれる、走れるふつうの
+// 車道である——見分けるのは表示の切り替えだけなので、ここで動かす値打ちがあるの
+// もそれだけである。上の区分の繰り返しが視点をどこへ置いたかに頼らず、明示的に
+// 移動する。この検査が繰り返しの中での位置に依存しないようにするためである。
 const expresswayArc = firstOf('expressway');
 if (expresswayArc) {
   await page.evaluate(
@@ -1014,11 +1012,10 @@ if (expresswayArc) {
   );
 }
 
-// --- 海上国道 must switch off on its own ------------------------------------
-// The sea sections are the one kind with no road underneath, so taking them
-// off the map is exactly what the toggle is for. Navigated explicitly — the
-// expressway check above already moved the camera off wherever the kind loop
-// left it, so this can no longer assume it is still there either.
+// --- 海上国道が単独で消せること --------------------------------------------
+// 海上区間は、下に道が無い唯一の区分である。地図から外せることこそ、この切り替え
+// の役目である。ここも明示的に移動する——上の自動車専用道路の検査が既に視点を
+// 動かしているので、区分の繰り返しが残した位置に居るとは、こちらも仮定できない。
 const ferryArc = firstOf('ferry');
 if (ferryArc) {
   await page.evaluate(
@@ -1047,19 +1044,18 @@ if (ferryArc) {
   console.log('\n海上国道: no ferry arc built — the toggle is not exercised');
 }
 
-// --- former designations (#84): the one meta → DOM path bun test never walks
-// former_km lives in each combination row next to kinds, and formerKmFor()
-// (aggregate.mjs) sums it exactly the way kindsFor() sums kinds. bun test only
-// ever hands detailHTML() a literal former_km, so it never reads the field by
-// name — a rename in pack_web.mjs (the #64/#65 shape of bug: the field still
-// exists, just under a different name than the code reads) would make
-// formerKmFor() return 0 forever and the row vanish from the box. No
-// exception, no console error, bun test still green throughout.
+// --- 旧道(#84)。bun test が辿らない、meta から DOM への唯一の経路
+// former_km は組み合わせの各行に kinds と並んで載っており、formerKmFor()
+// (aggregate.mjs)が kindsFor() の kinds とまったく同じやり方で足す。bun test が
+// detailHTML() に渡すのは直値の former_km だけなので、欄を名前で読むことが無い
+// ——pack_web.mjs での改名(#64・#65 と同じ形の不具合。欄は在るが、コードが読む
+// 名前と違う名前になっている)が起きると、formerKmFor() は永遠に 0 を返し、行は
+// パネルから消える。例外も出ず、コンソールにも何も出ず、bun test は緑のままで
+// ある。
 //
-// 国道10号 has 30.8 km of former designation; 国道4号 has none. Picking by ref
-// rather than by whatever the cursor lands on (as the arc click above does)
-// means both branches — row shown, row omitted — run every time this check
-// does, instead of only when the dice land on a route that happens to have one.
+// 国道 10 号は旧道を 30.8 km 持ち、国道 4 号は持たない。上のアークの押下のように
+// 指の落ちた先で選ばず ref で選ぶので、行が出る側と出ない側の両方が、この検査の
+// たびに毎回走る。たまたま旧道を持つ路線に当たった回だけ、ではない。
 const arcOf = (ref) =>
   features.find(
     (f) => f.properties.kind === 'road' && f.properties.refs_list.includes(ref),
@@ -1073,12 +1069,12 @@ const formerRowFor = async (ref) => {
     midOf(arc),
   );
   await settle();
-  // Same ring search as the arc-click test above (473 行), but aimed at a
-  // specific ref instead of whatever sits under the canvas centre.
+  // 上のアークの押下の検査(473 行)と同じ輪の探索だが、canvas の中央の下に在る
+  // 物ではなく、特定の ref を狙う。
   const hit = await page.evaluate((wantRef) => {
     const m = window.map;
     const r = m.getCanvas().getBoundingClientRect();
-    // 浮いている箱のぶん、地図の中心は画面の真ん中には無い。据えた地点が
+    // 浮いているパネルのぶん、地図の中心は画面の真ん中には無い。据えた地点が
     // 実際に落ちる画素から探し始める。
     const pad = m.getPadding();
     const cx = Math.round((r.width + pad.left - pad.right) / 2);
@@ -1119,15 +1115,14 @@ const formerRowFor = async (ref) => {
   return dd; // "30.8 km", or null if the row is absent
 };
 
-// Both sides of the comparison below read meta.combinations through
-// formerKmFor() — once because that is what the running page calls, once to
-// compute what the page ought to show. If pack_web.mjs renamed the field,
-// formerKmFor() would return 0 on *both* sides and they would agree, green,
-// on the wrong answer — the same shape of self-agreeing check f694172 fixed
-// for the dl-position test. 国道10号 having a nonzero former_km is a fact
-// about the real network, independent of what this file's meta happens to
-// contain, so it is asserted here on its own, first: if this comes back 0,
-// the field is gone or renamed, not that 10号 lost its former road.
+// 下の比較は、両側とも formerKmFor() を通して meta.combinations を読む——片方は
+// 走っているページが呼ぶのがそれだからで、もう片方はページが出すべき値を求める
+// ためである。pack_web.mjs が欄を改名すれば、formerKmFor() は両側とも 0 を返し、
+// 二つは誤った答えの上で一致して緑になる——f694172 が dl の位置の検査で直した
+// のと同じ、自分と一致するだけの検査である。国道 10 号が 0 でない former_km を
+// 持つことは、このファイルの meta にたまたま何が入っているかとは無関係な、実在
+// の道路網についての事実である。だからそれだけを先に断定する。0 が返ってきたら、
+// 10 号が旧道を失ったのではなく、欄が消えたか改名されたのである。
 const anchorKm = formerKmFor(meta.combinations, new Set([10]));
 ok(
   anchorKm > 0,
@@ -1135,11 +1130,11 @@ ok(
     `mean the field was dropped or renamed, not that 10号 has no former road`,
 );
 
-// The expected row's text comes from detailHTML() itself, not from retyping
-// fmtKm's rounding and formerRowHTML's "0.0 → no row" rule here (CLAUDE.md:
+// 期待する行の文面は detailHTML() 自身から得る。fmtKm の丸めと formerRowHTML の
+// 「0.0 なら行を出さない」規則をここへ書き写すのではない(CLAUDE.md:
 // 検証スクリプトは本物の定義を読み込んで検査する). Only former_km needs to be
-// the real, freshly-read value; the rest of `route` just has to be a route
-// that exists, so detailHTML has something to build the rest of the box from.
+// 本物の、いま読んだ値である。`route` の残りは実在する路線でありさえすればよい。
+// detailHTML がパネルの残りを組む材料になるためである。
 const expectedFormerRow = (ref) => {
   const route = routesOf(meta.combinations).find((r) => r.ref === ref);
   if (!route) return undefined; // ref not in this build at all
@@ -1172,9 +1167,9 @@ for (const ref of [10, 4]) {
   );
 }
 
-// --- every region's data must actually be on the map ------------------------
-// One region failing to make it into the archive would look almost the same
-// from the panel, so every prefecture is visited and its roads counted.
+// --- どの地域のデータも実際に地図に載っていること --------------------------
+// 1 地域がアーカイブに入り損ねても、操作面から見た姿はほとんど変わらない。だから
+// 県を全部訪ね、その道を数える。
 console.log('');
 const empty = [];
 for (const r of index) {
@@ -1201,8 +1196,8 @@ ok(
   `every prefecture renders roads from the archive (${empty.length ? empty.join(', ') : `all ${index.length}`})`,
 );
 
-// The whole country at once is the view the project exists for, and the zoom
-// where a missing low-zoom tile pyramid would show.
+// 全国が一度に入る眺めは、このプロジェクトが存在する理由そのものであり、低い
+// ズームのタイルのピラミッドが欠けていれば、それが現れるズームでもある。
 await page.evaluate(
   (b) =>
     window.map.fitBounds(

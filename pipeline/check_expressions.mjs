@@ -1,12 +1,12 @@
-/* Validate the *actual* style the viewer builds, then evaluate its filters
- * over the built data.
+/* 閲覧側が実際に組むスタイルそのものを検査し、続けてその絞り込み式を生成済みの
+ * データで評価する。
  *
- * This imports web/mapspec.mjs rather than restating the expressions, because
- * a restated copy already fooled this check once: the duplicate compiled fine
- * while the real layers were rejected by MapLibre for wrapping a `zoom`
- * interpolation in arithmetic and for a data-driven `line-dasharray`.
+ * 式を書き写さず web/mapspec.mjs を import する。書き写した複製が、一度この検査
+ * を欺いたためである。複製は問題なく通り、本物の層は MapLibre に拒否されていた。
+ * `zoom` の補間を算術式で包んでいたことと、`line-dasharray` をデータ駆動にして
+ * いたことが理由である。
  *
- * Usage:  node pipeline/check_expressions.mjs
+ * 使い方:  node pipeline/check_expressions.mjs
  */
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -15,8 +15,8 @@ import { pathToFileURL } from 'node:url';
 
 import { REGIONS, ROOT } from './_paths.mjs';
 
-// Imported by path rather than by a fixed relative depth: these scripts belong
-// to the skill, so how far they sit below the project is not fixed.
+// 相対の深さを決め打ちせずパスで import する。このスクリプト群はスキルに属して
+// おり、プロジェクトからどれだけ下にあるかは決まっていない。
 const {
   baseStyle,
   routeLayers,
@@ -32,18 +32,17 @@ const {
 const require = createRequire(join(ROOT, 'package.json'));
 const spec = require('@maplibre/maplibre-gl-style-spec');
 
-/* This check has two halves, and only one of them needs a build.
+/* この検査は二つに分かれ、生成物が必要なのは片方だけである。
  *
- * Section 1 asks whether the style and the filter expressions are legal
- * MapLibre — a question about the code, answerable anywhere, which is what
- * lets CI run it on a clone with no data in it. Sections 2 to 5 evaluate those
- * same expressions over real arcs and compare the result against plain JS,
- * which needs a region to have been built.
+ * 1 節は、スタイルと絞り込み式が MapLibre の仕様に適合するかを訊く——コードに
+ * ついての問いで、どこでも答えられる。CI がデータの無い clone で走らせられるのは
+ * このためである。2 節から 5 節は、その同じ式を実データのアークで評価し、素の
+ * JavaScript と突き合わせる。こちらは地域が生成済みであることを要求する。
  *
- * `--spec-only` asks for the first half alone. Without it, missing data is an
- * error rather than a quietly smaller run: someone checking their work on a
- * built tree should hear about it, not be handed a pass that skipped the
- * comparison.
+ * `--spec-only` は前半だけを求める。付けないときのデータ不足はエラーであって、
+ * 検査を減らして済ませることではない。生成済みの木で自分の作業を確かめている
+ * 人は、それを知らされるべきで、突き合わせを飛ばした合格を渡されるべきでは
+ * ない。
  */
 const args = process.argv.slice(2);
 const SPEC_ONLY = args.includes('--spec-only');
@@ -52,7 +51,7 @@ const REGION = args.find((a) => !a.startsWith('--')) || 'nagano';
 let geo = null;
 let meta = null;
 if (SPEC_ONLY) {
-  console.log('--spec-only: 仕様の検査だけを行う（データを読まない）');
+  console.log('--spec-only: 仕様の検査だけを行う(データを読まない)');
 } else {
   try {
     geo = JSON.parse(readFileSync(join(REGIONS, `${REGION}.geojson`), 'utf8'));
@@ -83,12 +82,12 @@ const ok = (cond, msg) => {
   console.log(`PASS  ${msg}`);
 };
 
-/* ---- 1. the whole style must satisfy the spec ----------------------------- */
+/* ---- 1. スタイル全体が仕様を満たす --------------------------------------- */
 function styleWith(filters) {
   const style = baseStyle();
-  // The viewer's own source definitions, not stand-ins: a `source-layer` on a
-  // layer is only valid against a vector source, so validating the layers over
-  // invented GeoJSON sources would pass while the real map failed.
+  // 代用ではなく、閲覧側自身のソース定義を使う。層の `source-layer` はベクタ
+  // ソースに対してしか妥当にならないので、でっち上げた GeoJSON のソースで層を
+  // 検査すると、本物の地図が落ちるのに検査は通る。
   Object.assign(style.sources, routeSources(PMTILES_URL));
   const layers = routeLayers();
   if (filters) {
@@ -119,10 +118,10 @@ validate(
   'style with no filters validates against the MapLibre spec',
 );
 
-// The archive states which zooms it holds and the protocol passes that on. A
-// zoom range restated in the style is a second, silent answer to the same
-// question: pinning maxzoom:14 against a z12 archive left every layer blank
-// past z12 while the style still validated.
+// どのズームを持っているかはアーカイブが述べ、protocol がそれを伝える。スタイル
+// に書き写したズームの範囲は、同じ問いへの二つ目の、しかも何も言わない答えで
+// ある。z12 までのアーカイブに maxzoom:14 を書いたときは、スタイルの検査は通る
+// のに z12 より下がどの層も真っ白になった。
 const src = routeSources(PMTILES_URL).routes;
 ok(
   src.minzoom === undefined && src.maxzoom === undefined,
@@ -136,15 +135,13 @@ ok(
   'every layer on the vector source names its source-layer',
 );
 
-// Every filter combination the UI can produce must also validate in place.
-// Scenarios are derived from the region's own data so the same checks work
-// wherever they are run. The deepest concurrency is the most demanding case.
-// A prefecture with no concurrency at all would still have to produce a valid
-// style, so the scenarios fall back to its longest route rather than throwing.
-// With --spec-only there is no region to read them from. A stand-in does:
-// this section asks whether a filter is legal MapLibre, and legality does not
-// depend on which numbers are inside it. 18・117・406 is the concurrency this
-// project has used as its worked example throughout.
+// 画面が作りうる絞り込みの組み合わせも、その場で妥当でなければならない。場面は
+// 地域自身のデータから作るので、どこで走らせても同じ検査になる。最も深い重用が
+// 最も厳しい場合である。重用が 1 つも無い県でも妥当なスタイルにはなるはずなので、
+// 場面は例外を投げず、その県で最も長い路線へ落とす。--spec-only では読み取る
+// 地域が無いので代用を使う。この節が訊くのは絞り込みが MapLibre の仕様に適合
+// するかであり、適合するかどうかは中の番号によらない。18・117・406 は、この
+// プロジェクトが通して例に使ってきた重用である。
 const deepest = !meta
   ? [18, 117, 406]
   : meta.concurrency_ranking.length
@@ -180,11 +177,11 @@ for (const [selected, conc, showFormer, label] of scenarios) {
 
 if (SPEC_ONLY) {
   console.log(`
-${pass} passed, ${fails.length} failed（仕様のみ）`);
+${pass} passed, ${fails.length} failed(仕様のみ)`);
   process.exit(fails.length ? 1 : 0);
 }
 
-/* ---- 2. do the filters select the same arcs as plain JS? ----------------- */
+/* ---- 2. 絞り込みは素の JavaScript と同じアークを選ぶか ------------------- */
 const compile = (expr) => {
   const r = spec.expression.createExpression(expr, { type: 'boolean' });
   if (r.result === 'error') {
@@ -233,7 +230,7 @@ for (const [selected, conc, showFormer, label] of scenarios) {
   );
 }
 
-/* ---- 3. the kind split must partition the arcs, not overlap or drop ------ */
+/* ---- 3. 区分の分割はアークを重複も脱落も無く分ける ---------------------- */
 const carriageway = compile(withKind(true, SPECIAL_KINDS, true));
 const special = compile(withKind(true, SPECIAL_KINDS, false));
 let both = 0;
@@ -249,10 +246,10 @@ ok(
   `carriageway / special layers partition all arcs (overlap ${both}, orphan ${neither})`,
 );
 
-/* ---- 4. the substring trap ----------------------------------------------- */
-// Pick a route number that is absent here but whose digits appear inside a
-// number that *is* present — 2 hides in 20, 1 hides in 17. Any hit at all then
-// proves the delimiter guard failed.
+/* ---- 4. 部分文字列の罠 --------------------------------------------------- */
+// ここに無い路線番号のうち、在る番号の中に数字として現れる物を選ぶ——2 は 20
+// に、1 は 17 に隠れている。1 件でも当たれば、区切り文字による防ぎが破れた証拠
+// になる。
 const present = new Set(meta.routes.map((r) => r.ref));
 const presentStr = meta.routes.map((r) => String(r.ref));
 let probe = null;
@@ -274,7 +271,7 @@ if (probe !== null) {
   );
 }
 
-// The four longest routes here must resolve identically through both paths.
+// この地域で最も長い四つの路線は、二つの経路で同じ結果にならなければならない。
 const busiest = [...meta.routes]
   .sort((a, b) => b.km - a.km)
   .slice(0, 4)
@@ -291,19 +288,19 @@ for (const ref of busiest) {
   );
 }
 
-/* ---- 5. spot-check the deepest concurrency ------------------------------- */
-// How deep the deepest stack goes is a fact about the country, not about every
-// prefecture — verify_national.py asserts the six-fold one over the merged
-// data. Here it only has to exist and be at the top of the ranking.
+/* ---- 5. 最も深い重用を抜き取りで確かめる -------------------------------- */
+// 最も深い重なりがどれだけ深いかは全国についての事実であって、県ごとの事実では
+// ない——六重用は verify_national.py が結合後のデータで断定する。ここでは、
+// それが在ってランキングの先頭に来ることだけを見る。
 const top = meta.concurrency_ranking[0];
 ok(
   top?.n >= 2,
   `deepest concurrency in ${meta.label} is ${top?.n}x ${JSON.stringify(top?.refs)}`,
 );
-// Every number of the deepest combination must land on the same arcs — the
-// thing the map exists to show — and the filter primitive must agree with the
-// stored list about which arcs those are. A prefecture with no concurrency at
-// all has nothing to compare here.
+// 最も深い組み合わせのどの番号も、同じアークに当たらなければならない——それが
+// この地図の見せたい物である——うえで、絞り込みの素片と、保存されている一覧が、
+// どのアークかについて一致しなければならない。重用が 1 つも無い県では、ここで
+// 比べる物が無い。
 if (!top) {
   console.log('NOTE  この地域に重用区間は無いので、この検査は行わない');
 } else {

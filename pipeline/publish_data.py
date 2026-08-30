@@ -2,24 +2,23 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Publish web/data/ to the R2 bucket the site fetches from.
+"""web/data/ を、サイトが読みに行く R2 バケットへ公開する。
 
-The served data is deliberately not in git. Two reasons, both in .gitignore:
-the road data is ODbL while the code is MIT, and the tiles are ~55 MB of
-already-gzipped bytes that neither delta nor compress, so every rebuild would
-be stacked whole onto the history.
+配信データを git に入れないのは意図してのことである。理由は二つあり、どちらも
+.gitignore に書いてある。道路データは ODbL でコードは MIT であること。そして
+タイルは既に gzip 済みの約 55 MB で、差分も圧縮も効かず、作り直すたびに丸ごと
+履歴へ積まれることである。
 
-It also does not travel through GitHub Pages. Pages' backend (Fastly) has a
-bug: a Range request that does not start at byte 0 comes back as bytes
-unrelated to the file actually asked for, on every file we tried, on every
-path we tried to route around it (Cloudflare cache rules, compression rules,
-a fresh deploy). PMTiles is read almost entirely by such requests, so the map
-never drew. R2 sits behind the same Cloudflare zone and does not have the
-bug, so the data lives there instead — at data.nanase.cc — and
-.github/workflows/pages.yml rewrites the two relative paths in the shipped
-JS to point at it.
+GitHub Pages も経由しない。Pages の裏側(Fastly)は、バイト 0 から始まらない
+Range 要求に対して、要求したファイルとは無関係なバイト列を返す不具合を持つ。
+試したどのファイルでも、迂回しようと試したどの経路でも(Cloudflare のキャッシュ
+規則、圧縮規則、配信のやり直し)同じだった。PMTiles の読み取りはほぼ全てそういう
+要求なので、地図は一度も描けなかった。R2 は同じ Cloudflare ゾーンの内側にあり、
+この不具合を持たない。だからデータはそちら——data.nanase.cc——に置き、
+.github/workflows/pages.yml が、配る JavaScript の中の相対パス 2 つをそこへ
+向け直す。
 
-Usage:
+使い方:
     uv run pipeline/publish_data.py
 """
 from __future__ import annotations
@@ -32,13 +31,13 @@ from _paths import DATA
 
 BUCKET = "kokudo-map-data"
 
-# Exactly what the viewer fetches. index.html, app.js and the rest travel with
-# the repository; only these are built.
+# 閲覧側が取る物ちょうど。index.html や app.js はリポジトリと一緒に運ばれる。
+# 生成されるのはこれだけである。
 FILES = ["national-routes.pmtiles", "national.meta.json", "regions.json"]
 
 
 def wrangler(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    """Run wrangler via bun x, decoding its output as UTF-8 regardless of locale."""
+    """wrangler を bun x 経由で走らせ、出力をロケールによらず UTF-8 で読む。"""
     # `bunx` 自体は mise がシムを作らないことがあります。`bun x` は bun 本体の
     # サブコマンドなので、mise.toml が述べる bun さえ入っていれば必ず通ります。
     # encoding を省くと日本語 Windows では cp932 に落ち、wrangler が出す UTF-8 の
@@ -50,12 +49,12 @@ def wrangler(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]
         encoding="utf-8", errors="replace",
     )
     if check and r.returncode != 0:
-        sys.exit(f"wrangler が失敗した（終了コード {r.returncode}）:\n{r.stdout}{r.stderr}")
+        sys.exit(f"wrangler が失敗した(終了コード {r.returncode}):\n{r.stdout}{r.stderr}")
     return r
 
 
 def preflight() -> None:
-    """Fail with the actual reason rather than with wrangler's."""
+    """wrangler の理由ではなく、本当の理由で落ちる。"""
     if shutil.which("bun") is None:
         sys.exit("bun が見つからない。mise install で入るはずである。")
 
@@ -72,8 +71,8 @@ def preflight() -> None:
 
 
 def main() -> None:
-    """Upload each file in FILES to BUCKET via wrangler."""
-    # Windows terminals default stdout to cp932 — see build_all.main().
+    """FILES のファイルを wrangler で BUCKET へ上げる。"""
+    # Windows の端末は標準出力の既定が cp932 である——build_all.main() を参照。
     sys.stdout.reconfigure(errors="replace")
     preflight()
 

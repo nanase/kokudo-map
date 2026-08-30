@@ -1,13 +1,11 @@
-/* Everything the sidebar shows, as functions of the data.
+/* サイドパネルが出すものを、データの関数として組み立てる。
  *
- * The panel has no numbers of its own. The viewer never holds the arcs, so
- * every total, every list and every count is read out of national.meta.json —
- * see aggregate.mjs for the two sums underneath. What is left is turning those
- * answers into markup, which is a plain function of them and belongs where it
- * can be checked.
+ * 操作面は自前の数を持たない。閲覧側はアークを手元に持たないので、合計も一覧も
+ * 個数も、すべて national.meta.json から読む——その下にある二つの和は
+ * aggregate.mjs にある。残るのはその答えを markup に直すことで、これも純関数
+ * なので、検査できる場所に置く。
  *
- * app.js keeps the part that cannot be: which element each string goes into,
- * and when.
+ * そうできない部分——どの文字列をどの要素へ、いつ入れるか——は app.js が持つ。
  */
 import { esc } from './html.mjs';
 import {
@@ -20,13 +18,13 @@ import {
 } from './mapspec.mjs';
 import { shieldRow } from './shield.mjs';
 
-/* How many rows the folded lists show. Both are ordered by the build, so a
- * prefix is the top of the ranking rather than an arbitrary sample. */
+/* 畳んだ一覧が出す行数。どちらもビルドが並べ替えて配るので、頭から取れば
+ * 上位がそのまま出る。任意の抜き取りではない。 */
 export const RANKING_ROWS = 25;
 export const SHARED_ROWS = 20;
 
 /* ------------------------------------------------------------------ 路線 --- */
-/** The checkbox list of every route the data contains. */
+/** データにあるすべての路線を並べたチェックボックスの一覧。 */
 export const routeListHTML = (routes) =>
   routes
     .map(
@@ -40,8 +38,7 @@ export const routeListHTML = (routes) =>
     .join('');
 
 /* ------------------------------------------------------------------ 集計 --- */
-/** The four numbers the 国道マップについて dialog states. An empty selection
- *  means everything. */
+/** 「国道マップについて」が述べる四つの数。選択が空なら全部を意味する。 */
 export const statsHTML = (selectedCount, totalRoutes, { arcs, km, conc }) =>
   `<dt>選択路線</dt><dd>${selectedCount || totalRoutes} / ${totalRoutes}</dd>` +
   `<dt>対象アーク</dt><dd>${arcs.toLocaleString()}</dd>` +
@@ -49,11 +46,11 @@ export const statsHTML = (selectedCount, totalRoutes, { arcs, km, conc }) =>
   `<dt>重用アーク</dt><dd>${conc.toLocaleString()}</dd>`;
 
 /**
- * What the clear button says.
+ * 選択解除のボタンが名乗る文言。
  *
- * It states how much it would undo, so nothing else has to state how much is
- * selected. A line under the list saying "1 路線を選択中。" was a second answer
- * to a question this button and the count above both answer already.
+ * どれだけ取り消すかを述べるので、選択数を述べる場所が他に不要である。一覧の下に
+ * 「1 路線を選択中。」と出していた行は、このボタンと上の数が既に答えている
+ * 問いへの二つ目の答えだった。
  */
 export const clearLabel = (selectedCount) =>
   selectedCount ? `${selectedCount} 路線を選択解除` : '選択解除';
@@ -74,7 +71,7 @@ export const selectionLabel = (selectedCount, totalRoutes) =>
 /* 並べる行を選ぶのは aggregate.mjs の concurrencies() である。組み合わせ表を
    選択で絞る規則はそこに一度だけ書いてある。 */
 
-/** "25 / 1,237 組" on the folded tab, or nothing when there is nothing. */
+/** 畳んだ見出しに出す「25 / 1,237 組」。何も無いときは何も出さない。 */
 export const countLabel = (shown, total, unit) =>
   total ? `${shown} / ${total} ${unit}` : '';
 
@@ -132,9 +129,9 @@ export const sharedHTML = (rows) =>
  * 共有ダイアログが出す、いまの表示状態の要約。
  *
  * ダイアログの中でこの状態は変更できないので、ここは読み取り専用の説明で
- * よい。`toggles` と `concLabel` はラベル文字列を own しない — index.html の
+ * よい。`toggles` と `concLabel` はラベル文字列を自分で持たない——index.html の
  * チェックボックス・ラジオボタンの表示文言をそのまま渡してもらう形にして
- * ある。ここで文言を書き直すと、表示側を直したときにこちらが黙って古くなる。
+ * ある。ここで文言を書き直すと、表示側を直したときにこちらが暗黙のうちに古くなる。
  */
 export const shareSummaryHTML = ({
   selectedRefs,
@@ -158,10 +155,9 @@ export const shareSummaryHTML = ({
   '</ul></div>';
 
 /**
- * The one-line title + URL an SNS share sheet expects, e.g.
- * "国道マップ - 292号\nhttps://…". `url` is a parameter rather than read from
- * `location` here, keeping this a pure function of state like the rest of the
- * panel.
+ * SNS の共有シートが期待する、題と URL の 1 行。例は
+ * 「国道マップ - 292号\nhttps://…」である。`url` はここで `location` から読まず
+ * 引数で受け取る。操作面の他と同じく、状態の純関数のままにするためである。
  */
 export const shareText = (url, { selectedRefs }) =>
   `国道マップ${selectedRefs.length ? ` - ${selectedRefs.join('・')}号` : ''}\n${url}`;
@@ -169,7 +165,7 @@ export const shareText = (url, { selectedRefs }) =>
 /* ------------------------------------------------------------------ 凡例 --- */
 /**
  * `tip` は補足であって名前の一部ではないので、表示上はカッコ書きにせず
- * `title` 属性へ渡す — ホバーで読めれば足り、常に文字として並べておく理由が
+ * `title` 属性へ渡す——ホバーで読めれば足り、常に文字として並べておく理由が
  * ない。`title` を持つ項目だけカーソルを help にし、補足があることを示す。
  */
 const swatch = (color, text, dashed, tip) =>
@@ -197,20 +193,19 @@ const utc = (d) =>
   `${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
 
 /**
- * State plainly which day of OpenStreetMap this map shows.
+ * いつ時点の OpenStreetMap を出しているかを、そのまま述べる。
  *
- * Two different dates matter and are easy to confuse. `osm_timestamp` is the
- * moment the OSM database was read, which is how current we are. The per-way
- * edit dates are when each road was last touched by a mapper, which is what
- * actually determines whether a new bypass is here yet.
+ * 効いてくる日付は二つあり、取り違えやすい。`osm_timestamp` は OSM の
+ * データベースを読んだ時刻で、こちらがどれだけ新しいかを述べる。way ごとの
+ * 編集日は、その道を投稿者が最後に触った日で、新しいバイパスがもう入って
+ * いるかを実際に決めているのはこちらである。
  *
- * `now` is a parameter so that "how old is this" has one input rather than a
- * hidden one.
+ * `now` を引数にしてあるのは、「どれだけ古いか」の入力を隠さず一つにする
+ * ためである。
  *
- * There is no staleness warning. No update interval is promised, so such a
- * warning would be lit permanently, and one that is always on is background
- * rather than information. The panel says the thing that is true instead —
- * the interval is irregular — and leaves the judgement to the reader.
+ * 古さの警告は出さない。更新の間隔を約束していない以上、その警告は点きっぱなし
+ * になり、常に点いている警告は情報ではなく背景である。代わりに操作面は本当の
+ * ことを述べ——間隔は不定期である——判断は読む人に委ねる。
  */
 export function freshnessHTML(meta, now = Date.now()) {
   const base = new Date(meta.osm_timestamp);

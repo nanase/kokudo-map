@@ -21,14 +21,14 @@ mise activate fish | source    # fish
 済ませないまま進めるなら、各コマンドの前に `mise exec --` を置いてください。
 
 ```sh
-bun x playwright install chromium   # 実描画チェックにのみ必要
+bun x playwright install chromium   # 実描画の確認にだけ必要
 ```
 
 `bun install` は続けて `scripts/vendor_web.mjs` を走らせ、MapLibre と PMTiles と書体を `node_modules` から `web/vendor/` に複製します。地図はそこから読みます。CDN は読みません。
 
-書体は 2 つです。路線番号の標識が Roboto、操作面が LINE Seed JP です。後者は日本語 1 書体ぶんあるので 1 ファイルにはならず、Fontsource が unicode-range で分けた ~120 片を weight 400・700 のぶんだけ複製します(woff2 で 248 ファイル・6 MB)。ブラウザが取るのは画面に出ている字を含む片だけです。
+書体は 2 つです。路線番号の標識が Roboto、操作面が LINE Seed JP です。後者は日本語 1 書体ぶんあるので 1 ファイルにはなりません。Fontsource が unicode-range で分けた約 120 片を、weight 400・700 のぶんだけ複製します。woff2 で 248 ファイル、6 MB です。ブラウザが取るのは画面に出ている字を含む片だけです。
 
-`bunfig.toml` で `minimumReleaseAge` を設定してあり、公開から 3 日経っていないパッケージは入りません。サプライチェーン攻撃で悪意あるバージョンが公開直後に出回っても、既知の期間はそれを踏みません。
+`bunfig.toml` で `minimumReleaseAge` を設定してあり、公開から 3 日経っていないパッケージは入りません。サプライチェーン攻撃で悪意あるバージョンが公開直後に出回っても、それが見つかるまでの数日を先に空けるので、踏まずに済みます。
 
 ## データを作る
 
@@ -51,7 +51,7 @@ mise run serve        # http://localhost:8000/
 | `mise run pack` | `build/regions/` から `web/data/` を作り直す |
 | `mise run publish-data` | 配信データを R2(data.nanase.cc)に上げる |
 | `mise run decree` | 政令の別表から起点・終点を取り込み、座標を当てる |
-| `mise run audit <地域>` | 鎖が切れている路線を機械的に探す |
+| `mise run audit <地域>` | 途切れている路線を機械的に探す |
 | `mise run compare <地域>` | Overpass 由来の基準と突き合わせる |
 | `mise run compare-n13 <地域>` | 国土数値情報 N13(道路)と突き合わせ、OSM に無い国道の候補を探す |
 | `mise run apply-n13 <地域>` | former のうち N13 で指定解除を機械確認できたものに revoked を書き込む |
@@ -61,7 +61,7 @@ mise run serve        # http://localhost:8000/
 
 `mise run decree` は初回に国土数値情報 N03(行政区域)を取ります。47 都道府県ぶんを現行と 2000 年版の二つ、約 530 MB です。以後はキャッシュから読みます。
 
-`serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが要ります。
+`serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが必要です。
 
 判定ルールは都道府県ごとに閉じたままにしてあります。取得は全国でも、この境界は崩せません。理由、不具合の切り分け、過去の判断は [national-route-data スキル](../.claude/skills/national-route-data/SKILL.md) にまとめてあります。
 
@@ -78,14 +78,14 @@ mise run serve        # http://localhost:8000/
 
 絵は寸法ごとに組み直しません。1200x630 の組みを、求められた枠を覆うまで拡大して、はみ出したぶんを切ります。そのため選べるのは 1200:630 に近い縦横比だけです。離れた寸法は切る量が題字や標識に届くので、書かずに止まります。
 
-グリフは 11 字しかありません。ラベルは路線番号を `・` で繋いだ物だけなので、日本語フォント一式は要りません。2 ファイル 5 kB で足ります。
+グリフは 11 字しかありません。ラベルは路線番号を `・` で繋いだ物だけなので、日本語フォント一式は不要です。2 ファイル 5 kB で足ります。
 
 ```sh
 bun run lint                 # 静的検査
 bun run format               # 整形
 bun run lint:fix             # 安全な自動修正込みで検査
 bun run test                 # 単体テスト
-bun run check                # スタイルと絞り込み式(生成済みの地域が要る)
+bun run check                # スタイルと絞り込み式(生成済みの地域が必要)
 bun run check --spec-only    # 同上。データを読まない
 bun run check:docs           # 命令の一覧が食い違っていないか
 uvx ruff check pipeline      # Python の静的検査
@@ -97,13 +97,13 @@ uvx ruff check pipeline      # Python の静的検査
 | --- | --- |
 | `web/` | 地図本体。MapLibre GL JS と配信データ |
 | `web/mapspec.mjs` | スタイルと絞り込み式の定義。検証スクリプトも同じ物を読む |
-| `web/app.js` | 地図と操作の繋ぎ込み。生きた地図と頁が要る部分だけが残る |
+| `web/app.js` | 地図と操作の繋ぎ込み。生きた地図とページが必要な部分だけが残る |
 | `web/wiring.mjs` | index.html の要素と state の対応づけ。地図を作らずに import できる |
 | `web/urlstate.mjs` | 絞り込みと表示状態を URL のクエリ文字列に載せる |
 | `web/aggregate.mjs` | 画面が出す数を組み合わせ表から読む |
 | `web/panel.mjs` | 操作面の一覧・集計と、地図の上の凡例の組み立て |
 | `web/popup.mjs` | 押したアークが自分について述べること |
-| `web/detail.mjs` | 一つの国道について述べること。標識を押すと出る箱 |
+| `web/detail.mjs` | 一つの国道について述べること。標識を押すと出るパネル |
 | `web/termini.mjs` | 起点・終点を GeoJSON にする |
 | `web/shield.mjs` | 国道番号標識の形。画面も favicon も共有画像もここから描く |
 | `web/html.mjs` | エスケープ。OSM の文字は信用できない |

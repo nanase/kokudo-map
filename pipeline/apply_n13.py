@@ -2,24 +2,24 @@
 # requires-python = ">=3.12"
 # dependencies = ["requests", "pyshp"]
 # ///
-"""Write N13's mechanical 指定解除 confirmation into build/regions/<region>.geojson
-as the `revoked` property — issue #9's decision on the former 孤立候補 triage.
+"""N13 による指定解除の機械確認を、`revoked` 属性として
+build/regions/<region>.geojson へ書く——former 孤立候補の仕分けについての、
+issue #9 の判断である。
 
-compare_n13.py's own CLI stays read-only; it only ever prints a report. This
-script is the one place that turns compare_n13.region_former_clusters()'s
-`confirmed` verdict into build data, via the exact same clustering function
-the report uses (see that function's docstring) — so what a human reads in
-`mise run compare-n13` and what a build actually writes never drift apart.
+compare_n13.py 自身のコマンドは読み取り専用のままで、報告を出すだけである。
+compare_n13.region_former_clusters() の `confirmed` という判定を生成データに
+変える場所はこのスクリプトだけで、報告が使うのとまったく同じクラスタ化の関数を
+通す(その関数の docstring を参照)——`mise run compare-n13` で人が読む物と、
+ビルドが実際に書く物が、離れていかないようにするためである。
 
-`revoked` is independent of `former` (RULES.md 旧道), not a replacement for
-it: a former arc keeps former=1 regardless of what N13 says, because the
-legal designation can lag OSM's own tagging by years. Only former arcs in the
-low-coverage candidate set compare_n13.py already triages are checked against
-N13 at all; every other arc — former or not — keeps the revoked=0 default
-build_routes.py already writes. revoked=0 therefore means "not confirmed",
-not "confirmed still current".
+`revoked` は `former` とは独立であって(RULES.md 旧道)、置き換えではない。旧道の
+アークは N13 が何と言おうと former=1 のままである。法令上の指定は、OSM 自身の
+タグ付けより何年も遅れうるからである。N13 と突き合わせるのは、compare_n13.py が
+既に仕分けた低被覆率の候補に入る旧道のアークだけである。それ以外のアークは
+——旧道であってもなくても——build_routes.py が書いた既定の revoked=0 のままで
+ある。つまり revoked=0 は「未確認」であって、「現役だと確認済み」ではない。
 
-Usage:  uv run pipeline/apply_n13.py <region> [--refresh]
+使い方:  uv run pipeline/apply_n13.py <地域> [--refresh]
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from compare_n13 import region_former_clusters
 
 
 def main() -> None:
-    # Windows terminals default stdout to cp932 — see compare_n13.main().
+    # Windows の端末は標準出力の既定が cp932 である——compare_n13.main() を参照。
     sys.stdout.reconfigure(errors="replace")
     args = [a for a in sys.argv[1:] if a != "--refresh"]
     refresh = "--refresh" in sys.argv[1:]
@@ -42,22 +42,19 @@ def main() -> None:
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     gj = json.loads(gj_path.read_text(encoding="utf-8"))
 
-    # Reset first: this script is meant to run right after build_routes.py,
-    # which already writes revoked=0 fresh on every arc, but it is also run
-    # standalone during triage (mise run apply-n13). Without this reset, a
-    # second standalone run over a geojson that already has revoked=1 from a
-    # prior run would only ever add confirmations, never retract one for an
-    # arc that dropped out of the candidate set (CodeRabbit review on this
-    # PR) — this loop is what makes every run start from the same baseline
-    # regardless of what called it.
+    # 先に戻す。このスクリプトは build_routes.py の直後に走る想定で、あちらは
+    # 既に全アークへ revoked=0 を書き直している。しかし仕分けの最中には単独でも
+    # 走る(mise run apply-n13)。この戻しが無いと、前回の実行で revoked=1 が
+    # 入っている geojson に対する二度目の単独実行は、確認を足すばかりで、候補
+    # から外れたアークの確認を取り消せない(この PR への CodeRabbit のレビュー)
+    # ——この繰り返しが、誰が呼んだかによらず毎回同じ地点から始めさせている。
     for f in gj["features"]:
         f["properties"]["revoked"] = 0
 
-    # No former arcs at all (e.g. a region with none) means nothing to check
-    # against N13 — skip the mesh fetch entirely rather than downloading data
-    # this region has no use for. Still write back the reset above, so a
-    # region that used to have former arcs and no longer does loses any
-    # stale revoked=1 too.
+    # 旧道のアークが 1 本も無ければ(そういう地域もある)N13 と突き合わせる物が
+    # 無い——その地域に使い道の無いデータを落としてくるより、メッシュの取得ごと
+    # 飛ばす。それでも上の戻しは書き戻す。かつて旧道を持っていて今は持たない
+    # 地域から、古い revoked=1 が消えるようにするためである。
     if not any(f["properties"].get("former") for f in gj["features"]):
         print(f"{region}: no former arcs, nothing to confirm against N13")
         gj_path.write_text(

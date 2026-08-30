@@ -1,4 +1,4 @@
-/* 一つの国道について語る箱の中身。
+/* 一つの国道について述べるパネルの中身。
  *
  * ここで壊れやすいのは三つあります。区分別の距離(issue #58)・台帳の起終点
  * (issue #59)・旧道の距離(issue #84)は、どれも組み合わせ表と meta の欄が
@@ -106,7 +106,7 @@ describe('decreeTerminiOf', () => {
 describe('detailHTML — 見出しとボタン', () => {
   test('標識を出し、路線名は読み上げにだけ残す', () => {
     // 標識が路線の名前そのものなので、隣に「国道18号」とは書きません。ただし
-    // 箱の aria-labelledby が指す先なので、名前は #detail-title に残します。
+    // パネルの aria-labelledby が指す先なので、名前は #detail-title に残します。
     const html = detailHTML({ route: route() });
     expect(html).toContain('aria-label="国道18号"'); // shield() の svg
     expect(html).toContain(
@@ -216,7 +216,7 @@ describe('detailHTML — 旧道', () => {
   });
 
   test('延長の行の直後に来る(区分別より前)', () => {
-    // 区分別の合計は延長とほぼ一致する(国道10号なら791.3 kmと791.4 km)。
+    // 区分別の合計は延長とほぼ一致する(国道 10 号なら 791.3 km と 791.4 km)。
     // 区分別の下に同じ書体で旧道の行を続けると「四つめの区分」に読める
     // (#26)。延長の直下に置けば、「うち」が指す先の真下に来る。文字列位置
     // を引き算するのではなく、延長と旧道の行がそのまま連続することを直接
@@ -413,7 +413,7 @@ describe('detailHTML — 関わりのある国道', () => {
   });
 
   test('小さいほうの標識を使う', () => {
-    // 交差する路線は 35 まであります。見出しの 44px で並べると箱が埋まります。
+    // 交差する路線は 35 まであります。見出しの 44px で並べるとパネルが埋まります。
     expect(detailHTML({ route: route(), related })).toContain(
       '<span class="shield sm">',
     );

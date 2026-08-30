@@ -1,31 +1,29 @@
-"""Per-region facts the build must reproduce.
+"""生成物が再現しなければならない、地域ごとの事実。
 
-Kept apart from the checks themselves so that adding a region is a data edit,
-not a code edit. Only assert what is independently known to be true — a wrong
-expectation is worse than none, because it trains you to ignore failures.
+検査そのものと分けてあるのは、地域を足すことをコードの変更ではなくデータの編集に
+するためである。独立に真だと分かっていることだけを断定する——誤った期待値は無い
+より悪い。失敗を無視する癖を付けるからである。
 
-  present   route numbers that certainly run through the region
-  absent    routes that certainly do not, with where they actually are. These
-            catch numbers leaking in from 都道府県道 or from bad tags.
-  kinds     routes that must have arcs of a given kind, e.g. a 点線国道
-  named     (way name, route number) pairs that must be present and designated
+  present   その地域を確かに通る路線番号
+  absent    確かに通らない路線と、実際にはどこを通るか。都道府県道からの漏れや、
+            誤ったタグからの漏れを捕まえる
+  kinds     ある区分のアークを必ず持つ路線。点線国道など
+  named     必ず在って指定もされている (way の名前, 路線番号) の対
 
-`present` lists are deliberately short. They are the routes whose 政令 itinerary
-names the prefecture outright, not everything the build happens to find. The
-boxes are rectangles and spill into neighbours, so what a region contains is
-always a superset of what its prefecture does — asserting the superset would
-mean asserting the shape of the rectangle, which is not a fact about roads.
+`present` の一覧は意図して短い。政令の経過地がその県を名指ししている路線だけで
+あって、生成物がたまたま見つけた物すべてではない。bbox は矩形で隣県へ食み込むので、
+地域が含む物は必ず、その県が含む物の上位集合になる——上位集合を断定することは
+矩形の形を断定することであり、それは道についての事実ではない。
 
-`absent` works the other way and has to respect the same spill. 国道12号 is
-Hokkaido-only and 国道390号 is Okinawa-only, and no rectangle drawn around any
-other prefecture reaches either, so the pair is the standard guard everywhere
-else. Both numbers are ones a 都道府県道 somewhere really does carry — 12 was
-among the tokens rejected in 長野県 — so they test the corroboration guard and
-not just the absence of a road.
+`absent` は逆向きに効くが、同じ食み込みを踏まえる必要がある。国道12号は北海道に
+しかなく、国道390号は沖縄にしかない。他のどの県に外接する矩形もそのどちらにも
+届かないので、この二つがどこでも使える標準の見張りになる。しかも両方とも、
+どこかの都道府県道が実際に名乗っている番号である——12 は長野県で排除された
+トークンの中にあった——ので、道が無いことだけでなく裏取りそのものを試している。
 """
 from __future__ import annotations
 
-# The two that catch a leak anywhere on Honshu, Shikoku or Kyushu.
+# 本州・四国・九州のどこであっても漏れを捕まえる二つ。
 FAR = [(12, "北海道"), (390, "沖縄"), (58, "鹿児島〜沖縄")]
 
 EXPECTATIONS: dict[str, dict] = {
@@ -87,7 +85,7 @@ EXPECTATIONS: dict[str, dict] = {
                     410, 464, 465],
         "absent": FAR,
         # 16 号は富津から横須賀まで東京湾を渡る。海上区間と述べているのは
-        # `description` だけで、名称は 国道16号 のままです。
+        # `description` だけで、名称は `国道16号` のまま。
         "kinds": {16: ["ferry"]},
         "named": [],
     },
@@ -100,7 +98,7 @@ EXPECTATIONS: dict[str, dict] = {
         "present": [1, 15, 16, 129, 133, 134, 138, 246, 271, 357, 409, 412,
                     413, 466, 467],
         "absent": FAR,
-        # 357号は 7.0 km の未開通区間を持つ。
+        # 357 号は 7.0 km の未開通区間を持つ。
         "kinds": {357: ["unopened"]}, "named": [],
     },
     # ---- 中部 -------------------------------------------------------------
@@ -113,9 +111,9 @@ EXPECTATIONS: dict[str, dict] = {
         "kinds": {
             # 清水峠が点線国道
             291: ["foot"],
-            # 350号は佐渡を経由する海上国道
+            # 350 号は佐渡を経由する海上国道
             350: ["ferry"],
-            # 353号は 7.2 km の未開通区間を持つ
+            # 353 号は 7.2 km の未開通区間を持つ
             353: ["unopened"],
         },
         "named": [],
@@ -127,7 +125,7 @@ EXPECTATIONS: dict[str, dict] = {
     "ishikawa": {
         "present": [8, 157, 159, 160, 249, 304, 305, 359, 360, 415, 416, 471],
         "absent": FAR,
-        # 360号は白山白川郷ホワイトロードが代替路の 16.4 km を未開通で持つ。
+        # 360 号は白山白川郷ホワイトロードが代替路の 16.4 km を未開通で持つ。
         "kinds": {360: ["unopened"]}, "named": [],
     },
     "fukui": {
@@ -144,7 +142,7 @@ EXPECTATIONS: dict[str, dict] = {
         "present": [18, 19, 20, 117, 141, 142, 143, 144, 148, 151, 152, 153,
                     158, 254, 256, 292, 299, 361, 403, 405, 406, 418, 474],
         "absent": [
-            (372, "京都〜兵庫"),   # 長野県道372号が混入した実例
+            (372, "京都〜兵庫"),   # 長野県道 372 号が混入した実例
             (368, "三重"),         # official_name のタイポを拾った実例
             (4, "東京〜青森"),
             (2, "大阪〜北九州"),
@@ -179,7 +177,7 @@ EXPECTATIONS: dict[str, dict] = {
         "present": [1, 23, 25, 42, 163, 165, 166, 167, 258, 259, 260, 306,
                     368, 369, 421, 422, 477],
         "absent": FAR,
-        # 1号は北勢バイパスに 8.2 km x2 の未開通区間を持つ。
+        # 1 号は北勢バイパスに 8.2 km x2 の未開通区間を持つ。
         "kinds": {1: ["unopened"]}, "named": [],
     },
     "shiga": {
@@ -206,7 +204,7 @@ EXPECTATIONS: dict[str, dict] = {
         "kinds": {2: ["expressway"], 28: ["ferry", "expressway"]},
         # 第二神明道路・神戸淡路鳴門自動車道はどちらも国道リレーションのメンバーで
         # なく、`ref` が `E93;2` のように高速道路番号と同居していたため候補判定
-        # から丸ごと落ちていました（CASES.md 15）。
+        # から丸ごと落ちていた(CASES.md 15)。
         "named": [("第二神明道路", 2), ("神戸淡路鳴門自動車道", 28)],
     },
     "nara": {
@@ -249,7 +247,7 @@ EXPECTATIONS: dict[str, dict] = {
         "absent": FAR,
         # 28 号は神戸淡路鳴門自動車道の大鳴門橋区間を持つ。
         "kinds": {28: ["expressway"]},
-        # 兵庫県と同じ理由で候補判定から落ちていました（CASES.md 15）。
+        # 兵庫県と同じ理由で候補判定から落ちていた(CASES.md 15)。
         "named": [("神戸淡路鳴門自動車道", 28)],
     },
     "kagawa": {
@@ -293,7 +291,7 @@ EXPECTATIONS: dict[str, dict] = {
                     388, 389, 443, 445, 501],
         "absent": FAR,
         # 57 号と 324 号は三角から島原まで有明海を渡る。26 km と 22 km の直線で、
-        # 名称に海上区間と書いていないので実線のまま海の上に出ていました。
+        # 名称に海上区間と書いていないので実線のまま海の上に出ていた。
         "kinds": {57: ["ferry"], 324: ["ferry"]},
         "named": [],
     },
@@ -304,14 +302,14 @@ EXPECTATIONS: dict[str, dict] = {
         "absent": FAR, "kinds": {}, "named": [],
     },
     # 58 号の海上区間は鹿児島市から種子島へ渡り、宮崎県の矩形を海の上で横切る。
-    # way/561255584 の 1 本だけです。食み出しであって漏れではない。
+    # way/561255584 の 1 本だけ。食み出しであって漏れではない。
     "miyazaki": {
         "present": [10, 218, 219, 220, 221, 222, 223, 265, 268, 269, 327, 388,
                     446, 448, 503],
         "absent": [(12, "北海道"), (390, "沖縄"), (1, "東京〜大阪")],
         "kinds": {}, "named": [],
     },
-    # 58号の起点は鹿児島市です。種子島と奄美を経て沖縄へ渡るので、ここでは
+    # 58 号の起点は鹿児島市。種子島と奄美を経て沖縄へ渡るので、ここでは
     # 「遠くにある番号」として使えない。
     "kagoshima": {
         "present": [3, 10, 58, 220, 223, 224, 225, 226, 267, 268, 269, 270,
@@ -337,19 +335,20 @@ EXPECTATIONS: dict[str, dict] = {
 }
 
 
-# Where a route may be, as south, west, north, east. Checked against the merged
-# nationwide data by verify_national.py, which is the only place the question
-# "did a number leak into the wrong end of the country?" can be asked at all:
-# every per-region check sees one rectangle and cannot tell.
+# 路線が在ってよい範囲を、南・西・北・東で述べる。結合後の全国データに対して
+# verify_national.py が検査する。「番号が国の反対側へ漏れていないか」を訊ける
+# 場所はそこしかない。地域ごとの検査はどれも 1 つの矩形しか見ておらず、答え
+# られない。
 #
-# These are the itineraries, padded generously. A box here says "nowhere else",
-# not "exactly here" — it is a leak detector, not a description of the road.
+# 値は経過地に十分な余裕を足した物である。ここでの範囲は「他のどこにも無い」と
+# 述べているのであって、「ちょうどここに在る」ではない——漏れを見つけるための物で
+# あって、道の記述ではない。
 ROUTE_EXTENTS: dict[int, tuple[tuple[float, float, float, float], str]] = {
     2: ((33.2, 130.5, 35.1, 135.9), "大阪〜北九州"),
     4: ((35.3, 139.4, 41.1, 141.7), "東京〜青森"),
     12: ((42.7, 141.0, 44.1, 142.7), "札幌〜旭川"),
     58: ((25.7, 127.3, 32.1, 131.3), "鹿児島〜那覇"),
-    # CASES.md 1: 長野県道372号 の ref を国道として拾った実例。
+    # CASES.md 1: 長野県道 372 号の ref を国道として拾った実例。
     372: ((34.4, 134.3, 35.3, 136.0), "京都〜姫路"),
     # CASES.md 2: official_name のタイポで山梨に出た実例。
     368: ((34.1, 135.7, 35.2, 136.9), "松阪〜伊賀"),

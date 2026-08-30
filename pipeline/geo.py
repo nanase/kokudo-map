@@ -1,27 +1,25 @@
-"""Distance on the globe, answered once.
+"""地球上の距離に、一度だけ答える。
 
-Four files here measure how far apart two points are, and they were doing it
-with four copies of the same eight lines. compare_n13.py had already noticed
-and imported audit.py's copy rather than writing a fifth; this is that same
-move, made somewhere that does not also drag in a whole audit run.
+この構成では四つのファイルが二点間の距離を測っており、同じ 8 行の写しを四つ
+持っていた。compare_n13.py は既にそれに気付いて、五つ目を書く代わりに audit.py
+の写しを import していた。ここでの移動もそれと同じで、監査の実行一式を引きずり
+込まずに済む場所へ置き直しただけである。
 
-Nothing in this module reads a file, takes an argument or prints. It is
-arithmetic, so it can be imported from anywhere in the pipeline without
-ordering anything.
+このモジュールは、ファイルを読まず、引数を取らず、何も出力しない。ただの計算
+なので、順序を気にせずパイプラインのどこからでも import できる。
 """
 from __future__ import annotations
 
 import math
 
-# IUGG mean radius. Which radius to use is a real choice — the equatorial and
-# polar radii differ by 21 km, about 0.3 % — and the answer has to be the same
-# one everywhere, or two files measuring the same road disagree in the fourth
-# digit. Stated here so nobody has to decide it again.
+# IUGG の平均半径。どの半径を使うかは本当に選択である——赤道半径と極半径は
+# 21 km、約 0.3 % 違う——うえに、どこでも同じ答えでなければ、同じ道を測った二つの
+# ファイルが 4 桁目で食い違う。誰も選び直さずに済むよう、ここで一度述べる。
 EARTH_RADIUS_M = 6371008.8
 
 
 def haversine(a: tuple[float, float], b: tuple[float, float]) -> float:
-    """Metres between two (lat, lon) pairs."""
+    """(緯度, 経度) の 2 点間の距離を m で返す。"""
     p1, p2 = math.radians(a[0]), math.radians(b[0])
     dp = p2 - p1
     dl = math.radians(b[1] - a[1])
@@ -30,5 +28,5 @@ def haversine(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 
 def line_length(coords: list[tuple[float, float]]) -> float:
-    """Metres along a polyline of (lat, lon) pairs."""
+    """(緯度, 経度) を繋いだ折れ線の長さを m で返す。"""
     return sum(haversine(coords[i], coords[i + 1]) for i in range(len(coords) - 1))

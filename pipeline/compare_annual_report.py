@@ -2,48 +2,46 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Account for the gap between the map's kilometres and 道路統計年報's.
+"""地図の km と道路統計年報の km の差が、何でできているかを説明する。
 
-The map draws 70,376 km of 一般国道. 道路統計年報2025 says 58,512 km of what
-ought to be the same thing (総延長 - 重用延長, that is 実延長 + 未供用 + 渡船).
-Twenty percent apart is not rounding, and until this script existed nobody could
-say what the twenty percent was made of.
+地図は一般国道を 70,376 km 描く。道路統計年報2025 は、同じ物であるはずの値
+(総延長 − 重用延長。すなわち 実延長 + 未供用 + 渡船)を 58,512 km と述べる。
+二割の開きは丸めではないが、このスクリプトができるまで、その二割が何でできて
+いるかを誰も言えなかった。
 
-The two count different objects, and that is most of the answer:
+二つは別々の物を数えている。答えの大半はそこにある。
 
-  the ledger  counts a route's centreline. A divided road is one length. A ramp
-              is not route length at all. 認定 comes before the road exists, so a
-              road not yet open still has a length (未供用).
-  the map     counts OSM ways. A divided road is two ways, each carrying the
-              route number, and the map draws both — that is what it is for.
+  台帳    路線の中心線を数える。上下線が分かれた道も 1 本ぶんである。ランプは
+          そもそも路線の延長ではない。認定は道ができる前に済むので、まだ開通して
+          いない道にも延長がある(未供用)。
+  地図    OSM の way を数える。上下線が分かれた道は way が 2 本あり、どちらも
+          路線番号を持つので、地図は両方を描く——そのための地図である。
 
-So the question is not who is right. It is which of the map's kilometres the
-ledger does not count, and how many. Every cause below is measured, and what
-the causes fail to explain is printed as a residual rather than waved at.
+だから問いは、どちらが正しいかではない。地図の km のうち台帳が数えていないのは
+どれで、どれだけあるか、である。以下の原因はどれも実測し、原因で説明しきれない
+ぶんは、ごまかさず残りとして出す。
 
-  海上区間        the ledger's 未供用 includes 1,953 km of sea. The map has only
-                  the ferry ways its route relations contain.
-  工事中・未開通  OSM's `construction` covers rebuilding a road that is open and
-                  in the ledger already as well as building one that is not. The
-                  first is a double count; the two are told apart by whether an
-                  open, same-numbered road runs alongside.
-  ランプ・連結路  highway=*_link. A ramp is 附属物, not route length.
-  上下線分離      a way with a same-numbered way running alongside, both one-way:
-                  two carriageways, one road. Measured geometrically — see
-                  paired_fraction. The ledger holds one length and the map two,
-                  so half the paired length is the excess.
-  旧道            both sides count 旧道 — the ledger inside 実延長, as its own
-                  column — so this is a classification difference, not a length
-                  one. It is reported next to the ledger's 旧道 column and left
-                  out of the arithmetic.
+  海上区間        台帳の未供用には 1,953 km の海が入る。地図が持つのは、ルート
+                  リレーションが含む航路の way だけである。
+  工事中・未開通  OSM の `construction` は、まだ無い道を造ることだけでなく、
+                  既に開通していて台帳にも載っている道を造り直すことも指す。
+                  前者は二重計上で、二つは同じ番号の開通済みの道が並んで走って
+                  いるかどうかで見分ける。
+  ランプ・連結路  highway=*_link。ランプは附属物であって路線の延長ではない。
+  上下線分離      同じ番号の way が並んで走り、どちらも一方通行である way。
+                  車道が二本で道は一本である。測り方は幾何的で、
+                  paired_fraction を参照。台帳は 1 本ぶん、地図は 2 本ぶんを
+                  持つので、並走の長さの半分が超過ぶんになる。
+  旧道            両方とも旧道を数える——台帳は実延長の中に、専用の欄として持つ
+                  ——ので、これは分類の差であって延長の差ではない。台帳の旧道の
+                  欄の隣に並べて報告し、計算からは外す。
 
-What this script deliberately does not do is compare prefecture by prefecture.
-The regions are rectangles and neighbours spill in, so a per-prefecture figure
-would be measuring the boxes. Nationwide totals are unaffected: every way is
-counted once, by id, whichever boxes hold it.
+このスクリプトが意図してやらないのは、都道府県別の突き合わせである。地域は矩形で
+隣県が食み込むので、県ごとの数は bbox を測ることになる。全国計は影響を受けない。
+どの bbox に入っていようと、way は id で一度だけ数えるからである。
 
-Usage:  uv run pipeline/compare_annual_report.py
-        uv run pipeline/compare_annual_report.py --distance 60
+使い方:  uv run pipeline/compare_annual_report.py
+         uv run pipeline/compare_annual_report.py --distance 60
 """
 from __future__ import annotations
 
@@ -59,31 +57,31 @@ from regions import REGIONS
 
 REPORT_CSV = Path(__file__).with_name("annual_report_2025.csv")
 
-# How far apart two carriageways of one road may be and still be one road.
-# Japanese divided roads sit 5-20 m apart in town and 30-40 m apart where the
-# carriageways take separate cuttings or tunnels. Past that they stop being one
-# road in any useful sense. 40 m is the working figure; --distance re-measures
-# with another, and docs/results.md records what 25 m and 60 m give.
+# 1 本の道の二つの車道が、どれだけ離れていてもなお 1 本の道と見なせるか。
+# 日本の上下線分離は、市街地で 5〜20 m、車道が別々の切り通しやトンネルに入る所で
+# 30〜40 m である。それを超えると、どんな意味でも 1 本の道ではなくなる。40 m を
+# 実務上の値として使う。--distance で別の値でも測れる。25 m と 60 m の結果は
+# docs/results.md に記録してある。
 PAIR_DISTANCE_M = 40.0
 
-# A sample every 25 m along each way. Ways are short — 70,376 km over 151,114 of
-# them is 466 m each — and a carriageway pair rarely begins or ends inside one,
-# so finer sampling costs time and moves nothing.
+# way に沿って 25 m ごとに標本を取る。way は短い——70,376 km を 151,114 本で
+# 割ると 1 本 466 m である——うえ、車道の対が way の途中で始まったり終わったり
+# することはまず無いので、これより細かく取っても時間がかかるだけで値は動かない。
 SAMPLE_M = 25.0
 
-# Two ways are parallel if their bearings differ by less than this, modulo 180°.
-# Carriageways are drawn in opposite directions, so their signed bearings differ
-# by ~180° and their unsigned ones by ~0°.
+# 二つの way は、方位の差がこれ未満(180 度を法とする)なら平行と見なす。上下線は
+# 互いに逆向きに描かれるので、符号付きの方位は約 180 度、符号を落とせば約 0 度
+# 違う。
 PARALLEL_DEG = 30.0
 
-# The probe ignores anything within 4 m sideways. Two carriageways are never
-# that close, and without the gap a way would pair with the one it shares a
-# node with at a junction.
+# 横方向に 4 m 以内にある物は、探りの対象から外す。二つの車道がそこまで近づく
+# ことは無く、この隙間が無いと、交差点でノードを共有している相手と対になって
+# しまう。
 PROBE_MIN_M = 4.0
 
-# Which kinds can double-count each other. `ferry`, `foot` and `steps` cannot:
-# a sea section has nothing beside it, and a 点線国道 footpath is the only thing
-# there is. They are compared to the ledger as whole categories instead.
+# どの区分どうしが二重に数えあうか。`ferry`・`foot`・`steps` は数えあわない。
+# 海上区間の隣には何も無く、点線国道の徒歩道はそこにある唯一の物である。この
+# 三つは、区分まるごとで台帳と突き合わせる。
 KIND_GROUP = {
     "road": "open", "expressway": "open",
     "construction": "build", "unopened": "build",
@@ -96,12 +94,11 @@ LENGTH_COLUMNS = ("total_m", "concurrent_m", "unopened_m", "unopened_sea_m",
 
 # ------------------------------------------------------------------ ledger ---
 def load_report() -> dict[str, float]:
-    """The transcribed 表8 rows, summed, in kilometres.
+    """写し取った表 8 の行を合計し、km で返す。
 
-    kind=pref and kind=city are disjoint: a 政令指定都市 administers its own
-    national routes and does not sit inside its prefecture's row. Both are
-    added. The sheet's own 合計 row is transcribed as well and checked against
-    that sum, which is the only mechanical guard against a transcription slip.
+    kind=pref と kind=city は互いに交わらない。政令指定都市は自分の国道を自分で
+    管理し、県の行の中には入らないので、両方を足す。表自身の合計の行も写し取って
+    あり、この和と突き合わせる。写し間違いを機械的に防げるのはそこだけである。
     """
     lines = [ln for ln in REPORT_CSV.read_text(encoding="utf-8").splitlines()
              if not ln.startswith("#")]
@@ -123,24 +120,24 @@ def load_report() -> dict[str, float]:
 
 # ---------------------------------------------------------------- geometry ---
 def bearing(a: tuple[float, float], b: tuple[float, float]) -> float:
-    """Direction of a-b in degrees, modulo 180: which line, not which way."""
+    """a から b の向きを度で、180 度を法として返す。どちらの線かであって、
+    どちら向きかではない。"""
     return math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) % 180.0
 
 
 def parallel(one: float, other: float) -> bool:
-    """Are two bearings within PARALLEL_DEG of each other, either way round?"""
+    """二つの方位が、向きを問わず PARALLEL_DEG 以内に収まっているか。"""
     d = abs(one - other)
     return min(d, 180.0 - d) <= PARALLEL_DEG
 
 
 def probe_hit(p, v, q1, q2, reach: float) -> float | None:
-    """Where the line through p across v crosses segment q1-q2, as a distance.
+    """p を通り v を横切る線が線分 q1-q2 と交わる位置を、距離として返す。
 
-    Sideways from the sample point, both ways, out to `reach`; None if nothing
-    is there. A sideways probe rather than a nearest-segment search because the
-    way a road continues into is *ahead* of it, not beside it. Nearest-segment
-    reads every junction as a carriageway pair: measured over 長野県 it returned
-    930 km of paired length against this probe's 532 km.
+    標本の点から横方向へ、両側に `reach` まで探る。何も無ければ None を返す。
+    最近傍の線分を探すのではなく横へ探るのは、道が続いていく先は横ではなく前だ
+    からである。最近傍で探すと、どの交差点も車道の対に読める。長野県で測ると、
+    この探りの 532 km に対して 930 km の並走を返した。
     """
     qx, qy = q2[0] - q1[0], q2[1] - q1[1]
     denom = v[0] * qy - v[1] * qx
@@ -156,18 +153,17 @@ def probe_hit(p, v, q1, q2, reach: float) -> float | None:
 
 # ------------------------------------------------------------------- input ---
 def load_region(region: str) -> list[dict]:
-    """One region's arcs, with the way tags the ledger comparison needs.
+    """1 地域のアークと、台帳との突き合わせに必要な way のタグ。
 
-    `oneway` and `highway` are not in the GeoJSON — the map has no use for them
-    — so they come from the same raw cache build_routes.py read. Both files are
-    written from one .osm.pbf, so the way ids line up exactly. A cache cut before
-    build_routes.TAGS_USED gained `oneway` has no such tag; run `mise run
-    extract` again if the one-way figures come out at zero.
+    `oneway` と `highway` は GeoJSON に無い——地図に使い道が無いためである——ので、
+    build_routes.py が読んだのと同じ生のキャッシュから取る。どちらのファイルも
+    1 つの .osm.pbf から書かれているので、way id はぴたりと揃う。
+    build_routes.TAGS_USED が `oneway` を持つ前に切ったキャッシュにはそのタグが
+    無い。一方通行の数が 0 になるようなら `mise run extract` をやり直す。
 
-    Coordinates become metres in a local equirectangular frame, the same way
-    compare_n13.py measures distance. A region spans a few degrees, so the
-    east-west scale is a couple of percent out at the top and bottom of the
-    tallest box — immaterial against a 40 m threshold.
+    座標は、compare_n13.py が距離を測るのと同じやり方で、局所的な正距円筒の枠の
+    中の m に直す。地域は数度に及ぶので、最も背の高い bbox の上端と下端では東西方向の
+    尺度が数 % ずれるが、40 m のしきい値に対しては問題にならない。
     """
     raw_path = CACHE / f"{region}.raw.json"
     if not raw_path.exists():
@@ -198,8 +194,8 @@ def load_region(region: str) -> list[dict]:
             "highway": highway,
             "link": highway.endswith("_link")
                     or (t.get("construction") or "").endswith("_link"),
-            # `-1` is one-way against the drawn direction. `reversible` and
-            # `alternating` are single-carriageway arrangements, not two roads.
+            # `-1` は描かれた向きと逆の一方通行である。`reversible` と
+            # `alternating` は車道 1 本の運用であって、道が二本あるのではない。
             "oneway": t.get("oneway") in ("yes", "-1", "1", "true"),
             "pts": [(c[0] * kx, c[1] * ky) for c in f["geometry"]["coordinates"]],
         })
@@ -208,10 +204,10 @@ def load_region(region: str) -> list[dict]:
 
 # ----------------------------------------------------------------- pairing ---
 def build_grid(arcs: list[dict], cell: float) -> dict:
-    """Segment index, cell side = the probe's reach.
+    """線分の索引。セルの一辺は探りの届く距離に等しい。
 
-    With the cell equal to the reach, whatever the probe can touch is inside the
-    3x3 window around the sample's own cell.
+    セルを届く距離と同じにしておけば、探りが触れうる物は、標本のセルを中心と
+    する 3x3 の窓の中に必ず収まる。
     """
     grid = defaultdict(list)
     for ai, a in enumerate(arcs):
@@ -228,13 +224,12 @@ def build_grid(arcs: list[dict], cell: float) -> dict:
 
 def counterpart(arc: dict, ai: int, p, u, arcs: list[dict], grid, cell: float,
                 reach: float) -> dict | None:
-    """The nearest way running alongside `arc` at point `p`, if there is one.
+    """点 p で `arc` と並んで走る、最も近い way。無ければ返さない。
 
-    Same-numbered only: two *different* routes side by side are two roads and
-    the ledger counts both. Of its own kind first — an open road beside an open
-    road is a carriageway pair even when a way under construction happens to be
-    nearer, and taking the nearer one would move the same metres into a
-    different cause.
+    同じ番号の物だけを見る。別々の路線が並んでいるなら道は二本で、台帳も両方を
+    数える。同じ区分の物を先に選ぶ——開通済みの道の隣にある開通済みの道は、工事中
+    の way がたまたま近くにあっても車道の対であり、近いほうを選ぶと、同じ距離が
+    別の原因へ移ってしまう。
     """
     vx, vy = -u[1], u[0]
     best: dict[str, dict | None] = {"same": None, "other": None}
@@ -269,13 +264,13 @@ def counterpart(arc: dict, ai: int, p, u, arcs: list[dict], grid, cell: float,
 
 def paired_fraction(arc: dict, ai: int, arcs: list[dict], grid, cell: float,
                     reach: float) -> dict[tuple[str, str, bool], float]:
-    """Metres of this arc with a same-numbered way alongside, by what kind.
+    """このアークのうち、同じ番号の way が並んでいる長さを m で、区分ごとに返す。
 
-    Keyed by (this arc's kind, the neighbour's group, both are one-way), which
-    is what lets the causes be told apart afterwards: two open carriageways are
-    one thing, a road being rebuilt beside the one it replaces is another. The
-    arc's own kind is kept rather than its group so the report can say how much
-    of the doubling is 自動車専用道路, where two carriageways are the norm.
+    鍵は (このアークの区分, 隣の way の群, 両方とも一方通行か) である。後から原因
+    を見分けられるのはこの鍵のおかげである。開通済みの車道が二本並ぶのと、置き換え
+    られる道の隣で造り直しが進むのとは別のことである。アーク自身の区分を群ではなく
+    そのまま残すのは、二重計上のうちどれだけが自動車専用道路——車道が二本あるのが
+    普通の区分——なのかを報告で述べられるようにするためである。
     """
     out: dict[tuple[str, str, bool], float] = defaultdict(float)
     pts = arc["pts"]
@@ -285,9 +280,9 @@ def paired_fraction(arc: dict, ai: int, arcs: list[dict], grid, cell: float,
         if seglen == 0.0:
             continue
         u = ((x2 - x1) / seglen, (y2 - y1) / seglen)
-        # Rounded up, so no sample ever stands for more than SAMPLE_M of road.
-        # Truncating gave a 49 m segment one sample and let that single probe
-        # decide all 49 m, which is not a measurement every 25 m.
+        # 切り上げる。1 つの標本が SAMPLE_M より長い道を代表しないようにする
+        # ためである。切り捨てると 49 m の線分が標本 1 つになり、その 1 回の
+        # 探りが 49 m 全部を決めてしまう。それは 25 m ごとの計測ではない。
         n = max(1, math.ceil(seglen / SAMPLE_M))
         step = seglen / n
         for i in range(n):
@@ -302,12 +297,12 @@ def paired_fraction(arc: dict, ai: int, arcs: list[dict], grid, cell: float,
 
 # ----------------------------------------------------------------- measure ---
 def measure(reach: float) -> dict:
-    """Every way once, nationwide, with paired length measured inside its region.
+    """全国の way を一度ずつ。並走の長さは、その way が属する地域の中で測る。
 
-    Region files overlap heavily — 151,114 distinct ways appear 311,380 times —
-    so a way is counted for the first region whose file holds it. Pairing is
-    still measured within that region against everything that file contains: a
-    carriageway's twin is 40 m away and therefore in the same box by definition.
+    地域のファイルは大きく重なる——別々の way 151,114 本が延べ 311,380 回現れる
+    ——ので、way はそれを含む最初の地域のぶんとして数える。並走はその地域の中で、
+    そのファイルが持つすべてを相手に測る。車道の相方は 40 m 以内にあり、定義上
+    同じ bbox の中にいる。
     """
     seen: set[int] = set()
     km_by_kind: dict[str, float] = defaultdict(float)
@@ -338,10 +333,10 @@ def measure(reach: float) -> dict:
             if a["oneway"]:
                 total["oneway_arcs"] += 1
 
-        # A 旧道 is a road in its own right to the ledger (実延長's 旧道 column),
-        # not a duplicate of the road that bypassed it, so it neither pairs nor
-        # serves as a neighbour. Ramps are held out for the mirror-image reason:
-        # they are counted whole already, under ランプ・連結路.
+        # 台帳にとって旧道はそれ自体で 1 本の道であり(実延長の旧道の欄)、それを
+        # 迂回した道の複製ではない。だから対にもならず、隣の相手にもならない。
+        # ランプを外すのは裏返しの理由による。ランプ・連結路として既に丸ごと
+        # 数えてあるためである。
         pool = [a for a in arcs
                 if a["kind"] in KIND_GROUP and not a["former"] and not a["link"]]
         grid = build_grid(pool, reach)
@@ -359,11 +354,10 @@ def measure(reach: float) -> dict:
 
 # ------------------------------------------------------------------ report ---
 def base_timestamp() -> str:
-    """The OSM cut the regions were built from, refusing to average.
+    """地域を生成した元の OSM の切り出し時刻。平均は取らない。
 
-    Regions built from different cuts would make the nationwide total mean
-    nothing in a way the total itself could never show, so a mixed build is
-    named instead of hidden.
+    別々の切り出しから作った地域が混ざると、全国計は意味を失うが、合計そのものは
+    それを決して示さない。だから混ざった生成物は、隠さずに名指しする。
     """
     stamps = {json.loads((REGION_DIR / f"{r}.meta.json").read_text(encoding="utf-8"))
               ["osm_timestamp"] for r in REGIONS}
@@ -371,10 +365,10 @@ def base_timestamp() -> str:
 
 
 def row(label: str, ledger: float | None, map_km: float | None) -> str:
-    """One comparison line: the ledger, the map, and the gap between them.
+    """突き合わせの 1 行。台帳の値、地図の値、そしてその差である。
 
-    Either side may be None — 徒歩道 has no column in the ledger to compare
-    against, and saying so is not the same as calling it zero.
+    どちらの側も None になりうる——徒歩道には突き合わせる欄が台帳に無い。そう
+    述べることは、0 と述べることとは違う。
     """
     if ledger is None or map_km is None:
         gap = ""
@@ -425,15 +419,15 @@ def main() -> None:
                    if KIND_GROUP[mine] == group and other == neighbour
                    and (both_oneway is None or one == both_oneway))
 
-    # Halved: both carriageways see each other, so one road contributes its
-    # length twice to the paired total and only the second copy is the excess.
+    # 半分にする。二つの車道は互いを見つけるので、1 本の道が並走の合計へ自分の
+    # 長さを二度持ち込む。超過はその二つ目の写しだけである。
     dual_km = paired_sum("open", "open", True) / 2
     dual_by_kind = {mine: v / 2 for (mine, other, one), v in paired.items()
                     if other == "open" and one and KIND_GROUP[mine] == "open"}
     parallel_km = paired_sum("open", "open", False) / 2
     build_dual_km = paired_sum("build", "build") / 2
-    # Not halved, and only in this direction: the open road beside it is the one
-    # the ledger already counts, so the whole of the construction way is extra.
+    # こちらは半分にせず、しかもこの向きだけを数える。隣の開通済みの道こそ台帳が
+    # 既に数えている物なので、工事中の way は丸ごと超過である。
     rebuild_km = paired_sum("build", "open")
 
     comparable = report["total"] - report["concurrent"]
@@ -475,12 +469,11 @@ def main() -> None:
         print(f"  {label:34} {value:+12,.1f}")
     print(f"  {'合計':34} {dedup_km - comparable:+12,.1f}")
 
-    # The ledger measures, independently, how much of its 実延長 has a central
-    # reservation — which is what makes a road two carriageways in OSM in the
-    # first place. It is not the same question (a 中央帯 is a structure with a
-    # width; OSM splits a way for a painted separator too, and 表8's column
-    # leaves out the 高速自動車国道 concurrency that our expressway arcs carry),
-    # but the two ought to land in the same place, and they do.
+    # 台帳は、実延長のうち中央帯を持つ長さを独立に測っている——そもそも OSM で
+    # 道が二本の車道になるのはそれが理由である。まったく同じ問いではない(中央帯は
+    # 幅を持つ構造物であり、OSM は塗り分けただけの分離帯でも way を分ける。しかも
+    # 表 8 のこの欄は、こちらの自動車専用道路のアークが持つ高速自動車国道との重用
+    # を外している)が、二つは近い値に落ち着くはずであり、実際そうなる。
     print("\n裏取り")
     print(row("中央帯設置 / 上下線分離の実測", report["median"], dual_km))
     print("  " + "  ".join(f"うち {k} {v:,.1f} km"

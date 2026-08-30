@@ -2,33 +2,31 @@
 # requires-python = ">=3.12"
 # dependencies = ["requests"]
 # ///
-"""Fetch the raw OSM objects for one region from Overpass and cache them.
+"""1 地域ぶんの生の OSM の物を Overpass から取り、キャッシュする。
 
-Three separate queries, because they answer three different questions and
-because one combined query is both slower and impossible to de-merge (a way
-returned by two `out` statements arrives twice, and the ids-only copy is
-indistinguishable from the copy with geometry):
+問い合わせを三つに分けるのは、答える問いが三つ別々だからであり、一つにまとめた
+問い合わせは遅いうえに分け直せないからでもある(二つの `out` が返した way は二度
+届き、id だけの写しと形を持つ写しを見分けられない)。
 
-  1. national-route relations (+ their child relations) and every way they
-     contain — the trusted core;
-  2. national-grade ways carrying a numeric `ref` or a 国道N号 name, whether or
-     not any relation contains them — route relations are maintained far less
-     diligently than the ways themselves, so bypasses that have been open for
-     years are routinely absent from them;
-  3. *competing* route relations, tags and members — a negative signal, since
-     都道府県道 use the same bare numeric `ref` format as national routes, and
-     an operator-branded route numbering scheme (首都高速道路 etc.) makes the
-     identical kind of claim under a `network` that just isn't `JP:`-prefixed
-     (CASES.md 20). Kept as whole relations (not a flat way-id set) so a
-     way's own claim can be checked against the specific number a competing
-     relation makes for it, rather than being disqualified by mere membership
-     in one.
+  1. 国道のルートリレーション(とその子リレーション)と、それが含む way すべて
+     ——信用できる中核である。
+  2. 国道の格を持ち、数字だけの `ref` か 国道N号 の名前を持つ way。どのリレー
+     ションが含んでいるかは問わない——ルートリレーションの整備は way 自身の整備
+     より大きく遅れるので、開通から何年も経つバイパスがそこに無いことは珍しく
+     ない。
+  3. 競合するルートリレーションと、そのタグとメンバー——負の証拠である。都道府県道
+     は国道と同じ、数字だけの `ref` の書式を使う。事業者が自分の路線番号を名乗る
+     体系(首都高速道路など)も、`JP:` で始まらない `network` の下でまったく同じ形の
+     主張をする(CASES.md 20)。平らな way id の集合ではなくリレーションのまま持つ
+     ので、way 自身の主張を、競合するリレーションがその way について述べる番号と
+     突き合わせられる。ただ所属しているというだけで失格にせずに済む。
 
-Freshness matters and is not automatic: public Overpass mirrors can fall
-badly behind. We probe every endpoint, pick the freshest, and record its
-`timestamp_osm_base` so the map can state which day it is showing.
+新しさは効いてくるうえに自動では保たれない。公開されている Overpass のミラーは
+大きく遅れることがある。だからすべての配布元を測って最も新しい物を選び、その
+`timestamp_osm_base` を記録する。地図がいつ時点を出しているかを述べられる
+ようにするためである。
 
-Usage:  uv run pipeline/fetch_osm.py [region]
+使い方:  uv run pipeline/fetch_osm.py [地域]
 """
 from __future__ import annotations
 
@@ -48,23 +46,23 @@ ENDPOINTS = [
     "https://overpass.private.coffee/api/interpreter",
 ]
 
-# Warn if the freshest mirror we can reach is older than this.
+# 届く範囲で最も新しいミラーがこれより古ければ警告する。
 STALE_AFTER_DAYS = 7
 
-# Grades a general national route is plausibly mapped at. `primary` is
-# deliberately excluded: in this region 3,305 relation-less `primary` ways carry
-# a numeric ref and *none* is named 国道, so admitting them would drag in
-# thousands of 主要地方道 for no gain.
+# 一般国道が描かれうる道路の格。`primary` は意図して外す。この地域では、リレー
+# ションに属さない `primary` の way 3,305 本が数字だけの ref を持ち、そのうち
+# 国道 と名乗る物は 1 本も無い。認めれば、得る物が無いまま主要地方道を数千本
+# 引き込むことになる。
 NATIONAL_GRADES = "trunk|motorway|construction"
 
 UA = {"User-Agent": "NationalRouteMap/0.2 (build pipeline)"}
 
 
 def probe(ep: str, tries: int = 3) -> tuple[str | None, str | None]:
-    """Return (timestamp_osm_base, error) for an endpoint.
+    """配布元の (timestamp_osm_base, エラー) を返す。
 
-    Public mirrors answer 429/504 under load even for a trivial query, so a
-    single failure says nothing about availability.
+    公開ミラーは、ごく軽い問い合わせでも負荷が高ければ 429 や 504 を返す。
+    1 回の失敗は、使えるかどうかについて何も述べていない。
     """
     last = "unknown"
     for i in range(tries):
@@ -130,14 +128,14 @@ def main() -> None:
     ep, base_ts = pick_endpoint()
     print(f"\nfetching {region} ({bb})")
 
-    # 1. the trusted core: national route relations and their member ways.
+    # 1. 信用できる中核。国道のルートリレーションと、そのメンバーの way。
     #
-    # `network=JP:national` is not the only evidence a relation is a 国道 route.
-    # Measured over the whole country, 582 route=road relations named 国道N号
-    # carry that network and 43 carry no `network` at all — and for 国道478号 the
-    # untagged one is the only relation there is. Name is the same evidence
-    # RULES.md 問1 規則 b accepts from a way, so it is accepted here too, unless
-    # a 都道府県道 network says otherwise.
+    # リレーションが国道の路線である証拠は `network=JP:national` だけではない。
+    # 全国で測ると、国道N号 という名前の route=road のリレーションのうち 582 が
+    # その network を持ち、43 は `network` を持たない——国道478号については、
+    # タグの無いほうが唯一のリレーションである。名前は、RULES.md 問 1 規則 b が
+    # way について認めるのと同じ証拠なので、ここでも認める。都道府県道の network
+    # がそうでないと述べている場合を除く。
     core = run(ep, f"""
 [out:json][timeout:900];
 (
@@ -152,7 +150,7 @@ way(r.rels)({bb});
 out meta geom;
 """, "national relations + members")
 
-    # 2. candidates the relations may have missed
+    # 2. リレーションが取りこぼしたかもしれない候補。
     cand = run(ep, f"""
 [out:json][timeout:900];
 (
@@ -162,23 +160,22 @@ out meta geom;
 out meta geom;
 """, "candidate ways")
 
-    # 3. negative signal: which routes competing relations claim, and which
-    # ways they hold. `out body` (tags + member list, no geometry — the ways'
-    # own coordinates are irrelevant here) instead of the old ids-only member
-    # dump: a bare way-id set couldn't distinguish 広島県道243号広島港線
-    # claiming way X from 国道2号 also holding way X for its own reasons,
-    # so build_routes.py had to treat "any competing relation touches this
-    # way" as disqualifying — which throws out 広島南道路 (real 国道2号, only
-    # incidentally still listed on an unrelated old 県道 relation) exactly
-    # like it throws out a genuine 都道府県道 number collision. Keeping the
-    # claimed *number* per relation lets the guard compare numbers instead of
-    # just presence.
+    # 3. 負の証拠。競合するリレーションがどの路線を主張し、どの way を抱えて
+    # いるか。以前の id だけのメンバー一覧ではなく `out body`(タグとメンバーの
+    # 一覧。形は不要である——way 自身の座標はここでは関係が無い)を取る。平らな
+    # way id の集合では、広島県道243号広島港線が way X を主張していることと、
+    # 国道2号が別の理由で同じ way X を抱えていることを見分けられない。だから
+    # build_routes.py は「競合するリレーションがこの way に触れている」ことを
+    # 失格の理由にするしかなく——それは、本物の都道府県道との番号の衝突と
+    # まったく同じように、広島南道路(本物の国道2号で、たまたま無関係な古い
+    # 県道リレーションに残っていただけ)まで捨てる。リレーションごとに主張して
+    # いる番号を保つことで、裏取りは在る無しではなく番号を比べられる。
     #
-    # `network~"^JP:prefectural"` catches 都道府県道. `network` present but not
-    # `JP:`-prefixed catches an operator naming its own route numbers instead
-    # (首都高速道路, 阪神高速道路, …) — 首都高速都心環状線 (`ref=1`, no `高速N号`
-    # in its name for CASES.md 9's guard to match) sits on exactly such a
-    # relation. See CASES.md 20.
+    # `network~"^JP:prefectural"` は都道府県道を捕まえる。`network` が在って
+    # `JP:` で始まらない物は、事業者が自分の路線番号を名乗っている場合を捕まえる
+    # (首都高速道路、阪神高速道路 など)——首都高速都心環状線(`ref=1`。名前に
+    # `高速N号` が無いので CASES.md 9 の見張りには当たらない)は、まさにその形の
+    # リレーションに載っている。CASES.md 20 を参照。
     competing = run(ep, f"""
 [out:json][timeout:900];
 (

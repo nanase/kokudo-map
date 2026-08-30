@@ -1,5 +1,5 @@
-"""Locate the project. pipeline/ sits directly under the project root, so the
-depth is fixed."""
+"""リポジトリの場所を決める。pipeline/ はルートの直下にあるので、深さは決まって
+いる。"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,9 +19,9 @@ N03 = ROOT / "build" / "n03"
 # 一般国道の路線を指定する政令の生 XML と、そこから作った参照表。
 DECREE = ROOT / "build" / "decree"
 
-# Per-region GeoJSON and meta. Intermediate, not served: nationwide they come to
-# ~70 MB across 47 files, and the viewer reads the packed tiles instead.
+# 地域ごとの GeoJSON と meta。中間成果であって配信物ではない。全国では 47 ファイル
+# 約 70 MB になり、閲覧側は代わりに詰めたタイルを読む。
 REGIONS = ROOT / "build" / "regions"
 
-# What the viewer actually fetches.
+# 閲覧側が実際に取る物。
 DATA = ROOT / "web" / "data"

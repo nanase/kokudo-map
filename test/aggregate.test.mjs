@@ -1,16 +1,15 @@
-/* The panel's numbers.
+/* 画面が出す数。
  *
- * This is the arithmetic the map exists for. A conventional map answers "how
- * long is 国道18号" by adding up the road it drew, having already dropped the
- * numbers it rounded away; and a table of per-route totals answers "how much
- * road is selected" by adding routes together, which counts every concurrent
- * arc once per designation on it. Both are wrong in the same direction, and
- * both look plausible.
+ * この地図が存在する理由そのものの計算です。ふつうの地図は「国道 18 号は何 km
+ * か」に、自分が描いた道を足して答えます。丸めて捨てた番号は既に落ちた後です。
+ * 路線別の合計表は「選んだぶんの道はどれだけか」に路線を足して答えるので、
+ * 重用区間のアークをその指定の数だけ数えます。どちらも同じ向きに間違っており、
+ * どちらももっともらしく見えます。
  *
- * So the rows are per *combination* of designations, and these two sums read
- * them two different ways: `routesOf` fans a combination out to each of its
- * routes, `statsFor` adds each combination at most once. Getting those two the
- * wrong way round is the bug this file is here to catch.
+ * だから行は指定の組み合わせごとに持ち、この二つの和はそれを別々の読み方で
+ * 読みます。`routesOf` は組み合わせをその路線それぞれへ開き、`statsFor` は
+ * 組み合わせを高々 1 回だけ足します。この二つを取り違えることが、このファイル
+ * が捕まえようとしている不具合です。
  *
  * 旧道はもう一つの軸である。区分ではないので、`formerKmFor` の値を
  * `kindsFor` の合計に足すと、その道を二度数える。
@@ -197,7 +196,7 @@ describe('concurrencies', () => {
 
   test('絞り方は statsFor と同じである', () => {
     // 同じ選択に対して、重用行を数え上げた結果が両者で一致します。写しを持って
-    // いたころは、ここが黙ってずれる余地がありました。
+    // いたころは、ここが暗黙のうちにずれる余地がありました。
     for (const sel of [
       new Set(),
       new Set([7]),
