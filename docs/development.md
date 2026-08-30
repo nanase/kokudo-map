@@ -56,8 +56,13 @@ mise run serve        # http://localhost:8000/
 | `mise run compare-n13 <地域>` | 国土数値情報 N13(道路)と突き合わせ、OSM に無い国道の候補を探す |
 | `mise run apply-n13 <地域>` | former のうち N13 で指定解除を機械確認できたものに revoked を書き込む |
 | `mise run compare-annual-report` | 道路統計年報と延長を突き合わせ、差の内訳を出す |
+| `mise run survey-pref` | 都道府県道になりうる way を全国から測り、`build/survey/` に残す |
+| `mise run compare-annual-report-pref` | 都道府県道の延長を年報と突き合わせ、差の内訳と重用の復元率を出す |
+| `mise run compare-n13-pref` | N13 と突き合わせ、OSM に無い都道府県道の量を測る |
 | `mise run serve` | ローカルサーバを起動する |
 | `mise run render-check` | Chromium で実描画を確認する |
+
+`mise run survey-pref` は pbf を一度読み、都道府県道になりうる way を `build/survey/` に県ごとに残します。47 ファイル約 200 MB です。都道府県道の突き合わせはそこを読むので、何度やり直しても pbf を読み直しません。
 
 国土数値情報 N03(行政区域)は初回に取ります。`mise run extract` は way の所属都道府県を決めるのに現行の年版を、`mise run decree` は政令の地名を引くのに 2000 年版も使います。47 都道府県ぶん二つで約 530 MB です。以後はキャッシュから読みます。
 
