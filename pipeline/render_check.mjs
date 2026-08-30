@@ -1131,10 +1131,10 @@ ok(
 );
 
 // 期待する行の文面は detailHTML() 自身から得る。fmtKm の丸めと formerRowHTML の
-// 「0.0 なら行を出さない」規則をここへ書き写すのではない(CLAUDE.md:
-// 検証スクリプトは本物の定義を読み込んで検査する). Only former_km needs to be
-// 本物の、いま読んだ値である。`route` の残りは実在する路線でありさえすればよい。
-// detailHTML がパネルの残りを組む材料になるためである。
+// 「0.0 なら行を出さない」規則をここへ書き写すのではない(CLAUDE.md の
+// 「検証スクリプトは本物の定義を読み込んで検査する」)。本物でなければならないの
+// は former_km だけで、それはいま読んだ値である。`route` の残りは実在する路線で
+// ありさえすればよい。detailHTML がパネルの残りを組む材料になるためである。
 const expectedFormerRow = (ref) => {
   const route = routesOf(meta.combinations).find((r) => r.ref === ref);
   if (!route) return undefined; // ref not in this build at all

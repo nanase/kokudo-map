@@ -65,7 +65,7 @@ OSM だけを見ていても分かりません。参照データが必要です�
   - 電子国土基本図由来で、地理院地図と同じ出典
   - 道路分類に国道があるが、路線番号は持たない
   - 我々の線でカバーされない国道を抽出すれば、地理院地図との差分になる
-  - `uv run pipeline/compare_n13.py <地域>` (`mise run compare-n13`) が実行する
+  - `uv run pipeline/compare_n13.py <地域>` (`mise run compare-n13`) を実行する
     - 取得・しきい値・他都道府県への広げ方は issue #1 にまとめてある
   - former 孤立候補は `region all` (`mise run compare-n13 all`) で出す
     - 地理院地図で指定解除済みかもしれない旧道のこと
@@ -75,7 +75,7 @@ OSM だけを見ていても分かりません。参照データが必要です�
     - `compare_n13.py` はここでも読み取り専用。書き込みは `apply_n13.py` だけが行う
 - 道路統計年報 表 8(全国計のみ実装済み)
   - 一般国道の総延長・重用延長・未供用延長・実延長を都道府県別に持つ
-  - `uv run pipeline/compare_annual_report.py` (`mise run compare-annual-report`) が全国計で突き合わせ、差の内訳を原因ごとに出す
+  - `uv run pipeline/compare_annual_report.py` (`mise run compare-annual-report`) が全国計を突き合わせ、差の内訳を原因ごとに出す
   - 値は `pipeline/annual_report_2025.csv` に写してある
   - 結果は docs/results.md の検算の節にある
   - 都道府県別は未実装

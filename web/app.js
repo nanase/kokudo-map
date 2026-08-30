@@ -1157,8 +1157,8 @@ function updateStats() {
   const totals = statsFor(state.meta.combinations, sel);
   $('#stats').innerHTML = statsHTML(sel.size, state.routes.length, totals);
 
-  // 何もできないボタンは、押しても何も起きないのではなく、押せないことで
-  // doing nothing. 文字は持たないボタンなので、どれだけ取り消すかはラベルが述べる。
+  // 何もできないボタンは、押しても何も起きないのではなく、押せないことでそれを
+  // 述べる。文字を持たないボタンなので、どれだけ取り消すかはラベルが述べる。
   const clear = $('#sel-none');
   clear.disabled = sel.size === 0;
   const clearText = clearLabel(sel.size);

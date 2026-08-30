@@ -997,7 +997,7 @@ function scan(text, startCwd, depth, posix) {
 /**
  * 命令 1 つを判定する。止めるなら理由を、通すなら null を返す。
  *
- * 判定はここから下の scan() が全部持つ。stdin も標準出力も終了コード
+ * 判定は scan() が全部持つ。stdin も標準出力も終了コード
  * もこの関数には無いので、test/guard-data-dirs.test.mjs はこれを import
  * して繰り返し呼べる。1 例ごとに node を起こしていたころ、その 1 ファイル
  * だけでテスト全体の 21 秒を使っていた。
@@ -1032,7 +1032,9 @@ export function decide({ command, toolName, root }) {
 /**
  * stdin に届く PreToolUse を読み、止めるなら deny を書いて終わる。
  *
- * 読めなければ何も言わずに通す。フックが落ちて作業まで止まるのは行き過ぎである。
+ * 握りつぶすのは stdin の JSON を読めなかったときだけで、そのときは何も言わずに
+ * 通す。フックが落ちて作業まで止まるのは行き過ぎである。decide() の予期しない
+ * 例外は握りつぶさず、そのまま投げる(上を見よ)。
  */
 function main() {
   let input;
