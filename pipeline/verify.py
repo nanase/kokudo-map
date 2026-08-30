@@ -16,8 +16,9 @@ import sys
 from collections import Counter
 from datetime import datetime, timezone
 
-from _paths import REGIONS
+from _paths import CACHE, REGIONS
 from expectations import for_region
+from regions import REGIONS as REGION_BOXES
 
 region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
 expect = for_region(region)
@@ -53,6 +54,53 @@ check(not bad_n, f"n equals the designation count ({len(bad_n)} mismatches)")
 
 sorted_ok = all(f["properties"]["refs_list"] == sorted(f["properties"]["refs_list"]) for f in feats)
 check(sorted_ok, "refs_list is sorted ascending")
+
+# --- 所属都道府県 -----------------------------------------------------------
+# 生成物には所属県が出てこない。国道の番号は全国で一意なので、地図はそれを要らない。
+# 要るのは都道府県道である。番号は県の中でしか一意でなく、県道18号は 47 本ある。
+# 判定がそれを読むより先に、切り出しが正しく書けているかをここで見る。
+#
+# 「(県, 番号)の組が県内で妥当か」には、ここでは答えられない。その組を作る判定が
+# まだ無いためである(issue #98)。答えるのは compare_annual_report_pref.py で、
+# 県ごとに見つかった番号の数を年報の路線数と突き合わせる。
+raw = json.loads((CACHE / f"{region}.raw.json").read_text(encoding="utf-8"))
+cache_ways = [o for o in (*raw["core"], *raw["candidates"]) if o["type"] == "way"]
+
+missing_pref = [w["id"] for w in cache_ways if "pref" not in w]
+check(not missing_pref,
+      f"every way in the cache carries a prefecture ({len(missing_pref)} without)")
+
+unknown_pref = sorted({w["pref"] for w in cache_ways
+                       if w.get("pref") is not None and w["pref"] not in REGION_BOXES})
+check(not unknown_pref, f"every prefecture is a known region name ({unknown_pref})")
+
+# `prefs` を持つのは県境を跨いだ way だけで、その先頭は `pref` と同じである
+# (prefectures.write_pref)。1 つしか持たない `prefs` は、同じことを二度述べている。
+bad_prefs = [w["id"] for w in cache_ways if "prefs" in w
+             and (len(w["prefs"]) < 2 or w["prefs"][0] != w.get("pref")
+                  or any(p not in REGION_BOXES for p in w["prefs"]))]
+check(not bad_prefs,
+      f"prefs lists two or more known regions, led by pref ({len(bad_prefs)} broken)")
+
+
+def boxes_touch(one, other) -> bool:
+    """二つの bbox が重なるか。順は南・西・北・東である。"""
+    return not (one[2] < other[0] or one[0] > other[2]
+                or one[3] < other[1] or one[1] > other[3])
+
+
+# 面の索引が壊れれば、長野県の切り出しに沖縄県の way が現れる。この地域の矩形に
+# 触れる県の集合を超えた所属は、そういう壊れ方でしか出ない。
+touching = {r for r, spec in REGION_BOXES.items()
+            if boxes_touch(spec["bbox"], REGION_BOXES[region]["bbox"])}
+stray = sorted({w["pref"] for w in cache_ways if w.get("pref")} - touching)
+check(not stray, f"prefectures found are ones this bbox can touch ({stray})")
+
+own = sum(1 for w in cache_ways if w.get("pref") == region)
+crossing = sum(1 for w in cache_ways if "prefs" in w)
+homeless = sum(1 for w in cache_ways if w.get("pref") is None)
+print(f"NOTE  cache ways {len(cache_ways):,}: {own:,} in {region}, "
+      f"{crossing:,} crossing a boundary, {homeless:,} with no prefecture")
 
 # --- 区切り文字の工夫が、部分文字列の衝突を実際に防いでいるか --------------
 # 4 号は、14・24・40・400 号しか持たないアークに当たってはならない。
