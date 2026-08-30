@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   decreeTerminiOf,
   detailHTML,
+  fmtKm,
   relatedRoutesOf,
   wikipediaURL,
 } from '../web/detail.mjs';
@@ -186,6 +187,22 @@ describe('detailHTML — 区分別', () => {
       kinds: [{ kind: 'newkind', km: 1 }],
     });
     expect(html).toContain('newkind');
+  });
+
+  // round1() が 0.1 km 未満を切り捨てるので、地図には描かれているのに丸めた
+  // 値がちょうど 0 になる区分がある(#88)。行ごと落とすと「階段が 0.0 km
+  // ある」より悪い——「階段がある」という事実そのものが消える。
+  test('丸めて 0.0 km になる区分は行を落とさず「0.1 km 未満」と出す', () => {
+    const html = detailHTML({
+      route: route(),
+      kinds: [{ kind: 'steps', km: 0.04 }],
+    });
+    // 期待値も fmtKm で組む。'0.1' と書き写すと、小数点にコンマを使うロケール
+    // で実装の出力(fmtKm(0.1))と食い違う。
+    expect(html).toContain(
+      `<dt>${KIND_LABELS.steps}</dt><dd>${fmtKm(0.1)} km 未満</dd>`,
+    );
+    expect(html).not.toContain(`${fmtKm(0)} km</dd>`);
   });
 });
 
