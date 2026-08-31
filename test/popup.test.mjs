@@ -9,7 +9,10 @@ import { describe, expect, test } from 'bun:test';
 import {
   deepest,
   KIND_LABELS,
+  PREF_KIND_LABELS,
   popupHTML,
+  prefPopupHTML,
+  prefRefsOf,
   refsOf,
   SRC_LABELS,
 } from '../web/popup.mjs';
@@ -120,5 +123,99 @@ describe('popupHTML', () => {
     const html = popupHTML(arc({ id: 195557224 }));
     expect(html).toContain('https://www.openstreetmap.org/way/195557224');
     expect(html).toContain('>way/195557224</a>');
+  });
+});
+
+/* ---------------------------------------------------------- 都道府県道 --- */
+describe('prefRefsOf', () => {
+  test('区切り文字で囲まれた鍵の並びにする。数には直さない', () => {
+    expect(prefRefsOf(',nagano-2,nagano-93,')).toEqual([
+      'nagano-2',
+      'nagano-93',
+    ]);
+  });
+
+  test('空や欠落でも落ちない', () => {
+    expect(prefRefsOf('')).toEqual([]);
+    expect(prefRefsOf(undefined)).toEqual([]);
+  });
+});
+
+describe('prefPopupHTML', () => {
+  /* build_prefectural.py が書く属性です。国道と違って `updated` を持ちません。 */
+  const parc = (over) => ({
+    id: 173704782,
+    pref: 'nagano',
+    refs: ',nagano-60,',
+    n: 1,
+    kind: 'road',
+    rank: 'major',
+    src: 'relation',
+    former: 0,
+    revoked: 0,
+    name: '長野荒瀬原線',
+    km: 0.335,
+    ...over,
+  });
+
+  test('標識は県を伴う鍵を持つ。番号だけでは 47 本のどれか決まらない', () => {
+    const html = prefPopupHTML(parc(), '長野県');
+    expect(html).toContain('data-pref="nagano-60"');
+    expect(html).not.toContain('data-ref=');
+    expect(html).toContain('長野県道60号の詳細');
+  });
+
+  test('指定のぶんだけ標識が出て、重用数を述べる', () => {
+    expect(prefPopupHTML(parc(), '長野県')).toContain('単独指定');
+    const two = prefPopupHTML(
+      parc({ refs: ',nagano-60,nagano-399,', n: 2 }),
+      '長野県',
+    );
+    expect(two).toContain('2 重用');
+    expect(two.match(/class="shield-btn"/g)).toHaveLength(2);
+  });
+
+  test('県の呼び分けは県の名前が持つ', () => {
+    expect(prefPopupHTML(parc({ refs: ',tokyo-7,' }), '東京都')).toContain(
+      '東京都道7号',
+    );
+    expect(prefPopupHTML(parc({ refs: ',hokkaido-106,' }), '北海道')).toContain(
+      '北海道道106号',
+    );
+    expect(prefPopupHTML(parc({ refs: ',osaka-1,' }), '大阪府')).toContain(
+      '大阪府道1号',
+    );
+  });
+
+  test('区分は都道府県道の言い方に直す', () => {
+    // 「点線国道」「海上国道」は国道の呼び名です。都道府県道は持ちません。
+    const html = prefPopupHTML(parc({ kind: 'foot' }), '長野県');
+    expect(html).toContain(PREF_KIND_LABELS.foot);
+    expect(html).not.toContain(KIND_LABELS.foot);
+  });
+
+  test('最終更新の行は出さない。県道のアークがその欄を持たないため', () => {
+    const html = prefPopupHTML(parc(), '長野県');
+    expect(html).not.toContain('最終更新');
+    // 国道の側は今までどおり出す。
+    expect(popupHTML(arc())).toContain('最終更新');
+  });
+
+  test('残りの欄は国道と同じことを訊く', () => {
+    const html = prefPopupHTML(parc({ former: 1 }), '長野県');
+    expect(html).toContain('<dt>名称</dt><dd>長野荒瀬原線</dd>');
+    expect(html).toContain('<dt>区間長</dt><dd>0.34 km</dd>');
+    expect(html).toContain(SRC_LABELS.relation);
+    expect(html).toContain('<dt>備考</dt><dd>旧道</dd>');
+    expect(html).toContain('https://www.openstreetmap.org/way/173704782');
+  });
+
+  test('OSM の名称はエスケープしてから入れる', () => {
+    const html = prefPopupHTML(
+      parc({ name: '<img src=x onerror=alert(1)>' }),
+      '長野県',
+    );
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).not.toContain('<img');
   });
 });

@@ -19,6 +19,9 @@ const round1 = (km) => Math.round(km * 10) / 10;
 const touched = (c, selected) =>
   !selected.size || c.refs.some((r) => selected.has(r));
 
+/* 路線の既定の並べ方。国道は番号そのものが路線の鍵なので、数として比べる。 */
+const byNumber = (a, b) => a - b;
+
 /**
  * ビルドが配るのは 1 枚の表である。指定の組み合わせごとに 1 行で、延長・
  * アーク数・広がりを持つ。画面が出すものは、どれもその行の部分和である。
@@ -26,8 +29,12 @@ const touched = (c, selected) =>
  * 路線別の表では足りない。重用区間のアークは複数の路線に同時に属するので、
  * 路線の行を足すと共有部分を二重に数える——それは地図が隠すのをやめさせたい
  * 数そのものである。
+ *
+ * 数え方は路線の格に依らないので、都道府県道の県別 meta も同じ表である。違うのは
+ * 路線の鍵だけで——国道は番号 `18`、都道府県道は県を貼り付けた `nagano-18`——
+ * それは並べ方として受け取る(pipeline/rollup.mjs が同じ形で書いている)。
  */
-export function routesOf(combos) {
+export function routesOf(combos, compare = byNumber) {
   const by = new Map();
   for (const c of combos) {
     for (const ref of c.refs) {
@@ -43,13 +50,29 @@ export function routesOf(combos) {
       e.max_n = Math.max(e.max_n, c.n);
     }
   }
-  const out = [...by.values()].sort((a, b) => a.ref - b.ref);
+  const out = [...by.values()].sort((a, b) => compare(a.ref, b.ref));
   for (const e of out) {
     e.km = round1(e.km);
     e.conc_km = round1(e.conc_km);
   }
   return out;
 }
+
+/**
+ * その都道府県道 1 本の格。主要地方道か一般都道府県道かである。
+ *
+ * 境目の番号を持っているのは判定(pipeline/build_prefectural.py の `MAJOR_MAX`)
+ * なので、番号から決め直さない。読むのは組み合わせ表の `rank` だが、読めるのは
+ * その路線 1 本だけの行に限る——重用の行の `rank` は「重なっている路線のうち
+ * 一つでも主要地方道なら major」なので、一般都道府県道が主要地方道と重用して
+ * いる行にも major と書いてある。
+ *
+ * 1 本だけの行を持たない路線——延長のすべてが重用である路線——は 13,234 のうち
+ * 78 ある。その 78 では null を返す。欄が無ければその欄ごと出さないのは、詳細
+ * パネルの他の欄と同じ扱いである。
+ */
+export const prefRankOf = (combos, key) =>
+  combos.find((c) => c.n === 1 && c.refs[0] === key)?.rank ?? null;
 
 /** 選択が触れる組み合わせの合計。選択が空なら全部で、それが地図の見せている
  *  ものである。

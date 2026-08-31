@@ -13,10 +13,13 @@ import {
   decreeTerminiOf,
   detailHTML,
   fmtKm,
+  prefDetailHTML,
+  prefWikipediaURL,
   relatedRoutesOf,
   wikipediaURL,
 } from '../web/detail.mjs';
-import { KIND_LABELS } from '../web/popup.mjs';
+import { KIND_LABELS, PREF_KIND_LABELS } from '../web/popup.mjs';
+import { comparePrefKeys } from '../web/prefroute.mjs';
 
 const route = (over) => ({
   ref: 18,
@@ -434,5 +437,185 @@ describe('detailHTML — 関わりのある国道', () => {
     expect(detailHTML({ route: route(), related })).toContain(
       '<span class="shield sm">',
     );
+  });
+});
+
+/* ---------------------------------------------------------- 都道府県道 --- */
+describe('prefWikipediaURL', () => {
+  test('「<県>道N号」で引く。路線名は入れない', () => {
+    expect(prefWikipediaURL('長野県', 63)).toBe(
+      `https://ja.wikipedia.org/wiki/${encodeURIComponent('長野県道63号')}`,
+    );
+  });
+
+  test('県・都・府・道の呼び分けは県の名前が持つ', () => {
+    // 「県道」「都道」「府道」「道道」は、県の名前の末尾が既に持っています。
+    // 呼び分けの表は要りません。
+    for (const [label, want] of [
+      ['東京都', '東京都道7号'],
+      ['大阪府', '大阪府道7号'],
+      ['北海道', '北海道道7号'],
+    ]) {
+      expect(prefWikipediaURL(label, 7)).toBe(
+        `https://ja.wikipedia.org/wiki/${encodeURIComponent(want)}`,
+      );
+    }
+  });
+
+  test('県が違えば別の記事を指す。番号だけでは決まらない', () => {
+    expect(prefWikipediaURL('長野県', 18)).not.toBe(
+      prefWikipediaURL('愛知県', 18),
+    );
+  });
+});
+
+describe('relatedRoutesOf — 都道府県道', () => {
+  /* pack_web_pref.mjs が県ごとに書く二つの欄です。`shared_termini` はありません
+   * ——都道府県道には全国 1 枚の起終点の台帳がないためです。 */
+  const meta = {
+    combinations: [
+      { refs: ['nagano-60'], n: 1, km: 20 },
+      { refs: ['nagano-60', 'nagano-399'], n: 2, km: 1.9 },
+      { refs: ['nagano-60', 'nagano-366'], n: 2, km: 0.4 },
+      { refs: ['nagano-96', 'nagano-373'], n: 2, km: 3 },
+    ],
+    crossings: [
+      ['nagano-60', 'nagano-96'],
+      ['nagano-60', 'nagano-373'],
+      ['nagano-60', 'nagano-399'],
+    ],
+  };
+  const opts = {
+    system: '都道府県道',
+    compare: comparePrefKeys,
+    normalize: String,
+  };
+  const groups = relatedRoutesOf(meta, 'nagano-60', opts);
+  const pick = (key) => groups.find((g) => g.key === key)?.refs;
+
+  test('鍵のまま拾い、番号の順に並べる', () => {
+    expect(pick('conc')).toEqual(['nagano-366', 'nagano-399']);
+    expect(pick('cross')).toEqual(['nagano-96', 'nagano-373']);
+  });
+
+  test('重用する相手を交差にも出さない', () => {
+    // 399 は交差の欄にもいますが、重用として既に言ってあります。
+    expect(pick('cross')).not.toContain('nagano-399');
+  });
+
+  test('起終点の節は出ない。県別 meta がその欄を持たない', () => {
+    expect(groups.map((g) => g.key)).toEqual(['conc', 'cross']);
+  });
+
+  test('見出しは都道府県道と名乗る', () => {
+    expect(groups.map((g) => g.label)).toEqual([
+      '重用する都道府県道',
+      '交差する都道府県道',
+    ]);
+  });
+});
+
+describe('prefDetailHTML', () => {
+  const prefRoute = {
+    ref: 'nagano-60',
+    km: 23.5,
+    arcs: 41,
+    conc_km: 1.9,
+    max_n: 2,
+  };
+  const full = (over) =>
+    prefDetailHTML({
+      prefLabel: '長野県',
+      ref: 60,
+      route: prefRoute,
+      rank: 'major',
+      kinds: [{ kind: 'road', km: 23.5 }],
+      related: [
+        { key: 'conc', label: '重用する都道府県道', refs: ['nagano-399'] },
+      ],
+      ...over,
+    });
+
+  test('見出しは路線の名前を出す。ヘキサは県を持たない', () => {
+    expect(full()).toContain('class="shield hex"');
+    expect(full()).toContain('>長野県道60号</h2>');
+    // 国道のパネルは名前を伏せます。おにぎりの番号がそのまま名前だからです。
+    expect(detailHTML({ route: route() })).toContain('class="sr-only"');
+  });
+
+  test('Wikipedia へ送る。「だけを表示」は出さない', () => {
+    expect(full()).toContain(`href="${prefWikipediaURL('長野県', 60)}"`);
+    // 路線ごとの選択そのものが未着手です(#109)。
+    expect(full()).not.toContain('detail-only');
+  });
+
+  test('起終点は出さない。都道府県道に全国 1 枚の台帳が無い', () => {
+    expect(full()).not.toContain('detail-termini');
+  });
+
+  test('数と区分別を出し、区分は都道府県道の言い方にする', () => {
+    const html = prefDetailHTML({
+      prefLabel: '長野県',
+      ref: 60,
+      route: prefRoute,
+      kinds: [{ kind: 'ferry', km: 1.2 }],
+    });
+    expect(html).toContain('<dt>延長</dt><dd>23.5 km</dd>');
+    expect(html).toContain('<dt>重用区間</dt><dd>1.9 km</dd>');
+    expect(html).toContain('<dt>最大重用数</dt><dd>2 重用</dd>');
+    expect(html).toContain(PREF_KIND_LABELS.ferry);
+    expect(html).not.toContain(KIND_LABELS.ferry);
+  });
+
+  test('0.1 km 未満の区分は「0.1 km 未満」と出す(#93 と同じ作法)', () => {
+    const html = prefDetailHTML({
+      prefLabel: '長野県',
+      ref: 60,
+      route: prefRoute,
+      kinds: [{ kind: 'steps', km: 0 }],
+    });
+    expect(html).toContain(`${fmtKm(0.1)} km 未満`);
+    expect(html).not.toContain(`<dd>${fmtKm(0)} km</dd>`);
+  });
+
+  test('種別は渡されたときだけ出す', () => {
+    expect(full()).toContain('<dt>種別</dt><dd>主要地方道</dd>');
+    expect(full({ rank: null })).not.toContain('<dt>種別</dt>');
+  });
+
+  test('重用を持たない路線は「なし」と言う', () => {
+    const html = prefDetailHTML({
+      prefLabel: '長野県',
+      ref: 60,
+      route: { ...prefRoute, conc_km: 0, max_n: 1 },
+    });
+    expect(html).toContain('<dt>重用区間</dt><dd>なし</dd>');
+    expect(html).toContain('<dt>最大重用数</dt><dd>単独指定</dd>');
+  });
+
+  test('関わりのある路線の標識も県を伴う鍵を持つ', () => {
+    expect(full()).toContain('data-pref="nagano-399"');
+    expect(full()).toContain('class="shield hex sm"');
+  });
+
+  test('重用の但し書きはパネルに出さない', () => {
+    // 置き場所は「国道マップについて」です(panel.mjs)。パネルは 1 路線の数を
+    // 述べる場所で、数え方そのものを述べる場所ではありません。
+    const html = full();
+    expect(html).not.toContain('11,562.9');
+    expect(html).not.toContain('79.5%');
+  });
+
+  test('数が届く前は待たせる。見出しは先に出す', () => {
+    const html = prefDetailHTML({ prefLabel: '長野県', ref: 60 });
+    expect(html).toContain('>長野県道60号</h2>');
+    expect(html).toContain('読み込んでいます');
+    expect(html).not.toContain('<dt>延長</dt>');
+  });
+
+  test('読めなかったときはそう言う', () => {
+    const html = prefDetailHTML({ prefLabel: '長野県', ref: 60, failed: true });
+    expect(html).toContain('読み込めませんでした');
+    expect(html).not.toContain('読み込んでいます');
   });
 });

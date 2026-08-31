@@ -43,11 +43,17 @@ import {
   concurrencies,
   formerKmFor,
   kindsFor,
+  prefRankOf,
   routesOf,
   statsFor,
 } from './aggregate.mjs';
 import { dataURL } from './dataurl.mjs';
-import { decreeTerminiOf, detailHTML, relatedRoutesOf } from './detail.mjs';
+import {
+  decreeTerminiOf,
+  detailHTML,
+  prefDetailHTML,
+  relatedRoutesOf,
+} from './detail.mjs';
 import {
   baseStyle,
   buildFilter,
@@ -64,7 +70,10 @@ import {
   hasRef,
   NOTHING,
   PMTILES_URL,
+  PREF_CLICKABLE_LAYERS,
+  PREF_PICKED_LAYER,
   PREF_PMTILES_URL,
+  PREF_POPUP_MINZOOM,
   pickedFilter,
   prefLabelLayer,
   prefLineLayers,
@@ -76,6 +85,7 @@ import {
   clearLabel,
   countLabel,
   freshnessHTML,
+  prefConcurrencyHTML,
   RANKING_ROWS,
   rankingHTML,
   routeListHTML,
@@ -84,7 +94,8 @@ import {
   sharedHTML,
   statsHTML,
 } from './panel.mjs';
-import { deepest, popupHTML } from './popup.mjs';
+import { deepest, popupHTML, prefPopupHTML } from './popup.mjs';
+import { comparePrefKeys, prefRefOf, prefRegionOf } from './prefroute.mjs';
 import { terminiFeatures } from './termini.mjs';
 import { decodeURLState, encodeState, MANAGED_KEYS } from './urlstate.mjs';
 import {
@@ -98,9 +109,19 @@ const state = {
   meta: null,
   routes: [],
   selected: new Set(),
+  // 県の名前を引く表。regions.json を起動時に読んだもので、`nagano` から
+  // 「長野県」を返す。都道府県道の標識も詳細も、県を伴わなければ路線を名指した
+  // ことにならない。
+  prefLabels: new Map(),
+  // 県別 meta の置き場。県を初めて開いたときに 1 県ぶんだけ取りに行く
+  // (prefMeta)。47 県ぶんは 3.45 MB あり、初期表示では読まない。
+  prefMetas: new Map(),
   // ポップアップが開いているアークの OSM way id。開いていなければ null。
   // 使い道はその下に敷く影だけで、地図の他の物は 1 本に絞られていない。
   picked: null,
+  // 同じものの都道府県道の側。層を分けてあるので状態も分ける——国道と重用する
+  // 県道のアークは、二つのアーカイブに同じ way id で入っている。
+  prefPicked: null,
   conc: 'off',
   labels: true,
   termini: true,
@@ -977,6 +998,7 @@ async function boot() {
   if (!index.length) throw new Error(`${dataURL('regions.json')} is empty`);
   state.meta = meta;
   state.routes = routesOf(meta.combinations);
+  state.prefLabels = new Map(index.map((r) => [r.region, r.label]));
   applyURLState();
 
   await mapLoaded;
@@ -1128,7 +1150,12 @@ function fitInitialView(index) {
  * と二重に持たないよう、層の定義そのものから読む。
  */
 const PREF_DEFAULT_FILTERS = new Map(
-  [...prefLineLayers(), prefLabelLayer()].map((l) => [l.id, l.filter ?? true]),
+  [...prefLineLayers(), prefLabelLayer()]
+    // 影の層はここに入れない。押されたアークが決めるものなので、系統の表示と
+    // 一緒に戻すと押した印が消える。国道の `picked` を FILTERED_LAYERS が
+    // 持たないのと同じ理由である。
+    .filter((l) => l.id !== PREF_PICKED_LAYER)
+    .map((l) => [l.id, l.filter ?? true]),
 );
 
 /* -------------------------------------------------------------- 絞り込み --- */
@@ -1151,6 +1178,11 @@ function applyFilters() {
   for (const [id, filter] of PREF_DEFAULT_FILTERS) {
     map.setFilter(id, state.pref ? filter : NOTHING);
   }
+
+  map.setFilter(
+    PREF_PICKED_LAYER,
+    state.pref ? pickedFilter(true, state.prefPicked) : NOTHING,
+  );
 
   const sel = [...state.selected];
   let tFilter = true;
@@ -1199,6 +1231,7 @@ function buildUI() {
   $('#route-list').innerHTML = routeListHTML(state.routes);
   $('#route-filter').value = '';
   $('#freshness').innerHTML = freshnessHTML(state.meta);
+  $('#pref-concurrency').innerHTML = prefConcurrencyHTML();
   renderShared();
 }
 
@@ -1293,8 +1326,9 @@ document.addEventListener('click', (ev) => {
  */
 let popup = null;
 
-function pick(id) {
+function pick(id, prefId = null) {
   state.picked = id;
+  state.prefPicked = prefId;
   applyFilters();
 }
 
@@ -1302,33 +1336,100 @@ function closePopup() {
   const p = popup;
   popup = null;
   p?.remove();
-  if (state.picked !== null) pick(null);
+  if (state.picked !== null || state.prefPicked !== null) pick(null);
+}
+
+/**
+ * 都道府県道を押せるかどうか。
+ *
+ * z8 未満のタイルは `id`・`name`・`km`・`src` を持たないので、ポップアップを
+ * 組めない(mapspec.mjs の PREF_POPUP_MINZOOM)。国道はこの制限を持たず、
+ * 今までどおり z0 から押せる。
+ */
+const prefPickable = () => map.getZoom() >= PREF_POPUP_MINZOOM;
+
+/**
+ * カーソルの形。押せる物の上でだけ指の形にする。
+ *
+ * 二つの系統で押せる条件が違うので、どちらの上にいるかを覚えておいて一箇所で
+ * 決める。指の形をズームでも見直すのは、県道の上に載せたまま縮尺だけを動かせる
+ * ためである——動かした先で押しても何も起きないのに、指の形だけが残っていては、
+ * 押せる物だと言ったままになる。
+ */
+let overNational = false;
+let overPref = false;
+
+function syncCursor() {
+  const want = overNational || (overPref && prefPickable()) ? 'pointer' : '';
+  // ズームは 1 フレームごとに届く。同じ値を書き直さない。
+  const canvas = map.getCanvas();
+  if (canvas.style.cursor !== want) canvas.style.cursor = want;
 }
 
 function wirePopups() {
   for (const id of CLICKABLE_LAYERS) {
-    map.on('mouseenter', id, () => (map.getCanvas().style.cursor = 'pointer'));
-    map.on('mouseleave', id, () => (map.getCanvas().style.cursor = ''));
+    map.on('mouseenter', id, () => {
+      overNational = true;
+      syncCursor();
+    });
+    map.on('mouseleave', id, () => {
+      overNational = false;
+      syncCursor();
+    });
   }
+  for (const id of PREF_CLICKABLE_LAYERS) {
+    map.on('mouseenter', id, () => {
+      overPref = true;
+      syncCursor();
+    });
+    map.on('mouseleave', id, () => {
+      overPref = false;
+      syncCursor();
+    });
+  }
+  map.on('zoom', syncCursor);
+
   map.on('click', (ev) => {
+    closePopup();
+
+    // 国道が先である。二つの系統が同じ画素の下に重なるところでは、上に描かれて
+    // いるのは国道の線で、押した人が見ているのもそれである。ここで深さを比べて
+    // 混ぜることはしない——`n` は国道では重用の深さ、県道でも重用の深さだが、
+    // 数えている集合が違うので、二つを一つの尺度で比べたことにならない。
+    // 国道だけを見ている人にとって、押した結果は今までと同じである。
     const hits = map.queryRenderedFeatures(ev.point, {
       layers: CLICKABLE_LAYERS,
     });
-    closePopup();
-    if (!hits.length) return;
+    if (hits.length) {
+      const p = deepest(hits);
+      showPopup(ev.lngLat, popupHTML(p));
+      pick(p.id);
+      return;
+    }
 
-    const p = deepest(hits);
-    popup = new maplibregl.Popup({
-      closeButton: true,
-      closeOnClick: false,
-      maxWidth: '300px',
-    })
-      .setLngLat(ev.lngLat)
-      .setHTML(popupHTML(p))
-      .addTo(map);
-    popup.on('close', closePopup);
-    pick(p.id);
+    if (!prefPickable()) return;
+    const prefHits = map.queryRenderedFeatures(ev.point, {
+      layers: PREF_CLICKABLE_LAYERS,
+    });
+    if (!prefHits.length) return;
+    const p = deepest(prefHits);
+    const label = state.prefLabels.get(p.pref);
+    if (!label) return;
+    showPopup(ev.lngLat, prefPopupHTML(p, label));
+    pick(null, p.id);
   });
+}
+
+function showPopup(lngLat, html) {
+  popup = new maplibregl.Popup({
+    closeButton: true,
+    closeOnClick: false,
+    maxWidth: '300px',
+  })
+    .setLngLat(lngLat)
+    .setHTML(html)
+    .addTo(map);
+  popup.on('close', closePopup);
 }
 
 /* ------------------------------------------------------------------ 詳細 --- */
@@ -1368,9 +1469,20 @@ const cameraMoved = (a, b) =>
   Math.abs(a.lat - b.lat) > CAMERA_EPS ||
   Math.abs(a.zoom - b.zoom) > CAMERA_EPS;
 
+/**
+ * いま開いているパネルを名指す札。
+ *
+ * 都道府県道のパネルは県別 meta を取りに行くあいだ待つので、届いた頃には別の
+ * 路線が開かれていることがある。取りに行く前に控えた札と、届いたときの札が同じ
+ * であるときだけ書き込む。国道のパネルも札を進める——待っているあいだに国道へ
+ * 開き直したら、遅れて届いた県道の中身がそれを上書きしてはならない。
+ */
+let detailSerial = 0;
+
 function openDetail(ref) {
   const route = state.routes.find((r) => r.ref === ref);
   if (!route) return;
+  detailSerial++;
   // パネルを出すときは、後ろのポップアップを引き取る。ポップアップはアーク 1 本
   // について、パネルは路線そのものについて述べるので、両方が出ていると同じ画面で
   // 二つが別のことを述べる。パネルは地図の左下を覆うから、狭い画面では重なりもする。
@@ -1387,8 +1499,85 @@ function openDetail(ref) {
     related: relatedRoutesOf(state.meta, ref),
     formerKm: formerKmFor(state.meta.combinations, sel),
   });
-  // 別の路線に開き直しただけなら、居場所は開いたときのままにしておく。
-  // ここで取り直すと、動いた後に開き直した人が閉じたときに横へ滑る。
+  showDetail();
+}
+
+/**
+ * 一つの都道府県道について述べるパネル。
+ *
+ * 数はどれも県別 meta の組み合わせ表から出す。国道の national.meta.json と同じ
+ * 表なので、読み方(aggregate.mjs)も同じである。違うのは表の在りかだけで、県の
+ * ぶんは県を初めて開いたときに取りに行く。
+ *
+ * 取りに行くあいだも見出しは出す。押した標識がどの路線だったかは、数が揃う前
+ * から分かっていることである。
+ */
+async function openPrefDetail(key) {
+  const region = prefRegionOf(key);
+  const prefLabel = state.prefLabels.get(region);
+  if (!prefLabel) return;
+  const ref = prefRefOf(key);
+  const serial = ++detailSerial;
+
+  closePopup();
+  detailBody.innerHTML = prefDetailHTML({ prefLabel, ref });
+  showDetail();
+
+  let meta;
+  try {
+    meta = await prefMeta(region);
+  } catch (err) {
+    console.error(err);
+    if (serial === detailSerial) {
+      detailBody.innerHTML = prefDetailHTML({ prefLabel, ref, failed: true });
+    }
+    return;
+  }
+  // 待っているあいだに別の路線が開かれていたら、届いた中身は捨てる。
+  if (serial !== detailSerial) return;
+
+  const combos = meta.combinations;
+  const route = routesOf(combos, comparePrefKeys).find((r) => r.ref === key);
+  if (!route) return;
+  const sel = new Set([key]);
+  detailBody.innerHTML = prefDetailHTML({
+    prefLabel,
+    ref,
+    route,
+    rank: prefRankOf(combos, key),
+    kinds: kindsFor(combos, sel),
+    related: relatedRoutesOf(meta, key, {
+      system: '都道府県道',
+      compare: comparePrefKeys,
+      normalize: String,
+    }),
+    formerKm: formerKmFor(combos, sel),
+  });
+}
+
+/**
+ * 県別 meta を 1 県ぶんだけ取る。一度取ったら覚えておく。
+ *
+ * 取りに行っている最中の約束そのものを覚える。同じ県の路線を続けて開いたとき、
+ * 二度目が一度目の到着を待つのではなく同じ約束に乗るためである。
+ */
+function prefMeta(region) {
+  let pending = state.prefMetas.get(region);
+  if (!pending) {
+    pending = fetch(dataURL(`pref/${region}.meta.json`)).then((r) => {
+      if (!r.ok) throw new Error(`pref/${region}.meta.json: ${r.status}`);
+      return r.json();
+    });
+    // 失敗した約束を覚えたままにすると、二度と取り直せなくなる。
+    pending.catch(() => state.prefMetas.delete(region));
+    state.prefMetas.set(region, pending);
+  }
+  return pending;
+}
+
+/* パネルを出す。中身を入れ替えただけの開き直しでは、開いたときの居場所を
+ * 取り直さない——動いた後に開き直した人が閉じたときに横へ滑るためである。 */
+function showDetail() {
   if (detail.hidden) detailOpenedAt = cameraNow();
   detail.hidden = false;
   app.classList.add('detail-open');
@@ -1397,6 +1586,8 @@ function openDetail(ref) {
 
 function closeDetail() {
   if (detail.hidden) return;
+  // 閉じた後に、待っていた中身が届いて書き込まれることがないようにする。
+  detailSerial++;
   const moved = detailOpenedAt && cameraMoved(detailOpenedAt, cameraNow());
   detailOpenedAt = null;
   detail.hidden = true;
@@ -1439,7 +1630,9 @@ document.addEventListener('click', (ev) => {
   // 続けるのではなく、その路線のパネルに入れ替わるのが筋である。
   const shieldBtn = ev.target.closest('.shield-btn');
   if (shieldBtn) {
-    openDetail(Number(shieldBtn.dataset.ref));
+    // 都道府県道の標識は県を伴う鍵を持つ。番号だけでは 47 本のどれか決まらない。
+    if (shieldBtn.dataset.pref) openPrefDetail(shieldBtn.dataset.pref);
+    else openDetail(Number(shieldBtn.dataset.ref));
     return;
   }
 

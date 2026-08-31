@@ -112,9 +112,10 @@ uvx ruff check pipeline      # Python の静的検査
 | `web/aggregate.mjs` | 画面が出す数を組み合わせ表から読む |
 | `web/panel.mjs` | 操作面の一覧・集計と、地図の上の凡例の組み立て |
 | `web/popup.mjs` | 押したアークが自分について述べること |
-| `web/detail.mjs` | 一つの国道について述べること。標識を押すと出るパネル |
+| `web/detail.mjs` | 一つの路線について述べること。標識を押すと出るパネル |
+| `web/prefroute.mjs` | 都道府県道の路線を名指す鍵。番号は県の中でしか一意でない |
 | `web/termini.mjs` | 起点・終点を GeoJSON にする |
-| `web/shield.mjs` | 国道番号標識の形。画面も favicon も共有画像もここから描く |
+| `web/shield.mjs` | 国道番号標識(おにぎり)と都道府県道番号標識(ヘキサ)の形。画面も favicon も共有画像もここから描く |
 | `web/html.mjs` | エスケープ。OSM の文字は信用できない |
 | `web/glyphs/` | ラベルの SDF グリフ。数字と `・` の 11 字 |
 | `scripts/` | 地図そのものの道具。データ生成には関わらない |

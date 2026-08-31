@@ -20,9 +20,11 @@ import {
   concurrencies,
   formerKmFor,
   kindsFor,
+  prefRankOf,
   routesOf,
   statsFor,
 } from '../web/aggregate.mjs';
+import { comparePrefKeys } from '../web/prefroute.mjs';
 
 const row = (refs, km, arcs) => ({ refs, n: refs.length, km, arcs });
 
@@ -323,5 +325,56 @@ describe('formerKmFor', () => {
 
   test('どの組み合わせにも居ない番号を選ぶと 0 になる', () => {
     expect(formerKmFor(FORMER, new Set([999]))).toBe(0);
+  });
+});
+
+/* ---------------------------------------------------------- 都道府県道 --- */
+/* 数え方は路線の格に依りません。違うのは路線の鍵だけで——国道は番号 `18`、
+ * 都道府県道は県を貼り付けた `nagano-18`——それは並べ方として渡します。 */
+describe('routesOf — 都道府県道の鍵', () => {
+  const combos = [
+    { refs: ['nagano-100'], n: 1, km: 10, arcs: 100, rank: 'general' },
+    { refs: ['nagano-9'], n: 1, km: 20, arcs: 200, rank: 'major' },
+    { refs: ['nagano-9', 'nagano-100'], n: 2, km: 5, arcs: 50, rank: 'major' },
+  ];
+  const routes = routesOf(combos, comparePrefKeys);
+
+  test('番号の順に並べる。文字列の順ではない', () => {
+    expect(routes.map((r) => r.ref)).toEqual(['nagano-9', 'nagano-100']);
+  });
+
+  test('組み合わせを路線それぞれへ開く', () => {
+    const r9 = routes.find((r) => r.ref === 'nagano-9');
+    expect(r9.km).toBe(25);
+    expect(r9.arcs).toBe(250);
+    expect(r9.conc_km).toBe(5);
+    expect(r9.max_n).toBe(2);
+  });
+});
+
+describe('prefRankOf', () => {
+  /* 組み合わせの `rank` は「重なっている路線のうち一つでも主要地方道なら
+   * major」です。だから読めるのは、その路線 1 本だけの行に限ります。 */
+  const combos = [
+    { refs: ['nagano-9'], n: 1, km: 20, rank: 'major' },
+    { refs: ['nagano-100'], n: 1, km: 10, rank: 'general' },
+    { refs: ['nagano-9', 'nagano-100'], n: 2, km: 5, rank: 'major' },
+    { refs: ['nagano-9', 'nagano-200'], n: 2, km: 2, rank: 'major' },
+  ];
+
+  test('1 本だけの行から読む', () => {
+    expect(prefRankOf(combos, 'nagano-9')).toBe('major');
+    expect(prefRankOf(combos, 'nagano-100')).toBe('general');
+  });
+
+  test('重用の行の rank に釣られない', () => {
+    // 100 号は 9 号と重なる行では major と書かれていますが、一般都道府県道です。
+    expect(prefRankOf(combos, 'nagano-100')).not.toBe('major');
+  });
+
+  test('1 本だけの行を持たない路線では null になる', () => {
+    // 延長のすべてが重用である路線です。13,234 のうち 78 あります。
+    expect(prefRankOf(combos, 'nagano-200')).toBe(null);
+    expect(prefRankOf(combos, 'nagano-999')).toBe(null);
   });
 });
