@@ -196,13 +196,15 @@
          確かめようがない。操作面の中では地図と目を往復することになるので、
          同じ画面の、地図の上に置く。
 
-         中身は panel.mjs の legendNHTML() / legendKindHTML() の出力そのもの。
-         static にしてあるのは vendor/*.js の読み込みを待たずに最初の描画から
-         出したいため——test/panel.test.mjs がここと関数の一致を検査する。 -->
+         中身は panel.mjs の legendNHTML() / legendKindHTML() / legendPrefHTML()
+         の出力そのもの。static にしてあるのは vendor/*.js の読み込みを待たずに
+         最初の描画から出したいため——test/panel.test.mjs がここと関数の一致を
+         検査する。 -->
     <div id="legend-bar">
       <div class="legend-box">
-        <div id="legend-n" class="legend"><span class="item"><span class="swatch" style="border-top-color:#1B62C4"></span>単独指定</span><span class="item"><span class="swatch" style="border-top-color:#D98324"></span>二重用</span><span class="item"><span class="swatch" style="border-top-color:#C2352B"></span>三重用</span><span class="item"><span class="swatch" style="border-top-color:#7B3E9D"></span>四重用以上</span></div>
+        <div id="legend-n" class="legend"><span class="lead">国道</span><span class="item"><span class="swatch" style="border-top-color:#1B62C4"></span>単独指定</span><span class="item"><span class="swatch" style="border-top-color:#D98324"></span>二重用</span><span class="item"><span class="swatch" style="border-top-color:#C2352B"></span>三重用</span><span class="item"><span class="swatch" style="border-top-color:#7B3E9D"></span>四重用以上</span></div>
         <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
+        <div id="legend-pref" class="legend"><span class="lead">都道府県道</span><span class="item"><span class="swatch" style="border-top-color:#1B7A3E"></span>主要地方道</span><span class="item"><span class="swatch" style="border-top-color:#8CBF4A"></span>一般都道府県道</span></div>
       </div>
     </div>
     <!-- 地図の上のボタンから出る面。「何が地図に描かれるか」を決めるものは残らず

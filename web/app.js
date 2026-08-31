@@ -64,7 +64,10 @@ import {
   hasRef,
   NOTHING,
   PMTILES_URL,
+  PREF_PMTILES_URL,
   pickedFilter,
+  prefLabelLayer,
+  prefLineLayers,
   routeLayers,
   routeSources,
   withKind,
@@ -978,9 +981,20 @@ async function boot() {
 
   // アーカイブの所在は絶対で指す。protocol の handler が自分で URL を解くので、
   // 相対の基準にできるページを持たない。
-  const sources = routeSources(new URL(PMTILES_URL, location.href).href);
+  const sources = routeSources(
+    new URL(PMTILES_URL, location.href).href,
+    new URL(PREF_PMTILES_URL, location.href).href,
+  );
   for (const [id, src] of Object.entries(sources)) map.addSource(id, src);
+  /* 都道府県道の線は国道より先に足す。後から足した層が上に載るので、この順が
+   * そのまま「国道は都道府県道の上」になる——国道だけを見ている人にとって、
+   * 地図は今までと同じ絵のままである。
+   *
+   * 県道の札だけは線より上でなければ国道の線に潜るので、線の層とは別に、
+   * 国道の札のすぐ下へ差し込む。場所争いの優先も同時に決まる(prefLabelLayer)。 */
+  for (const layer of prefLineLayers()) map.addLayer(layer);
   for (const layer of routeLayers()) map.addLayer(layer);
+  map.addLayer(prefLabelLayer(), 'route-labels');
   map.addControl(new PitchControl(), 'top-right');
   map.addControl(new HideRoutesControl(), 'top-right');
   map.addControl(new DisplayControl(), 'top-right');

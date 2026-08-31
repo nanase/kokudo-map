@@ -347,6 +347,14 @@ input[type="search"]::placeholder { font-size: .82em; }
   font-family: ui-monospace, Consolas, monospace;
 }
 .legend .swatch { width: 20px; height: 0; border-top-width: 3px; border-top-style: solid; }
+/* 行の頭の語。行ごとに色の意味が違う（国道は重用の深さ、都道府県道は格）ので、
+   どちらの話かをここが述べる。字は見本の名前より一段淡くする——読むのは見本の
+   ほうで、頭の語はどの群かを言うだけである。 */
+.legend .lead {
+  font-size: .68rem; line-height: 1.35; color: var(--ink-3);
+  font-family: ui-monospace, Consolas, monospace;
+  margin-right: 2px; white-space: nowrap;
+}
 /* title 属性を持つ項目だけ、補足があることをカーソルで示す。 */
 .legend .item[title] { cursor: help; }
 

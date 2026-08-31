@@ -91,15 +91,23 @@ const GLYPHS = 'glyphs/{fontstack}/{range}.pbf';
 export const PMTILES_URL = dataURL('national-routes.pmtiles');
 export const SOURCE_LAYER = 'routes';
 
-/** 国道の層が前提とするソース。検査スクリプトもこの同じ関数からスタイルを組む
- *  ので、閲覧側が実際には作らないソースの形に対して層を検査することがない。 */
-export function routeSources(url) {
+/* 都道府県道は別のアーカイブで届く(#100)。国道の 55.9 MB を県道を直すたびに
+ * 上げ直さずに済むこと、県道側が壊れても国道の地図は出ることが理由である。
+ * 層の名前は国道と同じ `routes` で、ソースの id だけが違う。 */
+export const PREF_PMTILES_URL = dataURL('prefectural-routes.pmtiles');
+export const PREF_SOURCE = 'prefectural';
+
+/** 国道と都道府県道の層が前提とするソース。検査スクリプトもこの同じ関数から
+ *  スタイルを組むので、閲覧側が実際には作らないソースの形に対して層を検査する
+ *  ことがない。 */
+export function routeSources(url, prefURL) {
   return {
     // `maxzoom` を意図して書かない。アーカイブが自分で述べており、protocol が
     // それを載せた TileJSON を MapLibre に渡す。ここへ数を書き写したせいで、
     // アーカイブに無いズームをスタイルが要求し、それより下が何も描かれなく
     // なったことがある。
     routes: { type: 'vector', url: `pmtiles://${url}` },
+    [PREF_SOURCE]: { type: 'vector', url: `pmtiles://${prefURL}` },
     // 起終点は数千点しかなく、どれも操作面に既に出ているので、素の GeoJSON の
     // まま置く。
     termini: {
@@ -480,6 +488,198 @@ export function routeLayers() {
     },
   ];
 }
+
+/* -------------------------------------------------------- 都道府県道の層 --- */
+/**
+ * 都道府県道の配色。国道が既に青・橙・赤・紫を重用の深さに使っているので、
+ * 残っている強い色相は緑しかない。同じ色相の中で、明るさと彩度をはっきり離した
+ * 二色を格に当てる——細い線では、明るさの差より色相の差のほうが読めるが、緑の
+ * 内側で色相を動かせる幅は狭いためである。
+ *
+ * 格(主要地方道か一般都道府県道か)を色に、重用の深さを持たせないのは、国道の
+ * 四色と合わせて八色になると、どの色が何を述べているかが読めなくなるためである。
+ * 都道府県道の重用は太さで述べる(`prefLineWidth`)。
+ */
+export const PREF_MAJOR = '#1B7A3E';
+export const PREF_GENERAL = '#8CBF4A';
+export const PREF_RANK_LABELS = {
+  major: '主要地方道',
+  general: '一般都道府県道',
+};
+
+/** 都道府県道の区分のうち、走れる車道であるもの。残りは破線の層が引き取る。 */
+export const PREF_KIND_DRIVEABLE = ['road', 'expressway'];
+
+export const colorByRank = [
+  'match',
+  ['get', 'rank'],
+  'major',
+  PREF_MAJOR,
+  PREF_GENERAL,
+];
+
+/**
+ * 番号の札に使う一般都道府県道の色。線の `PREF_GENERAL` より暗い。
+ *
+ * 線としての #8CBF4A は淡色地図の上でよく読めるが、字としては白い地に対して
+ * 2.15:1 しかない。線は幅を持つので薄くても形が出るが、字は画線が細く、同じ
+ * 明るさでは読めなくなる。色相はそのままに暗くして 5.1:1 にする。主要地方道の
+ * #1B7A3E は字のままでも 4.5:1 あるので、動かさない。
+ *
+ * 凡例が出すのは線の色である(panel.mjs)。凡例は線が何かを述べる物であって、
+ * 札の字の色を述べる物ではない。
+ */
+export const PREF_GENERAL_INK = '#4F7A1E';
+
+export const inkByRank = [
+  'match',
+  ['get', 'rank'],
+  'major',
+  PREF_MAJOR,
+  PREF_GENERAL_INK,
+];
+
+/* 都道府県道は国道の下に敷く。同じ太さで引くと、上に載る国道が県道の網に
+ * 埋もれる——アークの数は国道の 151,004 に対して 290,529 である。国道の
+ * ZOOM_STOPS に対しておよそ 0.65 倍を基準にし、格で細み分ける。 */
+const PREF_ZOOM_STOPS = [
+  [6, 0.55],
+  [9, 1.1],
+  [12, 2.1],
+  [15, 4],
+];
+const PREF_RANK_MULT = ['match', ['get', 'rank'], 'major', 1.2, 0.85];
+// 重用は色ではなく太さだけが述べる。国道の N_MULT より刻みが浅いのは、県道の
+// 重用が二重までにほぼ収まるためである——290,529 アークの内訳は 単独 276,433、
+// 二重 13,424、三重 646、四重 26 で、三重以上は 0.23% しかない。深さの段を
+// 大きく開いても、開いたぶんが描かれる場所がほとんど無い。
+const PREF_N_MULT = ['match', ['get', 'n'], 1, 1, 2, 1.35, 1.6];
+
+/** 都道府県道の線の太さ。`lineWidth` と同じ理由で、掛け算は補間の出力側に置く。 */
+function prefLineWidth({ add = 0, scaleByN = true } = {}) {
+  const out = ['interpolate', ['linear'], ['zoom']];
+  for (const [z, w] of PREF_ZOOM_STOPS) {
+    let base = ['*', w, PREF_RANK_MULT];
+    if (scaleByN) base = ['*', base, PREF_N_MULT];
+    out.push(z, add ? ['+', base, add] : base);
+  }
+  return out;
+}
+
+/**
+ * 都道府県道の線の層を、描く順に並べる。国道のどの層よりも下に入れる
+ * (app.js の boot)。国道の見え方を変えないための順序である。
+ *
+ * 国道と違って区分ごとに層を分けない。走れない区分は 290,529 アーク中 1,037
+ * しかなく、そのうえ「点線国道」「海上国道」のような、区分ごとに定まった呼び名を
+ * 都道府県道は持たない。破線であること自体が「走れない」の印なので、色は格の
+ * ままにして、1 層にまとめる——`line-dasharray` はデータ駆動にできないが、
+ * `line-color` はできるので、分ける必要があるのは破線の形だけである。
+ */
+export function prefLineLayers() {
+  return [
+    {
+      // 白い縁取り。国道の `casing` と同じ役目で、ラスタの下地図の上でも線が
+      // 読めるようにする。破線の区分には敷かない——国道側も敷いていない。
+      id: 'pref-casing',
+      type: 'line',
+      source: PREF_SOURCE,
+      'source-layer': SOURCE_LAYER,
+      filter: kindTest(PREF_KIND_DRIVEABLE),
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#FFFFFF',
+        'line-opacity': formerOpacity(0.85),
+        'line-width': prefLineWidth({ add: 1.8 }),
+      },
+    },
+    {
+      id: 'pref-roads',
+      type: 'line',
+      source: PREF_SOURCE,
+      'source-layer': SOURCE_LAYER,
+      filter: kindTest(PREF_KIND_DRIVEABLE),
+      layout: {
+        'line-cap': 'round',
+        'line-join': 'round',
+        // 主要地方道を一般都道府県道の上に描く。鍵が無いとタイルの並び順の
+        // ままになり、格の違いが交差のたびに入れ替わる。
+        'line-sort-key': ['match', ['get', 'rank'], 'major', 2, 1],
+      },
+      paint: {
+        'line-color': colorByRank,
+        'line-opacity': formerOpacity(),
+        'line-width': prefLineWidth(),
+      },
+    },
+    {
+      // 工事中・未開通・徒歩道・階段・航路。走れる車道と取り違えられないよう、
+      // 国道側と同じく破線にする。
+      id: 'pref-special',
+      type: 'line',
+      source: PREF_SOURCE,
+      'source-layer': SOURCE_LAYER,
+      filter: ['!', kindTest(PREF_KIND_DRIVEABLE)],
+      layout: { 'line-cap': 'butt', 'line-join': 'round' },
+      paint: {
+        'line-color': colorByRank,
+        'line-opacity': formerOpacity(),
+        'line-width': prefLineWidth({ add: 0.6, scaleByN: false }),
+        'line-dasharray': [2, 2],
+      },
+    },
+  ];
+}
+
+/**
+ * 都道府県道の番号の札。国道の `route-labels` のすぐ下に入れる
+ * (app.js の boot)。二つの理由が同じ場所を指している。
+ *
+ *   描く順   線より上でなければ、国道の線に潜って読めなくなる
+ *   場所争い MapLibre は上の層から順に札を置き、置けなかった札を捨てる。
+ *            国道の札が上に在るかぎり、県道の札に押しのけられることはない
+ *
+ * 出す字は番号だけである。県名を載せると日本語 1 書体ぶんのグリフが要る——
+ * いまのラベルは数字と `・` の 11 字、約 5 kB で済んでいる。国道か都道府県道か
+ * は色が述べ、その色が何かは凡例が述べる。
+ *
+ * `minzoom` は国道と同じ 8 である。ズーム下限を置かないのはアーカイブの側で、
+ * 線は z0 から出る。z8 は札が出る縮尺であって、路線が現れる縮尺ではない。
+ */
+export function prefLabelLayer() {
+  return {
+    id: 'pref-labels',
+    type: 'symbol',
+    source: PREF_SOURCE,
+    'source-layer': SOURCE_LAYER,
+    minzoom: 8,
+    layout: {
+      'symbol-placement': 'line',
+      'text-field': ['get', 'label'],
+      'text-font': FONT,
+      'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 13, 13.5],
+      'symbol-spacing': 260,
+      // 国道の札と同じ考えである。深い重用の番号ほど先に置き、諦めるのは最後に
+      // する。同点は主要地方道を先にする。
+      'symbol-sort-key': [
+        '-',
+        0,
+        ['+', ['get', 'n'], ['match', ['get', 'rank'], 'major', 0.5, 0]],
+      ],
+      'text-rotation-alignment': 'viewport',
+      'text-pitch-alignment': 'viewport',
+    },
+    paint: {
+      'text-color': inkByRank,
+      'text-halo-color': '#FFFFFF',
+      'text-halo-width': 2,
+      'text-opacity': formerOpacity(),
+    },
+  };
+}
+
+/** 都道府県道の層すべて。層が在ることだけを問う側(検査、表示の切り替え)が使う。 */
+export const prefLayers = () => [...prefLineLayers(), prefLabelLayer()];
 
 /** 共有の絞り込み式を、どの層にどう当てるか。 */
 export const FILTERED_LAYERS = [

@@ -22,6 +22,11 @@ const {
   routeLayers,
   routeSources,
   PMTILES_URL,
+  PREF_PMTILES_URL,
+  PREF_SOURCE,
+  prefLabelLayer,
+  prefLineLayers,
+  prefLayers,
   buildFilter,
   withKind,
   hasRef,
@@ -88,13 +93,24 @@ function styleWith(filters) {
   // 代用ではなく、閲覧側自身のソース定義を使う。層の `source-layer` はベクタ
   // ソースに対してしか妥当にならないので、でっち上げた GeoJSON のソースで層を
   // 検査すると、本物の地図が落ちるのに検査は通る。
-  Object.assign(style.sources, routeSources(PMTILES_URL));
+  Object.assign(style.sources, routeSources(PMTILES_URL, PREF_PMTILES_URL));
   const layers = routeLayers();
   if (filters) {
     for (const l of layers)
       if (filters[l.id] !== undefined) l.filter = filters[l.id];
   }
-  style.layers = [...style.layers, ...layers];
+  // 閲覧側が addLayer する順(app.js の boot)をそのまま組む。県道の線は国道の
+  // すべての層の下、県道の札は国道の札のすぐ下である。層の順は描く順と札の
+  // 場所争いの両方を決めるので、検査するスタイルの並びが本物と違えば、検査した
+  // 物は本物ではない。
+  const at = layers.findIndex((l) => l.id === 'route-labels');
+  style.layers = [
+    ...style.layers,
+    ...prefLineLayers(),
+    ...layers.slice(0, at),
+    prefLabelLayer(),
+    ...layers.slice(at),
+  ];
   return style;
 }
 
@@ -122,17 +138,31 @@ validate(
 // に書き写したズームの範囲は、同じ問いへの二つ目の、しかも何も言わない答えで
 // ある。z12 までのアーカイブに maxzoom:14 を書いたときは、スタイルの検査は通る
 // のに z12 より下がどの層も真っ白になった。
-const src = routeSources(PMTILES_URL).routes;
+const sources = routeSources(PMTILES_URL, PREF_PMTILES_URL);
+for (const id of ['routes', PREF_SOURCE]) {
+  const src = sources[id];
+  ok(
+    src.minzoom === undefined && src.maxzoom === undefined,
+    `the ${id} vector source does not restate the archive's zoom range ` +
+      `(${JSON.stringify(src)})`,
+  );
+}
 ok(
-  src.minzoom === undefined && src.maxzoom === undefined,
-  `the vector source does not restate the archive's zoom range ` +
-    `(${JSON.stringify(src)})`,
+  [...routeLayers(), ...prefLayers()]
+    .filter((l) => l.source === 'routes' || l.source === PREF_SOURCE)
+    .every((l) => l['source-layer'] === 'routes'),
+  'every layer on a vector source names its source-layer',
+);
+// 都道府県道のアーカイブは z0-7 で `label` を落としている(#100)。それを読むのは
+// 札の層だけで、その層は z8 から出る。ここが崩れると、引いた縮尺でだけ札が
+// 消える——描かれない理由がタイルの中にあるので、画面を見ても分からない。
+const labelReaders = prefLayers().filter((l) =>
+  JSON.stringify(l).includes('"label"'),
 );
 ok(
-  routeLayers()
-    .filter((l) => l.source === 'routes')
-    .every((l) => l['source-layer'] === 'routes'),
-  'every layer on the vector source names its source-layer',
+  labelReaders.length > 0 && labelReaders.every((l) => l.minzoom >= 8),
+  `every prefectural layer reading \`label\` starts at z8 ` +
+    `(${labelReaders.map((l) => `${l.id}@${l.minzoom}`).join(', ')})`,
 );
 
 // 画面が作りうる絞り込みの組み合わせも、その場で妥当でなければならない。場面は
