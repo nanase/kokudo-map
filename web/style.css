@@ -692,16 +692,10 @@ input[type="search"]::placeholder { font-size: .82em; }
   padding: 12px 14px 14px;
   display: flex; flex-direction: column; gap: 12px;
 }
-/* Wikipedia の W。字体は書体が持つ (detail.mjs の WIKIPEDIA_ICON)。並べた
-   書体はどれも同じオールドスタイルのセリフで、先頭から入っているものが使われ
-   る。おにぎりの番号 (.shield text) と同じく、寸法は svg 側の viewBox・
-   textLength と目で合わせてある。 */
+/* Wikipedia の W。字体は書体ではなく detail.mjs の WIKIPEDIA_ICON が持つ
+   ——線で引いてあるので、書体の在る無しにも寸法にも左右されない。ここは
+   リンクの下線を外すだけである。 */
 .detail-wiki { text-decoration: none; }
-.detail-wiki text {
-  fill: currentcolor; font-size: 22px; font-weight: 400;
-  font-family: Garamond, 'Adobe Garamond Pro', Warnock, 'Warnock Pro',
-    Bodoni, 'Bodoni MT', 'Goudy Old Style', Musica, serif;
-}
 
 /* 起点・終点 --------------------------------------------------------------
    行そのものを路線に見立てる。左端が起点、右端が終点で、あいだを矢印が結ぶ。
