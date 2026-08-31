@@ -150,25 +150,23 @@ export const fmtKm = (km) =>
 const row = (dt, dd) => `<dt>${dt}</dt><dd>${dd}</dd>`;
 
 /* Wikipedia の記事へ。あちらのロゴはパブリックドメインではないので写さない。
- * 代わりに、V を二つ重ねた W——記事の見出しに使われている系統の字形——を、
- * 隣の漏斗と同じ単線で引く。
+ * 代わりに、記事の見出しが使う系統の書体で W 一文字を出す——字体そのものは
+ * 書体が持ち、ここは持たない(書体は style.css の `.detail-wiki text`)。
  *
- * 以前はこの形を書体に頼んでいた(style.css の `.detail-wiki text` に
- * Garamond 系を並べていた)。頼めるのは、その書体を端末が持っていて、かつ
- * 15px でヘアラインが消えないときだけである。どちらも当てにできない——
- * Garamond も Bodoni MT も Goudy Old Style も Office や Adobe の付属品で、
- * 無い端末では総称の serif に落ちて、V の重なりを持たない W が出る。持って
- * いる端末でも、この寸法では斜めの細い線が 1 画素を割って滲みに潰れる。
- * 形が要るなら、ここで形を述べる。
+ * かつてはその書体を端末に頼んでいた。頼める端末は、Office か Adobe の
+ * 付属品として Garamond 系を持っている端末だけである。持たない端末では総称
+ * の serif に落ち、V の重なりを持たない別の W が出ていた。いまは標識の番号
+ * と同じように自前で配っているので、どの端末でも同じ字が出る。
  *
- * 二本の V は x=3.2〜16.6 と x=10.4〜20.8 で、上から 3 割ほどの高さで交わる。
- * 隣の漏斗と同じ svg・同じ太さなので、`.icon-btn svg` の寸法がそのまま効き、
- * 二つのボタンの中身が同じ高さ・同じ濃さで並ぶ。 */
-const WIKIPEDIA_ICON =
+ * 隣の漏斗と同じ svg にしてある。textLength は shield.mjs の番号と同じ用途
+ * で、どの書体が当たっても枠から食み出させないためである。21 は EB Garamond
+ * の W の送り幅(font-size 22px で 20.97px)に合わせてあり、この書体では
+ * 伸び縮みしない——20 だったころは 20/24 に潰れ、細い斜め線がさらに細く
+ * なっていた。 */
+export const WIKIPEDIA_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-  '<path d="M3.2 6 8.4 18.6 13.6 6M10.4 6 15.6 18.6 20.8 6" fill="none" ' +
-  'stroke="currentColor" stroke-width="2" stroke-linejoin="round" ' +
-  'stroke-linecap="round"/></svg>';
+  '<text x="12" y="18.4" text-anchor="middle" textLength="21" ' +
+  'lengthAdjust="spacingAndGlyphs">W</text></svg>';
 
 /* 絞り込みの漏斗。側面の「番号で絞り込み」と同じ所作——他を落として一つに
  * するもの——なので、同じ形で述べる。 */

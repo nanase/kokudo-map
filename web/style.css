@@ -88,6 +88,28 @@
   font-display: swap;
 }
 
+/* Wikipedia の W だけに使う (.detail-wiki text)。あちらのロゴは写せないので、
+   V を二つ重ねた W——オールドスタイルのセリフの字形——で代えている。
+
+   これを端末の書体に頼むことはできない。Garamond も Bodoni MT も
+   Goudy Old Style も Office や Adobe の付属品で、持たない端末では総称の
+   serif へ落ちる。総称の serif に V の重なりの保証は無いので、頼んだ端末に
+   よって別の字が出る。標識の番号に Roboto を配るのと同じ理由で、こちらも
+   自前で配る。EB Garamond は OFL-1.1 の Garamond 復刻である。
+
+   weight は 500 だけ複製する。400 では 15px のとき斜めの細い線が 1 画素を
+   割り、上の飾り罫と一続きの滲みになる。
+
+   index.html は preload しない。この 24 kB が要るのは詳細パネルを開いた人
+   だけで、地図を見に来ただけの人には要らない。 */
+@font-face {
+  font-family: 'EB Garamond';
+  src: url('vendor/eb-garamond-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 * { box-sizing: border-box; }
 
 /* スクロールバー ----------------------------------------------------------
@@ -708,10 +730,20 @@ input[type="search"]::placeholder { font-size: .82em; }
   padding: 12px 14px 14px;
   display: flex; flex-direction: column; gap: 12px;
 }
-/* Wikipedia の W。字体は書体ではなく detail.mjs の WIKIPEDIA_ICON が持つ
-   ——線で引いてあるので、書体の在る無しにも寸法にも左右されない。ここは
-   リンクの下線を外すだけである。 */
+/* Wikipedia の W。字体は上で自前で配っている EB Garamond が持つ。後ろに
+   並べた三つは、それが降りてくるまでの繋ぎである——持っている端末では
+   swap が目に見えない。寸法は svg 側の viewBox・textLength と目で合わせて
+   ある (detail.mjs の WIKIPEDIA_ICON)。
+
+   印だけ 17px にしてある。他の印は線で引いた図で、15px でも形が残る。
+   これは字なので、同じ 15px では字面のほうが小さく見え、隣の漏斗と釣り
+   合わない。 */
 .detail-wiki { text-decoration: none; }
+.detail-wiki svg { width: 17px; height: 17px; }
+.detail-wiki text {
+  fill: currentcolor; font-size: 22px; font-weight: 500;
+  font-family: 'EB Garamond', Garamond, 'Bodoni MT', 'Goudy Old Style', serif;
+}
 
 /* 起点・終点 --------------------------------------------------------------
    行そのものを路線に見立てる。左端が起点、右端が終点で、あいだを矢印が結ぶ。

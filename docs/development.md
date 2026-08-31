@@ -26,7 +26,9 @@ bun x playwright install chromium   # 実描画の確認にだけ必要
 
 `bun install` は続けて `scripts/vendor_web.mjs` を走らせ、MapLibre と PMTiles と書体を `node_modules` から `web/vendor/` に複製します。地図はそこから読みます。CDN は読みません。
 
-書体は 2 つです。路線番号の標識が Roboto、操作面が LINE Seed JP です。後者は日本語 1 書体ぶんあるので 1 ファイルにはなりません。Fontsource が unicode-range で分けた約 120 片を、weight 400・700 のぶんだけ複製します。woff2 で 248 ファイル、6 MB です。ブラウザが取るのは画面に出ている字を含む片だけです。
+書体は 3 つです。路線番号の標識が Roboto、操作面が LINE Seed JP、Wikipedia の W が EB Garamond です。LINE Seed JP は日本語 1 書体ぶんあるので 1 ファイルにはなりません。Fontsource が unicode-range で分けた約 120 片を、weight 400・700 のぶんだけ複製します。woff2 で 248 ファイル、6 MB です。ブラウザが取るのは画面に出ている字を含む片だけです。
+
+Roboto と EB Garamond は 1 文字種のために配ります。どちらも「端末が持っている書体では字形が違って見える」ためで、標識の番号は等幅書体だと "1" にヒゲが残り、Wikipedia の W は Garamond 系を持たない端末では V の重なりを失います。EB Garamond は weight 500 のラテン文字ぶん 24 kB だけを複製し、preload はしません。要るのは詳細パネルを開いた人だけです。
 
 `bunfig.toml` で `minimumReleaseAge` を設定してあり、公開から 3 日経っていないパッケージは入りません。サプライチェーン攻撃で悪意あるバージョンが公開直後に出回っても、その 3 日のあいだに見つかって取り下げられれば踏みません。3 日を過ぎてから悪意が判明した版は防げないので、これは防壁ではなく、気付かれるまでの時間を稼ぐ仕掛けです。
 

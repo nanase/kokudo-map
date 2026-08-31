@@ -16,6 +16,7 @@ import {
   prefDetailHTML,
   prefWikipediaURL,
   relatedRoutesOf,
+  WIKIPEDIA_ICON,
   wikipediaURL,
 } from '../web/detail.mjs';
 import { KIND_LABELS, PREF_KIND_LABELS } from '../web/popup.mjs';
@@ -124,16 +125,10 @@ describe('detailHTML — 見出しとボタン', () => {
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener"');
     expect(html).toContain('class="icon-btn detail-wiki"');
-    // ロゴは写せないので W 一文字で名乗ります。字体は書体に頼らず、V を二つ
-    // 重ねた形をこちらで引きます。隣の漏斗と同じ svg・同じ太さの単線です。
-    // 座標そのものはここに写しません——形を決めているのは detail.mjs の
-    // WIKIPEDIA_ICON で、写せば同じ答えが二箇所に並びます。ここが確かめる
-    // のは、書体に頼っていないこと(線で引いてあること)です。
-    expect(html).toContain('<svg viewBox="0 0 24 24" aria-hidden="true">');
-    expect(html).toMatch(
-      /detail-wiki"[^>]*>.*?<path [^>]*stroke="currentColor"/,
-    );
-    expect(html).not.toContain('</text></svg></a>');
+    // ロゴは写せないので W 一文字で名乗ります。印そのものは detail.mjs の
+    // WIKIPEDIA_ICON が持つので、SHIELD_PATH と同じように本物を import して
+    // 突き合わせます。写せば同じ答えが二箇所に並びます。
+    expect(html).toContain(WIKIPEDIA_ICON);
     expect(html).toContain(
       'aria-label="Wikipedia「国道18号」を新しいタブで開く"',
     );

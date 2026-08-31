@@ -26,12 +26,18 @@ const MODULES = join(ROOT, 'node_modules');
 const VENDOR = join(ROOT, 'web', 'vendor');
 
 /* `.map` は意図して置いていく。1 つ数 MB あり、公開したサイトに対して誰も
- * 走らせないデバッガのための物である。 */
+ * 走らせないデバッガのための物である。
+ *
+ * 書体が二つ混じっている。Roboto は標識の番号、EB Garamond は Wikipedia の W
+ * である。どちらも「端末が持っている書体では字形が違って見える」という同じ
+ * 理由で自前で配る。EB Garamond はラテン文字ぶん 24 kB を W 一文字のために
+ * 運ぶが、降りてくるのは詳細パネルを開いた人だけである。 */
 const FILES = [
   ['maplibre-gl', 'dist/maplibre-gl.js'],
   ['maplibre-gl', 'dist/maplibre-gl.css'],
   ['pmtiles', 'dist/pmtiles.js'],
   ['@fontsource/roboto', 'files/roboto-latin-700-normal.woff2'],
+  ['@fontsource/eb-garamond', 'files/eb-garamond-latin-500-normal.woff2'],
 ];
 
 /* 操作面の書体。日本語 1 書体は約 7000 字あり、ラテン文字だけの Roboto のよう
