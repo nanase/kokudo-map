@@ -39,11 +39,18 @@
      なるので、そちらは元から変わらない。
 
      選択を書くのも、'auto' を解くのも app.js の仕事である。ここがするのは、
-     app.js が前に書いた物をそのまま置き直すことだけである。 -->
+     app.js が前に書いた物をそのまま置き直すことだけである。
+
+     凡例を畳んでいるかどうかも同じ理由でここに置く。凡例は vendor/*.js を
+     待たずに出せるよう静的な HTML にしてあるので(下の #legend-bar)、畳んだ人の
+     画面には、ここが無いと凡例が一度出てから消える。 -->
 <script>
   try {
     const t = localStorage.getItem('theme');
     if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    if (localStorage.getItem('legend-open') === '0') {
+      document.documentElement.dataset.legend = 'off';
+    }
   } catch {
     /* private browsing: 保存が読めないので端末の設定のまま出す。 */
   }
@@ -202,13 +209,38 @@
          検査する。
 
          出ていない系統の行は、app.js が起動後に hidden を付けて隠す。地図に
-         描かれていない色を凡例だけが説明する状態を避けるためである。 -->
+         描かれていない色を凡例だけが説明する状態を避けるためである。
+
+         畳んでいるかどうかは、この帯ではなく <html> の data-legend が持つ。
+         配色と同じ理由である——上の <head> の数行が前回の選択を最初の描画の前に
+         置くので、畳んでいる人の画面に凡例が一度出てから消えることがない。 -->
     <div id="legend-bar">
-      <div class="legend-box">
-        <div id="legend-n" class="legend"><span class="lead">国道</span><span class="item"><span class="swatch" style="border-top-color:#1B62C4"></span>単独指定</span><span class="item"><span class="swatch" style="border-top-color:#D98324"></span>二重用</span><span class="item"><span class="swatch" style="border-top-color:#C2352B"></span>三重用</span><span class="item"><span class="swatch" style="border-top-color:#7B3E9D"></span>四重用以上</span></div>
-        <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
-        <div id="legend-pref" class="legend"><span class="lead">都道府県道</span><span class="item"><span class="swatch" style="border-top-color:#1B7A3E"></span>主要地方道</span><span class="item"><span class="swatch" style="border-top-color:#8CBF4A"></span>一般都道府県道</span><span class="item" title="工事中・事業中／未開通／徒歩道・階段／航路"><span class="swatch duo"><span style="color:#1B7A3E"></span><span style="color:#8CBF4A"></span></span>工事中・事業中など</span></div>
+      <div id="legend-box" class="legend-box">
+        <div class="legend-rows">
+          <div id="legend-n" class="legend"><span class="lead">国道</span><span class="item"><span class="swatch" style="border-top-color:#1B62C4"></span>単独指定</span><span class="item"><span class="swatch" style="border-top-color:#D98324"></span>二重用</span><span class="item"><span class="swatch" style="border-top-color:#C2352B"></span>三重用</span><span class="item"><span class="swatch" style="border-top-color:#7B3E9D"></span>四重用以上</span></div>
+          <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
+          <div id="legend-pref" class="legend"><span class="lead">都道府県道</span><span class="item"><span class="swatch" style="border-top-color:#1B7A3E"></span>主要地方道</span><span class="item"><span class="swatch" style="border-top-color:#8CBF4A"></span>一般都道府県道</span><span class="item" title="工事中・事業中／未開通／徒歩道・階段／航路"><span class="swatch duo"><span style="color:#1B7A3E"></span><span style="color:#8CBF4A"></span></span>工事中・事業中など</span></div>
+        </div>
+        <!-- 浮いているパネルは自分で閉じられる、を凡例にも通す。開き直す口は
+             同じ角に残る #legend-open である。 -->
+        <button type="button" id="legend-close" aria-controls="legend-box"
+                title="凡例を閉じる" aria-label="凡例を閉じる">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor"
+                  stroke-width="2.4" stroke-linecap="round"/>
+          </svg>
+        </button>
       </div>
+      <!-- 凡例を畳んでいるあいだだけ、同じ角に出る。絵だけでは何の一覧かを
+           指せないので、字を添える。 -->
+      <button type="button" id="legend-open" aria-controls="legend-box" aria-expanded="true"
+              title="凡例を表示" aria-label="凡例を表示">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h6M4 12h6M4 17h6M14 7h6M14 12h6M14 17h6" fill="none"
+                stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        凡例
+      </button>
     </div>
     <!-- 地図の上のボタンから出る面。「何が地図に描かれるか」を決めるものは残らず
          ここに集める——切り替えた結果は地図にしか現れないので、操作面ではなく

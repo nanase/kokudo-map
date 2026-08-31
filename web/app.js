@@ -1203,7 +1203,12 @@ function applyFilters() {
  * 凡例を、地図に描かれている系統だけに絞る。`legend-kind`(点線国道・工事中・
  * 未開通・海上国道)は国道の区分の凡例なので、`legend-n` と同じく `national` に
  * 従う——国道を消した画面に、国道の区分だけの凡例が残っては元も子もない。
+ * 都道府県道の破線は `legend-pref` の中にあるので、こちらは `pref` に従う。
  * 両方消えたときは帯そのものも隠す。空の角丸だけが地図に残らないためである。
+ *
+ * 読む人が凡例を畳んだかどうかは、ここが決めることではない。帯を隠せば畳んだ
+ * ほうも道連れになるので、二つを一つの属性に押し込まずに分けてある——畳み方は
+ * 下の即時関数が <html> の data-legend で持つ。
  */
 function syncLegend() {
   $('#legend-n').hidden = !state.national;
@@ -1227,6 +1232,41 @@ function syncURL() {
   const url = `${location.pathname}${q ? `?${q}` : ''}${location.hash}`;
   history.replaceState(null, '', url);
 }
+
+/* ------------------------------------------------------------ 凡例を畳む --- */
+/**
+ * 凡例を畳んで、地図に角を返す。
+ *
+ * 操作面(#panel)と同じ形である——開いているあいだ閉じる口は凡例自身の ×、
+ * 閉じているあいだ開き直す口は同じ角に残る #legend-open である。
+ *
+ * 状態は URL ではなく localStorage に残す。配色・下地図の種類と濃さ・操作面の
+ * 開閉と同じ、読む人の表示の好みだからである。地図に何が描かれているかを決める
+ * 物ではないので、共有したリンクが相手の凡例まで決める理由が無い。
+ *
+ * 畳んだ状態を実際に効かせるのは CSS で、鍵は <html> の data-legend である。
+ * ここが hidden を置かないのは、index.html の <head> が最初の描画の前に同じ
+ * 属性を置いているためで、答えを二箇所に分けないためである。
+ */
+(() => {
+  const open = $('#legend-open');
+  const set = (isOpen) => {
+    document.documentElement.dataset.legend = isOpen ? 'on' : 'off';
+    open.setAttribute('aria-expanded', String(isOpen));
+    try {
+      localStorage.setItem('legend-open', isOpen ? '1' : '0');
+    } catch {
+      /* プライベートブラウズ: 選択がタブより長く残らないだけである。 */
+    }
+  };
+  open.addEventListener('click', () => set(true));
+  $('#legend-close').addEventListener('click', () => set(false));
+  // <head> が既に読んでいる。ここは aria-expanded を初回だけ合わせ直す。
+  open.setAttribute(
+    'aria-expanded',
+    String(document.documentElement.dataset.legend !== 'off'),
+  );
+})();
 
 /* -------------------------------------------------------- 画面の組み立て --- */
 function buildUI() {

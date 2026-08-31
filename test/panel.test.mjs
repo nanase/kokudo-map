@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 // 色の写しは置かない。凡例の見本が地図の線と同じ色かどうかを見るので、地図の
 // 定義そのものを読む。
 import { PREF_GENERAL, PREF_MAJOR } from '../web/mapspec.mjs';
-
 import {
   clearLabel,
   countLabel,
@@ -359,11 +358,34 @@ describe('凡例', () => {
         `<span style="color:${PREF_GENERAL}"></span>` +
         '</span>',
     );
-    const css = readFileSync(
-      new URL('../web/style.css', import.meta.url),
-      'utf8',
-    );
-    expect(css).toContain('.legend .swatch.duo > span');
+    expect(styleCss).toContain('.legend .swatch.duo > span');
+  });
+
+  /* 凡例を畳んだ状態は三つのファイルにまたがる——index.html の <head> が最初の
+   * 描画の前に置き、app.js が押されたときに書き直し、style.css がそれを効かせる。
+   * 鍵の綴りが一つでもずれると、畳んだまま次に来た人の画面に凡例が戻る。それが
+   * どこも壊さずに起きるので、ここで三つを突き合わせる。 */
+  const appJs = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const styleCss = readFileSync(
+    new URL('../web/style.css', import.meta.url),
+    'utf8',
+  );
+
+  test('凡例の畳み方は、三つのファイルが同じ綴りを使う', () => {
+    expect(indexHtml).toContain("localStorage.getItem('legend-open')");
+    expect(appJs).toContain("localStorage.setItem('legend-open'");
+    expect(indexHtml).toContain("dataset.legend = 'off'");
+    expect(appJs).toContain('dataset.legend');
+    expect(styleCss).toContain(':root[data-legend="off"] #legend-box');
+    expect(styleCss).toContain(':root[data-legend="off"] #legend-open');
+  });
+
+  test('凡例には閉じる口と開き直す口の両方がある', () => {
+    // 片方しか無いと、畳んだ人が戻れないか、そもそも畳めない。
+    expect(indexHtml).toContain('id="legend-close"');
+    expect(indexHtml).toContain('id="legend-open"');
+    // どちらも同じものを指していると読み上げにも伝わる形にする。
+    expect(indexHtml.match(/aria-controls="legend-box"/g)).toHaveLength(2);
   });
 
   test('系統ごとの行は頭の語で、どちらの話かを述べる', () => {

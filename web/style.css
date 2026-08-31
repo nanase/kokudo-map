@@ -365,11 +365,13 @@ input[type="search"]::placeholder { font-size: .82em; }
 #app:not(.panel-off) #legend-bar { left: 364px; }
 .legend-box {
   pointer-events: auto; max-width: 100%;
-  display: flex; flex-direction: column; gap: 3px;
-  padding: 7px 11px;
+  display: flex; align-items: flex-start; gap: 2px;
+  /* 右は畳む × のぶんだけ薄くする。ボタン自身が余白を持っている。 */
+  padding: 7px 6px 7px 11px;
   background: var(--panel); color: var(--ink);
   border-radius: 6px; box-shadow: 0 0 0 2px rgba(0,0,0,.1);
 }
+.legend-rows { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .legend {
   display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: flex-end;
 }
@@ -411,6 +413,34 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 /* title 属性を持つ項目だけ、補足があることをカーソルで示す。 */
 .legend .item[title] { cursor: help; }
+
+/* 凡例を畳む口と、開き直す口。畳んでいるかどうかは <html> の data-legend が
+   持つ——index.html の <head> の数行が前回の選択を最初の描画の前に置くので、
+   畳んでいる人の画面に凡例が一度出てから消えることがない。書くのは app.js で
+   ある。
+
+   × は共有ダイアログの .dialog-close と同じ言葉で書くが、寸法は一回り小さい。
+   凡例の台は 3 行しかなく、32px 角ではその高さの半分を占める。 */
+#legend-close {
+  flex: none; border: 0; background: none; cursor: pointer; padding: 0;
+  display: grid; place-items: center; width: 26px; height: 26px;
+  border-radius: 4px; color: var(--ink-3);
+}
+#legend-close:hover { color: var(--ink); background: var(--panel-2); }
+#legend-close svg { width: 13px; height: 13px; }
+/* 開き直す口は地図の上の部品なので、#panel-toggle と同じ見た目の言葉で書く。
+   絵だけでは何の一覧かを指せないので、字を添える。 */
+#legend-open {
+  pointer-events: auto; display: none; align-items: center; gap: 5px;
+  padding: 4px 9px; font: inherit; font-size: .72rem; line-height: 1.35;
+  background: var(--panel); color: var(--ink-2); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.24);
+}
+#legend-open:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
+#legend-open svg { width: 13px; height: 13px; }
+:root[data-legend="off"] #legend-box { display: none; }
+:root[data-legend="off"] #legend-open { display: flex; }
 
 /* 重用ランキング -------------------------------------------------------- */
 .ranking { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
