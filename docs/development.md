@@ -84,6 +84,8 @@ mise run pack-n13
 
 変換できたメッシュから、古い JSON は消します。読む物がもう無く、全国で 6.7 GB あるからです。packed は同じ内容を 2.7 GB で持ちます。残したいときは `mise run pack-n13 -- --keep-legacy` を使います。
 
+**消した JSON は作り直せます。**元は `build/n13/<メッシュ>/` の shapefile で、そちらは消しません。packed も JSON も、そこから作った物です。だからこの変更を revert して古いコードに戻したときも、`mise run apply-n13` なり `mise run compare-n13` なりが、無いメッシュの JSON をその場で作り直します。取り直しは要りません。海しかないメッシュだけ、配布物が無いことの確認に KSJ へ 1 度ずつ問い合わせます。
+
 なぜ形を変えたかは `pipeline/compare_n13.py` の `Mesh` にあります。要点は、座標 1 点を Python の tuple で持つと生の 16 バイトが 20 倍に膨らむこと、配列にして mmap で開けば常駐に乗らないこと、そして読み取り専用なので並列に走る県が同じ物理ページを共有することです。
 
 `serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが必要です。
