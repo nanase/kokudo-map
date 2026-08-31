@@ -26,7 +26,7 @@ import sys
 import time
 from pathlib import Path
 
-from _paths import ROOT
+from _paths import PREFECTURAL, ROOT, SURVEY
 from regions import REGIONS, named_regions
 
 HERE = Path(__file__).resolve().parent
@@ -76,6 +76,43 @@ def outcome(label: str, code: int, out: str) -> list[str]:
     if code != 0 and not bad:
         bad.append(f"{label} が終了コード {code} で異常終了しました(FAIL 行なし)")
     return bad
+
+
+def prefectural(judge: bool) -> None:
+    """都道府県道を判定し、別のアーカイブへ切る。
+
+    国道と分けて持つ理由は #100 にある——国道の 55.9 MB を県道を直すたびに上げ
+    直さずに済むこと、タイル化のメモリが 2 回に分かれること、県道側が壊れても
+    国道の地図は出ること。
+
+    判定が読むのは build/survey で、あれを作るのは pbf を一度読む別の段
+    (`mise run survey-pref`)である。そこまでを build_all が抱えると、国道だけを
+    作り直したい手元で 2.5 GB の読み直しを強いることになる。無いときは飛ばし、
+    何をすれば入るかを名指す。
+
+    飛ばす判断は、詰める物が半分だけある状態を作らないためでもある。47 県のうち
+    幾つかが欠けたアーカイブは、揃った物と見分けが付かない。
+    """
+    need = SURVEY if judge else PREFECTURAL
+    suffix = ".json" if judge else ".meta.json"
+    missing = [r for r in REGIONS if not (need / f"{r}{suffix}").is_file()]
+    if missing:
+        label = need.relative_to(ROOT).as_posix()
+        first = ", ".join(missing[:5]) + (" ほか" if len(missing) > 5 else "")
+        print(f"\n{'=' * 70}")
+        print("都道府県道 — 飛ばす")
+        print(f"{'=' * 70}")
+        print(f"{label} に {len(missing)} 県が無い({first})。")
+        print("入れるには `mise run survey-pref` と `mise run build-pref` を"
+              "先に実行する。", flush=True)
+        return
+    if judge:
+        stage("都道府県道 — build/survey から判定する",
+              ["uv", "run", str(HERE / "build_prefectural.py")])
+    # 国道の 151,004 本に対して 290,529 本あるが、低ズームでは属性を減らすので、
+    # 国道の半分以下のヒープで通る。実測では 1,280 MB で通り、896 MB で落ちる。
+    stage("配信データ — 都道府県道のタイルを切る",
+          ["node", "--max-old-space-size=2048", str(HERE / "pack_web_pref.mjs")])
 
 
 def main() -> None:
@@ -165,6 +202,9 @@ def main() -> None:
     # 生きている。既定のヒープでは足りない。
     stage("配信データ — 地域を結合してタイルを切る",
           ["node", "--max-old-space-size=6144", str(HERE / "pack_web.mjs")])
+    prefectural(judge=not pack_only)
+    # アーカイブは国道と都道府県道で別々である。引数を渡さなければ、切ってある
+    # 物をすべて詰める。
     stage("配信データ — PMTiles にまとめる",
           ["uv", "run", str(HERE / "pack_pmtiles.py")])
     if not skip_verify:

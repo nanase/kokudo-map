@@ -6,7 +6,7 @@
 
 配信データを git に入れないのは意図してのことである。理由は二つあり、どちらも
 .gitignore に書いてある。道路データは ODbL でコードは MIT であること。そして
-タイルは既に gzip 済みの約 55 MB で、差分も圧縮も効かず、作り直すたびに丸ごと
+タイルは既に gzip 済みの 156 MB で、差分も圧縮も効かず、作り直すたびに丸ごと
 履歴へ積まれることである。
 
 GitHub Pages も経由しない。Pages の裏側(Fastly)は、バイト 0 から始まらない
@@ -15,8 +15,8 @@ Range 要求に対して、要求したファイルとは無関係なバイト�
 規則、圧縮規則、配信のやり直し)同じだった。PMTiles の読み取りはほぼ全てそういう
 要求なので、地図は一度も描けなかった。R2 は同じ Cloudflare ゾーンの内側にあり、
 この不具合を持たない。だからデータはそちら——data.nanase.cc——に置き、
-.github/workflows/pages.yml が、配る JavaScript の中の相対パス 2 つをそこへ
-向け直す。
+.github/workflows/pages.yml が web/dataurl.mjs の基点をそこへ向け直す。書き換える
+のはその 1 行だけなので、配信データのファイルが増えてもここは変わらない。
 
 使い方:
     uv run pipeline/publish_data.py
@@ -33,7 +33,22 @@ BUCKET = "kokudo-map-data"
 
 # 閲覧側が取る物ちょうど。index.html や app.js はリポジトリと一緒に運ばれる。
 # 生成されるのはこれだけである。
-FILES = ["national-routes.pmtiles", "national.meta.json", "regions.json"]
+#
+# 国道と都道府県道でアーカイブが分かれているのは #100 の判断である。分けてあると、
+# 県道を直したときに上げ直すのは 100 MB の側だけで済む——国道の 55.9 MB は動かない。
+# 県ごとの meta が 47 個あるのも同じ理由で、画面が最初に読む JSON を増やさずに、
+# 県を選んだときにその県のぶんだけを取らせるためである。
+FILES = [
+    "national-routes.pmtiles",
+    "national.meta.json",
+    "regions.json",
+    "prefectural-routes.pmtiles",
+]
+
+
+def pref_metas() -> list[str]:
+    """web/data/pref/ に在る県ごとの meta。R2 でも同じ `pref/` の下に置く。"""
+    return sorted(f"pref/{p.name}" for p in (DATA / "pref").glob("*.meta.json"))
 
 
 def wrangler(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -63,6 +78,10 @@ def preflight() -> None:
         sys.exit(
             f"web/data/ に {', '.join(missing)} が無い。先に `mise run pack` を実行する。"
         )
+    if not pref_metas():
+        sys.exit(
+            "web/data/pref/ に県ごとの meta が無い。先に `mise run pack` を実行する。"
+        )
 
     if wrangler("whoami", check=False).returncode != 0:
         sys.exit(
@@ -71,12 +90,12 @@ def preflight() -> None:
 
 
 def main() -> None:
-    """FILES のファイルを wrangler で BUCKET へ上げる。"""
+    """配信データを wrangler で BUCKET へ上げる。"""
     # Windows の端末は標準出力の既定が cp932 である——build_all.main() を参照。
     sys.stdout.reconfigure(errors="replace")
     preflight()
 
-    for name in FILES:
+    for name in FILES + pref_metas():
         path = DATA / name
         size = path.stat().st_size
         print(f"  {name}  {size / 1e6:.1f} MB  を上げる")

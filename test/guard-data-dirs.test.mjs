@@ -371,6 +371,9 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf build/cache'],
     ['rm -rf build/n03'],
     ['rm -rf build/overpass-baseline'],
+    ['rm -rf build/survey'],
+    ['rm -rf build/prefectural'],
+    ['rm -rf build/tiles-prefectural'],
     ['rm -rf web/data'],
   ])('%s', denies);
 

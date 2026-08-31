@@ -9,6 +9,10 @@ export const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
  * pack_web.mjs が web/data へ詰めた物である。 */
 export const REGIONS = join(ROOT, 'build', 'regions');
 
+/* 都道府県道の判定の生成物。国道と同じ形の GeoJSON と meta である。
+ * 木を分ける理由は pipeline/_paths.py にある。 */
+export const PREFECTURAL = join(ROOT, 'build', 'prefectural');
+
 /* 政令の別表をデータにした物。pipeline/decree.py が書く。 */
 export const DECREE = join(ROOT, 'build', 'decree');
 export const DATA = join(ROOT, 'web', 'data');
