@@ -1192,6 +1192,8 @@ function applyFilters() {
   map.setFilter('termini-label', tFilter);
 
   syncLegend();
+  // 系統を消したなら、その線の上に置いたままの指も押せなくなっている。
+  syncCursor();
   updateStats();
   renderRanking();
   syncURL();
@@ -1352,15 +1354,22 @@ const prefPickable = () => map.getZoom() >= PREF_POPUP_MINZOOM;
  * カーソルの形。押せる物の上でだけ指の形にする。
  *
  * 二つの系統で押せる条件が違うので、どちらの上にいるかを覚えておいて一箇所で
- * 決める。指の形をズームでも見直すのは、県道の上に載せたまま縮尺だけを動かせる
- * ためである——動かした先で押しても何も起きないのに、指の形だけが残っていては、
- * 押せる物だと言ったままになる。
+ * 決める。押せるかどうかは、線の上にいることだけでは決まらない——その系統が
+ * 地図に出ているか、都道府県道なら縮尺が足りているかも要る。
+ *
+ * ズームと絞り込みでも見直す。線の上に指を置いたまま縮尺を動かすことも、系統を
+ * 消すこともできるためである。`mouseleave` は指が動いたときにしか来ないので、
+ * 指を止めたまま押せなくなったとき、指の形だけが残る。押せる物だと言ったままに
+ * なる。
  */
 let overNational = false;
 let overPref = false;
 
 function syncCursor() {
-  const want = overNational || (overPref && prefPickable()) ? 'pointer' : '';
+  const on =
+    (overNational && state.national) ||
+    (overPref && state.pref && prefPickable());
+  const want = on ? 'pointer' : '';
   // ズームは 1 フレームごとに届く。同じ値を書き直さない。
   const canvas = map.getCanvas();
   if (canvas.style.cursor !== want) canvas.style.cursor = want;
@@ -1538,7 +1547,12 @@ async function openPrefDetail(key) {
 
   const combos = meta.combinations;
   const route = routesOf(combos, comparePrefKeys).find((r) => r.ref === key);
-  if (!route) return;
+  // タイルに在る路線が県の表に無いのは、配ってある web/data が食い違っていると
+  // きである。待っている表示のまま止めず、読めなかったと言う。
+  if (!route) {
+    detailBody.innerHTML = prefDetailHTML({ prefLabel, ref, failed: true });
+    return;
+  }
   const sel = new Set([key]);
   detailBody.innerHTML = prefDetailHTML({
     prefLabel,
