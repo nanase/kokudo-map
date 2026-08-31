@@ -105,12 +105,10 @@ for (const f of features) {
   }
 }
 
-const dataBbox = features.reduce((a, f) => unionBbox(a, f.bbox), [
-  Infinity,
-  Infinity,
-  -Infinity,
-  -Infinity,
-]);
+const dataBbox = features.reduce(
+  (a, f) => unionBbox(a, f.bbox),
+  [Infinity, Infinity, -Infinity, -Infinity],
+);
 
 /* ---------------------------------------------------------------- 集計 --- */
 /** 地域をまたいで結合した起終点。重なりの内側にある点は二度報告されるので、
