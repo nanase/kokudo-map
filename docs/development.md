@@ -57,6 +57,7 @@ mise run serve        # http://localhost:8000/
 | `mise run compare <地域>` | Overpass 由来の基準と突き合わせる |
 | `mise run compare-n13 <地域>` | 国土数値情報 N13(道路)と突き合わせ、OSM に無い国道の候補を探す |
 | `mise run apply-n13 <地域>` | former のうち N13 で指定解除を機械確認できたものに revoked を書き込む |
+| `mise run pack-n13` | N13 のメッシュを packed の形へ用意し、古い JSON キャッシュを片づける |
 | `mise run compare-annual-report` | 道路統計年報と延長を突き合わせ、差の内訳を出す |
 | `mise run survey-pref` | 都道府県道になりうる way を全国から測り、`build/survey/` に残す |
 | `mise run build-pref [地域…]` | `build/survey/` から都道府県道を判定し、`build/prefectural/` を作る |
@@ -70,6 +71,20 @@ mise run serve        # http://localhost:8000/
 `mise run build-pref` は判定して `build/prefectural/` に GeoJSON と meta を書きます。国道の `build/regions/` とは木を分けてあります。判定ルールは [PREFECTURAL.md](../.claude/skills/national-route-data/PREFECTURAL.md) にあります。配信への組み込みはまだありません。
 
 国土数値情報 N03(行政区域)は初回に取ります。`mise run extract` は way の所属都道府県を決めるのに現行の年版を、`mise run decree` は政令の地名を引くのに 2000 年版も使います。47 都道府県ぶん二つで約 530 MB です。以後はキャッシュから読みます。
+
+### N13 のキャッシュを packed へ移す
+
+`mise run build-all` は県を並列に走らせます。その前に、N13 の 1 次メッシュを `build/n13/<メッシュ>.{pts,starts,rdctg}.npy` の形へ用意します。`build-all` が自分で `pack-n13` を呼ぶので、いつもの手順なら何もしなくて構いません。
+
+**手元に古い `build/n13/<メッシュ>.classified.raw.json` があるなら、初回だけ変換が走ります。**全国 285 メッシュで約 20 分です。取り直しではなく、既にある shapefile を読み直すだけなので、通信は海しかないメッシュの確認に使う程度です。ビルドとは別の時間に済ませたいときは、先に単独で回せます。
+
+```sh
+mise run pack-n13
+```
+
+変換できたメッシュから、古い JSON は消します。読む物がもう無く、全国で 6.7 GB あるからです。packed は同じ内容を 2.7 GB で持ちます。残したいときは `mise run pack-n13 -- --keep-legacy` を使います。
+
+なぜ形を変えたかは `pipeline/compare_n13.py` の `Mesh` にあります。要点は、座標 1 点を Python の tuple で持つと生の 16 バイトが 20 倍に膨らむこと、配列にして mmap で開けば常駐に乗らないこと、そして読み取り専用なので並列に走る県が同じ物理ページを共有することです。
 
 `serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが必要です。
 

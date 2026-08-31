@@ -41,7 +41,7 @@ from compare_n13 import (
     GAP_THRESHOLD_M,
     build_segment_grid,
     coverage_ratio,
-    load_classified_raw,
+    load_mesh,
     mesh_codes_for_bbox,
 )
 from geo import line_length
@@ -158,8 +158,8 @@ def main() -> None:
 
     print(f"\n{len(meshes)} meshes, {GAP_THRESHOLD_M} m threshold", flush=True)
     for n, mesh in enumerate(meshes, 1):
-        raw = [line for rdctg, line in load_classified_raw(mesh, refresh)
-               if rdctg == RDCTG_PREFECTURAL and len(line) >= 2]
+        raw = [line for line in load_mesh(mesh, refresh).lines(RDCTG_PREFECTURAL)
+               if len(line) >= 2]
         if not raw:
             continue
         records += len(raw)

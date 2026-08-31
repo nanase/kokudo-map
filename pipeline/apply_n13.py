@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["requests", "pyshp"]
+# dependencies = ["requests", "pyshp", "numpy"]
 # ///
 """N13 による指定解除の機械確認を、`revoked` 属性として
 build/regions/<region>.geojson へ書く——former 孤立候補の仕分けについての、
