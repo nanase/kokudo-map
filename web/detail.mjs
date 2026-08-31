@@ -14,7 +14,7 @@
 import { esc } from './html.mjs';
 import { PREF_RANK_LABELS } from './mapspec.mjs';
 import { KIND_LABELS, PREF_KIND_LABELS } from './popup.mjs';
-import { prefRefOf } from './prefroute.mjs';
+import { prefKeyOf, prefRefOf } from './prefroute.mjs';
 import { hexShield, prefRouteName, shield } from './shield.mjs';
 
 /** 路線の記事。日本語版 Wikipedia は「国道N号」で立項が揃っている。 */
@@ -343,7 +343,12 @@ export function detailHTML({
  *
  *   標識      ヘキサになり、路線名を見出しに出す
  *   起終点    出ない。都道府県道には全国 1 枚の起終点の台帳が無い
- *   絞り込み  出ない。路線ごとの選択そのものが未着手である(#109)
+ *   絞り込み  押した状態が残る。ここが選択を述べる唯一の場所である(#109)
+ *
+ * 「この路線だけ表示」は国道と同じ絵・同じ場所に置くが、押した後の振る舞いだけ
+ * が違う。国道のボタンは押すたびにその 1 路線へ置き換えるのに対し、こちらは
+ * 押した状態を持ち、もう一度押すと解除する。操作面に都道府県道の節が無い以上、
+ * 選んでいることを述べる場所も、解除する口も、このボタンのほかに無い(#109)。
  *
  * 重用の但し書きはここに置かない。「国道マップについて」が持つ
  * (panel.mjs の prefConcurrencyHTML)。パネルは 1 路線の数を述べる場所で、
@@ -359,6 +364,7 @@ export function detailHTML({
  * 揃う前から分かっていることである。
  */
 export function prefDetailHTML({
+  region,
   prefLabel,
   ref,
   route = null,
@@ -367,6 +373,7 @@ export function prefDetailHTML({
   related = [],
   formerKm = 0,
   failed = false,
+  selected = false,
 }) {
   const name = prefRouteName(prefLabel, ref);
   const wait = failed
@@ -385,6 +392,20 @@ export function prefDetailHTML({
       relatedHTML(related, prefRelShieldHTML(prefLabel))
     : wait;
 
+  // 押した後に何が起きるかをそのまま名乗る。押している間の名乗りは「解除」で
+  // あって「表示」ではない——同じ文言のまま状態だけ変わると、押した結果が
+  // 読み上げからも title からも分からなくなる。
+  const onlyText = selected
+    ? `${name}だけの表示を解除`
+    : `${name}だけを表示（国道も消えます）`;
+  // 見た目は `active`、読み上げは `aria-pressed` が持つ。二つに分けるのは
+  // app.js の地図の上のボタン(cycleButton)と同じ作法である。
+  const only = region
+    ? `<button type="button" class="icon-btn detail-only${selected ? ' active' : ''}" ` +
+      `data-pref="${esc(prefKeyOf(region, ref))}" aria-pressed="${selected}" ` +
+      `title="${esc(onlyText)}" aria-label="${esc(onlyText)}">${ONLY_ICON}</button>`
+    : '';
+
   return (
     `<header class="detail-hd">${hexShield(prefLabel, ref)}` +
     `<h2 id="detail-title" class="detail-name">${esc(name)}</h2>` +
@@ -393,6 +414,7 @@ export function prefDetailHTML({
     `target="_blank" rel="noopener" title="Wikipedia「${esc(name)}」" ` +
     `aria-label="Wikipedia「${esc(name)}」を新しいタブで開く">` +
     `${WIKIPEDIA_ICON}</a>` +
+    only +
     '</div></header>' +
     `<div class="detail-scroll">${body}</div>`
   );

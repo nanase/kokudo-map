@@ -7,8 +7,10 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  decodePrefRoutes,
   decodeRoutes,
   decodeURLState,
+  encodePrefRoutes,
   encodeRoutes,
   encodeState,
 } from '../web/urlstate.mjs';
@@ -42,11 +44,74 @@ describe('encodeRoutes / decodeRoutes', () => {
   test('空文字列は空配列', () => {
     expect(decodeRoutes('')).toEqual([]);
   });
+
+  /* 桁の違う範囲は路線を指していません。展開すると、リンクを開いた側で数億回の
+     同期ループが走り、地図が出る前に画面が止まります。 */
+  test('広すぎる範囲は読み飛ばす。前後の有効な項目は残る', () => {
+    expect(decodeRoutes('18,1-999999999,117')).toEqual([18, 117]);
+  });
+
+  test('実在しうる幅の範囲は展開する', () => {
+    // 番号は国道が 507 まで、都道府県道が 1199 まである。
+    expect(decodeRoutes('1-1199')).toHaveLength(1199);
+  });
+});
+
+describe('encodePrefRoutes / decodePrefRoutes', () => {
+  test('県ごとにまとめ、県の中は範囲表記に畳む', () => {
+    expect(
+      encodePrefRoutes(['nagano-1', 'nagano-2', 'nagano-3', 'tokyo-18']),
+    ).toBe('nagano:1-3;tokyo:18');
+  });
+
+  test('県の並びは入力の順に左右されない', () => {
+    expect(encodePrefRoutes(['tokyo-18', 'nagano-63'])).toBe(
+      'nagano:63;tokyo:18',
+    );
+  });
+
+  test('空の選択は空文字列', () => {
+    expect(encodePrefRoutes([])).toBe('');
+  });
+
+  test('encode/decode は互いの逆である', () => {
+    const keys = ['nagano-1', 'nagano-2', 'nagano-63', 'tokyo-18'];
+    expect(decodePrefRoutes(encodePrefRoutes(keys))).toEqual(keys);
+  });
+
+  /* 同じ番号でも県が違えば別の路線である。県道18号は 47 本ある。 */
+  test('県をまたいだ同じ番号は別々に残る', () => {
+    expect(decodePrefRoutes('nagano:18;tokyo:18')).toEqual([
+      'nagano-18',
+      'tokyo-18',
+    ]);
+  });
+
+  test('県を名乗らない項目・県の形をしない項目は読み飛ばす', () => {
+    expect(decodePrefRoutes('nagano:63;18;Tokyo:1;na-gano:2;osaka:2')).toEqual([
+      'nagano-63',
+      'osaka-2',
+    ]);
+  });
+
+  test('番号側が壊れていれば、その番号だけを読み飛ばす', () => {
+    expect(decodePrefRoutes('nagano:1-3,abc,9-8,63')).toEqual([
+      'nagano-1',
+      'nagano-2',
+      'nagano-3',
+      'nagano-63',
+    ]);
+  });
+
+  test('空文字列は空配列', () => {
+    expect(decodePrefRoutes('')).toEqual([]);
+  });
 });
 
 describe('encodeState', () => {
   const base = {
     selected: new Set(),
+    prefSelected: new Set(),
     conc: 'off',
     labels: true,
     termini: true,
@@ -66,6 +131,25 @@ describe('encodeState', () => {
     expect(encodeState({ ...base, selected: new Set([18, 117]) })).toBe(
       'routes=18%2C117',
     );
+  });
+
+  test('都道府県道の選択は proutes として出る', () => {
+    expect(encodeState({ ...base, prefSelected: new Set(['nagano-63']) })).toBe(
+      'proutes=nagano%3A63',
+    );
+  });
+
+  /* 国道の鍵の形は変えない。いま共有されているリンクが開けなくなる。 */
+  test('国道と都道府県道は別々の鍵に出る', () => {
+    const p = new URLSearchParams(
+      encodeState({
+        ...base,
+        selected: new Set([18]),
+        prefSelected: new Set(['nagano-63']),
+      }),
+    );
+    expect(p.get('routes')).toBe('18');
+    expect(p.get('proutes')).toBe('nagano:63');
   });
 
   test('重用区間のみ表示は conc=all として出る', () => {
@@ -105,6 +189,12 @@ describe('decodeURLState', () => {
     });
   });
 
+  test('proutes は鍵の Set に戻る', () => {
+    expect(decodeURLState('?proutes=nagano:63;tokyo:18')).toEqual({
+      prefSelected: new Set(['nagano-63', 'tokyo-18']),
+    });
+  });
+
   test('conc=all だけが認識される。それ以外の値は無視する', () => {
     expect(decodeURLState('?conc=all')).toEqual({ conc: 'all' });
     expect(decodeURLState('?conc=off')).toEqual({});
@@ -130,9 +220,15 @@ describe('decodeURLState', () => {
   });
 
   test('encodeState の出力を decodeURLState に通すと同じ差分が戻る', () => {
-    const diff = { selected: new Set([1, 2, 3]), conc: 'all', special: false };
+    const diff = {
+      selected: new Set([1, 2, 3]),
+      prefSelected: new Set(['nagano-63']),
+      conc: 'all',
+      special: false,
+    };
     const full = {
       selected: new Set(),
+      prefSelected: new Set(),
       conc: 'off',
       labels: true,
       termini: true,

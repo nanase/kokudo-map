@@ -811,6 +811,14 @@ input[type="search"]::placeholder { font-size: .82em; }
    印だけ 17px にしてある。他の印は線で引いた図で、15px でも形が残る。
    これは字なので、同じ 15px では字面のほうが小さく見え、隣の漏斗と釣り
    合わない。 */
+/* 押した状態を持つのは都道府県道の側だけである(#109)。操作面に都道府県道の
+   節が無いので、絞っていることを述べる場所がこのボタンのほかに無い——押せる
+   ことだけでなく、いま押されていることも、ここが見せなければならない。
+   国道のボタンは状態を持たないので、この規則には当たらない。 */
+.detail-only.active {
+  background: var(--sign-blue); color: var(--panel); border-color: var(--sign-blue);
+}
+.detail-only.active:hover { color: var(--panel); }
 .detail-wiki { text-decoration: none; }
 .detail-wiki svg { width: 17px; height: 17px; }
 .detail-wiki text {

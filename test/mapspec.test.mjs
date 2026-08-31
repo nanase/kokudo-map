@@ -36,6 +36,7 @@ import {
   SPECIAL_KINDS,
   terminiFilter,
   withKind,
+  withPrefSelection,
 } from '../web/mapspec.mjs';
 
 /* -------------------------------------------------------------- 絞り込み --- */
@@ -109,6 +110,38 @@ describe('withKind', () => {
       base,
       kindTest(['road']),
     ]);
+  });
+});
+
+describe('withPrefSelection', () => {
+  test('選択が空なら、渡された式をそのまま返す', () => {
+    const base = kindTest(['road']);
+    expect(withPrefSelection(base, [])).toBe(base);
+    expect(withPrefSelection(true, [])).toBe(true);
+  });
+
+  /* 鍵は県を伴う文字列です。番号は県の中でしか一意でないので、`63` では
+     47 本のどれか決まりません(prefroute.mjs)。 */
+  test('選択は県を伴う鍵で any に並べる', () => {
+    expect(withPrefSelection(true, ['nagano-63'])).toEqual([
+      'any',
+      hasRef('nagano-63'),
+    ]);
+  });
+
+  test('層が持っている式には all で重ねる', () => {
+    const base = kindTest(['road']);
+    expect(withPrefSelection(base, ['nagano-63', 'tokyo-18'])).toEqual([
+      'all',
+      base,
+      ['any', hasRef('nagano-63'), hasRef('tokyo-18')],
+    ]);
+  });
+
+  /* 区切り文字で囲む防ぎは国道と同じ式が持ちます。`nagano-6` が
+     `nagano-63` に当たってはなりません。 */
+  test('鍵は区切り文字で囲まれる', () => {
+    expect(hasRef('nagano-6')).toEqual(['in', ',nagano-6,', ['get', 'refs']]);
   });
 });
 

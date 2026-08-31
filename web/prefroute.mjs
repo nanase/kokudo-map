@@ -15,6 +15,9 @@ export const prefRegionOf = (key) => key.slice(0, key.lastIndexOf('-'));
 /** 鍵の番号。`nagano-18` なら 18 である。 */
 export const prefRefOf = (key) => Number(key.slice(key.lastIndexOf('-') + 1));
 
+/** 県と番号から鍵を作る。上の二つの逆で、組み立て方もここに一度だけ書く。 */
+export const prefKeyOf = (region, ref) => `${region}-${ref}`;
+
 /**
  * 鍵の並べ方。
  *

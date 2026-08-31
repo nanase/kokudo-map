@@ -873,6 +873,28 @@ if (!target) {
     `the box's 「だけを表示」 selects that route alone (${narrowed.join(', ')})`,
   );
 
+  /* 「だけ」は文字どおりの意味である(#109)。押した後の地図に残るのはその 1 本
+   * だけで、もう一方の系統——ここでは都道府県道——は消える。系統トグルを実際に
+   * 動かすので、消えたことはトグルにも URL にも出る。 */
+  const prefOff = await page.evaluate(() => ({
+    checked: document.querySelector('#t-pref').checked,
+    drawn: window.map.queryRenderedFeatures({ layers: ['pref-roads'] }).length,
+    url: location.search,
+  }));
+  ok(
+    !prefOff.checked && prefOff.drawn === 0 && prefOff.url.includes('pref=0'),
+    `and hides the prefectural routes with it ` +
+      `(toggle ${prefOff.checked}, ${prefOff.drawn} arcs, "${prefOff.url}")`,
+  );
+
+  // 選択を解けば、ボタンが消した都道府県道は戻る。
+  await page.click('#sel-none');
+  await settle();
+  const prefBack = await page.evaluate(
+    () => document.querySelector('#t-pref').checked,
+  );
+  ok(prefBack, 'clearing the selection brings the prefectural routes back');
+
   /* パネルは地図の一部を覆うので、開くあいだ地図は覆われたぶん脇へ寄る。開けて
    * 読んで閉じるだけなら、閉じたときに寄せたぶんが戻るのが正しい——開く前の
    * 眺めに戻ることだからである。

@@ -29,8 +29,11 @@ const {
   prefLayers,
   buildFilter,
   withKind,
+  withPrefSelection,
+  pickedFilter,
   hasRef,
   FILTERED_LAYERS,
+  PREF_PICKED_LAYER,
   SPECIAL_KINDS,
 } = await import(pathToFileURL(join(ROOT, 'web', 'mapspec.mjs')).href);
 
@@ -88,7 +91,7 @@ const ok = (cond, msg) => {
 };
 
 /* ---- 1. スタイル全体が仕様を満たす --------------------------------------- */
-function styleWith(filters) {
+function styleWith(filters, prefFilters) {
   const style = baseStyle();
   // 代用ではなく、閲覧側自身のソース定義を使う。層の `source-layer` はベクタ
   // ソースに対してしか妥当にならないので、でっち上げた GeoJSON のソースで層を
@@ -103,12 +106,18 @@ function styleWith(filters) {
   // すべての層の下、県道の札は国道の札のすぐ下である。層の順は描く順と札の
   // 場所争いの両方を決めるので、検査するスタイルの並びが本物と違えば、検査した
   // 物は本物ではない。
+  const prefLines = prefLineLayers();
+  const prefLabels = prefLabelLayer();
+  if (prefFilters) {
+    for (const l of [...prefLines, prefLabels])
+      if (prefFilters[l.id] !== undefined) l.filter = prefFilters[l.id];
+  }
   const at = layers.findIndex((l) => l.id === 'route-labels');
   style.layers = [
     ...style.layers,
-    ...prefLineLayers(),
+    ...prefLines,
     ...layers.slice(0, at),
-    prefLabelLayer(),
+    prefLabels,
     ...layers.slice(at),
   ];
   return style;
@@ -203,6 +212,30 @@ for (const [selected, conc, showFormer, label] of scenarios) {
     filters[id] = kinds ? withKind(base, kinds, negate) : base;
   }
   validate(styleWith(filters), `filters validate in the style — ${label}`);
+}
+
+/* 都道府県道の選択も、その場で妥当な式でなければならない。選択の鍵は
+ * `nagano-63` の文字列で、国道の番号とは型が違う。重ねる先も違う——国道は
+ * 共有の式に区分を足すのに対し、都道府県道は層が持っている区分の式に選択を
+ * 足す(mapspec.mjs の withPrefSelection)。画面が組む形をそのまま組む。 */
+const prefScenarios = [
+  [[], 'no prefectural selection'],
+  [['nagano-63'], 'single prefectural route'],
+  [['nagano-63', 'tokyo-18'], 'prefectural routes across two prefectures'],
+];
+
+for (const [selected, label] of prefScenarios) {
+  const prefFilters = {};
+  for (const l of [...prefLineLayers(), prefLabelLayer()]) {
+    prefFilters[l.id] =
+      l.id === PREF_PICKED_LAYER
+        ? pickedFilter(withPrefSelection(true, selected), 1234567)
+        : withPrefSelection(l.filter ?? true, selected);
+  }
+  validate(
+    styleWith(null, prefFilters),
+    `prefectural filters validate in the style — ${label}`,
+  );
 }
 
 if (SPEC_ONLY) {

@@ -19,7 +19,7 @@ import {
   PREF_MAJOR,
   PREF_RANK_LABELS,
 } from './mapspec.mjs';
-import { shieldRow } from './shield.mjs';
+import { hexShield, prefRouteName, shieldRow } from './shield.mjs';
 
 /* 畳んだ一覧が出す行数。どちらもビルドが並べ替えて配るので、頭から取れば
  * 上位がそのまま出る。任意の抜き取りではない。 */
@@ -138,6 +138,7 @@ export const sharedHTML = (rows) =>
  */
 export const shareSummaryHTML = ({
   selectedRefs,
+  prefRoutes = [],
   totalRoutes,
   concLabel,
   toggles,
@@ -148,6 +149,16 @@ export const shareSummaryHTML = ({
       ? shieldRow(selectedRefs, true)
       : `<span class="all">すべて（${totalRoutes} 路線）</span>`
   }</span></div>` +
+  // 都道府県道の行は、選んでいるときだけ出す。選んでいないことは国道と同じく
+  // 「すべて」を意味するが、13,234 組という数を出しても読む人の役には立たない
+  // ——一覧を眺めて選ぶ数ではないためである。行ごと出さなければ、国道だけを
+  // 見ている人のダイアログは今までと変わらない。
+  (prefRoutes.length
+    ? '<div class="share-row"><span class="lbl">都道府県道</span>' +
+      `<span class="shields">${prefRoutes
+        .map((r) => hexShield(r.prefLabel, r.ref, true))
+        .join('')}</span></div>`
+    : '') +
   '<div class="share-row"><span class="lbl">重用区間</span>' +
   `<span>${esc(concLabel)}</span></div>` +
   '<div class="share-row"><span class="lbl">表示</span>' +
@@ -161,9 +172,16 @@ export const shareSummaryHTML = ({
  * SNS の共有シートが期待する、題と URL の 1 行。例は
  * 「国道マップ - 292号\nhttps://…」である。`url` はここで `location` から読まず
  * 引数で受け取る。操作面の他と同じく、状態の純関数のままにするためである。
+ *
+ * 都道府県道は「長野県道63号」と県ごと名乗る。番号だけでは 47 本のどれか決まら
+ * ないので、国道のように番号を並べて末尾に「号」を付ける形にはできない。
  */
-export const shareText = (url, { selectedRefs }) =>
-  `国道マップ${selectedRefs.length ? ` - ${selectedRefs.join('・')}号` : ''}\n${url}`;
+export const shareText = (url, { selectedRefs, prefRoutes = [] }) => {
+  const names = [];
+  if (selectedRefs.length) names.push(`${selectedRefs.join('・')}号`);
+  for (const r of prefRoutes) names.push(prefRouteName(r.prefLabel, r.ref));
+  return `国道マップ${names.length ? ` - ${names.join('・')}` : ''}\n${url}`;
+};
 
 /* ------------------------------------------------------------------ 凡例 --- */
 /**
