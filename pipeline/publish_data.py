@@ -28,6 +28,7 @@ import subprocess
 import sys
 
 from _paths import DATA
+from regions import REGIONS
 
 BUCKET = "kokudo-map-data"
 
@@ -78,9 +79,18 @@ def preflight() -> None:
         sys.exit(
             f"web/data/ に {', '.join(missing)} が無い。先に `mise run pack` を実行する。"
         )
-    if not pref_metas():
+    # 県が 1 つでも欠けた状態で上げない。欠けた県の路線はアーカイブにも入らない
+    # のに、R2 には前回の meta が残る。半分だけの配信物は、揃った物と見分けが
+    # 付かない。ここは配る直前の最後の関門なので、ここで数える。
+    have = {name[len("pref/"):-len(".meta.json")] for name in pref_metas()}
+    if have != set(REGIONS):
+        short = sorted(set(REGIONS) - have)
+        extra = sorted(have - set(REGIONS))
         sys.exit(
-            "web/data/pref/ に県ごとの meta が無い。先に `mise run pack` を実行する。"
+            "web/data/pref/ の県が 47 県と一致しない。"
+            f"足りない: {', '.join(short) or 'なし'} / "
+            f"余分: {', '.join(extra) or 'なし'}。"
+            "先に `mise run build-pref` と `mise run pack` を実行する。"
         )
 
     if wrangler("whoami", check=False).returncode != 0:
