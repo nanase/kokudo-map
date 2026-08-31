@@ -10,6 +10,8 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   HEX_PATH,
+  HEX_STROKE_WIDTH,
+  HEX_VIEWBOX,
   hexShield,
   prefRouteName,
   SHIELD_ICON_PAD,
@@ -121,18 +123,29 @@ describe('shield', () => {
   });
 });
 
-/* ヘキサ(都道府県道番号標識)。おにぎりと同じ枠に描くので、確かめることも
- * 同じです——閉じた形であること、点が viewBox の中に収まっていること。違うのは
- * コマンドが絶対の M・L・Q であることだけです(角を二次ベジエで丸めています)。 */
+/* ヘキサ(都道府県道番号標識)。素材のパスを拡大して平行移動しただけの物なので、
+ * ここでも導き直せる式はありません。確かめることはおにぎりと同じです——閉じた
+ * 形であること、点が自分の viewBox の中に収まっていること。違うのはコマンドが
+ * 絶対の M・L・C であることと、枠が HEX_VIEWBOX であることだけです。 */
 describe('HEX_PATH', () => {
-  /** 絶対の M・L・Q が名指しする点をすべて。二次曲線はこの三点の凸包を出ません。 */
+  /** 絶対の M・L・C が名指しする点をすべて。三次曲線はこの四点の凸包を出ません。 */
   const hexPoints = (d) => {
     const points = [];
-    for (const seg of d.matchAll(/([MLQ])([^MLQZ]*)/g)) {
+    for (const seg of d.matchAll(/([MLC])([^MLCZ]*)/g)) {
       const n = nums(seg[2]);
       for (let i = 0; i < n.length; i += 2) points.push([n[i], n[i + 1]]);
     }
     return points;
+  };
+
+  const extent = () => {
+    const p = hexPoints(HEX_PATH);
+    const xs = p.map(([x]) => x);
+    const ys = p.map(([, y]) => y);
+    return {
+      w: Math.max(...xs) - Math.min(...xs),
+      h: Math.max(...ys) - Math.min(...ys),
+    };
   };
 
   test('閉じた path である', () => {
@@ -140,13 +153,13 @@ describe('HEX_PATH', () => {
     expect(HEX_PATH.endsWith('Z')).toBe(true);
   });
 
-  test('M・L・Q 以外のコマンドを含まない', () => {
-    expect(HEX_PATH.replace(/[MLQ0-9.,\s-]/g, '')).toBe('Z');
+  test('M・L・C 以外のコマンドを含まない', () => {
+    expect(HEX_PATH.replace(/[MLC0-9.,\s-]/g, '')).toBe('Z');
   });
 
   test('点は viewBox の内側、縁の太さぶんの余白を残す', () => {
-    const [, , vw, vh] = nums(SHIELD_VIEWBOX);
-    const margin = SHIELD_STROKE_WIDTH / 2;
+    const [, , vw, vh] = nums(HEX_VIEWBOX);
+    const margin = HEX_STROKE_WIDTH / 2;
     for (const [x, y] of hexPoints(HEX_PATH)) {
       expect(x).toBeGreaterThanOrEqual(margin);
       expect(x).toBeLessThanOrEqual(vw - margin);
@@ -155,13 +168,27 @@ describe('HEX_PATH', () => {
     }
   });
 
-  test('おにぎりより縦長である', () => {
-    // 実物の標識の比です。同じ viewBox に描くので、違いは形にしか出ません。
-    const xs = hexPoints(HEX_PATH).map(([x]) => x);
-    const ys = hexPoints(HEX_PATH).map(([, y]) => y);
-    const w = Math.max(...xs) - Math.min(...xs);
-    const h = Math.max(...ys) - Math.min(...ys);
-    expect(w).toBeLessThan(h);
+  test('おにぎりと違って横長である', () => {
+    // 実物の標識の比です。上下が水平な辺、左右が頂点なので、幅が高さを超えます。
+    const { w, h } = extent();
+    expect(w).toBeGreaterThan(h);
+  });
+
+  test('縁を含めた外径の高さがおにぎりと揃う', () => {
+    // 二つの標識は同じ行に並びます。高さを CSS の .shield 一つで決めているので、
+    // 外径の高さがずれると、並べたときに片方だけ小さく見えます。枠の高さと縁の
+    // 太さは別々に決められるので、揃っていることをここで押さえます。
+    const oni = anchors(SHIELD_PATH).map(([, y]) => y);
+    const oniOuter = Math.max(...oni) - Math.min(...oni) + SHIELD_STROKE_WIDTH;
+    const hexOuter = extent().h + HEX_STROKE_WIDTH;
+    expect(hexOuter).toBeCloseTo(oniOuter, 1);
+  });
+
+  test('枠の高さはおにぎりと同じで、幅だけが広い', () => {
+    const [, , hw, hh] = nums(HEX_VIEWBOX);
+    const [, , ow, oh] = nums(SHIELD_VIEWBOX);
+    expect(hh).toBe(oh);
+    expect(hw).toBeGreaterThan(ow);
   });
 });
 
@@ -195,12 +222,13 @@ describe('hexShield', () => {
     expect(width(407)).toBeLessThanOrEqual(width(1104));
   });
 
-  test('おにぎりと同じ枠・同じ縁で、輪郭だけが違う', () => {
+  test('ヘキサ自身の枠と縁で描く', () => {
     const html = hexShield('長野県', 63);
-    expect(html).toContain(`viewBox="${SHIELD_VIEWBOX}"`);
-    expect(html).toContain(`stroke-width="${SHIELD_STROKE_WIDTH}"`);
+    expect(html).toContain(`viewBox="${HEX_VIEWBOX}"`);
+    expect(html).toContain(`stroke-width="${HEX_STROKE_WIDTH}"`);
     expect(html).toContain(HEX_PATH);
     expect(html).not.toContain(SHIELD_PATH);
+    expect(html).not.toContain(`viewBox="${SHIELD_VIEWBOX}"`);
   });
 
   test('小さい版は class で区別する', () => {

@@ -442,6 +442,11 @@ input[type="search"]::placeholder { font-size: .82em; }
   fill: var(--shield-ink); font-family: Roboto, var(--ui-font);
   font-size: 212.5px; font-weight: 700;
 }
+/* ヘキサだけ番号を大きくする。おにぎりは下へ尖っていくが、ヘキサは胴が広く、
+   そこに「県道」も県名も載せない(shield.mjs の hexShield)。空いたぶんを番号に
+   回すと、22px まで落とした行でも 3 桁が読める。書体と色は上の .shield text の
+   ままで、変えるのは大きさだけである。 */
+.shield.hex text { font-size: 240px; }
 .shield.sm { height: 22px; }
 
 /* ポップアップの標識は押せる。標識そのものが路線の名前なので、脇に別の
