@@ -220,6 +220,13 @@ def main() -> None:
             if bad:
                 broken[region] = bad
 
+    if wanted:
+        # 47 本が並列に走るあいだ、そのそれぞれが build/regions/regions.json を
+        # 書く——揃った顔ぶれの索引なので、最後に書いた 1 本の目に映った物が残る。
+        # 全員が書き終えてからもう一度書けば、残る物が本当に揃った索引になる。
+        stage("索引 — build/regions/regions.json を揃った顔ぶれで書き直す",
+              ["uv", "run", str(HERE / "build_routes.py"), "--index-only"])
+
     if not pack_only:
         print(
             f"\n{len(wanted)} region(s) in {time.time() - started:.0f}s",

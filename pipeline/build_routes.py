@@ -42,7 +42,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 
-from _paths import CACHE, REGIONS as OUT
+from _paths import CACHE, REGIONS as OUT, write_atomic
 from geo import haversine, line_length
 from regions import for_region
 
@@ -345,8 +345,42 @@ def names_a_closed_residential_road(tags: dict[str, str]) -> bool:
 
 
 # ------------------------------------------------------------------ main ---
+def write_index() -> list[dict]:
+    """build/regions/ に在る meta から regions.json を作り直す。
+
+    どの地域が在るかを教えられなくても、閲覧側が地域を選ばせられるようにする
+    ためである。
+
+    これは 1 県の話ではなく、揃っている物すべての話である。だから県ごとの段を
+    並列にすると、走っている 47 本が全員これを書く——最後に書いた 1 本の目に
+    映った顔ぶれが残る。それでも正しい物が残るように、build_all.py は県の並列が
+    終わってからもう一度ここを呼ぶ(`--index-only`)。1 県だけ作り直す経路
+    (pipeline.py)では、その 1 県の後にここが走るだけで足りる。
+    """
+    index = []
+    for p in sorted(OUT.glob("*.meta.json")):
+        m = json.loads(p.read_text(encoding="utf-8"))
+        index.append({
+            "region": m["region"],
+            "label": m.get("label", m["region"]),
+            "bbox": m["bbox"],
+            "arc_count": m["arc_count"],
+            "total_km": m["total_km"],
+            "routes": len(m["routes"]),
+        })
+    write_atomic(OUT / "regions.json",
+                 json.dumps(index, ensure_ascii=False, separators=(",", ":")))
+    return index
+
+
 def main() -> None:
-    region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
+    args = sys.argv[1:]
+    if "--index-only" in args:
+        index = write_index()
+        print(f"wrote regions.json ({len(index)} region(s): "
+              f"{', '.join(e['label'] for e in index)})")
+        return
+    region = args[0] if args else "nagano"
     raw_path = CACHE / f"{region}.raw.json"
     if not raw_path.exists():
         raise SystemExit(f"no cache for {region!r}; run pipeline/fetch_osm.py {region} first")
@@ -630,10 +664,10 @@ def main() -> None:
         for a in arcs
     ]
     gj_path = OUT / f"{region}.geojson"
-    gj_path.write_text(
+    write_atomic(
+        gj_path,
         json.dumps({"type": "FeatureCollection", "features": features},
                    ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
     )
 
     edits = sorted(a["updated"] for a in arcs if a["updated"])
@@ -695,25 +729,11 @@ def main() -> None:
         "n_histogram": {str(k): v for k, v in sorted(n_hist.items())},
     }
     meta_path = OUT / f"{region}.meta.json"
-    meta_path.write_text(
-        json.dumps(meta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    write_atomic(
+        meta_path, json.dumps(meta, ensure_ascii=False, separators=(",", ":"))
     )
 
-    # ここまでに生成した物の索引。どの地域が在るかを教えられなくても、閲覧側が
-    # 地域を選ばせられるようにするためである。
-    index = []
-    for p in sorted(OUT.glob("*.meta.json")):
-        m = json.loads(p.read_text(encoding="utf-8"))
-        index.append({
-            "region": m["region"],
-            "label": m.get("label", m["region"]),
-            "bbox": m["bbox"],
-            "arc_count": m["arc_count"],
-            "total_km": m["total_km"],
-            "routes": len(m["routes"]),
-        })
-    (OUT / "regions.json").write_text(
-        json.dumps(index, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    index = write_index()
 
     print(f"\ntotal arc length: {total_km:,.0f} km")
     print(f"way last-edit range: {meta['oldest_edit']} .. {meta['newest_edit']}")

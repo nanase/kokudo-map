@@ -82,7 +82,7 @@ mise run serve        # http://localhost:8000/
 mise run pack-n13
 ```
 
-変換できたメッシュから、古い JSON は消します。読む物がもう無く、全国で 6.7 GB あるからです。packed は同じ内容を 2.7 GB で持ちます。残したいときは `mise run pack-n13 -- --keep-legacy` を使います。
+変換できたメッシュから、古い JSON は消します。読む物がもう無く、全国 285 メッシュで 6.5 GB あるからです。packed は同じ内容を 2.6 GB で持ちます。残したいときは `mise run pack-n13 -- --keep-legacy` を使います。
 
 **消した JSON は作り直せます。**元は `build/n13/<メッシュ>/` の shapefile で、そちらは消しません。packed も JSON も、そこから作った物です。だからこの変更を revert して古いコードに戻したときも、`mise run apply-n13` なり `mise run compare-n13` なりが、無いメッシュの JSON をその場で作り直します。取り直しは要りません。海しかないメッシュだけ、配布物が無いことの確認に KSJ へ 1 度ずつ問い合わせます。
 

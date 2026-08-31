@@ -13,8 +13,9 @@
 build_all.py がそのためにこれを先に呼ぶ。単独でも呼べる(`mise run pack-n13`)。
 
 古い `<メッシュ>.classified.raw.json` は、packed が書けたメッシュから順に消す。
-読む物はもう無く、全国で 6.7 GB ある。同じ内容を packed は 2.7 GB で持つ。消すの
-は「その 1 ファイル」であって、`build/n13/` を木ごと消すことは決してしない。
+読む物はもう無く、全国 285 メッシュで 6.5 GB ある。同じ内容を packed は 2.6 GB
+で持つ。消すのは「その 1 ファイル」であって、`build/n13/` を木ごと消すことは
+決してしない。
 
 使い方:  uv run pipeline/pack_n13.py [地域 ...]      (既定: 全地域)
          uv run pipeline/pack_n13.py --keep-legacy   (古い JSON を残す)
