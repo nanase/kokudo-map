@@ -373,7 +373,8 @@ RDCTG_WIDTH = 2
 
 
 def mesh_cache_paths(mesh: str) -> tuple[Path, Path, Path]:
-    """そのメッシュの packed キャッシュ 3 本。pts を最後に書く——下を参照。"""
+    """そのメッシュの packed キャッシュ 3 本。pts が最後で、それが揃っている印で
+    ある——pack_mesh の書き込みの段を参照。"""
     return (N13 / f"{mesh}.starts.npy", N13 / f"{mesh}.rdctg.npy",
             N13 / f"{mesh}.pts.npy")
 
@@ -440,9 +441,18 @@ def pack_mesh(mesh: str, refresh: bool) -> None:
     # 同じディレクトリにしておけば名前の付け替えが 1 つのファイルシステムの中で
     # 済み、それが不可分になる理由である。
     #
-    # 3 本の順序にも意味がある。pts を最後に置き、load_mesh はその 1 本の有無だけ
-    # を見る。pts が在るなら他の 2 本は既に置き替わっている——県ごとの段を並列に
-    # したとき、半分だけ入れ替わった組を掴まないためである。
+    # 3 本のあいだの取り決めは 1 つである。**pts が在ることが、3 本が同じ組で
+    # 揃っていることの印である。**load_mesh はその 1 本の有無だけを見る。だから
+    # pts は最後に置き、そして書き直す前にまず消す。
+    #
+    # 消す側が要る理由は --refresh である。既に 3 本ある状態で書き直すと、pts は
+    # 古いまま残っているのに starts と rdctg が先に新しくなる瞬間がある。そこで
+    # 止まると、次の実行は「pts が在る」を見て、新しい starts と古い pts を組に
+    # して開く。座標の区切りが中身とずれた物を、何も言われないまま使うことになる
+    # (この PR への CodeRabbit のレビュー)。先に消しておけば、その瞬間に残るのは
+    # 「pts が無い」——作り直す理由になる状態——だけである。
+    pts_p = mesh_cache_paths(mesh)[2]
+    pts_p.unlink(missing_ok=True)
     for path, arr in zip(mesh_cache_paths(mesh), arrays, strict=True):
         tmp_path = path.with_name(path.name + f".{os.getpid()}.tmp")
         np.save(tmp_path, arr, allow_pickle=False)
@@ -459,7 +469,11 @@ _REFRESHED: set[str] = set()
 
 
 def load_mesh(mesh: str, refresh: bool) -> Mesh:
-    """そのメッシュの Mesh を、キャッシュから mmap で開いて返す。無ければ作る。"""
+    """そのメッシュの Mesh を、キャッシュから mmap で開いて返す。無ければ作る。
+
+    在るかどうかを pts の 1 本で判ずるのは、pack_mesh がそれを最後に置き、書き直す
+    前にまず消すからである——理由はあちらの書き込みの段にある。
+    """
     starts_p, rdctg_p, pts_p = mesh_cache_paths(mesh)
     if (refresh and mesh not in _REFRESHED) or not pts_p.exists():
         pack_mesh(mesh, refresh)
