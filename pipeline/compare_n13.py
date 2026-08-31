@@ -191,7 +191,7 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
     shp = out_dir / f"N13-24_{mesh}_SHP" / f"N13-24_{mesh}.shp"
     if shp.exists() and not refresh:
         return shp
-    out_dir.mkdir(parents=True, exist_ok=True)
+    N13.mkdir(parents=True, exist_ok=True)
     url = f"{BASE_URL}/N13-24_{mesh}_SHP.zip"
     print(f"  downloading {url}", flush=True)
     r = requests.get(url, headers=UA, timeout=120)
@@ -225,13 +225,22 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
     if not (staging / shp.parent.name / shp.name).exists():
         shutil.rmtree(staging, ignore_errors=True)
         raise SystemExit(f"{mesh}: expected {shp} after unzip, not found")
-    shutil.rmtree(out_dir, ignore_errors=True)
+    # 置き換えを先に試し、失敗したときだけ既に在る物を見る。順序が逆——先に
+    # out_dir を消してから置き換える——だと、同じメッシュを同時に取りに行った
+    # 別のプロセスが既に置き終えた完全な組を、こちらが消してしまう。その後の
+    # 置き換えが何かの理由で通らなければ、両方とも何も持たないまま終わる。
     try:
         os.replace(staging, out_dir)
     except OSError:
-        # 同じメッシュを同時に取りに行った別のプロセスが先に置いた。落としてくる
-        # 物は同じなので、自分の展開結果を捨てて相手の物を使う。
-        shutil.rmtree(staging, ignore_errors=True)
+        if shp.exists() and not refresh:
+            # 既に完全な組が在る。落としてくる物は同じなので、自分の展開結果を
+            # 捨てて相手の物を使う。
+            shutil.rmtree(staging, ignore_errors=True)
+        else:
+            # 途中で止まった組か、--refresh で置き換えたい古い組である。refresh
+            # のときに相手を使ってしまうと、取り直したのに古い写しが残る。
+            shutil.rmtree(out_dir, ignore_errors=True)
+            os.replace(staging, out_dir)
     if not shp.exists():
         raise SystemExit(f"{mesh}: expected {shp} after unzip, not found")
     return shp
@@ -441,11 +450,20 @@ def pack_mesh(mesh: str, refresh: bool) -> None:
         os.replace(tmp_path.with_name(tmp_path.name + ".npy"), path)
 
 
+# この実行の中で既に取り直したメッシュ。1 回の実行が同じメッシュを二度開くことは
+# 珍しくない——被覆率を測る側(load_kokudo_raw)と、直下の分類を見る側
+# (classify_clusters_beneath)がそれぞれ開く。`--refresh` をそのまま二度受け取ると、
+# 同じ物を二度落として二度解析することになる。取り直しは 1 回の実行につき 1 度で
+# 足りる。
+_REFRESHED: set[str] = set()
+
+
 def load_mesh(mesh: str, refresh: bool) -> Mesh:
     """そのメッシュの Mesh を、キャッシュから mmap で開いて返す。無ければ作る。"""
     starts_p, rdctg_p, pts_p = mesh_cache_paths(mesh)
-    if refresh or not pts_p.exists():
+    if (refresh and mesh not in _REFRESHED) or not pts_p.exists():
         pack_mesh(mesh, refresh)
+        _REFRESHED.add(mesh)
     return Mesh(np.load(pts_p, mmap_mode="r"),
                 np.load(starts_p, mmap_mode="r"),
                 np.load(rdctg_p, mmap_mode="r"))
