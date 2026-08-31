@@ -151,6 +151,21 @@ def prefectural(judge: bool) -> None:
           ["node", "--max-old-space-size=2048", str(HERE / "pack_web_pref.mjs")])
 
 
+def positive_jobs(value: str | None) -> int:
+    """`--jobs` に渡された物を本数として読む。読めなければ止まる。
+
+    黙って既定へ戻さない。`--jobs --no-pack` は値の抜けであると同時に、次の
+    フラグを食べてしまう指定でもある。`--jobs 0` を 1 に丸めるのも同じで、
+    渡した本数と走る本数が違うまま気付けない。
+    """
+    if value is None or not value.lstrip("+").isdigit() or int(value) < 1:
+        raise SystemExit(
+            f"--jobs には 1 以上の整数を渡す(受け取ったのは {value!r})。\n"
+            "  uv run pipeline/build_all.py --jobs N   (県を同時に N 本まで)"
+        )
+    return int(value)
+
+
 def build_region(region: str, skip_verify: bool) -> tuple[str, list[str]]:
     """1 県ぶんの段を通し、(表示する 1 行, 失敗の一覧) を返す。
 
@@ -196,9 +211,9 @@ def main() -> None:
     rest = iter(args)
     for a in rest:
         if a == "--jobs":
-            jobs = max(1, int(next(rest, REGION_JOBS)))
+            jobs = positive_jobs(next(rest, None))
         elif a.startswith("--jobs="):
-            jobs = max(1, int(a.split("=", 1)[1]))
+            jobs = positive_jobs(a.split("=", 1)[1])
         elif not a.startswith("--"):
             names.append(a)
     wanted = [] if pack_only else named_regions(names)
