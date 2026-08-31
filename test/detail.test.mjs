@@ -126,10 +126,14 @@ describe('detailHTML — 見出しとボタン', () => {
     expect(html).toContain('class="icon-btn detail-wiki"');
     // ロゴは写せないので W 一文字で名乗ります。字体は書体に頼らず、V を二つ
     // 重ねた形をこちらで引きます。隣の漏斗と同じ svg・同じ太さの単線です。
+    // 座標そのものはここに写しません——形を決めているのは detail.mjs の
+    // WIKIPEDIA_ICON で、写せば同じ答えが二箇所に並びます。ここが確かめる
+    // のは、書体に頼っていないこと(線で引いてあること)です。
     expect(html).toContain('<svg viewBox="0 0 24 24" aria-hidden="true">');
-    expect(html).toContain(
-      'd="M3.2 6 8.4 18.6 13.6 6M10.4 6 15.6 18.6 20.8 6"',
+    expect(html).toMatch(
+      /detail-wiki"[^>]*>.*?<path [^>]*stroke="currentColor"/,
     );
+    expect(html).not.toContain('</text></svg></a>');
     expect(html).toContain(
       'aria-label="Wikipedia「国道18号」を新しいタブで開く"',
     );
