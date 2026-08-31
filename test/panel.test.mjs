@@ -2,7 +2,9 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-
+// 色の写しは置かない。凡例の見本が地図の線と同じ色かどうかを見るので、地図の
+// 定義そのものを読む。
+import { PREF_GENERAL, PREF_MAJOR } from '../web/mapspec.mjs';
 import {
   clearLabel,
   countLabel,
@@ -11,6 +13,8 @@ import {
   legendNHTML,
   legendPrefHTML,
   PREF_CONCURRENCY_NOTES,
+  PREF_SPECIAL_LABEL,
+  PREF_SPECIAL_TIP,
   prefConcurrencyHTML,
   rankingHTML,
   routeListHTML,
@@ -265,6 +269,19 @@ describe('shareText', () => {
 });
 
 describe('凡例', () => {
+  /* 凡例は三つのファイルにまたがる。index.html が静的な markup と <head> の
+   * 先読みを、app.js が押されたときの書き直しを、style.css が見本の描き方と
+   * 畳んだ状態の効かせ方を持つ。下の検査はどれもこの三つを読む。 */
+  const indexHtml = readFileSync(
+    new URL('../web/index.html', import.meta.url),
+    'utf8',
+  );
+  const appJs = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const styleCss = readFileSync(
+    new URL('../web/style.css', import.meta.url),
+    'utf8',
+  );
+
   test('重用の深さは 4 段である', () => {
     expect(legendNHTML().match(/class="item"/g)).toHaveLength(4);
     expect(legendNHTML()).toContain('単独指定');
@@ -298,10 +315,6 @@ describe('凡例', () => {
    * 回線では凡例だけ空のまま出てから遅れて現れて見えていた。static にした
    * 代わり、legendNHTML()/legendKindHTML() と食い違えば古いままになりうる
    * ので、ここで一致を検査する。 */
-  const indexHtml = readFileSync(
-    new URL('../web/index.html', import.meta.url),
-    'utf8',
-  );
   const staticMarkup = (id) => {
     const m = indexHtml.match(
       new RegExp(`<div id="${id}" class="legend">([\\s\\S]*?)</div>`),
@@ -323,13 +336,60 @@ describe('凡例', () => {
 
   test('都道府県道の凡例は格を 2 段で述べる', () => {
     const html = legendPrefHTML();
-    expect(html.match(/class="item"/g)).toHaveLength(2);
     expect(html).toContain('主要地方道');
     expect(html).toContain('一般都道府県道');
+    // 格の 2 段は実線で示す。破線は走れない区分の印なので、格の見本には出ない。
+    expect(
+      html.match(/class="swatch" style="border-top-color:#[0-9A-F]{6}"/g),
+    ).toHaveLength(2);
   });
 
-  test('都道府県道は実線で示す。破線は走れない区分の印である', () => {
-    expect(legendPrefHTML()).not.toContain('border-top-style:dashed');
+  test('走れない都道府県道は 1 項目にまとめる', () => {
+    // 地図でも区分ごとに層を分けておらず、「点線国道」「海上国道」にあたる
+    // 呼び名も都道府県道は持ちません。凡例が地図より細かく分けても、分けた先を
+    // 指す線が地図にありません。
+    const html = legendPrefHTML();
+    expect(html.match(/class="item"/g)).toHaveLength(3);
+    expect(html).toContain(PREF_SPECIAL_LABEL);
+    expect(html).toContain(`title="${PREF_SPECIAL_TIP}"`);
+    expect(PREF_SPECIAL_TIP).toContain('工事中・事業中');
+  });
+
+  test('走れない都道府県道の見本は、格の二色を半分ずつ並べる', () => {
+    // 地図では走れない区分も格の色のまま描かれるので(mapspec.mjs の
+    // pref-special)、一色では片方の格しか述べられません。破線を描くのは
+    // style.css の .legend .swatch.duo > span で、そちらが currentcolor を
+    // 読むため、ここが渡すのは border-top-color ではなく color です。
+    const html = legendPrefHTML();
+    expect(html).toContain(
+      '<span class="swatch duo">' +
+        `<span style="color:${PREF_MAJOR}"></span>` +
+        `<span style="color:${PREF_GENERAL}"></span>` +
+        '</span>',
+    );
+    expect(styleCss).toContain('.legend .swatch.duo > span');
+  });
+
+  /* 畳んだ状態を持つ鍵の綴りが一つでもずれると、畳んだまま次に来た人の画面に
+   * 凡例が戻る。それがどこも壊さずに起きるので、三つを突き合わせる。 */
+  test('凡例の畳み方は、三つのファイルが同じ綴りを使う', () => {
+    expect(indexHtml).toContain("localStorage.getItem('legend-open')");
+    expect(appJs).toContain("localStorage.setItem('legend-open'");
+    expect(indexHtml).toContain("dataset.legend = 'off'");
+    expect(appJs).toContain('dataset.legend');
+    expect(styleCss).toContain(':root[data-legend="off"] #legend-box');
+    expect(styleCss).toContain(':root[data-legend="off"] #legend-open');
+  });
+
+  test('凡例には閉じる口と開き直す口の両方がある', () => {
+    // 片方しか無いと、畳んだ人が戻れないか、そもそも畳めない。
+    expect(indexHtml).toContain('id="legend-close"');
+    expect(indexHtml).toContain('id="legend-open"');
+    // 開き直す口は自分の外にある物を出すので、何を出すのかを述べる。閉じる口は
+    // 閉じる対象の中にいるので述べない——#panel-close・#detail-close と同じ。
+    expect(indexHtml).toContain(
+      '<button type="button" id="legend-open" aria-controls="legend-box"',
+    );
   });
 
   test('系統ごとの行は頭の語で、どちらの話かを述べる', () => {

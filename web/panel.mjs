@@ -171,10 +171,35 @@ export const shareText = (url, { selectedRefs }) =>
  * `title` 属性へ渡す——ホバーで読めれば足り、常に文字として並べておく理由が
  * ない。`title` を持つ項目だけカーソルを help にし、補足があることを示す。
  */
-const swatch = (color, text, dashed, tip) =>
-  `<span class="item"${tip ? ` title="${esc(tip)}"` : ''}>` +
+const item = (mark, text, tip) =>
+  `<span class="item"${tip ? ` title="${esc(tip)}"` : ''}>${mark}${text}</span>`;
+
+/** 1 色の見本。地図の線と同じく、実線か破線かで走れるかどうかを述べる。 */
+const rule = (color, dashed) =>
   `<span class="swatch" style="border-top-color:${color}` +
-  `${dashed ? ';border-top-style:dashed' : ''}"></span>${text}</span>`;
+  `${dashed ? ';border-top-style:dashed' : ''}"></span>`;
+
+/** 1 色の見本を持つ項目。凡例の 10 項目のうち 9 つがこの形である。 */
+const swatch = (color, text, dashed, tip) =>
+  item(rule(color, dashed), text, tip);
+
+/**
+ * 二色を半分ずつ並べた破線の見本。都道府県道の走れない区間だけが使う。
+ *
+ * 地図では、走れない区分も格の色のまま描かれる(mapspec.mjs の `pref-special`)
+ * ので、どちらの格でも破線になることを見本が言わなければならない。一色にすると
+ * 片方の格しか述べられず、もう片方の緑の破線が凡例に無いままになる。
+ *
+ * 色は `border-top-color` ではなく `color` で渡す。半分ずつに割ると 1 本が 10px
+ * になり、その幅では `border-top-style: dashed` が刻みを 1 本に丸めて実線に
+ * 見える。破線を描くのは style.css の repeating-linear-gradient で、そちらが
+ * `currentcolor` を読む。
+ */
+const duoRule = (major, general) =>
+  '<span class="swatch duo">' +
+  `<span style="color:${major}"></span>` +
+  `<span style="color:${general}"></span>` +
+  '</span>';
 
 /**
  * 行の頭に置く、その行がどの系統の話かを述べる語。
@@ -189,14 +214,36 @@ export const legendNHTML = () =>
   lead('国道') + N_COLORS.map((c, i) => swatch(c, N_LABELS[i], false)).join('');
 
 /**
- * 都道府県道の格。色が述べるのは格であって重用の深さではない——国道が既に
- * 四色を深さに使っているので、同じ画面で八色を配ると、どの色が何を述べて
- * いるかが読めなくなる。都道府県道の重用は太さが述べる(mapspec.mjs)。
+ * 走れない都道府県道をひとまとめに述べる項目の、名前と補足。
+ *
+ * 国道側は区分ごとに行を持つが(`legendKindHTML`)、都道府県道は一つで足りる。
+ * 理由は二つあり、どちらも mapspec.mjs の `prefLineLayers` が既に述べている。
+ * 区分ごとに定まった呼び名——「点線国道」「海上国道」にあたる語——を都道府県道
+ * は持たない。そして地図でも区分ごとに層を分けておらず、色は格のまま、破線で
+ * あること自体が「走れない」の印になっている。凡例が地図より細かく分けても、
+ * 分けた先を指す線が地図に無い。
+ *
+ * 名前の頭を「工事中・事業中」にするのは、四区分のうちこれが一番多く目に入る
+ * ためではなく、国道側の同じ区分と同じ語で呼ぶためである。異なる語で呼ぶと、
+ * 同じ物の話だと分かるのに一手かかる。
+ */
+export const PREF_SPECIAL_LABEL = '工事中・事業中など';
+export const PREF_SPECIAL_TIP = '工事中・事業中／未開通／徒歩道・階段／航路';
+
+/**
+ * 都道府県道の格と、走れない区間。色が述べるのは格であって重用の深さでは
+ * ない——国道が既に四色を深さに使っているので、同じ画面で八色を配ると、どの色が
+ * 何を述べているかが読めなくなる。都道府県道の重用は太さが述べる(mapspec.mjs)。
+ *
+ * 破線を国道の行(`legendKindHTML`)に混ぜず、この行の末尾に置く。あちらの四色は
+ * 国道の区分ごとの色で、都道府県道の破線には一つも当てはまらない。緑の破線の
+ * 説明は、緑の実線の隣にあるのが一番近い。
  */
 export const legendPrefHTML = () =>
   lead('都道府県道') +
   swatch(PREF_MAJOR, PREF_RANK_LABELS.major, false) +
-  swatch(PREF_GENERAL, PREF_RANK_LABELS.general, false);
+  swatch(PREF_GENERAL, PREF_RANK_LABELS.general, false) +
+  item(duoRule(PREF_MAJOR, PREF_GENERAL), PREF_SPECIAL_LABEL, PREF_SPECIAL_TIP);
 
 export const legendKindHTML = () =>
   [
