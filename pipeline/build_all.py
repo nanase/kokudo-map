@@ -220,12 +220,11 @@ def main() -> None:
             if bad:
                 broken[region] = bad
 
-    if wanted:
-        # 47 本が並列に走るあいだ、そのそれぞれが build/regions/regions.json を
-        # 書く——揃った顔ぶれの索引なので、最後に書いた 1 本の目に映った物が残る。
-        # 全員が書き終えてからもう一度書けば、残る物が本当に揃った索引になる。
-        stage("索引 — build/regions/regions.json を揃った顔ぶれで書き直す",
-              ["uv", "run", str(HERE / "build_routes.py"), "--index-only"])
+    # 索引は 1 県の話ではなく、揃っている物すべての話である。県ごとの段は自分の
+    # 県のファイルだけを書き、ここが最後に 1 度だけ索引を書く。--pack-only でも
+    # 書くのは、この後の decree.py と pack_web.mjs が読むのがこの索引だからである。
+    stage("索引 — build/regions/regions.json を書く",
+          ["uv", "run", str(HERE / "build_routes.py"), "--index-only"])
 
     if not pack_only:
         print(

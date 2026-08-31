@@ -34,6 +34,7 @@
         主張をする——resolve_competing_claims と CASES.md 20 を参照。
 
 使い方:  uv run pipeline/build_routes.py [地域]
+         uv run pipeline/build_routes.py --index-only  (regions.json だけ書き直す)
 """
 from __future__ import annotations
 
@@ -349,13 +350,16 @@ def write_index() -> list[dict]:
     """build/regions/ に在る meta から regions.json を作り直す。
 
     どの地域が在るかを教えられなくても、閲覧側が地域を選ばせられるようにする
-    ためである。
+    ためである。読むのは decree.py と pack_web.mjs で、どちらも全県が揃ってから
+    走る段である。
 
-    これは 1 県の話ではなく、揃っている物すべての話である。だから県ごとの段を
-    並列にすると、走っている 47 本が全員これを書く——最後に書いた 1 本の目に
-    映った顔ぶれが残る。それでも正しい物が残るように、build_all.py は県の並列が
-    終わってからもう一度ここを呼ぶ(`--index-only`)。1 県だけ作り直す経路
-    (pipeline.py)では、その 1 県の後にここが走るだけで足りる。
+    **これは 1 県の話ではなく、揃っている物すべての話なので、県ごとの判定はここを
+    呼ばない。**呼ぶのは、県の集合を回し終えた側——build_all.py と pipeline.py
+    ——が `--index-only` で 1 度だけである。かつては判定の最後にここが走っていた
+    が、県を並列にすると 47 本が同じ 1 ファイルを置き換えに来る。Windows の
+    os.replace は、その相手を誰かが開いているあいだ PermissionError(WinError 5)
+    で落ちる——並列度 4 で実際に落ちた(issue #103)。書く人を 1 人にすれば、
+    競争そのものが無くなる。
     """
     index = []
     for p in sorted(OUT.glob("*.meta.json")):
@@ -733,14 +737,10 @@ def main() -> None:
         meta_path, json.dumps(meta, ensure_ascii=False, separators=(",", ":"))
     )
 
-    index = write_index()
-
     print(f"\ntotal arc length: {total_km:,.0f} km")
     print(f"way last-edit range: {meta['oldest_edit']} .. {meta['newest_edit']}")
     print(f"wrote {gj_path.name} ({gj_path.stat().st_size / 1e6:.2f} MB)")
     print(f"wrote {meta_path.name} ({meta_path.stat().st_size / 1e3:.1f} kB)")
-    print(f"wrote regions.json ({len(index)} region(s): "
-          f"{', '.join(e['label'] for e in index)})")
 
 
 if __name__ == "__main__":
