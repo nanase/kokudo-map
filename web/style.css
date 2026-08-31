@@ -401,7 +401,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 .legend .swatch.duo > span {
   width: 10px; height: 3px;
   background-image: repeating-linear-gradient(
-    to right, currentColor 0 3px, transparent 3px 5px
+    to right, currentcolor 0 3px, transparent 3px 5px
   );
 }
 /* 行の頭の語。行ごとに色の意味が違う（国道は重用の深さ、都道府県道は格）ので、

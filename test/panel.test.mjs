@@ -358,7 +358,7 @@ describe('凡例', () => {
   test('走れない都道府県道の見本は、格の二色を半分ずつ並べる', () => {
     // 地図では走れない区分も格の色のまま描かれるので(mapspec.mjs の
     // pref-special)、一色では片方の格しか述べられません。破線を描くのは
-    // style.css の .legend .swatch.duo > span で、そちらが currentColor を
+    // style.css の .legend .swatch.duo > span で、そちらが currentcolor を
     // 読むため、ここが渡すのは border-top-color ではなく color です。
     const html = legendPrefHTML();
     expect(html).toContain(

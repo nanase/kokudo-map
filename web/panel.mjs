@@ -193,7 +193,7 @@ const swatch = (color, text, dashed, tip) =>
  * 色は `border-top-color` ではなく `color` で渡す。半分ずつに割ると 1 本が 10px
  * になり、その幅では `border-top-style: dashed` が刻みを 1 本に丸めて実線に
  * 見える。破線を描くのは style.css の repeating-linear-gradient で、そちらが
- * `currentColor` を読む。
+ * `currentcolor` を読む。
  */
 const duoRule = (major, general) =>
   '<span class="swatch duo">' +
