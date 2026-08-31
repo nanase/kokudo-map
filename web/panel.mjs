@@ -255,7 +255,7 @@ export const legendKindHTML = () =>
     .map(([c, t, tip]) => swatch(c, t, true, tip))
     .join('');
 
-/* ---------------------------------------------- 都道府県道の重用の数え方 --- */
+/* ---------------------------------------------- 都道府県道の重用の考え方 --- */
 /**
  * 重用について、「国道マップについて」が述べる三つ。
  *
@@ -299,11 +299,21 @@ export const PREF_CONCURRENCY_NOTES = [
   },
 ];
 
-/** 上の三つを紙に組む。見出しは index.html の <h3> が持つ。 */
+/**
+ * 上の三つを紙に組む。見出しは index.html の <h3> が持つ。
+ *
+ * 項目は `<details>` で畳み、開閉の状態は残さない。凡例の開閉(#115)は
+ * localStorage に残しているが、あちらは地図の上に居座る帯の見え方——読む人の
+ * 表示の好みである。この三つはダイアログを開いたときだけ現れる読み物で、
+ * 「国道を選択」など操作面の他の節(index.html の `.fold`)と同じ、開けば読める
+ * 但し書きにすぎない。あちらに状態を持たせていない以上、ここだけ持たせると
+ * 流儀が二つになる。
+ */
 export const prefConcurrencyHTML = () =>
   PREF_CONCURRENCY_NOTES.map(
     (n) =>
-      `<div class="note"><b>${esc(n.head)}</b><span>${esc(n.body)}</span></div>`,
+      `<details class="fold"><summary>${esc(n.head)}</summary>` +
+      `<span>${esc(n.body)}</span></details>`,
   ).join('');
 
 /* ------------------------------------------------------------ データ基準 --- */

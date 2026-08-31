@@ -459,7 +459,7 @@ describe('freshnessHTML', () => {
   });
 });
 
-/* ------------------------------------ 都道府県道の重用の数え方 --- */
+/* ------------------------------------ 都道府県道の重用の考え方 --- */
 /* 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではありません。数だけ
  * を並べると、出ている数がその路線の重用のすべてだと読まれます。三つはその読みを
  * 止めるためにあるので、文言そのものが仕様です。 */
@@ -493,11 +493,11 @@ describe('PREF_CONCURRENCY_NOTES', () => {
 });
 
 describe('prefConcurrencyHTML', () => {
-  test('三つとも、見出しと本文の対で入る', () => {
+  test('三つとも <details class="fold"> で畳んで入る', () => {
     const html = prefConcurrencyHTML();
-    expect(html.match(/class="note"/g)).toHaveLength(3);
+    expect(html.match(/<details class="fold">/g)).toHaveLength(3);
     for (const n of PREF_CONCURRENCY_NOTES) {
-      expect(html).toContain(`<b>${n.head}</b>`);
+      expect(html).toContain(`<summary>${n.head}</summary>`);
       expect(html).toContain(`<span>${n.body}</span>`);
     }
   });
