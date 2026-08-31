@@ -144,6 +144,12 @@ def pack(key: str) -> None:
 
 
 def main() -> None:
+    # Windows の端末は標準出力の既定が cp932 で、下の「wrote … — N tiles」の
+    # ダッシュを持たない。mise.toml が PYTHONIOENCODING=":replace" を渡すので
+    # `mise run build-all` では出なかったが、build_all.py や このスクリプトを直に
+    # 叩くと UnicodeEncodeError で落ちていた(issue #103)。他のスクリプトと同じ
+    # 手当てをここにも置く。
+    sys.stdout.reconfigure(errors="replace")
     wanted = [a for a in sys.argv[1:] if not a.startswith("--")]
     for key in wanted:
         if key not in ARCHIVES:
