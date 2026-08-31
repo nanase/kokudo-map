@@ -67,7 +67,6 @@ import {
   GSI_SHADE_LEVELS,
   GSI_SHADE_PAINT,
   gsiLayerId,
-  hasRef,
   NOTHING,
   PMTILES_URL,
   PREF_CLICKABLE_LAYERS,
@@ -79,6 +78,7 @@ import {
   prefLineLayers,
   routeLayers,
   routeSources,
+  terminiFilter,
   withKind,
 } from './mapspec.mjs';
 import {
@@ -1184,10 +1184,10 @@ function applyFilters() {
     state.pref ? pickedFilter(true, state.prefPicked) : NOTHING,
   );
 
-  const sel = [...state.selected];
-  let tFilter = true;
-  if (!state.national || !state.termini) tFilter = ['==', ['get', 'count'], -1];
-  else if (sel.length) tFilter = ['any', ...sel.map(hasRef)];
+  const tFilter =
+    !state.national || !state.termini
+      ? ['==', ['get', 'count'], -1]
+      : terminiFilter([...state.selected]);
   map.setFilter('termini-dot', tFilter);
   map.setFilter('termini-label', tFilter);
 
