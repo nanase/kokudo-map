@@ -56,6 +56,7 @@ jobs:
           test -s web/vendor/maplibre-gl.js
           test -s web/vendor/pmtiles.js
           test -s web/vendor/line-seed-jp.css
+          test -s web/vendor/eb-garamond-latin-500-normal.woff2
 
       # data.nanase.cc に直接向けます。配信データの基点は web/dataurl.mjs だけが
       # 持っており(mapspec.mjs・app.js はそこから組む)、書き換えるのもこの 1 行

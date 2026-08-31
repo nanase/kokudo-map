@@ -49,6 +49,17 @@
   --danger: #B3261E;
   --danger-hover: #8C1F19;
 
+  /* 操作面の書体。先頭の 1 書体だけが自前で、残りは端末が持っている物である。
+     降ってくるのは画面に出ている字を含む片だけとはいえ、それでも数百 kB は
+     待つ——font-display が swap なので、その間は次の候補で読める字が出て、
+     届いた時点で入れ替わる。
+
+     body だけでなく標識の番号 (.shield text) も、この並びを Roboto の後ろに
+     繋いで使う。書体の並びを二箇所に書くと、片方が黙って古くなる。 */
+  --ui-font: "LINE Seed JP", "Hiragino Kaku Gothic ProN", "Hiragino Sans",
+             "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", "Segoe UI",
+             system-ui, sans-serif;
+
   /* 国道番号標識の配色。地の青、白の縁、白抜きの番号である。
      標識は明るい配色でも暗い配色でも同じ色なので、切り替えない。 */
   --shield-face: #00449E;
@@ -77,6 +88,28 @@
   font-display: swap;
 }
 
+/* Wikipedia の W だけに使う (.detail-wiki text)。あちらのロゴは写せないので、
+   V を二つ重ねた W——オールドスタイルのセリフの字形——で代えている。
+
+   これを端末の書体に頼むことはできない。Garamond も Bodoni MT も
+   Goudy Old Style も Office や Adobe の付属品で、持たない端末では総称の
+   serif へ落ちる。総称の serif に V の重なりの保証は無いので、頼んだ端末に
+   よって別の字が出る。標識の番号に Roboto を配るのと同じ理由で、こちらも
+   自前で配る。EB Garamond は OFL-1.1 の Garamond 復刻である。
+
+   weight は 500 だけ複製する。400 では 15px のとき斜めの細い線が 1 画素を
+   割り、上の飾り罫と一続きの滲みになる。
+
+   index.html は preload しない。この 24 kB が要るのは詳細パネルを開いた人
+   だけで、地図を見に来ただけの人には要らない。 */
+@font-face {
+  font-family: 'EB Garamond';
+  src: url('vendor/eb-garamond-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 * { box-sizing: border-box; }
 
 /* スクロールバー ----------------------------------------------------------
@@ -100,12 +133,7 @@
 }
 html, body { height: 100%; margin: 0; }
 body {
-  /* 先頭の 1 書体だけが自前で、残りは端末が持っている物である。降ってくるのは
-     画面に出ている字を含む片だけとはいえ、それでも数百 kB は待つ——font-display
-     が swap なので、その間は次の候補で読める字が出て、届いた時点で入れ替わる。 */
-  font-family: "LINE Seed JP", "Hiragino Kaku Gothic ProN", "Hiragino Sans",
-               "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", "Segoe UI",
-               system-ui, sans-serif;
+  font-family: var(--ui-font);
   color: var(--ink);
   background: var(--panel-2);
   font-size: 14px;
@@ -189,13 +217,17 @@ body {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 10px; margin-bottom: 10px;
 }
-/* #panel を付けると id を含む分だけ詳細度が上がり、.fold > summary:hover h2
-   の hover 色 (クラスのみ) に勝ってしまう——折りたたみの見出しだけホバーで
-   色が変わらない不具合になる。 */
+/* 節の見出しは、小さく・太く・字を離した帯である。等幅にしていたのはその
+   見た目のためで、桁を揃えるためではない。等幅を頼むと、日本語の字だけが
+   端末の代替書体へ落ちて、同じ 1 行の中で書体が二つになる。帯の見た目は
+   字の大きさ・太さ・letter-spacing が作るので、書体は操作面のものでよい。
+
+   選択子に #panel を付けると id を含む分だけ詳細度が上がり、
+   .fold > summary:hover h2 の hover 色 (クラスのみ) に勝ってしまう——
+   折りたたみの見出しだけホバーで色が変わらない不具合になる。 */
 .block h2, .map-popover h2 {
   margin: 0; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
-  font-family: ui-monospace, Consolas, monospace;
 }
 /* 絞り込み欄。虫眼鏡は欄の中に置く——ラベルを書き足さずに、この欄が探す所で
    あることを述べる。押せる物ではないので、手は素通りさせる。 */
@@ -241,7 +273,7 @@ body {
    ボタン 24px と間 10px のぶんをここで空ける。 */
 #route-block > summary .count { margin-right: 34px; }
 .fold > summary .count {
-  font-family: ui-monospace, Consolas, monospace; font-size: .68rem;
+  font-size: .68rem;
   color: var(--ink-3); font-variant-numeric: tabular-nums;
 }
 
@@ -297,8 +329,10 @@ input[type="search"]::placeholder { font-size: .82em; }
   /* 数字を選ばせない。459 個の的が 3 px 間隔で並んでいるので、少しでも
      手が動くとチェックではなく文字の範囲選択になってしまう。 */
   -webkit-user-select: none; user-select: none;
-  font-family: ui-monospace, Consolas, monospace; font-size: .78rem;
+  font-size: .78rem;
   padding: 2px 3px; border-radius: 2px; color: var(--ink-2);
+  /* 1 桁から 3 桁までが縦に並ぶ。桁を揃えるのは等幅ではなくこれの仕事で、
+     操作面の書体はもともと数字が等幅である。 */
   font-variant-numeric: tabular-nums;
 }
 .route-list label:hover { background: var(--panel); color: var(--ink); }
@@ -348,7 +382,6 @@ input[type="search"]::placeholder { font-size: .82em; }
 .legend .item {
   display: flex; align-items: center; gap: 6px;
   font-size: .72rem; line-height: 1.35; color: var(--ink-2);
-  font-family: ui-monospace, Consolas, monospace;
 }
 .legend .swatch { width: 20px; height: 0; border-top-width: 3px; border-top-style: solid; }
 /* 行の頭の語。行ごとに色の意味が違う（国道は重用の深さ、都道府県道は格）ので、
@@ -356,7 +389,6 @@ input[type="search"]::placeholder { font-size: .82em; }
    ほうで、頭の語はどの群かを言うだけである。 */
 .legend .lead {
   font-size: .68rem; line-height: 1.35; color: var(--ink-3);
-  font-family: ui-monospace, Consolas, monospace;
   margin-right: 2px; white-space: nowrap;
 }
 /* title 属性を持つ項目だけ、補足があることをカーソルで示す。 */
@@ -378,7 +410,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .ranking .row .shields { display: flex; gap: 3px; flex-wrap: wrap; }
 .ranking .row .km {
-  font-family: ui-monospace, Consolas, monospace; font-size: .72rem;
+  font-size: .72rem;
   color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .ranking .row .nm {
@@ -402,8 +434,12 @@ input[type="search"]::placeholder { font-size: .82em; }
 .shield path { fill: var(--shield-face); stroke: var(--shield-edge); }
 .shield text {
   /* x/y/textLength in shield.mjs はここと合わせて目で調整してある。
-     viewBox を変えるときは三つとも一緒に見直す。 */
-  fill: var(--shield-ink); font-family: Roboto, ui-monospace, Consolas, monospace;
+     viewBox を変えるときは三つとも一緒に見直す。
+
+     Roboto の後ろに並ぶのは、それが届くまでのあいだに出る書体である。等幅を
+     並べていたころは、待っているあいだだけ "1" にヒゲの付いた字が出ていた
+     ——Roboto を入れたのは、まさにそれを避けるためである。 */
+  fill: var(--shield-ink); font-family: Roboto, var(--ui-font);
   font-size: 212.5px; font-weight: 700;
 }
 .shield.sm { height: 22px; }
@@ -422,7 +458,6 @@ input[type="search"]::placeholder { font-size: .82em; }
 .stats, .freshness {
   display: grid; grid-template-columns: max-content 1fr;
   gap: 1px 10px; font-size: .68rem; line-height: 1.55;
-  font-family: ui-monospace, Consolas, monospace;
 }
 /* データ基準以下との区切りとわかる程度の余白。 */
 .freshness { margin: 8px 0 0; }
@@ -639,12 +674,15 @@ input[type="search"]::placeholder { font-size: .82em; }
   border-bottom: 1px solid var(--line-2);
 }
 .pop-n {
-  font-family: ui-monospace, Consolas, monospace; font-size: .7rem;
+  font-size: .7rem;
   color: var(--ink-3); margin-left: 4px;
 }
 .pop-row { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); }
 .pop-row dt { color: var(--ink-3); font-size: .72rem; }
-.pop-row dd { margin: 0; font-family: ui-monospace, Consolas, monospace; font-size: .72rem; }
+/* 行ごとに km と本数が右端で揃う。桁は tabular-nums が揃える。 */
+.pop-row dd {
+  margin: 0; font-size: .72rem; font-variant-numeric: tabular-nums;
+}
 /* ポップアップの中で anchor は OSM の way へのリンクだけである。ブラウザの
    既定は黒に近い青で、暗い操作面ではほとんど消えるので、他と同じく配色に
    追随する標識の青にする。 */
@@ -692,15 +730,19 @@ input[type="search"]::placeholder { font-size: .82em; }
   padding: 12px 14px 14px;
   display: flex; flex-direction: column; gap: 12px;
 }
-/* Wikipedia の W。字体は書体が持つ (detail.mjs の WIKIPEDIA_ICON)。並べた
-   書体はどれも同じオールドスタイルのセリフで、先頭から入っているものが使われ
-   る。おにぎりの番号 (.shield text) と同じく、寸法は svg 側の viewBox・
-   textLength と目で合わせてある。 */
+/* Wikipedia の W。字体は上で自前で配っている EB Garamond が持つ。後ろに
+   並べた三つは、それが降りてくるまでの繋ぎである——持っている端末では
+   swap が目に見えない。寸法は svg 側の viewBox・textLength と目で合わせて
+   ある (detail.mjs の WIKIPEDIA_ICON)。
+
+   印だけ 17px にしてある。他の印は線で引いた図で、15px でも形が残る。
+   これは字なので、同じ 15px では字面のほうが小さく見え、隣の漏斗と釣り
+   合わない。 */
 .detail-wiki { text-decoration: none; }
+.detail-wiki svg { width: 17px; height: 17px; }
 .detail-wiki text {
-  fill: currentcolor; font-size: 22px; font-weight: 400;
-  font-family: Garamond, 'Adobe Garamond Pro', Warnock, 'Warnock Pro',
-    Bodoni, 'Bodoni MT', 'Goudy Old Style', Musica, serif;
+  fill: currentcolor; font-size: 22px; font-weight: 500;
+  font-family: 'EB Garamond', Garamond, 'Bodoni MT', 'Goudy Old Style', serif;
 }
 
 /* 起点・終点 --------------------------------------------------------------
@@ -735,7 +777,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .detail-termini .lbl {
   font-size: .68rem; color: var(--ink-3);
-  font-family: ui-monospace, Consolas, monospace; letter-spacing: .06em;
+  letter-spacing: .06em;
 }
 .detail-termini .nm {
   max-width: 100%; font-size: .78rem;
@@ -757,7 +799,6 @@ input[type="search"]::placeholder { font-size: .82em; }
 .detail-stats {
   display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px;
   margin: 0; font-size: .72rem; line-height: 1.6;
-  font-family: ui-monospace, Consolas, monospace;
 }
 .detail-stats dt { color: var(--ink-3); }
 /* 数の列は右で揃える。左揃えだと桁の違う km が単位ごとばらける——ポップアップ
@@ -770,7 +811,6 @@ input[type="search"]::placeholder { font-size: .82em; }
 .detail-sub {
   font-size: .68rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
-  font-family: ui-monospace, Consolas, monospace;
 }
 
 /* 関わりのある国道 --------------------------------------------------------
@@ -823,7 +863,6 @@ input[type="search"]::placeholder { font-size: .82em; }
 .sheet h3 {
   margin: 0 0 8px; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
-  font-family: ui-monospace, Consolas, monospace;
 }
 .sheet section { margin: 0; }
 
@@ -857,6 +896,10 @@ input[type="search"]::placeholder { font-size: .82em; }
 .dialog-close:hover { color: var(--ink); background: var(--panel-2); }
 
 .share-url-row { display: flex; gap: 6px; }
+/* ここだけは等幅のままにする。欄に入っているのは文章ではなく URL で、渡す前に
+   1 字ずつ確かめる物だからである。プロポーショナルの書体では l と 1 と I、
+   0 と O が見分けにくく、書き写す・直すときに間違える。桁を揃えるための等幅
+   ではないので、tabular-nums では代われない。 */
 .share-url-row input {
   flex: 1; min-width: 0; font: inherit; font-family: ui-monospace, Consolas, monospace;
   font-size: .76rem; padding: 6px 8px; background: var(--panel-2); color: var(--ink);
@@ -885,7 +928,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 .share-row { display: flex; gap: 10px; align-items: baseline; }
 .share-row .lbl {
   flex: 0 0 72px; color: var(--ink-3); font-size: .68rem; font-weight: 700;
-  letter-spacing: .06em; font-family: ui-monospace, Consolas, monospace;
+  letter-spacing: .06em;
 }
 .share-row .shields { display: flex; flex-wrap: wrap; gap: 3px; }
 .share-row .all { color: var(--ink-2); }

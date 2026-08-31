@@ -153,12 +153,19 @@ const row = (dt, dd) => `<dt>${dt}</dt><dd>${dd}</dd>`;
  * 代わりに、記事の見出しが使う系統の書体で W 一文字を出す——字体そのものは
  * 書体が持ち、ここは持たない(書体は style.css の `.detail-wiki text`)。
  *
- * 隣の漏斗と同じ svg にしてある。同じ `.icon-btn svg` の寸法がそのまま効き、
- * 二つのボタンの中身が同じ高さで並ぶ。textLength は shield.mjs の番号と同じ
- * 用途で、どの書体が当たっても枠から食み出させないためである。 */
-const WIKIPEDIA_ICON =
+ * かつてはその書体を端末に頼んでいた。頼める端末は、Office か Adobe の
+ * 付属品として Garamond 系を持っている端末だけである。持たない端末では総称
+ * の serif に落ち、V の重なりを持たない別の W が出ていた。いまは標識の番号
+ * と同じように自前で配っているので、どの端末でも同じ字が出る。
+ *
+ * 隣の漏斗と同じ svg にしてある。textLength は shield.mjs の番号と同じ用途
+ * で、どの書体が当たっても枠から食み出させないためである。21 は EB Garamond
+ * の W の送り幅(font-size 22px で 20.97px)に合わせてあり、この書体では
+ * 伸び縮みしない——20 だったころは 20/24 に潰れ、細い斜め線がさらに細く
+ * なっていた。 */
+export const WIKIPEDIA_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-  '<text x="12" y="18" text-anchor="middle" textLength="20" ' +
+  '<text x="12" y="18.4" text-anchor="middle" textLength="21" ' +
   'lengthAdjust="spacingAndGlyphs">W</text></svg>';
 
 /* 絞り込みの漏斗。側面の「番号で絞り込み」と同じ所作——他を落として一つに
