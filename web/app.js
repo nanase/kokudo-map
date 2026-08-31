@@ -108,6 +108,8 @@ const state = {
   ferry: true,
   expressway: true,
   former: true,
+  national: true,
+  pref: true,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -1073,6 +1075,8 @@ function syncControls() {
     cb.closest('label').classList.toggle('on', checked);
   }
   $(`input[name=conc][value="${state.conc}"]`).checked = true;
+  $('#t-national').checked = state.national;
+  $('#t-pref').checked = state.pref;
   $('#t-labels').checked = state.labels;
   $('#t-termini').checked = state.termini;
   $('#t-expressway').checked = state.expressway;
@@ -1118,30 +1122,60 @@ function fitInitialView(index) {
   map.fitBounds(bounds, { padding, duration: 0 });
 }
 
+/**
+ * 都道府県道の各層が既定で持つ絞り込み。`national`/`pref` の切り替えを戻すとき
+ * はこれに戻す——区分ごとの絞り込み(走れる車道か、破線の区分か)を mapspec.mjs
+ * と二重に持たないよう、層の定義そのものから読む。
+ */
+const PREF_DEFAULT_FILTERS = new Map(
+  [...prefLineLayers(), prefLabelLayer()].map((l) => [l.id, l.filter ?? true]),
+);
+
 /* -------------------------------------------------------------- 絞り込み --- */
 function applyFilters() {
   const base = buildFilter([...state.selected], state.conc, state.former);
 
   for (const { id, kinds, negate, toggle } of FILTERED_LAYERS) {
-    if (toggle && !state[toggle]) {
+    if (!state.national || (toggle && !state[toggle])) {
       map.setFilter(id, NOTHING);
       continue;
     }
     map.setFilter(id, kinds ? withKind(base, kinds, negate) : base);
   }
 
-  map.setFilter('picked', pickedFilter(base, state.picked));
+  map.setFilter(
+    'picked',
+    state.national ? pickedFilter(base, state.picked) : NOTHING,
+  );
+
+  for (const [id, filter] of PREF_DEFAULT_FILTERS) {
+    map.setFilter(id, state.pref ? filter : NOTHING);
+  }
 
   const sel = [...state.selected];
   let tFilter = true;
-  if (!state.termini) tFilter = ['==', ['get', 'count'], -1];
+  if (!state.national || !state.termini) tFilter = ['==', ['get', 'count'], -1];
   else if (sel.length) tFilter = ['any', ...sel.map(hasRef)];
   map.setFilter('termini-dot', tFilter);
   map.setFilter('termini-label', tFilter);
 
+  syncLegend();
   updateStats();
   renderRanking();
   syncURL();
+}
+
+/**
+ * 凡例を、地図に描かれている系統だけに絞る。`legend-kind`(点線国道・工事中・
+ * 未開通・海上国道)は国道の区分の凡例なので、`legend-n` と同じく `national` に
+ * 従う——国道を消した画面に、国道の区分だけの凡例が残っては元も子もない。
+ * 両方消えたときは帯そのものも隠す。空の角丸だけが地図に残らないためである。
+ */
+function syncLegend() {
+  $('#legend-n').hidden = !state.national;
+  $('#legend-kind').hidden = !state.national;
+  $('#legend-pref').hidden = !state.pref;
+  $('#legend-bar').hidden = !state.national && !state.pref;
 }
 
 /**

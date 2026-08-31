@@ -45,6 +45,8 @@ function setup(routes = ROUTES) {
     special: true,
     ferry: true,
     former: true,
+    national: true,
+    pref: true,
   };
   const applyCalls = [];
   const applyFilters = () => {
@@ -152,9 +154,11 @@ describe('wireControls — 表示のトグル', () => {
     expect(state.picked).toBeNull();
   });
 
-  test('6 つのトグルすべてが自分のキーだけを変える', () => {
+  test('8 つのトグルすべてが自分のキーだけを変える', () => {
     const { document, window, state } = setup();
     const cases = [
+      ['#t-national', 'national'],
+      ['#t-pref', 'pref'],
       ['#t-termini', 'termini'],
       ['#t-expressway', 'expressway'],
       ['#t-special', 'special'],
