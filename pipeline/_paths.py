@@ -1,7 +1,11 @@
 """リポジトリの場所を決める。pipeline/ はルートの直下にあるので、深さは決まって
-いる。"""
+いる。
+
+書き込みの作法も 1 つだけ置く。場所を知っている物が、そこへどう書くかも知って
+いるほうが、同じ手当てを何箇所にも写さずに済む。"""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,3 +39,21 @@ PREFECTURAL = ROOT / "build" / "prefectural"
 
 # 閲覧側が実際に取る物。
 DATA = ROOT / "web" / "data"
+
+
+def write_atomic(path: Path, text: str) -> None:
+    """同じディレクトリの一時ファイルへ書いてから名前を付け替える。
+
+    `Path.write_text` は途中まで書けた状態を人に見せる。読む側が別のプロセスなら、
+    その途中を掴む。build_routes.py は自分の meta を書いた直後に、build/regions/
+    の meta を全部読んで索引を作り直す——県を並列にすると、隣の県が書いている
+    最中の meta をそこで読み、json.loads が「Expecting value: line 1 column 1」で
+    落ちた(issue #103 の並列度 6 の実測)。
+
+    同じディレクトリに置くのは、名前の付け替えが 1 つのファイルシステムの中で
+    済むからで、それが不可分になる理由である。プロセス番号を一時名に入れるのは、
+    同じファイルを同時に書きに来た二人が、互いの一時ファイルを潰さないためである。
+    """
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)

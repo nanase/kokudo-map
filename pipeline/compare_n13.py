@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["requests", "pyshp"]
+# dependencies = ["requests", "pyshp", "numpy"]
 # ///
 """地域の生成物を、国土数値情報 N13(道路)と突き合わせる。地理院地図と出どころを
 共有する唯一の参照データである。
@@ -73,10 +73,15 @@ import itertools
 import json
 import math
 import os
+import shutil
 import sys
 import zipfile
+from array import array
+from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
+import numpy as np
 import requests
 import shapefile
 
@@ -147,7 +152,7 @@ def neighbor_mesh_codes(pt: tuple[float, float]) -> list[str]:
 # shapefile を配っていない。陸が無く、N13 は道路しか覆わないためである。2026-08-22
 # に regions.py の 47 都道府県すべてに触れて出た 404 の全部である(相異なるメッシュ
 # 272 個のうち、ここに 125 個)。実行時のログを grep しただけでなく、ディスクの
-# build/n13/ とも突き合わせてある(kokudo.raw.json のキャッシュはあるのに展開した
+# build/n13/ とも突き合わせてある(メッシュのキャッシュはあるのに展開した
 # .shp のディレクトリが無いメッシュは、下の 404 の分岐を通ってしかそうならない)。
 # 最初に手で集めた一覧は、確認の実行がファイルへ流れていなかったメッシュを 5 つ
 # 取り落としていた。この集合に無いメッシュの 404 は、同類だとは仮定しない——
@@ -186,7 +191,7 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
     shp = out_dir / f"N13-24_{mesh}_SHP" / f"N13-24_{mesh}.shp"
     if shp.exists() and not refresh:
         return shp
-    out_dir.mkdir(parents=True, exist_ok=True)
+    N13.mkdir(parents=True, exist_ok=True)
     url = f"{BASE_URL}/N13-24_{mesh}_SHP.zip"
     print(f"  downloading {url}", flush=True)
     r = requests.get(url, headers=UA, timeout=120)
@@ -203,14 +208,39 @@ def ensure_mesh(mesh: str, refresh: bool) -> Path | None:
             "set — do not assume."
         )
     r.raise_for_status()
-    zip_path = out_dir / "shp.zip"
+    # 展開先を横の一時ディレクトリにしてから名前を付け替える。out_dir へ直に展開
+    # すると、展開の途中で止まったとき(Ctrl-C、強制終了)、`.shp` は在るのに `.dbf`
+    # が無い組が残り、次の実行はそれを「キャッシュ済み」と読んでしまう。上の
+    # `shp.exists()` はファイルが 1 つ在ることしか見ていないためである。
+    staging = out_dir.with_name(out_dir.name + f".{os.getpid()}.tmp")
+    shutil.rmtree(staging, ignore_errors=True)
+    staging.mkdir(parents=True)
+    zip_path = staging / "shp.zip"
     zip_path.write_bytes(r.content)
     with zipfile.ZipFile(zip_path) as z:
         # zip は最上位に N13-24_<mesh>_SHP/ のフォルダを既に持っている——
-        # 同じ名前の下位ディレクトリを作らず out_dir へ直接展開すれば、二重に
-        # ならずに済む。
-        z.extractall(out_dir)
+        # 同じ名前の下位ディレクトリを作らず直接展開すれば、二重にならずに済む。
+        z.extractall(staging)
     zip_path.unlink()
+    if not (staging / shp.parent.name / shp.name).exists():
+        shutil.rmtree(staging, ignore_errors=True)
+        raise SystemExit(f"{mesh}: expected {shp} after unzip, not found")
+    # 置き換えを先に試し、失敗したときだけ既に在る物を見る。順序が逆——先に
+    # out_dir を消してから置き換える——だと、同じメッシュを同時に取りに行った
+    # 別のプロセスが既に置き終えた完全な組を、こちらが消してしまう。その後の
+    # 置き換えが何かの理由で通らなければ、両方とも何も持たないまま終わる。
+    try:
+        os.replace(staging, out_dir)
+    except OSError:
+        if shp.exists() and not refresh:
+            # 既に完全な組が在る。落としてくる物は同じなので、自分の展開結果を
+            # 捨てて相手の物を使う。
+            shutil.rmtree(staging, ignore_errors=True)
+        else:
+            # 途中で止まった組か、--refresh で置き換えたい古い組である。refresh
+            # のときに相手を使ってしまうと、取り直したのに古い写しが残る。
+            shutil.rmtree(out_dir, ignore_errors=True)
+            os.replace(staging, out_dir)
     if not shp.exists():
         raise SystemExit(f"{mesh}: expected {shp} after unzip, not found")
     return shp
@@ -258,60 +288,205 @@ def line_touches_bbox(line: list[tuple[float, float]], west: float, south: float
     return any(segment_intersects_bbox(a, b, west, south, east, north) for a, b in pairs)
 
 
-def load_classified_raw(mesh: str, refresh: bool
-                         ) -> list[tuple[str, list[tuple[float, float]]]]:
+@dataclass
+class Mesh:
     """そのメッシュのレコード全部——国道だけでなくすべての道路分類——を、bbox で
-    切らずに返す。
+    切らずに持った物。
+
+    座標は Python のオブジェクトの木ではなく、numpy の配列 1 本である。1 点を
+    tuple で持つと、生の 16 バイトが何倍にも膨らむ。最大のメッシュ 5339(190 万
+    レコード、749 万点)で実測すると、生の座標 114 MB に対して常駐 2,323 MB——
+    20.3 倍だった。issue #103 が測ったピーク 2,466 MB の正体はこれである。同じ物
+    を (点数, 2) の float64 の配列と区切りの添字で持てば、ディスクで 124 MB、
+    mmap で開くので常駐にはほとんど乗らない。
+
+    読み取り専用の写像であることには、常駐を増やさない以上の意味がある。同時に
+    走る何本ものプロセスが同じ物理ページを共有するので、県ごとの段を並列にしても、
+    N13 のぶんのメモリが並列度に比例して増えない。
+
+    pts     (点数, 2) float64 — (緯度, 経度)。レコードの順に繋げてある
+    starts  (レコード数 + 1,) int32 — pts への区切り。レコード i の座標は
+            pts[starts[i]:starts[i + 1]] である
+    rdctg   (レコード数,) S2 — 道路分類(rdCtg)。DBF の N13_003 は幅 2 の
+            Character なので、2 バイトで元の値をそのまま持てる
+    """
+    pts: np.ndarray
+    starts: np.ndarray
+    rdctg: np.ndarray
+
+    def lines(self, code: str) -> list[list[tuple[float, float]]]:
+        """道路分類 `code` のレコードだけを、list[list[(緯度, 経度)]] にして返す。
+
+        絞った後だけを Python のオブジェクトにするのが要点である。1 メッシュの
+        全分類は最大 190 万件あるが、国道はそのうち 2 万件ほどしかない(issue #28)。
+        呼ぶ側が線分の格子に積むのはその 2 万件だけで、残りは配列のまま触らずに
+        済む。
+
+        返すのは tuple であって、numpy の行でもリストでもない。resample_line が
+        `points[-1] != coords[-1]` で端点の重複を避けており、tuple とリストは
+        中身が同じでも等しくならない。ここで形を変えると、被覆率が静かに変わる。
+        """
+        want = code.encode("utf-8")
+        out: list[list[tuple[float, float]]] = []
+        starts = np.asarray(self.starts)
+        for i in np.nonzero(np.asarray(self.rdctg) == want)[0]:
+            lo, hi = int(starts[i]), int(starts[i + 1])
+            out.append([(lat, lon) for lat, lon in self.pts[lo:hi].tolist()])
+        return out
+
+    @cached_property
+    def segments(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """線分ごとの (本物の線分か, 裏付けになる分類か, 道路分類) の 3 本。
+
+        pts は全レコードを繋げた 1 本なので、隣り合う 2 点が必ず 1 本の線分だとは
+        限らない。レコード k の最初の点の 1 つ手前の線分は、前のレコードの最後の点
+        と結んでしまう。starts がその境目を持っているので、そこだけ落とす。
+
+        分類のほうは点ごとに広げてから 1 つずらす。線分 j はレコード内に収まって
+        いるので(上で境目を落としてある)、始点の分類がその線分の分類である。
+        広げた物をそのまま持つのは、線分 1 本の分類を引くたびに starts を二分探索
+        するより安いからである——最大のメッシュで 1 本あたり 3.6 ms かかっていた
+        (memmap への searchsorted である)。線分ごとに 2 バイトなので、いちばん
+        大きいメッシュでも 12 MB に収まる。
+        """
+        starts = np.asarray(self.starts)
+        n = len(self.pts)
+        real = np.ones(max(n - 1, 0), dtype=bool)
+        # 空のレコード(starts[k] == starts[k + 1])があると、境目の添字が両端へ
+        # 寄る。先頭が空なら 0 が現れ、0 - 1 は最後の線分を指してしまう。末尾が
+        # 空なら n が現れ、n - 1 は存在しない線分を指す。どちらも境目ではない
+        # ——空のレコードは、繋がっている 2 点のあいだを切らない。
+        bnd = starts[1:-1]
+        real[bnd[(bnd > 0) & (bnd < n)] - 1] = False
+        code = np.repeat(np.asarray(self.rdctg), np.diff(starts))[:-1]
+        # np.isin ではなく等値の論理和にする。数バイトの文字列 4 つに対する
+        # np.isin は並べ替えを通るので、700 万要素では等値 4 回よりずっと重い。
+        confirmable = np.zeros(len(code), dtype=bool)
+        for want in sorted(CONFIRMABLE_RDCTG):
+            confirmable |= code == want.encode("utf-8")
+        return real, confirmable, code
+
+
+# DBF の N13_003(道路分類)の幅。sf.fields で確認した値である。ここを超える値が
+# 来たら、年版が変わって欄が広がったということなので、黙って切り詰めずに止まる。
+RDCTG_WIDTH = 2
+
+
+def mesh_cache_paths(mesh: str) -> tuple[Path, Path, Path]:
+    """そのメッシュの packed キャッシュ 3 本。pts が最後で、それが揃っている印で
+    ある——pack_mesh の書き込みの段を参照。"""
+    return (N13 / f"{mesh}.starts.npy", N13 / f"{mesh}.rdctg.npy",
+            N13 / f"{mesh}.pts.npy")
+
+
+def pack_mesh(mesh: str, refresh: bool) -> None:
+    """そのメッシュの shapefile を解析し、Mesh の 3 本の配列としてキャッシュへ書く。
 
     「メッシュとそのとき欲しい分類」ごとではなく、メッシュごとに 1 つのキャッシュ
-    で全分類を覆う。高く付くのは shapefile の解析(1 メッシュ約 8 秒)であり、絞った
-    後の物を鍵にした二つ目のキャッシュを持つと、このキャッシュが既に答えを持って
-    いる問い(「ではここに在る国道以外は何か」)に答えるために、同じ shapefile を
-    解析し直すことになる。
+    で全分類を覆う。高く付くのは shapefile の解析であり、絞った後の物を鍵にした
+    二つ目のキャッシュを持つと、このキャッシュが既に答えを持っている問い(「では
+    ここに在る国道以外は何か」)に答えるために、同じ shapefile を解析し直すことに
+    なる。
 
     キャッシュはメッシュの生の、絞っていないレコードを保ち、鍵はメッシュだけで
     ある——1 次メッシュは二つの地域の境をまたぐことが珍しくない(矩形が隣県へ食み
     込むことは regions.py を参照)。鍵をメッシュだけにしたまま書き込み時に絞ると、
     共有するメッシュに二番目に触れた地域が、自分の bbox ではなく最初の地域の bbox
     で絞った物を、何も言われないまま使い回すことになっていた。絞り込み(bbox でも、
-    国道だけに絞る場合でも)は呼ぶ側に任せる。下の load_kokudo_raw と同じである。
-    """
-    cache_path = N13 / f"{mesh}.classified.raw.json"
-    if cache_path.exists() and not refresh:
-        raw = json.loads(cache_path.read_text(encoding="utf-8"))
-        return [(rdctg, [tuple(p) for p in line]) for rdctg, line in raw]
+    分類でも)は呼ぶ側に任せる。Mesh.lines を参照。
 
+    座標は array("d") へ積む。Python のリストへ float を積むと、1 点あたり
+    float オブジェクト 24 バイトと参照 8 バイトが残る。array は生の倍精度をその
+    まま並べるので、解析中の山も座標のバイト数のままである。
+    """
     shp_path = ensure_mesh(mesh, refresh)
-    records: list[tuple[str, list[tuple[float, float]]]] = []
+    coords = array("d")
+    starts = array("i", [0])
+    codes = bytearray()
     if shp_path is not None:
         sf = shapefile.Reader(str(shp_path), encoding="utf-8")
         try:
             for i, rec in enumerate(sf.iterRecords()):
-                pts = sf.shape(i).points
-                records.append((rec[RDCTG_FIELD], [(lat, lon) for lon, lat in pts]))
+                for lon, lat in sf.shape(i).points:
+                    coords.append(lat)
+                    coords.append(lon)
+                starts.append(len(coords) // 2)
+                code = rec[RDCTG_FIELD].encode("utf-8")
+                if len(code) > RDCTG_WIDTH:
+                    raise SystemExit(
+                        f"{mesh}: rdCtg {rec[RDCTG_FIELD]!r} は {RDCTG_WIDTH} "
+                        "バイトに収まらない。N13 の年版が変わって欄が広がった "
+                        "可能性がある。RDCTG_WIDTH を確かめること。"
+                    )
+                codes += code.ljust(RDCTG_WIDTH, b"\0")
         finally:
             # `with` ではなく try/finally にする。依存(pyshp。スクリプトの
             # ヘッダで版を固定していない)が、Reader の context manager に対応した
             # 版であるとは限らないためである。
             sf.close()
+
     N13.mkdir(parents=True, exist_ok=True)
-    # cache_path へ直接書かず、同じディレクトリの一時ファイルへ書いてから名前を
-    # 付け替える——書き込みの途中で実行が止まると(Ctrl-C、メモリ不足による強制
-    # 終了)、そうしなければ途中までの JSON が残り、次の実行は解析し直すのではなく
-    # 上の json.loads で落ちる(この PR への CodeRabbit のレビュー)。同じ
-    # ディレクトリにしておけば名前の付け替えが 1 つのファイルシステムの中で済み、
-    # それが不可分になる理由である。
-    tmp_path = cache_path.with_name(cache_path.name + f".{os.getpid()}.tmp")
-    tmp_path.write_text(json.dumps(records), encoding="utf-8")
-    os.replace(tmp_path, cache_path)
-    return records
+    arrays = (
+        # starts は小さいので、buffer の書式から素直に写す(array("i") が何バイト
+        # かに依らない)。coords は最大 120 MB あるので、写さず buffer をそのまま
+        # 見る——array("d") は C の double であり、float64 と同じ並びである。
+        np.array(starts, dtype=np.int32),
+        np.frombuffer(codes, dtype=f"S{RDCTG_WIDTH}"),
+        (np.frombuffer(coords, dtype=np.float64).reshape(-1, 2)
+         if len(coords) else np.empty((0, 2), dtype=np.float64)),
+    )
+    # それぞれ同じディレクトリの一時ファイルへ書いてから名前を付け替える——書き
+    # 込みの途中で実行が止まると(Ctrl-C、メモリ不足による強制終了)、そうしなけれ
+    # ば途中までのファイルが残り、次の実行は解析し直すのではなく np.load で落ちる。
+    # 同じディレクトリにしておけば名前の付け替えが 1 つのファイルシステムの中で
+    # 済み、それが不可分になる理由である。
+    #
+    # 3 本のあいだの取り決めは 1 つである。**pts が在ることが、3 本が同じ組で
+    # 揃っていることの印である。**load_mesh はその 1 本の有無だけを見る。だから
+    # pts は最後に置き、そして書き直す前にまず消す。
+    #
+    # 消す側が要る理由は --refresh である。既に 3 本ある状態で書き直すと、pts は
+    # 古いまま残っているのに starts と rdctg が先に新しくなる瞬間がある。そこで
+    # 止まると、次の実行は「pts が在る」を見て、新しい starts と古い pts を組に
+    # して開く。座標の区切りが中身とずれた物を、何も言われないまま使うことになる
+    # (この PR への CodeRabbit のレビュー)。先に消しておけば、その瞬間に残るのは
+    # 「pts が無い」——作り直す理由になる状態——だけである。
+    pts_p = mesh_cache_paths(mesh)[2]
+    pts_p.unlink(missing_ok=True)
+    for path, arr in zip(mesh_cache_paths(mesh), arrays, strict=True):
+        tmp_path = path.with_name(path.name + f".{os.getpid()}.tmp")
+        np.save(tmp_path, arr, allow_pickle=False)
+        # np.save は拡張子 .npy が無ければ足す。付け替える先は足された物である。
+        os.replace(tmp_path.with_name(tmp_path.name + ".npy"), path)
+
+
+# この実行の中で既に取り直したメッシュ。1 回の実行が同じメッシュを二度開くことは
+# 珍しくない——被覆率を測る側(load_kokudo_raw)と、直下の分類を見る側
+# (classify_clusters_beneath)がそれぞれ開く。`--refresh` をそのまま二度受け取ると、
+# 同じ物を二度落として二度解析することになる。取り直しは 1 回の実行につき 1 度で
+# 足りる。
+_REFRESHED: set[str] = set()
+
+
+def load_mesh(mesh: str, refresh: bool) -> Mesh:
+    """そのメッシュの Mesh を、キャッシュから mmap で開いて返す。無ければ作る。
+
+    在るかどうかを pts の 1 本で判ずるのは、pack_mesh がそれを最後に置き、書き直す
+    前にまず消すからである——理由はあちらの書き込みの段にある。
+    """
+    starts_p, rdctg_p, pts_p = mesh_cache_paths(mesh)
+    if (refresh and mesh not in _REFRESHED) or not pts_p.exists():
+        pack_mesh(mesh, refresh)
+        _REFRESHED.add(mesh)
+    return Mesh(np.load(pts_p, mmap_mode="r"),
+                np.load(starts_p, mmap_mode="r"),
+                np.load(rdctg_p, mmap_mode="r"))
 
 
 def load_kokudo_raw(mesh: str, refresh: bool) -> list[list[tuple[float, float]]]:
-    """load_classified_raw のうち国道だけを取り出した物。bbox では切らない——
-    キャッシュの考え方はあちらの docstring にあり、ここもそれを共有する。"""
-    return [line for rdctg, line in load_classified_raw(mesh, refresh)
-            if rdctg == RDCTG_KOKUDO]
+    """そのメッシュの国道のレコードだけ。bbox では切らない——キャッシュの考え方は
+    pack_mesh の docstring にあり、ここもそれを共有する。"""
+    return load_mesh(mesh, refresh).lines(RDCTG_KOKUDO)
 
 
 # ---------------------------------------------------------------- geometry ---
@@ -417,9 +592,22 @@ def nearest_segment(pt, grid, radius=1):
     return best
 
 
-def nearest_classified_in_records(pt: tuple[float, float],
-                                   records: list[tuple[str, list[tuple[float, float]]]]
-                                   ) -> tuple[tuple[float, str] | None, tuple[float, str] | None]:
+# 距離の走査を numpy で回すとき、1 度に扱う点の数。
+#
+# メッシュを丸ごと一度に渡してはいけない。最大の 5339(749 万点)では一時配列
+# 1 本で 60 MB、数え上げると 500 MB を超える——このファイルが N13 を配列で持つ
+# ようにした理由そのものを、走査の側で打ち消してしまう。
+#
+# 小さすぎてもいけない。この大きさの塊を、問い合わせ点の数だけ繰り返し舐める
+# (下の繰り返しの順序を参照)ので、塊とその一時配列が CPU のキャッシュに載って
+# いるあいだは、二人目以降の問い合わせがメモリまで降りずに済む。65,536 点なら
+# 塊が 1 MB、一時配列が 1 本 512 KB で、両方合わせても L2/L3 に収まる。
+SCAN_CHUNK = 1 << 16
+
+
+def nearest_classified_in_mesh(points: list[tuple[float, float]], mesh_data: Mesh
+                                ) -> list[tuple[tuple[float, str] | None,
+                                                 tuple[float, str] | None]]:
     """メッシュ 1 つの全分類のレコードに対する、厳密な最近傍線分の探索。セルの
     半径の近傍ではなく、線分を全部見る。
 
@@ -434,29 +622,123 @@ def nearest_classified_in_records(pt: tuple[float, float],
     は、その当て推量を二度(約 1 km と約 4 km で)、まだ本物の線分を見落としうると
     指摘した。線分を全部走査すれば、当て推量そのものが無くなる。
 
-    その費用は払える。これが走るのは (クラスタ, 候補のメッシュ) の対ごとに 1 回
-    ——全国の実行でも多くて数百回である——であって、アークごとでも取り直した点
-    ごとでもない。しかも 1 メッシュの分類済みの集合(数万から 20 万件ほどの短い
-    レコード。load_classified_raw を参照)は、1 秒に満たない時間で走査できる。
+    走査そのものは numpy で回す。Python のループで 1 本ずつ測ると、最大のメッシュ
+    の 550 万本に数秒かかり、(クラスタ, メッシュ) の対ごとにそれを払うことになる
+    ——福島県 1 県の apply_n13 が 301 秒かかっていたのはここである(issue #103)。
 
-    返すのは (nearest_any, nearest_confirmable) である——それぞれの意味は
-    classify_beneath を参照。どちらも (距離, rdCtg) か None である。
+    問い合わせ点は 1 つずつではなく、そのメッシュを見たいものをまとめて受ける。
+    繰り返しの順序が「塊が外、点が内」になるのはそのためで、1 つの塊とその一時
+    配列が CPU のキャッシュに載っているあいだに、その塊に対する全部の点を片付ける。
+    点ごとにメッシュを頭から舐め直すと、同じ数の演算に対してメモリを何倍も往復
+    する。茨城県は 9 メッシュに対して 34 クラスタを問うので、この順序だけで
+    メッシュを読む回数が 233 回から 9 回になる。
+
+    ただし返す距離そのものは、numpy が出した値ではなく point_segment_distance_m
+    が出した値である。numpy が決めるのは「どの線分が最も近いか」だけで、決まった
+    後にその 1 本を本物の関数へ渡し直す。だから numpy の側は、括り方を変えて演算
+    を減らしてよい——最後の 1 ビットが動いたとしても、それで選ばれ方が変わるのは
+    1 ULP 差で並んだ二本のどちらを採るかという場面だけであり、返る値はどちらでも
+    本物の関数の出力である。しきい値と比べる値も報告に出る値も、このファイルが
+    距離だと述べている定義そのものの出力になる。写した式ではない。
+
+    返すのは points と同じ長さの一覧で、各要素が
+    (nearest_any, nearest_confirmable) である——それぞれの意味は classify_beneath
+    を参照。どちらも (距離, rdCtg) か None である。
     """
-    best_any = None
-    best_confirmable = None
-    for rdctg, line in records:
-        for i in range(len(line) - 1):
-            d = point_segment_distance_m(pt, line[i], line[i + 1])
-            if best_any is None or d < best_any[0]:
-                best_any = (d, rdctg)
-            if rdctg in CONFIRMABLE_RDCTG and (best_confirmable is None or d < best_confirmable[0]):
-                best_confirmable = (d, rdctg)
-    return best_any, best_confirmable
+    best: list[list[tuple[float, str] | None]] = [[None, None] for _ in points]
+    pts = mesh_data.pts
+    n = len(pts)
+    if n < 2 or not points:
+        return [(b[0], b[1]) for b in best]
+    real, confirmable, code = mesh_data.segments
+
+    # 問い合わせ点ごとの、局所的な正距円筒の係数。point_segment_distance_m は
+    # 1 点ずつ radians と cos を呼ぶが、点が決まれば定数なので、括り出して 1 回の
+    # 掛け算にしておく。
+    frames = [(lat0, lon0,
+               math.radians(1.0) * math.cos(math.radians(lat0)) * EARTH_RADIUS_M,
+               math.radians(1.0) * EARTH_RADIUS_M)
+              for lat0, lon0 in points]
+
+    # 作業領域は先に確保して使い回す。塊と問い合わせ点の組ごとに 4 MB の配列を
+    # 十数本ずつ作り直すと、確保と解放と、まっさらな頁を触りに行く費用のほうが、
+    # 実際の掛け算より高く付く。out= で書き先を渡す形にすれば、この繰り返しの
+    # あいだ 1 バイトも新しく確保しない。
+    span = min(SCAN_CHUNK, n - 1)
+    x, y = np.empty(span + 1), np.empty(span + 1)
+    dx, dy, denom, num, t, cx, cy, dist = (np.empty(span) for _ in range(8))
+
+    def closer(prev, j, pt):
+        """線分 j を本物の関数で測り直し、これまでの最良と比べる。"""
+        a, b = pts[j].tolist(), pts[j + 1].tolist()
+        cand = (point_segment_distance_m(pt, (a[0], a[1]), (b[0], b[1])),
+                code[j].decode("utf-8"))
+        return cand if prev is None or cand[0] < prev[0] else prev
+
+    for lo in range(0, n - 1, SCAN_CHUNK):
+        hi = min(lo + SCAN_CHUNK + 1, n)
+        w = hi - lo - 1                      # この塊の線分の数
+        chunk = np.asarray(pts[lo:hi])
+        # 緯度と経度を、それぞれ隙間なく並んだ配列へ写してから使う。pts は
+        # (点数, 2) なので chunk[:, 0] は 8 バイトおきの飛び飛びの眺めである。
+        # 写しは塊につき 1 度で、その塊に対する全部の問い合わせ点が使い回す。
+        lat_c, lon_c = chunk[:, 0].copy(), chunk[:, 1].copy()
+        # 線分でない隙間(レコードの境目)と、裏付けにならない分類を、距離へ足す
+        # 無限大にしておく。塊ごとに 1 度だけ作れば、点ごとには足し算 1 回で済む。
+        window = real[lo:lo + w]
+        veil_any = np.where(window, 0.0, np.inf)
+        veil_confirmable = np.where(window & confirmable[lo:lo + w], 0.0, np.inf)
+        # 長さ 0 の線分がどれかは、問い合わせ点によらない。同じ 2 点が並んでいる
+        # かどうかだけで決まるので、塊ごとに 1 度見ておく。
+        #
+        # 本物の関数は投影した後の dx == 0 かつ dy == 0 を見ているが、投影は
+        # 差に定数を掛けるだけなので、この二つは同じことである。日本の緯度では
+        # 経度 1 度が約 88,900 m で、経度の float64 の刻み(140 度あたりで
+        # 2.8e-14 度)を掛けても 2.5e-9 m にしかならない。0 へ潰れる余地は無い。
+        degenerate = (lat_c[:-1] == lat_c[1:]) & (lon_c[:-1] == lon_c[1:])
+        any_degenerate = bool(degenerate.any())
+        xw, yw = x[:w + 1], y[:w + 1]
+        dxw, dyw, denw, numw = dx[:w], dy[:w], denom[:w], num[:w]
+        tw, cxw, cyw, dw = t[:w], cx[:w], cy[:w], dist[:w]
+        for k, (lat0, lon0, kx, ky) in enumerate(frames):
+            np.subtract(lon_c, lon0, out=xw)
+            np.multiply(xw, kx, out=xw)
+            np.subtract(lat_c, lat0, out=yw)
+            np.multiply(yw, ky, out=yw)
+            ax, ay, bx, by = xw[:-1], yw[:-1], xw[1:], yw[1:]
+            np.subtract(bx, ax, out=dxw)
+            np.subtract(by, ay, out=dyw)
+            np.multiply(dxw, dxw, out=denw)
+            np.multiply(dyw, dyw, out=tw)
+            np.add(denw, tw, out=denw)
+            np.multiply(ax, dxw, out=numw)
+            np.multiply(ay, dyw, out=tw)
+            np.add(numw, tw, out=numw)
+            np.negative(numw, out=numw)
+            with np.errstate(invalid="ignore", divide="ignore"):
+                np.divide(numw, denw, out=tw)
+            np.clip(tw, 0.0, 1.0, out=tw)
+            # 長さ 0 の線分では 0/0 が出る。t = 0 にすれば始点そのものを指すので、
+            # 本物の関数が返す「端点までの距離」と同じ答えになる。
+            if any_degenerate:
+                np.copyto(tw, 0.0, where=degenerate)
+            np.multiply(tw, dxw, out=cxw)
+            np.add(ax, cxw, out=cxw)
+            np.multiply(tw, dyw, out=cyw)
+            np.add(ay, cyw, out=cyw)
+            np.hypot(cxw, cyw, out=dw)
+            for slot, veil in ((0, veil_any), (1, veil_confirmable)):
+                np.add(dw, veil, out=numw)   # numw をここで一時に借りる
+                j = int(np.argmin(numw))
+                if math.isinf(numw[j]):
+                    continue        # この塊に、その条件を満たす線分が 1 本も無い
+                best[k][slot] = closer(best[k][slot], lo + j, points[k])
+    return [(b[0], b[1]) for b in best]
 
 
 def classify_beneath(nearest_any: tuple[float, str] | None,
                       nearest_confirmable: tuple[float, str] | None) -> tuple[str, bool]:
-    """nearest_classified_in_records の結果を、報告の文字列と、指定解除の機械確認
+    """nearest_classified_in_mesh の結果を、報告の文字列と、指定解除の機械確認
     のフラグに整える。文字列は、分類を問わず N13 が標本の点の最も近くに描いている
     物である。フラグは、全体で最も近い物が何かとは独立に、裏付けになる分類
     (CONFIRMABLE_RDCTG を参照)が CONFIRM_THRESHOLD_M 以内に在るかどうかである。
@@ -480,14 +762,14 @@ def classify_clusters_beneath(clusters: list[dict], refresh: bool,
 
     1 メッシュの全分類(国道だけではない)のレコードは、国道だけの部分集合の 30〜50
     倍になる——メッシュあたり 74,000〜137,000 件に対し、国道は 2,000〜3,000 件で
-    ある(issue #28)。だから、国道だけの格子が安全にやっているように、呼ぶ側の
-    クラスタが跨りうるメッシュを全部 1 つにまとめると、全国の実行では数千万件の線の
-    レコードを同時に抱えることになり、実際にメモリを使い果たした。1 メッシュぶんを
-    読んでは捨てる形にすれば、クラスタの一覧が幾つのメッシュに跨ろうと、山は
-    1 メッシュぶんに収まる。引き換えに、分類を見る処理を coverage_ratio の処理と
-    同じメッシュの繰り返しの中では行えず、別にすることになる(coverage_ratio の
-    ほうは今もメッシュごとの国道だけの部分集合を 1 つの格子へ読み込む。そちらは
-    十分小さいままである。load_kokudo_raw を呼ぶ側を参照)。
+    ある(issue #28)。かつてこれを Python のオブジェクトへ起こしていた頃は、
+    クラスタが跨りうるメッシュを全部 1 つにまとめるとメモリを使い果たしたので、
+    1 メッシュぶんを読んでは捨てる形にしていた。今は Mesh が mmap で開くので、
+    メッシュを開く費用そのものがほとんど無い。それでもメッシュごとに繰り返すのは、
+    同じメッシュを何度も開き直さないためである。分類を見る処理を coverage_ratio と
+    同じ繰り返しの中に置けないことは変わらない(coverage_ratio のほうは今も
+    メッシュごとの国道だけの部分集合を 1 つの格子へ読み込む。そちらは十分小さい
+    ままである。load_kokudo_raw を呼ぶ側を参照)。
 
     道はメッシュの境界ごとに切られているので、境界から CONFIRM_THRESHOLD_M 以内に
     ある標本の点は、本当に最も近い N13 の線が隣のメッシュに在ることがある——この
@@ -512,9 +794,13 @@ def classify_clusters_beneath(clusters: list[dict], refresh: bool,
                 mesh_to_clusters.setdefault(mesh, []).append(c)
 
     for mesh, mesh_clusters in mesh_to_clusters.items():
-        records = load_classified_raw(mesh, refresh)
-        for c in mesh_clusters:
-            nearest_any, nearest_confirmable = nearest_classified_in_records(c["sample"], records)
+        mesh_data = load_mesh(mesh, refresh)
+        # そのメッシュを問うクラスタをまとめて渡す。1 つずつ渡すとメッシュを
+        # クラスタの数だけ舐め直すことになる——nearest_classified_in_mesh を参照。
+        found = nearest_classified_in_mesh([c["sample"] for c in mesh_clusters],
+                                            mesh_data)
+        for c, (nearest_any, nearest_confirmable) in zip(mesh_clusters, found,
+                                                          strict=True):
             if nearest_any is not None and (c["_nearest_any"] is None
                                              or nearest_any[0] < c["_nearest_any"][0]):
                 c["_nearest_any"] = nearest_any
@@ -523,8 +809,9 @@ def classify_clusters_beneath(clusters: list[dict], refresh: bool,
                 or nearest_confirmable[0] < c["_nearest_confirmable"][0]
             ):
                 c["_nearest_confirmable"] = nearest_confirmable
-        # `records` はここで捨てる。次のメッシュを読む前である——この繰り返しが
-        # 二つのメッシュの分類済みデータを同時に抱えることはない。
+        # `mesh_data` はここで捨てる。次のメッシュを開く前である——線分ごとの真偽
+        # の配列(Mesh.segments)だけは点の数ぶんあるので、二つのメッシュのぶんを
+        # 同時に抱えないようにしておく。
 
     for c in clusters:
         c["beneath"], c["confirmed"] = classify_beneath(
@@ -845,7 +1132,7 @@ def main() -> None:
     # 全分類(国道だけでなくすべての道路分類)は、ここではメッシュをまたいで積み
     # 上げない——全メッシュの全分類を同時に抱えることこそメモリを使い果たした原因
     # である理由は、classify_clusters_beneath の docstring を参照。あちらは後から、
-    # load_classified_raw のディスク上のキャッシュから 1 メッシュずつ読み直す。
+    # packed キャッシュから 1 メッシュずつ mmap で開き直す。
     for mesh in meshes:
         raw = load_kokudo_raw(mesh, refresh)
         filtered = [line for line in raw if line_touches_bbox(line, west, south, east, north)]

@@ -34,6 +34,7 @@
         主張をする——resolve_competing_claims と CASES.md 20 を参照。
 
 使い方:  uv run pipeline/build_routes.py [地域]
+         uv run pipeline/build_routes.py --index-only  (regions.json だけ書き直す)
 """
 from __future__ import annotations
 
@@ -42,7 +43,7 @@ import re
 import sys
 from collections import Counter, defaultdict
 
-from _paths import CACHE, REGIONS as OUT
+from _paths import CACHE, REGIONS as OUT, write_atomic
 from geo import haversine, line_length
 from regions import for_region
 
@@ -345,8 +346,45 @@ def names_a_closed_residential_road(tags: dict[str, str]) -> bool:
 
 
 # ------------------------------------------------------------------ main ---
+def write_index() -> list[dict]:
+    """build/regions/ に在る meta から regions.json を作り直す。
+
+    どの地域が在るかを教えられなくても、閲覧側が地域を選ばせられるようにする
+    ためである。読むのは decree.py と pack_web.mjs で、どちらも全県が揃ってから
+    走る段である。
+
+    **これは 1 県の話ではなく、揃っている物すべての話なので、県ごとの判定はここを
+    呼ばない。**呼ぶのは、県の集合を回し終えた側——build_all.py と pipeline.py
+    ——が `--index-only` で 1 度だけである。かつては判定の最後にここが走っていた
+    が、県を並列にすると 47 本が同じ 1 ファイルを置き換えに来る。Windows の
+    os.replace は、その相手を誰かが開いているあいだ PermissionError(WinError 5)
+    で落ちる——並列度 4 で実際に落ちた(issue #103)。書く人を 1 人にすれば、
+    競争そのものが無くなる。
+    """
+    index = []
+    for p in sorted(OUT.glob("*.meta.json")):
+        m = json.loads(p.read_text(encoding="utf-8"))
+        index.append({
+            "region": m["region"],
+            "label": m.get("label", m["region"]),
+            "bbox": m["bbox"],
+            "arc_count": m["arc_count"],
+            "total_km": m["total_km"],
+            "routes": len(m["routes"]),
+        })
+    write_atomic(OUT / "regions.json",
+                 json.dumps(index, ensure_ascii=False, separators=(",", ":")))
+    return index
+
+
 def main() -> None:
-    region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
+    args = sys.argv[1:]
+    if "--index-only" in args:
+        index = write_index()
+        print(f"wrote regions.json ({len(index)} region(s): "
+              f"{', '.join(e['label'] for e in index)})")
+        return
+    region = args[0] if args else "nagano"
     raw_path = CACHE / f"{region}.raw.json"
     if not raw_path.exists():
         raise SystemExit(f"no cache for {region!r}; run pipeline/fetch_osm.py {region} first")
@@ -630,10 +668,10 @@ def main() -> None:
         for a in arcs
     ]
     gj_path = OUT / f"{region}.geojson"
-    gj_path.write_text(
+    write_atomic(
+        gj_path,
         json.dumps({"type": "FeatureCollection", "features": features},
                    ensure_ascii=False, separators=(",", ":")),
-        encoding="utf-8",
     )
 
     edits = sorted(a["updated"] for a in arcs if a["updated"])
@@ -695,32 +733,14 @@ def main() -> None:
         "n_histogram": {str(k): v for k, v in sorted(n_hist.items())},
     }
     meta_path = OUT / f"{region}.meta.json"
-    meta_path.write_text(
-        json.dumps(meta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    write_atomic(
+        meta_path, json.dumps(meta, ensure_ascii=False, separators=(",", ":"))
     )
-
-    # ここまでに生成した物の索引。どの地域が在るかを教えられなくても、閲覧側が
-    # 地域を選ばせられるようにするためである。
-    index = []
-    for p in sorted(OUT.glob("*.meta.json")):
-        m = json.loads(p.read_text(encoding="utf-8"))
-        index.append({
-            "region": m["region"],
-            "label": m.get("label", m["region"]),
-            "bbox": m["bbox"],
-            "arc_count": m["arc_count"],
-            "total_km": m["total_km"],
-            "routes": len(m["routes"]),
-        })
-    (OUT / "regions.json").write_text(
-        json.dumps(index, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     print(f"\ntotal arc length: {total_km:,.0f} km")
     print(f"way last-edit range: {meta['oldest_edit']} .. {meta['newest_edit']}")
     print(f"wrote {gj_path.name} ({gj_path.stat().st_size / 1e6:.2f} MB)")
     print(f"wrote {meta_path.name} ({meta_path.stat().st_size / 1e3:.1f} kB)")
-    print(f"wrote regions.json ({len(index)} region(s): "
-          f"{', '.join(e['label'] for e in index)})")
 
 
 if __name__ == "__main__":

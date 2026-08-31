@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["requests", "pyshp"]
+# dependencies = ["requests", "pyshp", "numpy"]
 # ///
 """N13 による指定解除の機械確認を、`revoked` 属性として
 build/regions/<region>.geojson へ書く——former 孤立候補の仕分けについての、
@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import sys
 
-from _paths import REGIONS as DATA
+from _paths import REGIONS as DATA, write_atomic
 from compare_n13 import region_former_clusters
 
 
@@ -57,12 +57,12 @@ def main() -> None:
     # 地域から、古い revoked=1 が消えるようにするためである。
     if not any(f["properties"].get("former") for f in gj["features"]):
         print(f"{region}: no former arcs, nothing to confirm against N13")
-        gj_path.write_text(
-            json.dumps(gj, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+        write_atomic(
+            gj_path, json.dumps(gj, ensure_ascii=False, separators=(",", ":"))
         )
         meta["revoked_arcs"] = 0
-        meta_path.write_text(
-            json.dumps(meta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+        write_atomic(
+            meta_path, json.dumps(meta, ensure_ascii=False, separators=(",", ":"))
         )
         return
 
@@ -74,13 +74,11 @@ def main() -> None:
         if f["properties"]["id"] in confirmed:
             f["properties"]["revoked"] = 1
             touched += 1
-    gj_path.write_text(
-        json.dumps(gj, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
-    )
+    write_atomic(gj_path, json.dumps(gj, ensure_ascii=False, separators=(",", ":")))
 
     meta["revoked_arcs"] = touched
-    meta_path.write_text(
-        json.dumps(meta, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    write_atomic(
+        meta_path, json.dumps(meta, ensure_ascii=False, separators=(",", ":"))
     )
 
     print(f"{region}: {touched}/{former_count} former arc(s) confirmed 指定解除 by N13 "
