@@ -343,10 +343,12 @@ class Mesh:
         starts = np.asarray(self.starts)
         n = len(self.pts)
         real = np.ones(max(n - 1, 0), dtype=bool)
-        # 空のレコード(starts[k] == starts[k + 1])があると 0 が現れる。0 - 1 は
-        # 最後の線分を指してしまうので、0 は境目に数えない。
+        # 空のレコード(starts[k] == starts[k + 1])があると、境目の添字が両端へ
+        # 寄る。先頭が空なら 0 が現れ、0 - 1 は最後の線分を指してしまう。末尾が
+        # 空なら n が現れ、n - 1 は存在しない線分を指す。どちらも境目ではない
+        # ——空のレコードは、繋がっている 2 点のあいだを切らない。
         bnd = starts[1:-1]
-        real[bnd[bnd > 0] - 1] = False
+        real[bnd[(bnd > 0) & (bnd < n)] - 1] = False
         code = np.repeat(np.asarray(self.rdctg), np.diff(starts))[:-1]
         # np.isin ではなく等値の論理和にする。数バイトの文字列 4 つに対する
         # np.isin は並べ替えを通るので、700 万要素では等値 4 回よりずっと重い。
@@ -656,6 +658,11 @@ def nearest_classified_in_mesh(points: list[tuple[float, float]], mesh_data: Mes
         veil_confirmable = np.where(window & confirmable[lo:lo + w], 0.0, np.inf)
         # 長さ 0 の線分がどれかは、問い合わせ点によらない。同じ 2 点が並んでいる
         # かどうかだけで決まるので、塊ごとに 1 度見ておく。
+        #
+        # 本物の関数は投影した後の dx == 0 かつ dy == 0 を見ているが、投影は
+        # 差に定数を掛けるだけなので、この二つは同じことである。日本の緯度では
+        # 経度 1 度が約 88,900 m で、経度の float64 の刻み(140 度あたりで
+        # 2.8e-14 度)を掛けても 2.5e-9 m にしかならない。0 へ潰れる余地は無い。
         degenerate = (lat_c[:-1] == lat_c[1:]) & (lon_c[:-1] == lon_c[1:])
         any_degenerate = bool(degenerate.any())
         xw, yw = x[:w + 1], y[:w + 1]
