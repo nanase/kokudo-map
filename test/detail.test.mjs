@@ -556,12 +556,16 @@ describe('prefDetailHTML', () => {
     );
   });
 
-  test('押した状態は aria-pressed と名乗りに出る', () => {
+  /* 見た目は `active`、読み上げは `aria-pressed` が持ちます。二つに分けるのは
+     地図の上のトグルボタン(app.js の cycleButton)と同じ作法です。 */
+  test('押した状態は active と aria-pressed と名乗りに出る', () => {
     const off = full({ region: 'nagano' });
+    expect(off).toContain('class="icon-btn detail-only"');
     expect(off).toContain('aria-pressed="false"');
     expect(off).toContain('長野県道60号だけを表示');
 
     const on = full({ region: 'nagano', selected: true });
+    expect(on).toContain('class="icon-btn detail-only active"');
     expect(on).toContain('aria-pressed="true"');
     expect(on).toContain('長野県道60号だけの表示を解除');
   });

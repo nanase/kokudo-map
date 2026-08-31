@@ -16,21 +16,48 @@ import { comparePrefKeys, prefRefOf, prefRegionOf } from './prefroute.mjs';
 import { DEFAULTS } from './urlstate.mjs';
 
 /**
+ * 二つの系統。どれも系統ごとに 1 組しかない三つを、一箇所で結んでおく。
+ *
+ *   `state` の鍵      その系統を地図に出すかどうか
+ *   `toggle`          それを切り替えるチェックボックス(表示状態のパネル)
+ *   `before`          「だけ表示」が消す前の値を控える場所
+ *
+ * 表を分けると、系統を足したり名前を変えたりしたときに、片方だけが古くなる。
+ */
+const SYSTEMS = {
+  national: { toggle: '#t-national', before: 'nationalBefore' },
+  pref: { toggle: '#t-pref', before: 'prefBefore' },
+};
+
+/** 系統を消し、消す前の値を控える。既に控えてあれば上書きしない。 */
+function hideSystem(doc, state, key) {
+  const { toggle, before } = SYSTEMS[key];
+  if (state[before] === null) state[before] = state[key];
+  state[key] = false;
+  doc.querySelector(toggle).checked = false;
+}
+
+/** 控えた値へ戻し、控えを捨てる。`fallback` は控えが無いときの行き先である。 */
+function restoreSystem(doc, state, key, fallback) {
+  const { toggle, before } = SYSTEMS[key];
+  state[key] = state[before] ?? fallback;
+  state[before] = null;
+  doc.querySelector(toggle).checked = state[key];
+}
+
+/**
  * 路線の選択を丸ごと差し替える。#route-list の各チェックボックスへ反映した
  * うえで applyFilters を呼ぶ。wireControls の「選択解除」ボタンと、
  * app.js の標識クリック(popup)の両方から呼ばれるので、ここに一箇所だけ置く。
  *
  * 選択が空に戻ったときは、「この路線だけ表示」が消した都道府県道を戻す
- * (showRouteOnly)。控えが無ければ何もしない——手で切った系統を、選択解除の
- * ついでに点け直すことはない。
+ * (showRouteOnly)。控えが無ければ何もしない——このボタンは「だけ表示」の解除
+ * ではなく選択を空にする物なので、手で切った系統を、そのついでに点け直す理由が
+ * ない。行き先を今の値にしてあるのがその「何もしない」である。
  */
 export function setSelection(doc, state, refs, applyFilters) {
   state.selected = new Set(refs);
-  if (!state.selected.size && state.prefBefore !== null) {
-    state.pref = state.prefBefore;
-    state.prefBefore = null;
-    doc.querySelector('#t-pref').checked = state.pref;
-  }
+  if (!state.selected.size) restoreSystem(doc, state, 'pref', state.pref);
   for (const cb of doc.querySelectorAll('#route-list input')) {
     cb.checked = state.selected.has(Number(cb.value));
     cb.closest('label').classList.toggle('on', cb.checked);
@@ -55,16 +82,8 @@ export function setSelection(doc, state, refs, applyFilters) {
  * あって、「だけ表示」がその裏で別の絞り込みを持つと、同じことを二箇所が
  * 答えることになる。動かした結果は URL にも `national=0` / `pref=0` として乗る。
  */
-function hideOtherSystem(doc, state, { hide, record }) {
-  if (state[record] === null) state[record] = state[hide];
-  state[hide] = false;
-  doc.querySelector(hide === 'pref' ? '#t-pref' : '#t-national').checked =
-    false;
-}
-
-/** 国道を 1 本だけ地図に残す。都道府県道は消える。 */
 export function showRouteOnly(doc, state, ref, applyFilters) {
-  hideOtherSystem(doc, state, { hide: 'pref', record: 'prefBefore' });
+  hideSystem(doc, state, 'pref');
   setSelection(doc, state, [ref], applyFilters);
 }
 
@@ -79,11 +98,12 @@ export function togglePrefOnly(doc, state, key, applyFilters) {
   const on = state.prefSelected.size === 1 && state.prefSelected.has(key);
   if (on) {
     state.prefSelected = new Set();
-    state.national = state.nationalBefore ?? DEFAULTS.national;
-    state.nationalBefore = null;
-    doc.querySelector('#t-national').checked = state.national;
+    // このボタン自身が解除の口なので、控えが無くても既定へ戻す。共有リンクを
+    // 開いた人の控えは空である——押していないのだから当然で、それでも解除が
+    // 何もしないボタンであってはならない。
+    restoreSystem(doc, state, 'national', DEFAULTS.national);
   } else {
-    hideOtherSystem(doc, state, { hide: 'national', record: 'nationalBefore' });
+    hideSystem(doc, state, 'national');
     state.prefSelected = new Set([key]);
   }
   applyFilters();
@@ -125,13 +145,12 @@ export function wireControls(doc, state, applyFilters) {
     });
   }
 
-  // 系統を手で切り替えたら、「だけ表示」が控えていた値は捨てる。利用者が自分で
-  // 決めた後の系統を、ボタンが後から戻してよい理由が無い。
-  const forget = { national: 'nationalBefore', pref: 'prefBefore' };
   const toggle = (id, key) =>
     $(id).addEventListener('change', (e) => {
       state[key] = e.target.checked;
-      if (forget[key]) state[forget[key]] = null;
+      // 系統を手で切り替えたら、「だけ表示」が控えていた値は捨てる。利用者が
+      // 自分で決めた後の系統を、ボタンが後から戻してよい理由が無い。
+      if (SYSTEMS[key]) state[SYSTEMS[key].before] = null;
       // 影の層は種別で絞っていない。押されているアークを地図から外す切り替え
       // があると、そのままでは道の無い影だけが下地図の上に残る。
       state.picked = null;

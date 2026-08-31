@@ -114,7 +114,7 @@ describe('wireControls — 路線の選択', () => {
 });
 
 /* 「この路線だけ表示」は、押す場所によらず「その 1 本だけを地図に残す」を
- * 意味します。押した系統の 1 本を残し、もう一方の系統は消します。 */
+ * 意味する。押した系統の 1 本を残し、もう一方の系統は消す。 */
 describe('この路線だけ表示', () => {
   const tPref = (doc) => doc.querySelector('#t-pref');
   const tNational = (doc) => doc.querySelector('#t-national');

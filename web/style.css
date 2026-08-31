@@ -815,10 +815,10 @@ input[type="search"]::placeholder { font-size: .82em; }
    節が無いので、絞っていることを述べる場所がこのボタンのほかに無い——押せる
    ことだけでなく、いま押されていることも、ここが見せなければならない。
    国道のボタンは状態を持たないので、この規則には当たらない。 */
-.detail-only[aria-pressed="true"] {
+.detail-only.active {
   background: var(--sign-blue); color: var(--panel); border-color: var(--sign-blue);
 }
-.detail-only[aria-pressed="true"]:hover { color: var(--panel); }
+.detail-only.active:hover { color: var(--panel); }
 .detail-wiki { text-decoration: none; }
 .detail-wiki svg { width: 17px; height: 17px; }
 .detail-wiki text {

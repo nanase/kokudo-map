@@ -116,7 +116,7 @@ const state = {
   // 意味し、そこは国道の `selected` と同じである。
   prefSelected: new Set(),
   // 「この路線だけ表示」が消した系統の、消す前の値。解除でここへ戻す
-  // (wiring.mjs の hideOtherSystem)。控えが無いあいだは null である。
+  // (wiring.mjs の SYSTEMS)。控えが無いあいだは null である。
   nationalBefore: null,
   prefBefore: null,
   // 県の名前を引く表。regions.json を起動時に読んだもので、`nagano` から

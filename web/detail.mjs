@@ -398,8 +398,10 @@ export function prefDetailHTML({
   const onlyText = selected
     ? `${name}だけの表示を解除`
     : `${name}だけを表示（国道も消えます）`;
+  // 見た目は `active`、読み上げは `aria-pressed` が持つ。二つに分けるのは
+  // app.js の地図の上のボタン(cycleButton)と同じ作法である。
   const only = region
-    ? `<button type="button" class="icon-btn detail-only" ` +
+    ? `<button type="button" class="icon-btn detail-only${selected ? ' active' : ''}" ` +
       `data-pref="${esc(prefKeyOf(region, ref))}" aria-pressed="${selected}" ` +
       `title="${esc(onlyText)}" aria-label="${esc(onlyText)}">${ONLY_ICON}</button>`
     : '';
