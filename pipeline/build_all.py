@@ -4,7 +4,7 @@
 # ///
 """全地域をキャッシュから生成し、続けて全国の生成物をパックして検査する。
 
-地域ごとの前半は意図してそのままである。県はそれぞれ自分の bbox の中で判定する。
+地域ごとの判定は意図してそのままである。県はそれぞれ自分の bbox の中で判定する。
 裏取りが濾せるのは、信用する路線番号の集合が全国ぶんではなく 1 県ぶんであるあいだ
 だけだからである。新しいのは後半——地域を結合し、タイルを切り、地図が全国になって
 初めて成り立つ問いを訊くこと——である。
@@ -14,9 +14,14 @@
 通ったときにしか走らない。半分だけ生成した集合をアーカイブに詰めた物は、完全な物と
 見分けが付かない。
 
+県は互いに独立なので、同時に何県か走らせる。県ごとの段は自分の bbox の中だけを見て、
+書く先も build/regions/<県>.* に分かれている。並列度の決め方と、その前に何を直列で
+済ませておく必要があるかは REGION_JOBS を参照。
+
 使い方:  uv run pipeline/build_all.py [地域 ...]   (既定: 全地域)
          uv run pipeline/build_all.py --skip-verify  (生成とパックだけ)
          uv run pipeline/build_all.py --no-pack      (地域ごとの処理だけ)
+         uv run pipeline/build_all.py --jobs N       (県を同時に N 本まで)
 """
 from __future__ import annotations
 
@@ -24,12 +29,32 @@ import os
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from _paths import PREFECTURAL, ROOT, SURVEY
 from regions import REGIONS, named_regions
 
 HERE = Path(__file__).resolve().parent
+
+# 県を同時に何本まで走らせるか。
+#
+# この機械は 8 コア 16 スレッドで、1 県ぶんの段が同時に使うのは 1 コアである。
+# 上限を決めているのは CPU ではなくメモリのほうで、issue #103 の測り直しでは
+# 県 1 本のピーク常駐が 180〜350 MB だった(以前の apply_n13 は 1 本で 2,466 MB
+# 使っていた)。6 本なら山は 1.4 GB 前後に収まり、直列だった頃の 1 本ぶんより
+# なお低い。
+#
+# **空きメモリを埋める本数を選んではいけない。**この機械では他のプロセスが同時に
+# 動いており、空いて見えるメモリを埋めれば、それらが押し出される。ここは「収まる
+# 最大」ではなく「余裕をもって収まる本数」である。増やしたいときは --jobs で
+# 渡せるが、山も一緒に測ること。
+#
+# N13 のメッシュは、この並列に入る前に pack_n13.py が直列で用意しておく。1 次
+# メッシュは県境をまたぐので、用意しないまま並列に入ると、隣り合う県が同じ符号を
+# 同時に KSJ へ要求する。用意さえ済んでいれば、読むのは mmap なので、県が何本
+# 走っていても物理ページは 1 組しか要らない。
+REGION_JOBS = 6
 
 # 返ってくる物を UTF-8 として読むので、子プロセスも UTF-8 で書かねばならない。
 # pipe はコンソールではないため、そうしないと Python は端末のロケール——日本語
@@ -115,6 +140,37 @@ def prefectural(judge: bool) -> None:
           ["node", "--max-old-space-size=2048", str(HERE / "pack_web_pref.mjs")])
 
 
+def build_region(region: str, skip_verify: bool) -> tuple[str, list[str]]:
+    """1 県ぶんの段を通し、(表示する 1 行, 失敗の一覧) を返す。
+
+    表示は返すだけで、ここでは書かない。並列に走る何本もが同時に print すると、
+    どの行がどの県のものか分からなくなる。呼ぶ側が、終わった順に 1 県ぶんずつ
+    まとめて書く。
+    """
+    code, out = run(["uv", "run", str(HERE / "build_routes.py"), region])
+    if code != 0:
+        return f"判定に失敗\n{out}", ["build_routes.py failed"]
+
+    # revoked は検証ではなくデータそのものなので、--skip-verify でも飛ばさない。
+    # この後のパックは --skip-verify の有無に関係なく走るので、ここを飛ばすと
+    # revoked が反映されないデータがそのまま配信物になる(この PR への CodeRabbit
+    # のレビュー)。N13 側の障害(ネットワーク・KSJ 側の不具合)はこの県だけの失敗
+    # として扱い、他県の続行は止めない——build_routes.py の失敗とは別扱い。
+    code, out = run(["uv", "run", str(HERE / "apply_n13.py"), region])
+    bad = outcome("apply_n13.py", code, out)
+
+    if skip_verify:
+        return "判定のみ", bad
+
+    code, out = run(["uv", "run", str(HERE / "verify.py"), region])
+    bad += outcome("verify.py", code, out)
+    line = verdict(out)
+
+    code, out = run(["node", str(HERE / "check_expressions.mjs"), region])
+    bad += outcome("check_expressions.mjs", code, out)
+    return f"{line} | 式 {verdict(out)}", bad
+
+
 def main() -> None:
     # この端末が符号化できない道の名前で、生成が止まってはならない。
     sys.stdout.reconfigure(errors="replace")
@@ -125,55 +181,44 @@ def main() -> None:
     # 判定は回さない。段の順番を知っているのはこの関数だけにしたいので、
     # `mise run pack` もここを呼ぶ。
     pack_only = "--pack-only" in args
-    wanted = (
-        []
-        if pack_only
-        else named_regions([a for a in args if not a.startswith("--")])
-    )
+    jobs, names = REGION_JOBS, []
+    rest = iter(args)
+    for a in rest:
+        if a == "--jobs":
+            jobs = max(1, int(next(rest, REGION_JOBS)))
+        elif a.startswith("--jobs="):
+            jobs = max(1, int(a.split("=", 1)[1]))
+        elif not a.startswith("--"):
+            names.append(a)
+    wanted = [] if pack_only else named_regions(names)
 
     started = time.time()
     broken: dict[str, list[str]] = {}
 
-    for i, region in enumerate(wanted, 1):
-        label = REGIONS[region]["label"]
-        head = f"[{i:>2}/{len(wanted)}] {region:<11} {label:<5}"
+    if wanted:
+        # 並列に入る前に、N13 のメッシュを直列で用意しておく。理由は REGION_JOBS
+        # の上のコメントにある。
+        stage("N13 — メッシュを用意する",
+              ["uv", "run", str(HERE / "pack_n13.py"), *wanted])
+        print(f"\n{'=' * 70}\n判定 — {len(wanted)} 地域を最大 {jobs} 本ずつ\n"
+              f"{'=' * 70}", flush=True)
 
-        code, out = run(["uv", "run", str(HERE / "build_routes.py"), region])
-        if code != 0:
-            print(f"{head} 判定に失敗\n{out}", flush=True)
-            broken[region] = ["build_routes.py failed"]
-            continue
-
-        # revoked は検証ではなくデータそのものなので、--skip-verify でも飛ばさ
-        # ない。この後のパックは --skip-verify の有無に関係なく走るので、ここを
-        # 飛ばすと revoked が反映されないデータがそのまま配信物になる
-        # (この PR への CodeRabbit のレビュー)。N13 側の障害(ネットワーク・KSJ 側の
-        # 不具合)はこの県だけの失敗として扱い、他県の続行は止めない——
-        # build_routes.py の失敗とは別扱い。
-        code, out = run(["uv", "run", str(HERE / "apply_n13.py"), region])
-        bad = outcome("apply_n13.py", code, out)
-
-        if skip_verify:
-            print(f"{head} 判定のみ", flush=True)
+    done = 0
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        futures = {pool.submit(build_region, r, skip_verify): r for r in wanted}
+        # 終わった順に書く。速い県が遅い県の後ろで待たされないので、進みが見える。
+        # 何番目かは「幾つ終わったか」であって、名指しの順番ではない。
+        for fut in as_completed(futures):
+            region = futures[fut]
+            line, bad = fut.result()
+            done += 1
+            label = REGIONS[region]["label"]
+            print(f"[{done:>2}/{len(wanted)}] {region:<11} {label:<5} {line}",
+                  flush=True)
             for f in bad:
                 print(f"        {f}", flush=True)
             if bad:
                 broken[region] = bad
-            continue
-
-        code, out = run(["uv", "run", str(HERE / "verify.py"), region])
-        bad += outcome("verify.py", code, out)
-        line = f"{head} {verdict(out)}"
-
-        code, out = run(["node", str(HERE / "check_expressions.mjs"), region])
-        bad += outcome("check_expressions.mjs", code, out)
-        line += f" | 式 {verdict(out)}"
-
-        print(line, flush=True)
-        for f in bad:
-            print(f"        {f}", flush=True)
-        if bad:
-            broken[region] = bad
 
     if not pack_only:
         print(
