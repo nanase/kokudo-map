@@ -19,10 +19,13 @@ import {
   inkByRank,
   kindTest,
   NOTHING,
+  PREF_CLICKABLE_LAYERS,
   PREF_GENERAL,
   PREF_GENERAL_INK,
   PREF_KIND_DRIVEABLE,
   PREF_MAJOR,
+  PREF_PICKED_LAYER,
+  PREF_POPUP_MINZOOM,
   PREF_SOURCE,
   pickedFilter,
   prefLabelLayer,
@@ -263,6 +266,9 @@ describe('都道府県道のレイヤー', () => {
   const lines = prefLineLayers();
   const labels = prefLabelLayer();
   const all = prefLayers();
+  // 影(pref-picked)は「押されているアークの下」を示す層で、路線を描く層では
+  // ありません。国道の picked と同じ扱いで、道の体裁を問う検査からは外します。
+  const drawn = lines.filter((l) => l.id !== PREF_PICKED_LAYER);
 
   test('層はすべて都道府県道のソースを読み、source-layer を名乗る', () => {
     for (const l of all) {
@@ -286,11 +292,11 @@ describe('都道府県道のレイヤー', () => {
   test('走れる区分と走れない区分で、アークを重複も脱落も無く分ける', () => {
     // 実線の層と破線の層は互いの否定です。片方だけを直すと、どちらにも
     // 入らないアークが黙って消えるか、同じ線が二度描かれます。
-    const solid = lines.filter((l) => l.id !== 'pref-special');
+    const solid = drawn.filter((l) => l.id !== 'pref-special');
     for (const l of solid) {
       expect(l.filter).toEqual(kindTest(PREF_KIND_DRIVEABLE));
     }
-    expect(lines.find((l) => l.id === 'pref-special').filter).toEqual([
+    expect(drawn.find((l) => l.id === 'pref-special').filter).toEqual([
       '!',
       kindTest(PREF_KIND_DRIVEABLE),
     ]);
@@ -305,7 +311,7 @@ describe('都道府県道のレイヤー', () => {
 
   test('線も札も former で不透明度を下げる', () => {
     // 旧道は除外せず薄く描きます。国道と同じ扱いです。
-    for (const l of lines) {
+    for (const l of drawn) {
       const base = l.paint['line-opacity'][3];
       expect(l.paint['line-opacity']).toEqual(formerOpacity(base));
     }
@@ -322,7 +328,7 @@ describe('都道府県道のレイヤー', () => {
       PREF_MAJOR,
       PREF_GENERAL,
     ]);
-    for (const l of lines) {
+    for (const l of drawn) {
       if (l.id === 'pref-casing') continue;
       expect(l.paint['line-color']).toEqual(colorByRank);
     }
@@ -335,6 +341,29 @@ describe('都道府県道のレイヤー', () => {
     expect(inkByRank[3]).toBe(colorByRank[3]);
     expect(inkByRank[4]).not.toBe(colorByRank[4]);
     expect(inkByRank[4]).toBe(PREF_GENERAL_INK);
+  });
+
+  test('影の層はいちばん下で、押されるまで何も描かない', () => {
+    // 国道の picked と同じ役目です。層を分けてあるのは、国道と重用する県道の
+    // アークが二つのアーカイブに同じ way id で入っているためで、一つにすると
+    // 県道を押したときに国道の線が光ります。
+    expect(lines[0].id).toBe(PREF_PICKED_LAYER);
+    expect(lines[0].filter).toEqual(NOTHING);
+    expect(lines[0].paint['line-color']).toBe('#000000');
+  });
+
+  test('押されて答えるのは実線と破線の層だけである', () => {
+    const ids = new Set(all.map((l) => l.id));
+    for (const id of PREF_CLICKABLE_LAYERS) expect(ids.has(id)).toBe(true);
+    expect(PREF_CLICKABLE_LAYERS).not.toContain(PREF_PICKED_LAYER);
+    expect(PREF_CLICKABLE_LAYERS).not.toContain('pref-casing');
+    expect(PREF_CLICKABLE_LAYERS).not.toContain('pref-labels');
+  });
+
+  test('ポップアップを組めるのは z8 から', () => {
+    // z0-7 のタイルは id・name・km・src を落としてあります
+    // (pipeline/pack_web_pref.mjs)。国道はこの制限を持ちません。
+    expect(PREF_POPUP_MINZOOM).toBe(8);
   });
 
   test('主要地方道のほうが太い', () => {

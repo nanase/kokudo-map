@@ -567,6 +567,32 @@ function prefLineWidth({ add = 0, scaleByN = true } = {}) {
 }
 
 /**
+ * 影を敷く層の id。国道の `picked` と同じ役目だが、二つを一つの層で兼ねられ
+ * ない——鍵にするのは OSM の way id で、国道と重用する都道府県道のアークは
+ * 二つのアーカイブに同じ id で入っているためである。一つの層にすると、県道を
+ * 押したときに国道の線が光る。
+ */
+export const PREF_PICKED_LAYER = 'pref-picked';
+
+/**
+ * 都道府県道のポップアップを組める、最も浅いズーム。
+ *
+ * z0-7 のタイルは `id`・`name`・`km`・`src` を落としてある
+ * (pipeline/pack_web_pref.mjs の `LOW_ZOOM_FIELDS`)。落とした理由は低ズームの
+ * タイルの大きさで、覆せない。押しても何も出せないので、押せそうにも見せない
+ * ——カーソルを変えるのは app.js である。
+ *
+ * 国道は今までどおり z0 から出る。この非対称はそのままでよい。z7 は 1 画素が
+ * 約 1.2 km で、県道の網はその縮尺では網目になり、どの線を掴んだかが読み手にも
+ * 決められない。国道側を z8 に揃えるのは、いまの見え方を変えることになる。
+ */
+export const PREF_POPUP_MINZOOM = 8;
+
+/** 押されたら答える都道府県道の層。破線の層も押せる——工事中の区間も、その
+ *  区間について述べることを持っている。縁取りと札は押しても路線を指さない。 */
+export const PREF_CLICKABLE_LAYERS = ['pref-roads', 'pref-special'];
+
+/**
  * 都道府県道の線の層を、描く順に並べる。国道のどの層よりも下に入れる
  * (app.js の boot)。国道の見え方を変えないための順序である。
  *
@@ -578,6 +604,24 @@ function prefLineWidth({ add = 0, scaleByN = true } = {}) {
  */
 export function prefLineLayers() {
   return [
+    {
+      // 国道の `picked` と同じで、ポップアップが説明している 1 本を下地図から
+      // 浮かせる。都道府県道の層すべてより下に敷く。太らせる量が国道の +11 では
+      // なく +8 なのは、県道の線が国道のおよそ 0.65 倍しかないためである——
+      // 同じ +11 では、影が線に対して太すぎて輪ではなく帯になった。
+      id: PREF_PICKED_LAYER,
+      type: 'line',
+      source: PREF_SOURCE,
+      'source-layer': SOURCE_LAYER,
+      filter: NOTHING,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#000000',
+        'line-opacity': 0.6,
+        'line-blur': 3,
+        'line-width': prefLineWidth({ add: 8, scaleByN: false }),
+      },
+    },
     {
       // 白い縁取り。国道の `casing` と同じ役目で、ラスタの下地図の上でも線が
       // 読めるようにする。破線の区分には敷かない——国道側も敷いていない。

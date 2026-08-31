@@ -10,6 +10,8 @@ import {
   legendKindHTML,
   legendNHTML,
   legendPrefHTML,
+  PREF_CONCURRENCY_NOTES,
+  prefConcurrencyHTML,
   rankingHTML,
   routeListHTML,
   selectionLabel,
@@ -394,5 +396,49 @@ describe('freshnessHTML', () => {
     expect(freshnessHTML(bad, at('2026-08-16T21:00:00Z'))).toContain(
       '&lt;script&gt;',
     );
+  });
+});
+
+/* ------------------------------------ 都道府県道の重用の数え方 --- */
+/* 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではありません。数だけ
+ * を並べると、出ている数がその路線の重用のすべてだと読まれます。三つはその読みを
+ * 止めるためにあるので、文言そのものが仕様です。 */
+describe('PREF_CONCURRENCY_NOTES', () => {
+  const text = PREF_CONCURRENCY_NOTES.map((n) => n.head + n.body).join('');
+
+  test('三つある', () => {
+    expect(PREF_CONCURRENCY_NOTES).toHaveLength(3);
+  });
+
+  test('重用が下限であることを、#99 が測った値で述べる', () => {
+    expect(text).toContain('11,562.9 km');
+    expect(text).toContain('9,187.5 km');
+    expect(text).toContain('79.5%');
+  });
+
+  test('国道と重用する区間の典拠がリレーションだけであることを述べる', () => {
+    expect(text).toContain('ルートリレーション');
+  });
+
+  test('国道との重複を重用数に含めていないことを述べる', () => {
+    expect(text).toContain('単独指定');
+  });
+
+  test('59.8% / 40.8% は出さない', () => {
+    // あれは候補 way のうちリレーションが抱える本数の割合で、復元率ではありま
+    // せん。画面に置けば延長の割合として読まれます。
+    expect(text).not.toContain('59.8');
+    expect(text).not.toContain('40.8');
+  });
+});
+
+describe('prefConcurrencyHTML', () => {
+  test('三つとも、見出しと本文の対で入る', () => {
+    const html = prefConcurrencyHTML();
+    expect(html.match(/class="note"/g)).toHaveLength(3);
+    for (const n of PREF_CONCURRENCY_NOTES) {
+      expect(html).toContain(`<b>${n.head}</b>`);
+      expect(html).toContain(`<span>${n.body}</span>`);
+    }
   });
 });

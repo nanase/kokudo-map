@@ -12,12 +12,33 @@
  * 表から出したものを受け取る。同じ数を二度計算すると、片方が暗黙のうちに古くなる。
  */
 import { esc } from './html.mjs';
-import { KIND_LABELS } from './popup.mjs';
-import { shield } from './shield.mjs';
+import { PREF_RANK_LABELS } from './mapspec.mjs';
+import { KIND_LABELS, PREF_KIND_LABELS } from './popup.mjs';
+import { prefRefOf } from './prefroute.mjs';
+import { hexShield, prefRouteName, shield } from './shield.mjs';
 
 /** 路線の記事。日本語版 Wikipedia は「国道N号」で立項が揃っている。 */
 export const wikipediaURL = (ref) =>
   `https://ja.wikipedia.org/wiki/${encodeURIComponent(`国道${ref}号`)}`;
+
+/**
+ * 都道府県道の記事。「長野県道63号」の形で引ける。
+ *
+ * 路線名は入れない。way の `name` は路線名ではなく、その場所の呼び名だからで
+ * ある——「環状1号線」「1条通」「大網街道」「豊永橋」のような通称名・街路名・
+ * 橋名が入っている。路線名は OSM から取れないので、入れる形にはできない。
+ *
+ * 地図が持つ 13,234 組のうち、素の形で引けるのは 11,891 組、89.9% である。
+ * 連名指定も素の形で解ける——徳島県道1号 は「徳島県道・香川県道1号徳島引田線」
+ * へのリダイレクトである。
+ *
+ * 引けない 1,343 組(10.1%)は赤リンクになる。記事が `宮崎県道14号佐土原国富線`
+ * しか無く、素の形のリダイレクトが無い、という形である。ビルド時に存在を確かめて
+ * リンクを出し分けることはしない——古くなった「記事が無い」は赤リンクより悪い。
+ * この地図は更新の間隔を約束していないので、記事の不在を断定できる立場にない。
+ */
+export const prefWikipediaURL = (prefLabel, ref) =>
+  `https://ja.wikipedia.org/wiki/${encodeURIComponent(prefRouteName(prefLabel, ref))}`;
 
 /**
  * 台帳(政令)の起点・終点。national.meta.json がその欄を持たなければ空である。
@@ -71,10 +92,21 @@ export function decreeTerminiOf(meta, ref) {
  * 言い足しても、読む人が知ることは増えない。
  *
  * 欄を持たない meta では、その節ごと空になる。`crossings` は後から入った欄な
- * ので、それより前に作った web/data を配ったままでも壊れない。
+ * ので、それより前に作った web/data を配ったままでも壊れない。都道府県道の県別
+ * meta は `shared_termini` を持たない——都道府県道には全国 1 枚の起終点の台帳が
+ * 無い——ので、その節はいつも空になる。
+ *
+ * `system` はその路線が何と呼ばれる系統かで、節の見出しに入る。`compare` は
+ * 路線の並べ方、`normalize` は渡された路線を表の鍵に揃える関数である。国道の
+ * 鍵は番号、都道府県道の鍵は `nagano-18` の文字列で、表の中の値と `===` で
+ * 突き合わせる以上、揃えるのはここでなければならない。
  */
-export function relatedRoutesOf(meta, ref) {
-  const self = Number(ref);
+export function relatedRoutesOf(
+  meta,
+  ref,
+  { system = '国道', compare = (a, b) => a - b, normalize = Number } = {},
+) {
+  const self = normalize(ref);
   const pick = (refs) => refs.filter((r) => r !== self);
 
   const conc = new Set();
@@ -98,11 +130,11 @@ export function relatedRoutesOf(meta, ref) {
   // 番号の順に並べる。並びに意味を持たせるなら重用の長さや交差の回数で並べる
   // 手もあるが、標識には番号しか書いていないので、その順の理由が画面から読め
   // ない。番号順なら、探している番号がどこにあるかを見当だけで決められる。
-  const sorted = (s) => [...s].sort((a, b) => a - b);
+  const sorted = (s) => [...s].sort(compare);
   return [
-    { key: 'conc', label: '重用する国道', refs: sorted(conc) },
-    { key: 'termini', label: '起終点を共有する国道', refs: sorted(ends) },
-    { key: 'cross', label: '交差する国道', refs: sorted(cross) },
+    { key: 'conc', label: `重用する${system}`, refs: sorted(conc) },
+    { key: 'termini', label: `起終点を共有する${system}`, refs: sorted(ends) },
+    { key: 'cross', label: `交差する${system}`, refs: sorted(cross) },
   ].filter((g) => g.refs.length);
 }
 
@@ -179,11 +211,13 @@ const terminiHTML = (ref, termini) =>
 const kindKmHTML = (km) =>
   fmtKm(km) === fmtKm(0) ? `${fmtKm(0.1)} km 未満` : `${fmtKm(km)} km`;
 
-const kindsHTML = (kinds) =>
+/* 区分の呼び名は系統ごとに違う。「点線国道」「海上国道」は国道の呼び名で、
+ * 都道府県道はそれを持たない(popup.mjs の PREF_KIND_LABELS)。 */
+const kindsHTML = (kinds, kindLabels) =>
   kinds.length
     ? '<div class="detail-kinds"><div class="detail-sub">区分別</div>' +
       `<dl class="detail-stats">${kinds
-        .map((k) => row(esc(KIND_LABELS[k.kind] ?? k.kind), kindKmHTML(k.km)))
+        .map((k) => row(esc(kindLabels[k.kind] ?? k.kind), kindKmHTML(k.km)))
         .join('')}</dl></div>`
     : '';
 
@@ -218,12 +252,22 @@ const relShieldHTML = (ref) =>
   `<button type="button" class="shield-btn" data-ref="${ref}" ` +
   `title="国道${ref}号の詳細">${shield(ref, true)}</button>`;
 
-const relatedHTML = (groups) =>
+/* 都道府県道の側。標識はヘキサで、鍵は県を伴う——番号だけでは 47 本のどれか
+ * 決まらないので、押した先が開くパネルも県を受け取らなければならない。 */
+const prefRelShieldHTML = (prefLabel) => (key) => {
+  const name = prefRouteName(prefLabel, prefRefOf(key));
+  return (
+    `<button type="button" class="shield-btn" data-pref="${esc(key)}" ` +
+    `title="${esc(name)}の詳細">${hexShield(prefLabel, prefRefOf(key), true)}</button>`
+  );
+};
+
+const relatedHTML = (groups, shieldOf = relShieldHTML) =>
   groups
     .map(
       (g) =>
         `<div class="detail-rel"><div class="detail-sub">${g.label}</div>` +
-        `<div class="rel-shields">${g.refs.map(relShieldHTML).join('')}</div>` +
+        `<div class="rel-shields">${g.refs.map(shieldOf).join('')}</div>` +
         '</div>',
     )
     .join('');
@@ -276,8 +320,73 @@ export function detailHTML({
     row('重用区間', route.conc_km ? `${fmtKm(route.conc_km)} km` : 'なし') +
     row('最大重用数', route.max_n > 1 ? `${route.max_n} 重用` : '単独指定') +
     '</dl>' +
-    kindsHTML(kinds) +
+    kindsHTML(kinds, KIND_LABELS) +
     relatedHTML(related) +
     '</div>'
+  );
+}
+
+/* ------------------------------------------------------ 都道府県道の詳細 --- */
+/**
+ * 1 路線ぶんの詳細、都道府県道の側。
+ *
+ * 国道のパネル(detailHTML)と同じ形にしてある。読む人にとってこれは同じ地図の
+ * 同じ場所であって、系統ごとに別の作法を覚え直す場所ではない。違うのは四つ
+ * だけである。
+ *
+ *   標識      ヘキサになり、路線名を見出しに出す
+ *   起終点    出ない。都道府県道には全国 1 枚の起終点の台帳が無い
+ *   絞り込み  出ない。路線ごとの選択そのものが未着手である(#109)
+ *
+ * 重用の但し書きはここに置かない。「国道マップについて」が持つ
+ * (panel.mjs の prefConcurrencyHTML)。パネルは 1 路線の数を述べる場所で、
+ * 数え方そのものを述べる場所は、データの但し書きが集まっているあちらである。
+ *
+ * 見出しに名前を出すのは、ヘキサが県を持たないためである。国道のパネルが名前を
+ * 伏せているのは、おにぎりの番号がそのまま路線の名前だからだった。ヘキサの番号
+ * だけでは 47 本のどれか決まらないので、ここでは名前が要る。
+ *
+ * `route` が null なら、県別 meta がまだ届いていない。県の meta は県を開いた
+ * ときに 1 県ぶんだけ取りに行くので(app.js の prefMeta)、届くまでの短いあいだ
+ * がある。そのあいだも見出しは出す——押した標識がどの路線だったかは、数が
+ * 揃う前から分かっていることである。
+ */
+export function prefDetailHTML({
+  prefLabel,
+  ref,
+  route = null,
+  rank = null,
+  kinds = [],
+  related = [],
+  formerKm = 0,
+  failed = false,
+}) {
+  const name = prefRouteName(prefLabel, ref);
+  const wait = failed
+    ? '<p class="detail-wait">数を読み込めませんでした。</p>'
+    : '<p class="detail-wait">読み込んでいます…</p>';
+  const body = route
+    ? '<dl class="detail-stats">' +
+      (rank ? row('種別', esc(PREF_RANK_LABELS[rank] ?? rank)) : '') +
+      row('延長', `${fmtKm(route.km)} km`) +
+      formerRowHTML(formerKm) +
+      row('アーク数', route.arcs.toLocaleString()) +
+      row('重用区間', route.conc_km ? `${fmtKm(route.conc_km)} km` : 'なし') +
+      row('最大重用数', route.max_n > 1 ? `${route.max_n} 重用` : '単独指定') +
+      '</dl>' +
+      kindsHTML(kinds, PREF_KIND_LABELS) +
+      relatedHTML(related, prefRelShieldHTML(prefLabel))
+    : wait;
+
+  return (
+    `<header class="detail-hd">${hexShield(prefLabel, ref)}` +
+    `<h2 id="detail-title" class="detail-name">${esc(name)}</h2>` +
+    '<div class="detail-acts">' +
+    `<a class="icon-btn detail-wiki" href="${prefWikipediaURL(prefLabel, ref)}" ` +
+    `target="_blank" rel="noopener" title="Wikipedia「${esc(name)}」" ` +
+    `aria-label="Wikipedia「${esc(name)}」を新しいタブで開く">` +
+    `${WIKIPEDIA_ICON}</a>` +
+    '</div></header>' +
+    `<div class="detail-scroll">${body}</div>`
   );
 }

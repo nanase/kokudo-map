@@ -781,6 +781,20 @@ input[type="search"]::placeholder { font-size: .82em; }
    標識の影(--shield-shadow)が下へ落ちるぶんだけ列の隙間より広く取る。 */
 .rel-shields { display: flex; flex-wrap: wrap; gap: 5px 3px; }
 
+/* 都道府県道のパネル --------------------------------------------------------
+   路線の名前を見出しに出す。国道のパネルは出さない——おにぎりの番号がそのまま
+   路線の名前だからである。ヘキサは県を持たないので、番号だけでは 47 本のどれか
+   決まらない。標識と同じ行に、標識より小さく置く。 */
+.detail-name {
+  margin: 0; font-size: .95rem; font-weight: 600; letter-spacing: .01em;
+  /* 三つのボタンの列 (.detail-acts) を右端へ押し出すのは、こちらではなく
+     あちらの margin-left: auto である。名前が長くても列は動かない。 */
+  min-width: 0; overflow-wrap: anywhere;
+}
+
+/* 数が届くまでのあいだ、と読めなかったとき。 */
+.detail-wait { margin: 0; font-size: .78rem; color: var(--ink-3); }
+
 /* ダイアログ --------------------------------------------------------------
    ネイティブの <dialog> を使う。どちらのダイアログにも表示状態を変更する口は
    無いので、独自のフォーカストラップやキー処理を書く理由が無い —
@@ -817,6 +831,14 @@ input[type="search"]::placeholder { font-size: .82em; }
    出典はここに無い。地図の上の表示が一度だけ述べている。 */
 #about-dialog { width: min(480px, 92vw); }
 .about-lead { margin: 0; font-size: .82rem; color: var(--ink-2); }
+/* 数え方の但し書き。見出しを 1 行目に、中身をその下に置く——読む人は見出しだけ
+   拾って、要る節だけ本文へ降りられる。データ基準 (.freshness) と同じ字の大きさに
+   してある。同じ紙の、同じ種類の但し書きだからである。 */
+.notes { display: flex; flex-direction: column; gap: 10px; }
+.notes .note { display: flex; flex-direction: column; gap: 1px; }
+.notes b { font-size: .78rem; font-weight: 600; color: var(--ink); }
+.notes span { font-size: .78rem; color: var(--ink-2); }
+
 /* .mini の骨格を借りる。リンクなので、下線ではなくボタンの形で立たせる。 */
 .about-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .mini.about-link {
