@@ -2,6 +2,9 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+// 色の写しは置かない。凡例の見本が地図の線と同じ色かどうかを見るので、地図の
+// 定義そのものを読む。
+import { PREF_GENERAL, PREF_MAJOR } from '../web/mapspec.mjs';
 
 import {
   clearLabel,
@@ -11,6 +14,8 @@ import {
   legendNHTML,
   legendPrefHTML,
   PREF_CONCURRENCY_NOTES,
+  PREF_SPECIAL_LABEL,
+  PREF_SPECIAL_TIP,
   prefConcurrencyHTML,
   rankingHTML,
   routeListHTML,
@@ -323,13 +328,42 @@ describe('凡例', () => {
 
   test('都道府県道の凡例は格を 2 段で述べる', () => {
     const html = legendPrefHTML();
-    expect(html.match(/class="item"/g)).toHaveLength(2);
     expect(html).toContain('主要地方道');
     expect(html).toContain('一般都道府県道');
+    // 格の 2 段は実線で示す。破線は走れない区分の印なので、格の見本には出ない。
+    expect(
+      html.match(/class="swatch" style="border-top-color:#[0-9A-F]{6}"/g),
+    ).toHaveLength(2);
   });
 
-  test('都道府県道は実線で示す。破線は走れない区分の印である', () => {
-    expect(legendPrefHTML()).not.toContain('border-top-style:dashed');
+  test('走れない都道府県道は 1 項目にまとめる', () => {
+    // 地図でも区分ごとに層を分けておらず、「点線国道」「海上国道」にあたる
+    // 呼び名も都道府県道は持ちません。凡例が地図より細かく分けても、分けた先を
+    // 指す線が地図にありません。
+    const html = legendPrefHTML();
+    expect(html.match(/class="item"/g)).toHaveLength(3);
+    expect(html).toContain(PREF_SPECIAL_LABEL);
+    expect(html).toContain(`title="${PREF_SPECIAL_TIP}"`);
+    expect(PREF_SPECIAL_TIP).toContain('工事中・事業中');
+  });
+
+  test('走れない都道府県道の見本は、格の二色を半分ずつ並べる', () => {
+    // 地図では走れない区分も格の色のまま描かれるので(mapspec.mjs の
+    // pref-special)、一色では片方の格しか述べられません。破線を描くのは
+    // style.css の .legend .swatch.duo > span で、そちらが currentColor を
+    // 読むため、ここが渡すのは border-top-color ではなく color です。
+    const html = legendPrefHTML();
+    expect(html).toContain(
+      '<span class="swatch duo">' +
+        `<span style="color:${PREF_MAJOR}"></span>` +
+        `<span style="color:${PREF_GENERAL}"></span>` +
+        '</span>',
+    );
+    const css = readFileSync(
+      new URL('../web/style.css', import.meta.url),
+      'utf8',
+    );
+    expect(css).toContain('.legend .swatch.duo > span');
   });
 
   test('系統ごとの行は頭の語で、どちらの話かを述べる', () => {
