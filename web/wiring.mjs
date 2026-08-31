@@ -71,6 +71,8 @@ export function wireControls(doc, state, applyFilters) {
       state.picked = null;
       applyFilters();
     });
+  toggle('#t-national', 'national');
+  toggle('#t-pref', 'pref');
   toggle('#t-labels', 'labels');
   toggle('#t-termini', 'termini');
   toggle('#t-expressway', 'expressway');

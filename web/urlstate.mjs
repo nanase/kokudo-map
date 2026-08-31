@@ -16,6 +16,8 @@ export const DEFAULTS = {
   special: true,
   ferry: true,
   former: true,
+  national: true,
+  pref: true,
 };
 
 const TOGGLE_KEYS = [
@@ -25,6 +27,8 @@ const TOGGLE_KEYS = [
   'special',
   'ferry',
   'former',
+  'national',
+  'pref',
 ];
 
 // このモジュールが読み書きするクエリの鍵。`?region=` は別の役目(app.js の

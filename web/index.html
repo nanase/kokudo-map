@@ -199,7 +199,10 @@
          中身は panel.mjs の legendNHTML() / legendKindHTML() / legendPrefHTML()
          の出力そのもの。static にしてあるのは vendor/*.js の読み込みを待たずに
          最初の描画から出したいため——test/panel.test.mjs がここと関数の一致を
-         検査する。 -->
+         検査する。
+
+         出ていない系統の行は、app.js が起動後に hidden を付けて隠す。地図に
+         描かれていない色を凡例だけが説明する状態を避けるためである。 -->
     <div id="legend-bar">
       <div class="legend-box">
         <div id="legend-n" class="legend"><span class="lead">国道</span><span class="item"><span class="swatch" style="border-top-color:#1B62C4"></span>単独指定</span><span class="item"><span class="swatch" style="border-top-color:#D98324"></span>二重用</span><span class="item"><span class="swatch" style="border-top-color:#C2352B"></span>三重用</span><span class="item"><span class="swatch" style="border-top-color:#7B3E9D"></span>四重用以上</span></div>
@@ -215,6 +218,13 @@
          位置は app.js がボタンの台へ移してから CSS が決める。中身をここに置いて
          あるのは、データが届く前から state と結べるようにするためである。 -->
     <div id="display-popover" class="map-popover" hidden>
+      <section>
+        <h2>路線の系統</h2>
+        <div class="checks">
+          <label><input type="checkbox" id="t-national" checked> 国道</label>
+          <label><input type="checkbox" id="t-pref" checked> 都道府県道</label>
+        </div>
+      </section>
       <section>
         <h2>重用区間</h2>
         <div class="radios" role="radiogroup" aria-label="重用区間の表示">

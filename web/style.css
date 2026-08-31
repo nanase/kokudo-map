@@ -339,6 +339,10 @@ input[type="search"]::placeholder { font-size: .82em; }
 .legend {
   display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: flex-end;
 }
+/* display:flex は hidden の既定 (display:none) より強い。#detail と同じ理由で
+   ここも明示する——出ていない系統の行を、app.js が hidden で隠す(app.js の
+   syncLegend)。 */
+.legend[hidden], #legend-bar[hidden] { display: none; }
 /* 行は字面の高さまで詰める。本文の 1.6 は読み下す文章のためのもので、
    一行ずつ拾い読みする見本の一覧には広すぎる。 */
 .legend .item {

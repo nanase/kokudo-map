@@ -54,6 +54,8 @@ describe('encodeState', () => {
     special: true,
     ferry: true,
     former: true,
+    national: true,
+    pref: true,
   };
 
   test('すべて既定値なら空文字列', () => {
@@ -81,6 +83,14 @@ describe('encodeState', () => {
   test('旧道をオフにすると former=0 が出る', () => {
     const p = new URLSearchParams(encodeState({ ...base, former: false }));
     expect(p.get('former')).toBe('0');
+  });
+
+  test('国道・都道府県道をオフにすると national=0/pref=0 が出る', () => {
+    const p = new URLSearchParams(
+      encodeState({ ...base, national: false, pref: false }),
+    );
+    expect(p.get('national')).toBe('0');
+    expect(p.get('pref')).toBe('0');
   });
 });
 
@@ -112,6 +122,13 @@ describe('decodeURLState', () => {
     expect(decodeURLState('?former=0')).toEqual({ former: false });
   });
 
+  test('国道・都道府県道の表示項目も 0/それ以外 で真偽になる', () => {
+    expect(decodeURLState('?national=0&pref=1')).toEqual({
+      national: false,
+      pref: true,
+    });
+  });
+
   test('encodeState の出力を decodeURLState に通すと同じ差分が戻る', () => {
     const diff = { selected: new Set([1, 2, 3]), conc: 'all', special: false };
     const full = {
@@ -123,6 +140,8 @@ describe('decodeURLState', () => {
       special: true,
       ferry: true,
       former: true,
+      national: true,
+      pref: true,
       ...diff,
     };
     expect(decodeURLState(encodeState(full))).toEqual(diff);
