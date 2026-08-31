@@ -162,9 +162,9 @@ export function writeTiles(o) {
    * どれも十分に簡略化されているので、全部抱えても何ということはない。
    *
    * この索引の maxZoom がそのまま簡略化の効き方を決める。geojson-vt は
-   * `z === options.maxZoom` のズームを閾値 0 で書き出す——そのズームだけは点も
-   * 落とさず、短い線も捨てない。既定の `split - 1` は、いちばん深い低ズーム
-   * (国道では z7)を素のまま出すということである。 */
+   * `z === options.maxZoom` のズームを閾値 0 で書き出すので、既定の `split - 1`
+   * は、いちばん深い低ズームを素のまま出すということである(docs/architecture.md
+   * 「索引の一番深いズームは簡略化されない」)。 */
   const low = geojsonvt(fc(features, lowProperties), {
     maxZoom: lowMaxZoom,
     indexMaxZoom: lowMaxZoom,
