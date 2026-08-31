@@ -152,6 +152,23 @@ export function withKind(base, kinds, negate) {
   return base === true ? k : ['all', base, k];
 }
 
+/**
+ * 都道府県道の層が既に持っている絞り込みに、路線の選択を重ねる。
+ *
+ * 国道の buildFilter に当たるものだが、重ねる先が違う。国道は共有の式を組んで
+ * から区分を足すのに対し、都道府県道は層そのものが区分の式を持っている
+ * (prefLineLayers)ので、その式を土台にして選択を足す。
+ *
+ * 選択の鍵は `nagano-63` の形で、タイルの `refs` もその鍵を並べているので、
+ * 検査は国道と同じ hasRef で足りる。空の選択は「全部出す」を意味する——国道側
+ * (buildFilter)と同じ約束である。
+ */
+export function withPrefSelection(base, selected) {
+  if (!selected.length) return base;
+  const any = ['any', ...selected.map(hasRef)];
+  return base === true ? any : ['all', base, any];
+}
+
 /** 何にも当たらない式。層を消さずに隠すのに使う。 */
 export const NOTHING = ['==', ['get', 'n'], -1];
 

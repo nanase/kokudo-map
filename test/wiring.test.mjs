@@ -7,7 +7,13 @@ import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 
 import { routeListHTML } from '../web/panel.mjs';
-import { NARROW_QUERY, setSelection, wireControls } from '../web/wiring.mjs';
+import {
+  NARROW_QUERY,
+  setSelection,
+  showRouteOnly,
+  togglePrefOnly,
+  wireControls,
+} from '../web/wiring.mjs';
 
 const indexHtml = readFileSync(
   new URL('../web/index.html', import.meta.url),
@@ -37,6 +43,9 @@ function setup(routes = ROUTES) {
 
   const state = {
     selected: new Set(),
+    prefSelected: new Set(),
+    nationalBefore: null,
+    prefBefore: null,
     picked: null,
     conc: 'off',
     labels: true,
@@ -101,6 +110,101 @@ describe('wireControls — 路線の選択', () => {
     expect(document.querySelector('#route-list input[value="8"]').checked).toBe(
       true,
     );
+  });
+});
+
+/* 「この路線だけ表示」は、押す場所によらず「その 1 本だけを地図に残す」を
+ * 意味します。押した系統の 1 本を残し、もう一方の系統は消します。 */
+describe('この路線だけ表示', () => {
+  const tPref = (doc) => doc.querySelector('#t-pref');
+  const tNational = (doc) => doc.querySelector('#t-national');
+
+  test('国道を 1 本残すと、都道府県道は消える', () => {
+    const { document, state, applyFilters } = setup();
+    showRouteOnly(document, state, 8, applyFilters);
+
+    expect(state.selected).toEqual(new Set([8]));
+    expect(state.pref).toBe(false);
+    expect(tPref(document).checked).toBe(false);
+  });
+
+  test('都道府県道を 1 本残すと、国道は消える', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+
+    expect(state.prefSelected).toEqual(new Set(['nagano-63']));
+    expect(state.national).toBe(false);
+    expect(tNational(document).checked).toBe(false);
+  });
+
+  test('もう一度押すと都道府県道の選択が解け、国道が戻る', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+
+    expect(state.prefSelected.size).toBe(0);
+    expect(state.national).toBe(true);
+    expect(tNational(document).checked).toBe(true);
+  });
+
+  test('別の路線を押したときは、その 1 本に入れ替わる', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+    togglePrefOnly(document, state, 'tokyo-18', applyFilters);
+
+    expect(state.prefSelected).toEqual(new Set(['tokyo-18']));
+    expect(state.national).toBe(false);
+  });
+
+  /* 押す前から消していた系統を、解除で勝手に点け直しません。ボタンが自分で
+     消したものを、自分で戻す形です。 */
+  test('押す前から国道を消していたら、解除しても消えたまま', () => {
+    const { document, state, applyFilters } = setup();
+    state.national = false;
+    tNational(document).checked = false;
+
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+
+    expect(state.national).toBe(false);
+    expect(tNational(document).checked).toBe(false);
+  });
+
+  test('国道の選択解除で、消えていた都道府県道が戻る', () => {
+    const { document, state, applyFilters } = setup();
+    showRouteOnly(document, state, 8, applyFilters);
+    document.querySelector('#sel-none').click();
+
+    expect(state.selected.size).toBe(0);
+    expect(state.pref).toBe(true);
+    expect(tPref(document).checked).toBe(true);
+  });
+
+  test('「だけ表示」を経ていない選択解除は、系統に触らない', () => {
+    const { document, state } = setup();
+    state.pref = false;
+    tPref(document).checked = false;
+
+    document.querySelector('#route-list input[value="7"]').click();
+    document.querySelector('#sel-none').click();
+
+    expect(state.pref).toBe(false);
+  });
+
+  /* 系統を手で切り替えた後は、ボタンが後から戻す物はありません。 */
+  test('系統を手で切り替えると、控えていた値を捨てる', () => {
+    const { document, window, state, applyFilters } = setup();
+    showRouteOnly(document, state, 8, applyFilters);
+
+    const t = tPref(document);
+    t.checked = true;
+    t.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(state.prefBefore).toBeNull();
+
+    t.checked = false;
+    t.dispatchEvent(new window.Event('change', { bubbles: true }));
+    document.querySelector('#sel-none').click();
+    expect(state.pref).toBe(false);
   });
 });
 

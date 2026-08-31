@@ -80,6 +80,7 @@ import {
   routeSources,
   terminiFilter,
   withKind,
+  withPrefSelection,
 } from './mapspec.mjs';
 import {
   clearLabel,
@@ -100,7 +101,8 @@ import { terminiFeatures } from './termini.mjs';
 import { decodeURLState, encodeState, MANAGED_KEYS } from './urlstate.mjs';
 import {
   NARROW_QUERY,
-  setSelection,
+  showRouteOnly,
+  togglePrefOnly,
   wireControls,
   wireShare,
 } from './wiring.mjs';
@@ -109,6 +111,14 @@ const state = {
   meta: null,
   routes: [],
   selected: new Set(),
+  // 都道府県道の選択。中身は `nagano-63` の形の鍵である——番号は県の中でしか
+  // 一意でないので、国道のように数では持てない(prefroute.mjs)。空は「すべて」を
+  // 意味し、そこは国道の `selected` と同じである。
+  prefSelected: new Set(),
+  // 「この路線だけ表示」が消した系統の、消す前の値。解除でここへ戻す
+  // (wiring.mjs の hideOtherSystem)。控えが無いあいだは null である。
+  nationalBefore: null,
+  prefBefore: null,
   // 県の名前を引く表。regions.json を起動時に読んだもので、`nagano` から
   // 「長野県」を返す。都道府県道の標識も詳細も、県を伴わなければ路線を名指した
   // ことにならない。
@@ -1096,6 +1106,20 @@ async function boot() {
   syncControls();
   applyFilters();
 
+  /* 共有されたリンクが都道府県道を 1 本名指しているなら、その詳細を開く。
+   *
+   * 操作面に都道府県道の節は無いので(#109)、絞っていることを述べる場所も、
+   * 解除する口も、このパネルのほかに無い。開かずに出すと、地図に県道が 1 本
+   * しか出ていない理由が画面のどこにも書かれていない状態になる——それは
+   * 「絞られている」ではなく「壊れている」に見える。
+   *
+   * 2 本以上を名指した URL では開かない。パネルは 1 路線について述べる場所で、
+   * どれを代表に選んでも残りを黙って落とすことになる。画面からその形は作れず、
+   * 手で書いた URL だけが持ちうる。 */
+  if (state.prefSelected.size === 1) {
+    openPrefDetail([...state.prefSelected][0]);
+  }
+
   // 共有されたリンクの hash が優先する。無ければ `?region=` が地域を名指しして
   // いる場合にそれを使う——眺めの指定であって、データの切り替えではない。
   // どちらも無ければ、地図は作られたときの眺めのままである。
@@ -1116,6 +1140,17 @@ function applyURLState() {
   if (diff.selected) {
     const known = new Set(state.routes.map((r) => r.ref));
     diff.selected = new Set([...diff.selected].filter((r) => known.has(r)));
+  }
+  // 都道府県道は県までを確かめる。47 県の一覧は regions.json が持っているが、
+  // 県の中に何号があるかを述べる表は配っていない——13,234 組の索引を初期表示で
+  // 読ませないための判断である(#109)。在らぬ番号は地図に何も出さないだけで、
+  // 在らぬ県は「長野県道」の名すら出せないので、確かめるのはそこまでとする。
+  if (diff.prefSelected) {
+    diff.prefSelected = new Set(
+      [...diff.prefSelected].filter((key) =>
+        state.prefLabels.has(prefRegionOf(key)),
+      ),
+    );
   }
   Object.assign(state, diff);
 }
@@ -1210,13 +1245,21 @@ function applyFilters() {
     state.national ? pickedFilter(base, state.picked) : NOTHING,
   );
 
+  // 都道府県道の選択。層が既に持っている区分の式へ重ねる(withPrefSelection)。
+  // 空なら全部出す——国道の buildFilter と同じ約束である。
+  const prefSel = [...state.prefSelected];
   for (const [id, filter] of PREF_DEFAULT_FILTERS) {
-    map.setFilter(id, state.pref ? filter : NOTHING);
+    map.setFilter(
+      id,
+      state.pref ? withPrefSelection(filter, prefSel) : NOTHING,
+    );
   }
 
   map.setFilter(
     PREF_PICKED_LAYER,
-    state.pref ? pickedFilter(true, state.prefPicked) : NOTHING,
+    state.pref
+      ? pickedFilter(withPrefSelection(true, prefSel), state.prefPicked)
+      : NOTHING,
   );
 
   const tFilter =
@@ -1568,8 +1611,11 @@ async function openPrefDetail(key) {
   const ref = prefRefOf(key);
   const serial = ++detailSerial;
 
+  // 押した状態は state から読む。ボタンが自分の見た目を覚えるのではなく、
+  // 選択そのものが一つあって、それを毎回描き直す形にする。
+  const selected = state.prefSelected.has(key);
   closePopup();
-  detailBody.innerHTML = prefDetailHTML({ prefLabel, ref });
+  detailBody.innerHTML = prefDetailHTML({ region, prefLabel, ref, selected });
   showDetail();
 
   let meta;
@@ -1578,7 +1624,13 @@ async function openPrefDetail(key) {
   } catch (err) {
     console.error(err);
     if (serial === detailSerial) {
-      detailBody.innerHTML = prefDetailHTML({ prefLabel, ref, failed: true });
+      detailBody.innerHTML = prefDetailHTML({
+        region,
+        prefLabel,
+        ref,
+        selected,
+        failed: true,
+      });
     }
     return;
   }
@@ -1590,13 +1642,21 @@ async function openPrefDetail(key) {
   // タイルに在る路線が県の表に無いのは、配ってある web/data が食い違っていると
   // きである。待っている表示のまま止めず、読めなかったと言う。
   if (!route) {
-    detailBody.innerHTML = prefDetailHTML({ prefLabel, ref, failed: true });
+    detailBody.innerHTML = prefDetailHTML({
+      region,
+      prefLabel,
+      ref,
+      selected,
+      failed: true,
+    });
     return;
   }
   const sel = new Set([key]);
   detailBody.innerHTML = prefDetailHTML({
+    region,
     prefLabel,
     ref,
+    selected,
     route,
     rank: prefRankOf(combos, key),
     kinds: kindsFor(combos, sel),
@@ -1690,11 +1750,18 @@ document.addEventListener('click', (ev) => {
     return;
   }
 
-  // 選択の持ち主は state.selected のままである。ここは setSelection を呼ぶ
-  // だけで、サイドパネルのチェックもそちらが合わせる。
+  // 選択の持ち主は state のままである。ここは wiring の関数を呼ぶだけで、
+  // サイドパネルのチェックも系統のトグルもそちらが合わせる。
   const only = ev.target.closest('.detail-only');
   if (only) {
-    setSelection(document, state, [Number(only.dataset.ref)], applyFilters);
+    if (only.dataset.pref) {
+      togglePrefOnly(document, state, only.dataset.pref, applyFilters);
+      // 押した状態はこのボタン自身が述べる。開き直して aria-pressed と
+      // 名乗りを入れ替える——県別 meta は取得済みなので、待ちは挟まらない。
+      openPrefDetail(only.dataset.pref);
+    } else {
+      showRouteOnly(document, state, Number(only.dataset.ref), applyFilters);
+    }
     return;
   }
 

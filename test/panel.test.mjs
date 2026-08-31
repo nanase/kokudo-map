@@ -227,6 +227,23 @@ describe('shareSummaryHTML', () => {
     expect(html).not.toContain('すべて');
   });
 
+  /* 都道府県道の行は選んでいるときだけ出します。行ごと出さなければ、国道だけを
+     見ている人のダイアログは今までと変わりません。 */
+  test('都道府県道を選んでいなければ、その行は出さない', () => {
+    expect(shareSummaryHTML(base)).not.toContain('都道府県道');
+  });
+
+  test('都道府県道の選択はヘキサで出す', () => {
+    const html = shareSummaryHTML({
+      ...base,
+      prefRoutes: [{ prefLabel: '長野県', ref: 63 }],
+    });
+    expect(html).toContain('都道府県道');
+    expect(html).toContain('class="shield hex sm"');
+    // 番号だけでは 47 本のどれか決まらないので、読み上げには県が要る。
+    expect(html).toContain('aria-label="長野県道63号"');
+  });
+
   test('重用区間の状態はそのまま述べる', () => {
     expect(shareSummaryHTML(base)).toContain('強調しない');
   });

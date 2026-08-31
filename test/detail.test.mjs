@@ -544,10 +544,37 @@ describe('prefDetailHTML', () => {
     expect(detailHTML({ route: route() })).toContain('class="sr-only"');
   });
 
-  test('Wikipedia へ送る。「だけを表示」は出さない', () => {
+  test('Wikipedia へ送る', () => {
     expect(full()).toContain(`href="${prefWikipediaURL('長野県', 60)}"`);
-    // 路線ごとの選択そのものが未着手です(#109)。
+  });
+
+  /* 操作面に都道府県道の節は無いので、選んでいることを述べる場所も、解除する
+     口も、このボタンのほかにありません(#109)。 */
+  test('「だけを表示」は県を伴う鍵を持つ', () => {
+    expect(full({ region: 'nagano' })).toContain(
+      'class="icon-btn detail-only" data-pref="nagano-60"',
+    );
+  });
+
+  test('押した状態は aria-pressed と名乗りに出る', () => {
+    const off = full({ region: 'nagano' });
+    expect(off).toContain('aria-pressed="false"');
+    expect(off).toContain('長野県道60号だけを表示');
+
+    const on = full({ region: 'nagano', selected: true });
+    expect(on).toContain('aria-pressed="true"');
+    expect(on).toContain('長野県道60号だけの表示を解除');
+  });
+
+  /* 県が分からなければ鍵を作れません。県を伴わない呼び出しでは、押しても
+     何も指せないボタンを出さないでおきます。 */
+  test('県を渡さなければボタンごと出さない', () => {
     expect(full()).not.toContain('detail-only');
+  });
+
+  test('数が届く前も、読めなかったときも、ボタンは出したままにする', () => {
+    expect(full({ region: 'nagano', route: null })).toContain('detail-only');
+    expect(full({ region: 'nagano', failed: true })).toContain('detail-only');
   });
 
   test('起終点は出さない。都道府県道に全国 1 枚の台帳が無い', () => {
