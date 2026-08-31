@@ -34,6 +34,7 @@ import {
   routeLayers,
   routeSources,
   SPECIAL_KINDS,
+  terminiFilter,
   withKind,
 } from '../web/mapspec.mjs';
 
@@ -134,6 +135,29 @@ describe('pickedFilter', () => {
 
 test('NOTHING は実在しない n を要求する', () => {
   expect(NOTHING).toEqual(['==', ['get', 'n'], -1]);
+});
+
+describe('terminiFilter', () => {
+  test('選んでいなければ、共有地点だけに絞る', () => {
+    // 単独区間の端点は片方の路線しか無く、地図の上で意味を持ちません(#117)。
+    expect(terminiFilter([])).toEqual(['==', ['get', 'shared'], 1]);
+  });
+
+  test('選んでいれば、その路線が絡む共有地点だけにさらに絞る', () => {
+    expect(terminiFilter([18])).toEqual([
+      'all',
+      ['==', ['get', 'shared'], 1],
+      ['any', hasRef(18)],
+    ]);
+  });
+
+  test('選択が複数でも any で束ねる', () => {
+    expect(terminiFilter([18, 117])).toEqual([
+      'all',
+      ['==', ['get', 'shared'], 1],
+      ['any', hasRef(18), hasRef(117)],
+    ]);
+  });
 });
 
 /* ---------------------------------------------------------------- 対応づけ --- */

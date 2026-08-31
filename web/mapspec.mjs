@@ -156,6 +156,18 @@ export function withKind(base, kinds, negate) {
 export const NOTHING = ['==', ['get', 'n'], -1];
 
 /**
+ * 起終点の絞り込み式。単独区間の端点は片方しか路線が無く、地図の上で意味を
+ * 持たないので出さない——2 つ以上の国道が出会う地点だけを描く。
+ * `selected` があれば、その路線が絡む共有地点だけにさらに絞る。
+ */
+export function terminiFilter(selected) {
+  const shared = ['==', ['get', 'shared'], 1];
+  return selected.length
+    ? ['all', shared, ['any', ...selected.map(hasRef)]]
+    : shared;
+}
+
+/**
  * ポップアップが説明しているアークの下に敷く影。
  *
  * OSM の way id はそれだけでアークを一意に指す——ビルドの重複排除もこれを鍵に
