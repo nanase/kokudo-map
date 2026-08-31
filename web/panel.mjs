@@ -179,6 +179,7 @@ const rule = (color, dashed) =>
   `<span class="swatch" style="border-top-color:${color}` +
   `${dashed ? ';border-top-style:dashed' : ''}"></span>`;
 
+/** 1 色の見本を持つ項目。凡例の 10 項目のうち 9 つがこの形である。 */
 const swatch = (color, text, dashed, tip) =>
   item(rule(color, dashed), text, tip);
 
@@ -194,10 +195,10 @@ const swatch = (color, text, dashed, tip) =>
  * 見える。破線を描くのは style.css の repeating-linear-gradient で、そちらが
  * `currentColor` を読む。
  */
-const duoRule = (a, b) =>
+const duoRule = (major, general) =>
   '<span class="swatch duo">' +
-  `<span style="color:${a}"></span>` +
-  `<span style="color:${b}"></span>` +
+  `<span style="color:${major}"></span>` +
+  `<span style="color:${general}"></span>` +
   '</span>';
 
 /**

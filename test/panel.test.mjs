@@ -269,6 +269,19 @@ describe('shareText', () => {
 });
 
 describe('凡例', () => {
+  /* 凡例は三つのファイルにまたがる。index.html が静的な markup と <head> の
+   * 先読みを、app.js が押されたときの書き直しを、style.css が見本の描き方と
+   * 畳んだ状態の効かせ方を持つ。下の検査はどれもこの三つを読む。 */
+  const indexHtml = readFileSync(
+    new URL('../web/index.html', import.meta.url),
+    'utf8',
+  );
+  const appJs = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const styleCss = readFileSync(
+    new URL('../web/style.css', import.meta.url),
+    'utf8',
+  );
+
   test('重用の深さは 4 段である', () => {
     expect(legendNHTML().match(/class="item"/g)).toHaveLength(4);
     expect(legendNHTML()).toContain('単独指定');
@@ -302,10 +315,6 @@ describe('凡例', () => {
    * 回線では凡例だけ空のまま出てから遅れて現れて見えていた。static にした
    * 代わり、legendNHTML()/legendKindHTML() と食い違えば古いままになりうる
    * ので、ここで一致を検査する。 */
-  const indexHtml = readFileSync(
-    new URL('../web/index.html', import.meta.url),
-    'utf8',
-  );
   const staticMarkup = (id) => {
     const m = indexHtml.match(
       new RegExp(`<div id="${id}" class="legend">([\\s\\S]*?)</div>`),
@@ -361,16 +370,8 @@ describe('凡例', () => {
     expect(styleCss).toContain('.legend .swatch.duo > span');
   });
 
-  /* 凡例を畳んだ状態は三つのファイルにまたがる——index.html の <head> が最初の
-   * 描画の前に置き、app.js が押されたときに書き直し、style.css がそれを効かせる。
-   * 鍵の綴りが一つでもずれると、畳んだまま次に来た人の画面に凡例が戻る。それが
-   * どこも壊さずに起きるので、ここで三つを突き合わせる。 */
-  const appJs = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-  const styleCss = readFileSync(
-    new URL('../web/style.css', import.meta.url),
-    'utf8',
-  );
-
+  /* 畳んだ状態を持つ鍵の綴りが一つでもずれると、畳んだまま次に来た人の画面に
+   * 凡例が戻る。それがどこも壊さずに起きるので、三つを突き合わせる。 */
   test('凡例の畳み方は、三つのファイルが同じ綴りを使う', () => {
     expect(indexHtml).toContain("localStorage.getItem('legend-open')");
     expect(appJs).toContain("localStorage.setItem('legend-open'");
@@ -384,8 +385,11 @@ describe('凡例', () => {
     // 片方しか無いと、畳んだ人が戻れないか、そもそも畳めない。
     expect(indexHtml).toContain('id="legend-close"');
     expect(indexHtml).toContain('id="legend-open"');
-    // どちらも同じものを指していると読み上げにも伝わる形にする。
-    expect(indexHtml.match(/aria-controls="legend-box"/g)).toHaveLength(2);
+    // 開き直す口は自分の外にある物を出すので、何を出すのかを述べる。閉じる口は
+    // 閉じる対象の中にいるので述べない——#panel-close・#detail-close と同じ。
+    expect(indexHtml).toContain(
+      '<button type="button" id="legend-open" aria-controls="legend-box"',
+    );
   });
 
   test('系統ごとの行は頭の語で、どちらの話かを述べる', () => {
