@@ -44,6 +44,17 @@ describe('encodeRoutes / decodeRoutes', () => {
   test('空文字列は空配列', () => {
     expect(decodeRoutes('')).toEqual([]);
   });
+
+  /* 桁の違う範囲は路線を指していません。展開すると、リンクを開いた側で数億回の
+     同期ループが走り、地図が出る前に画面が止まります。 */
+  test('広すぎる範囲は読み飛ばす。前後の有効な項目は残る', () => {
+    expect(decodeRoutes('18,1-999999999,117')).toEqual([18, 117]);
+  });
+
+  test('実在しうる幅の範囲は展開する', () => {
+    // 番号は国道が 507 まで、都道府県道が 1199 まである。
+    expect(decodeRoutes('1-1199')).toHaveLength(1199);
+  });
 });
 
 describe('encodePrefRoutes / decodePrefRoutes', () => {

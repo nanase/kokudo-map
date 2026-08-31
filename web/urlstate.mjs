@@ -66,8 +66,22 @@ export function encodeRoutes(refs) {
 }
 
 /**
- * encodeRoutes の逆。壊れた項目(数字でない、範囲が逆順)は読み飛ばす —
- * 手で書き換えられた URL でも、有効な項目だけは復元したい。
+ * 一つの範囲が展開してよい番号の数。
+ *
+ * この地図に在る番号は、国道が 507 まで、都道府県道が 1199 まで
+ * (pipeline/build_prefectural.py の `MAX_REF`。それより上は市道・都市計画道路
+ * である)。桁の違う範囲は、路線を指しているのではなく壊れた項目である。
+ *
+ * ここで止めないと、`?routes=1-999999999` の一行が数億回の同期ループと配列に
+ * なり、リンクを開いた側の画面が地図の出る前に止まる。実在するかどうかを
+ * 確かめるのは app.js の役目だが、確かめてもらうためにはまず展開が終わらねば
+ * ならない。
+ */
+const MAX_SPAN = 2000;
+
+/**
+ * encodeRoutes の逆。壊れた項目(数字でない、範囲が逆順、広すぎる範囲)は読み
+ * 飛ばす — 手で書き換えられた URL でも、有効な項目だけは復元したい。
  */
 export function decodeRoutes(text) {
   if (!text) return [];
@@ -77,7 +91,7 @@ export function decodeRoutes(text) {
     if (!m) continue;
     const a = Number(m[1]);
     const b = m[2] === undefined ? a : Number(m[2]);
-    if (b < a) continue;
+    if (b < a || b - a >= MAX_SPAN) continue;
     for (let n = a; n <= b; n++) out.push(n);
   }
   return out;
