@@ -15,6 +15,9 @@ import {
   COLOR_UNOPENED,
   N_COLORS,
   N_LABELS,
+  PREF_GENERAL,
+  PREF_MAJOR,
+  PREF_RANK_LABELS,
 } from './mapspec.mjs';
 import { shieldRow } from './shield.mjs';
 
@@ -173,8 +176,27 @@ const swatch = (color, text, dashed, tip) =>
   `<span class="swatch" style="border-top-color:${color}` +
   `${dashed ? ';border-top-style:dashed' : ''}"></span>${text}</span>`;
 
+/**
+ * 行の頭に置く、その行がどの系統の話かを述べる語。
+ *
+ * 地図に二つの系統が載った時点で要る。`単独指定`・`二重用` は国道の重用の深さ
+ * を、`主要地方道`・`一般都道府県道` は都道府県道の格を述べており、色の意味が
+ * 行ごとに違う。頭の語が無いと、二つの行が一つの尺度に見える。
+ */
+const lead = (text) => `<span class="lead">${text}</span>`;
+
 export const legendNHTML = () =>
-  N_COLORS.map((c, i) => swatch(c, N_LABELS[i], false)).join('');
+  lead('国道') + N_COLORS.map((c, i) => swatch(c, N_LABELS[i], false)).join('');
+
+/**
+ * 都道府県道の格。色が述べるのは格であって重用の深さではない——国道が既に
+ * 四色を深さに使っているので、同じ画面で八色を配ると、どの色が何を述べて
+ * いるかが読めなくなる。都道府県道の重用は太さが述べる(mapspec.mjs)。
+ */
+export const legendPrefHTML = () =>
+  lead('都道府県道') +
+  swatch(PREF_MAJOR, PREF_RANK_LABELS.major, false) +
+  swatch(PREF_GENERAL, PREF_RANK_LABELS.general, false);
 
 export const legendKindHTML = () =>
   [

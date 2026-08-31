@@ -11,13 +11,23 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildFilter,
   CLICKABLE_LAYERS,
+  colorByRank,
   EXCLUDE_FROM_ROADS_LAYER,
   FILTERED_LAYERS,
   formerOpacity,
   hasRef,
+  inkByRank,
   kindTest,
   NOTHING,
+  PREF_GENERAL,
+  PREF_GENERAL_INK,
+  PREF_KIND_DRIVEABLE,
+  PREF_MAJOR,
+  PREF_SOURCE,
   pickedFilter,
+  prefLabelLayer,
+  prefLayers,
+  prefLineLayers,
   routeLayers,
   routeSources,
   SPECIAL_KINDS,
@@ -221,7 +231,10 @@ describe('旧道の不透明度', () => {
 });
 
 describe('ソース', () => {
-  const sources = routeSources('data/national-routes.pmtiles');
+  const sources = routeSources(
+    'data/national-routes.pmtiles',
+    'data/prefectural-routes.pmtiles',
+  );
 
   test('アーカイブに maxzoom を書き足さない', () => {
     // アーカイブ自身が持つ範囲を TileJSON が伝えます。ここで重ねて述べると、
@@ -230,8 +243,112 @@ describe('ソース', () => {
     expect(sources.routes.url).toBe('pmtiles://data/national-routes.pmtiles');
   });
 
+  test('都道府県道は別のソースで、こちらも zoom を書き足さない', () => {
+    // アーカイブは #100 で二つに分かれました。国道の 55.9 MB を県道を直すたびに
+    // 上げ直さずに済み、県道側が壊れても国道の地図は出ます。
+    expect(sources[PREF_SOURCE].maxzoom).toBeUndefined();
+    expect(sources[PREF_SOURCE].url).toBe(
+      'pmtiles://data/prefectural-routes.pmtiles',
+    );
+  });
+
   test('起終点は GeoJSON で、最初は空である', () => {
     expect(sources.termini.type).toBe('geojson');
     expect(sources.termini.data.features).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------- 都道府県道 --- */
+describe('都道府県道のレイヤー', () => {
+  const lines = prefLineLayers();
+  const labels = prefLabelLayer();
+  const all = prefLayers();
+
+  test('層はすべて都道府県道のソースを読み、source-layer を名乗る', () => {
+    for (const l of all) {
+      expect(l.source).toBe(PREF_SOURCE);
+      expect(l['source-layer']).toBe('routes');
+    }
+  });
+
+  test('id は国道の層とぶつからない', () => {
+    const national = new Set(routeLayers().map((l) => l.id));
+    for (const l of all) expect(national.has(l.id)).toBe(false);
+  });
+
+  test('prefLayers は線の層と札の層の全部である', () => {
+    expect(all.map((l) => l.id)).toEqual([
+      ...lines.map((l) => l.id),
+      labels.id,
+    ]);
+  });
+
+  test('走れる区分と走れない区分で、アークを重複も脱落も無く分ける', () => {
+    // 実線の層と破線の層は互いの否定です。片方だけを直すと、どちらにも
+    // 入らないアークが黙って消えるか、同じ線が二度描かれます。
+    const solid = lines.filter((l) => l.id !== 'pref-special');
+    for (const l of solid) {
+      expect(l.filter).toEqual(kindTest(PREF_KIND_DRIVEABLE));
+    }
+    expect(lines.find((l) => l.id === 'pref-special').filter).toEqual([
+      '!',
+      kindTest(PREF_KIND_DRIVEABLE),
+    ]);
+  });
+
+  test('走れない区分だけが破線である', () => {
+    for (const l of lines) {
+      const dashed = l.paint['line-dasharray'] !== undefined;
+      expect(dashed).toBe(l.id === 'pref-special');
+    }
+  });
+
+  test('線も札も former で不透明度を下げる', () => {
+    // 旧道は除外せず薄く描きます。国道と同じ扱いです。
+    for (const l of lines) {
+      const base = l.paint['line-opacity'][3];
+      expect(l.paint['line-opacity']).toEqual(formerOpacity(base));
+    }
+    expect(labels.paint['text-opacity']).toEqual(formerOpacity());
+  });
+
+  test('色は格を述べ、重用の深さは述べない', () => {
+    // 国道が既に四色を重用の深さに使っています。同じ画面で八色を配ると、
+    // どの色が何を述べているかが読めなくなります。
+    expect(colorByRank).toEqual([
+      'match',
+      ['get', 'rank'],
+      'major',
+      PREF_MAJOR,
+      PREF_GENERAL,
+    ]);
+    for (const l of lines) {
+      if (l.id === 'pref-casing') continue;
+      expect(l.paint['line-color']).toEqual(colorByRank);
+    }
+    expect(labels.paint['text-color']).toEqual(inkByRank);
+  });
+
+  test('札の字は線より濃い。主要地方道だけは同じ色でよい', () => {
+    // #8CBF4A は線としては読めますが、字としては白い地に対して 2.15:1 です。
+    // 線は幅を持つので形が出ますが、字は画線が細く、同じ明るさでは読めません。
+    expect(inkByRank[3]).toBe(colorByRank[3]);
+    expect(inkByRank[4]).not.toBe(colorByRank[4]);
+    expect(inkByRank[4]).toBe(PREF_GENERAL_INK);
+  });
+
+  test('主要地方道のほうが太い', () => {
+    // 太さは格と重用の両方を述べます。ここで見るのは格の側です。
+    const mult = (l) => l.paint['line-width'];
+    for (const l of lines) {
+      expect(JSON.stringify(mult(l))).toContain('"major",1.2,0.85');
+    }
+  });
+
+  test('札だけが z8 から出る。線にズーム下限は無い', () => {
+    // 縮尺で番号を省略しないのがこの地図の存在理由です。線は z0 から出ます。
+    // 札が z8 からなのは、z0-7 のタイルが `label` を持たないためです(#100)。
+    for (const l of lines) expect(l.minzoom).toBeUndefined();
+    expect(labels.minzoom).toBe(8);
   });
 });

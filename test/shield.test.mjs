@@ -9,6 +9,9 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  HEX_PATH,
+  hexShield,
+  prefRouteName,
   SHIELD_ICON_PAD,
   SHIELD_ICON_STROKE_WIDTH,
   SHIELD_PATH,
@@ -115,6 +118,94 @@ describe('shield', () => {
   test('どの標識も同じ輪郭を使う', () => {
     expect(shield(1)).toContain(SHIELD_PATH);
     expect(shield(459)).toContain(SHIELD_PATH);
+  });
+});
+
+/* ヘキサ(都道府県道番号標識)。おにぎりと同じ枠に描くので、確かめることも
+ * 同じです——閉じた形であること、点が viewBox の中に収まっていること。違うのは
+ * コマンドが絶対の M・L・Q であることだけです(角を二次ベジエで丸めています)。 */
+describe('HEX_PATH', () => {
+  /** 絶対の M・L・Q が名指しする点をすべて。二次曲線はこの三点の凸包を出ません。 */
+  const hexPoints = (d) => {
+    const points = [];
+    for (const seg of d.matchAll(/([MLQ])([^MLQZ]*)/g)) {
+      const n = nums(seg[2]);
+      for (let i = 0; i < n.length; i += 2) points.push([n[i], n[i + 1]]);
+    }
+    return points;
+  };
+
+  test('閉じた path である', () => {
+    expect(HEX_PATH.startsWith('M')).toBe(true);
+    expect(HEX_PATH.endsWith('Z')).toBe(true);
+  });
+
+  test('M・L・Q 以外のコマンドを含まない', () => {
+    expect(HEX_PATH.replace(/[MLQ0-9.,\s-]/g, '')).toBe('Z');
+  });
+
+  test('点は viewBox の内側、縁の太さぶんの余白を残す', () => {
+    const [, , vw, vh] = nums(SHIELD_VIEWBOX);
+    const margin = SHIELD_STROKE_WIDTH / 2;
+    for (const [x, y] of hexPoints(HEX_PATH)) {
+      expect(x).toBeGreaterThanOrEqual(margin);
+      expect(x).toBeLessThanOrEqual(vw - margin);
+      expect(y).toBeGreaterThanOrEqual(margin);
+      expect(y).toBeLessThanOrEqual(vh - margin);
+    }
+  });
+
+  test('おにぎりより縦長である', () => {
+    // 実物の標識の比です。同じ viewBox に描くので、違いは形にしか出ません。
+    const xs = hexPoints(HEX_PATH).map(([x]) => x);
+    const ys = hexPoints(HEX_PATH).map(([, y]) => y);
+    const w = Math.max(...xs) - Math.min(...xs);
+    const h = Math.max(...ys) - Math.min(...ys);
+    expect(w).toBeLessThan(h);
+  });
+});
+
+describe('prefRouteName', () => {
+  test('県の名前に「道」を継ぐだけで四つの呼び分けが出る', () => {
+    expect(prefRouteName('長野県', 63)).toBe('長野県道63号');
+    expect(prefRouteName('東京都', 7)).toBe('東京都道7号');
+    expect(prefRouteName('大阪府', 2)).toBe('大阪府道2号');
+    expect(prefRouteName('北海道', 106)).toBe('北海道道106号');
+  });
+});
+
+describe('hexShield', () => {
+  test('番号が中に入り、読み上げは県まで言う', () => {
+    const html = hexShield('長野県', 63);
+    expect(html).toContain('>63</text>');
+    expect(html).toContain('aria-label="長野県道63号"');
+  });
+
+  test('県名は絵として描かない', () => {
+    // 操作面での実寸は高さ 30 px です。その大きさでは県名は形になりません。
+    expect(hexShield('長野県', 63)).not.toContain('長野</text>');
+  });
+
+  test('桁が増えるほど文字幅を詰める', () => {
+    const width = (ref) =>
+      Number(hexShield('長野県', ref).match(/textLength="(\d+)"/)[1]);
+    expect(width(3)).toBeLessThan(width(63));
+    expect(width(63)).toBeLessThan(width(407));
+    // 番号は 1199 まで在りうる(判定の MAX_REF)。4 桁でも押し込める。
+    expect(width(407)).toBeLessThanOrEqual(width(1104));
+  });
+
+  test('おにぎりと同じ枠・同じ縁で、輪郭だけが違う', () => {
+    const html = hexShield('長野県', 63);
+    expect(html).toContain(`viewBox="${SHIELD_VIEWBOX}"`);
+    expect(html).toContain(`stroke-width="${SHIELD_STROKE_WIDTH}"`);
+    expect(html).toContain(HEX_PATH);
+    expect(html).not.toContain(SHIELD_PATH);
+  });
+
+  test('小さい版は class で区別する', () => {
+    expect(hexShield('長野県', 63, true)).toContain('class="shield hex sm"');
+    expect(hexShield('長野県', 63, false)).toContain('class="shield hex"');
   });
 });
 

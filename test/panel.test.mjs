@@ -9,6 +9,7 @@ import {
   freshnessHTML,
   legendKindHTML,
   legendNHTML,
+  legendPrefHTML,
   rankingHTML,
   routeListHTML,
   selectionLabel,
@@ -312,6 +313,32 @@ describe('凡例', () => {
 
   test('index.html の種別の凡例は legendKindHTML() の出力そのもの', () => {
     expect(staticMarkup('legend-kind')).toBe(legendKindHTML());
+  });
+
+  test('index.html の都道府県道の凡例は legendPrefHTML() の出力そのもの', () => {
+    expect(staticMarkup('legend-pref')).toBe(legendPrefHTML());
+  });
+
+  test('都道府県道の凡例は格を 2 段で述べる', () => {
+    const html = legendPrefHTML();
+    expect(html.match(/class="item"/g)).toHaveLength(2);
+    expect(html).toContain('主要地方道');
+    expect(html).toContain('一般都道府県道');
+  });
+
+  test('都道府県道は実線で示す。破線は走れない区分の印である', () => {
+    expect(legendPrefHTML()).not.toContain('border-top-style:dashed');
+  });
+
+  test('系統ごとの行は頭の語で、どちらの話かを述べる', () => {
+    // 同じ画面に二つの尺度が並びます。国道の色は重用の深さ、都道府県道の色は
+    // 格です。頭の語が無いと、二つの行が一つの尺度に見えます。
+    expect(legendNHTML().startsWith('<span class="lead">国道</span>')).toBe(
+      true,
+    );
+    expect(
+      legendPrefHTML().startsWith('<span class="lead">都道府県道</span>'),
+    ).toBe(true);
   });
 });
 
