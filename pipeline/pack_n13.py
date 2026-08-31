@@ -50,6 +50,14 @@ def main() -> None:
     args = sys.argv[1:]
     keep_legacy = "--keep-legacy" in args
     refresh = "--refresh" in args
+    # 綴り違いを黙って捨てない。`--keeplegacy` のつもりで打った物が素通りすると、
+    # 残すつもりだった 6.5 GB の JSON がそのまま消える。compare_n13_pref.py が
+    # 知らない引数で止まるのと同じ扱いである。
+    unknown = [a for a in args
+               if a.startswith("--") and a not in ("--keep-legacy", "--refresh")]
+    if unknown:
+        raise SystemExit(
+            f"知らない引数: {unknown[0]}。選べるのは --keep-legacy と --refresh である。")
     regions = named_regions([a for a in args if not a.startswith("--")])
 
     meshes = meshes_for(regions)
