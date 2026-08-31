@@ -460,22 +460,12 @@ export function routeLayers() {
       id: 'termini-dot',
       type: 'circle',
       source: 'termini',
+      // termini-dot は必ず terminiFilter() 経由で shared=1 の地点だけに絞られる
+      // （単独の起終点は #117 で地図から落とした）ので、shared による場合分けは
+      // もう要らない。
       paint: {
-        'circle-radius': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          7,
-          ['case', ['==', ['get', 'shared'], 1], 5, 3],
-          13,
-          ['case', ['==', ['get', 'shared'], 1], 9, 5],
-        ],
-        'circle-color': [
-          'case',
-          ['==', ['get', 'shared'], 1],
-          '#C2352B',
-          '#FFFFFF',
-        ],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 7, 5, 13, 9],
+        'circle-color': '#FFFFFF',
         'circle-stroke-color': '#00449E',
         'circle-stroke-width': 1.8,
       },
