@@ -244,6 +244,10 @@ body {
 #select-btn:focus { border-radius: 4px 0 0 4px; }
 #sel-none:focus { border-radius: 0 4px 4px 0; }
 .ui-ctrl-row:has(> .ui-btn[hidden]) > #select-btn:focus { border-radius: 4px; }
+/* 選択解除は取り消す操作なので、ホバーで危険色を示す。id を持つ選択子なので、
+   `.maplibregl-ctrl button:not(:disabled):hover` (クラス 3 つ・要素 1 つ)には
+   詳細度で自然に勝つ——`.sys-seg` のようにクラスを重ねて稼ぐ必要が無い。 */
+#sel-none:hover { color: var(--danger); }
 /* 選んでいる本数。国道と都道府県道の合計で、系統は分けない——「道路を選択」が
    両方を引き受けるのと同じ理由である。 */
 .sel-count {
