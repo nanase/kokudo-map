@@ -11,11 +11,13 @@ import { describe, expect, test } from 'bun:test';
 import {
   buildFilter,
   CLICKABLE_LAYERS,
+  clickableHitLayers,
   colorByRank,
   EXCLUDE_FROM_ROADS_LAYER,
   FILTERED_LAYERS,
   formerOpacity,
   hasRef,
+  hitLayerId,
   inkByRank,
   kindTest,
   NOTHING,
@@ -28,6 +30,7 @@ import {
   PREF_POPUP_MINZOOM,
   PREF_SOURCE,
   pickedFilter,
+  prefClickableHitLayers,
   prefLabelLayer,
   prefLayers,
   prefLineLayers,
@@ -39,6 +42,18 @@ import {
   withKind,
   withPrefSelection,
 } from '../web/mapspec.mjs';
+
+/** interpolate 式の各段が、元の式の同じ段より一定量だけ大きいことを確かめる。 */
+function stopAdds(widenedExpr, baseExpr) {
+  const widenedStops = widenedExpr.slice(3);
+  const baseStops = baseExpr.slice(3);
+  const adds = [];
+  for (let i = 1; i < widenedStops.length; i += 2) {
+    expect(widenedStops[i]).toEqual(['+', baseStops[i], widenedStops[i][2]]);
+    adds.push(widenedStops[i][2]);
+  }
+  return adds;
+}
 
 /* -------------------------------------------------------------- 絞り込み --- */
 
@@ -276,6 +291,68 @@ describe('レイヤーと絞り込みの対応', () => {
   });
 });
 
+/* ------------------------------------------------------------ 当たり判定 --- */
+/* 見た目の太さは重用の深さを読ませる符牒なので広げられない。押しやすさは、
+ * 見た目とは別の透明な層(clickableHitLayers)だけを太らせて確保する。 */
+describe('当たり判定の透明な層', () => {
+  const layers = routeLayers();
+  const byId = new Map(layers.map((l) => [l.id, l]));
+  const hits = clickableHitLayers();
+
+  test('見た目のレイヤー 1 つにつき 1 つ、当たり判定の層を持つ', () => {
+    expect(hits.map((l) => l.id)).toEqual(CLICKABLE_LAYERS.map(hitLayerId));
+  });
+
+  test('id は見た目のレイヤーとぶつからない', () => {
+    const visibleIds = new Set(layers.map((l) => l.id));
+    for (const l of hits) expect(visibleIds.has(l.id)).toBe(false);
+  });
+
+  test('描かれない(不透明度 0)が、線としては見た目より太い', () => {
+    for (const l of hits) {
+      const source = byId.get(l.id.replace(/-hit$/, ''));
+      expect(l.paint['line-opacity']).toBe(0);
+      expect(l.source).toBe(source.source);
+      expect(l['source-layer']).toBe(source['source-layer']);
+      const adds = stopAdds(l.paint['line-width'], source.paint['line-width']);
+      for (const add of adds) expect(add).toBeGreaterThan(0);
+      // 太らせる量はズームによらず一定である——狙いやすさは画面上の距離で
+      // 決まり、縮尺では決まらないため。
+      expect(new Set(adds).size).toBe(1);
+    }
+  });
+});
+
+describe('都道府県道の当たり判定の透明な層', () => {
+  const layers = prefLineLayers();
+  const byId = new Map(layers.map((l) => [l.id, l]));
+  const hits = prefClickableHitLayers();
+
+  test('見た目のレイヤー 1 つにつき 1 つ、当たり判定の層を持つ', () => {
+    expect(hits.map((l) => l.id)).toEqual(
+      PREF_CLICKABLE_LAYERS.map(hitLayerId),
+    );
+  });
+
+  test('id は国道・都道府県道どちらの見た目のレイヤーともぶつからない', () => {
+    const visibleIds = new Set([
+      ...layers.map((l) => l.id),
+      ...routeLayers().map((l) => l.id),
+    ]);
+    for (const l of hits) expect(visibleIds.has(l.id)).toBe(false);
+  });
+
+  test('描かれない(不透明度 0)が、線としては見た目より太い', () => {
+    for (const l of hits) {
+      const source = byId.get(l.id.replace(/-hit$/, ''));
+      expect(l.paint['line-opacity']).toBe(0);
+      const adds = stopAdds(l.paint['line-width'], source.paint['line-width']);
+      for (const add of adds) expect(add).toBeGreaterThan(0);
+      expect(new Set(adds).size).toBe(1);
+    }
+  });
+});
+
 describe('種別の切り分け', () => {
   test('車道レイヤーから外す種別は、特殊な種別と高速道路の和である', () => {
     for (const k of SPECIAL_KINDS)
@@ -443,8 +520,8 @@ describe('都道府県道のレイヤー', () => {
   });
 
   test('札の字は線より濃い。主要地方道だけは同じ色でよい', () => {
-    // #8CBF4A は線としては読めますが、字としては白い地に対して 2.15:1 です。
-    // 線は幅を持つので形が出ますが、字は画線が細く、同じ明るさでは読めません。
+    // 線は幅を持つので `PREF_GENERAL` の明るさでも形が出ますが、字は画線が細く、
+    // 同じ明るさでは読めません(mapspec.mjs の PREF_GENERAL_INK)。
     expect(inkByRank[3]).toBe(colorByRank[3]);
     expect(inkByRank[4]).not.toBe(colorByRank[4]);
     expect(inkByRank[4]).toBe(PREF_GENERAL_INK);

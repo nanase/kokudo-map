@@ -58,6 +58,7 @@ import {
   baseStyle,
   buildFilter,
   CLICKABLE_LAYERS,
+  clickableHitLayers,
   DEFAULT_BASEMAP,
   DEFAULT_SHADE,
   FILTERED_LAYERS,
@@ -67,6 +68,7 @@ import {
   GSI_SHADE_LEVELS,
   GSI_SHADE_PAINT,
   gsiLayerId,
+  hitLayerId,
   NOTHING,
   PMTILES_URL,
   PREF_CLICKABLE_LAYERS,
@@ -74,6 +76,7 @@ import {
   PREF_PMTILES_URL,
   PREF_POPUP_MINZOOM,
   pickedFilter,
+  prefClickableHitLayers,
   prefLabelLayer,
   prefLineLayers,
   routeLayers,
@@ -609,7 +612,9 @@ function hideStateTip(hidden) {
 
 function setRoutesHidden(hidden) {
   routesHidden = hidden;
-  for (const { id } of routeLayers()) {
+  // 当たり判定の透明な層は routeLayers() に含まれない別の層なので、ここで
+  // 一緒に隠さないと、隠したはずの国道がカーソルとクリックには残り続ける。
+  for (const { id } of [...routeLayers(), ...clickableHitLayers()]) {
     map.setLayoutProperty(id, 'visibility', hidden ? 'none' : 'visible');
   }
 }
@@ -1075,6 +1080,11 @@ async function boot() {
   for (const layer of prefLineLayers()) map.addLayer(layer);
   for (const layer of routeLayers()) map.addLayer(layer);
   map.addLayer(prefLabelLayer(), 'route-labels');
+  // 当たり判定だけを太らせた透明な層。見た目の層より後に足す——不透明度 0 なので
+  // 描く順に意味は無く、他の層の位置決め(prefLabelLayer の beforeId)を邪魔しない
+  // 場所へまとめて置く。
+  for (const layer of prefClickableHitLayers()) map.addLayer(layer);
+  for (const layer of clickableHitLayers()) map.addLayer(layer);
   map.addControl(new PitchControl(), 'top-right');
   map.addControl(new HideRoutesControl(), 'top-right');
   map.addControl(new DisplayControl(), 'top-right');
@@ -1253,11 +1263,16 @@ function applyFilters() {
   const { national, pref } = shown();
 
   for (const { id, kinds, negate, toggle } of FILTERED_LAYERS) {
-    if (!national || (toggle && !state[toggle])) {
-      map.setFilter(id, NOTHING);
-      continue;
-    }
-    map.setFilter(id, kinds ? withKind(base, kinds, negate) : base);
+    const filter =
+      !national || (toggle && !state[toggle])
+        ? NOTHING
+        : kinds
+          ? withKind(base, kinds, negate)
+          : base;
+    map.setFilter(id, filter);
+    // 当たり判定の透明な層は、見た目の層と常に同じ絞り込みを持つ。消した区分の
+    // 上にだけ判定が残ると、見えない道が押せてしまう。
+    if (CLICKABLE_LAYERS.includes(id)) map.setFilter(hitLayerId(id), filter);
   }
 
   map.setFilter(
@@ -1269,7 +1284,11 @@ function applyFilters() {
   // 空なら全部出す——国道の buildFilter と同じ約束である。
   const prefSel = [...state.prefSelected];
   for (const [id, filter] of PREF_DEFAULT_FILTERS) {
-    map.setFilter(id, pref ? withPrefSelection(filter, prefSel) : NOTHING);
+    const resolved = pref ? withPrefSelection(filter, prefSel) : NOTHING;
+    map.setFilter(id, resolved);
+    if (PREF_CLICKABLE_LAYERS.includes(id)) {
+      map.setFilter(hitLayerId(id), resolved);
+    }
   }
 
   map.setFilter(
@@ -1485,8 +1504,16 @@ function syncCursor() {
   if (canvas.style.cursor !== want) canvas.style.cursor = want;
 }
 
+// 押せる範囲はここでだけ、当たり判定用の透明な層(hitLayerId)を通して問う。
+// hover(mouseenter/mouseleave)と click を同じ層に対して行うことで、指の形が
+// 変わる範囲と実際に押せる範囲が常に一致する——見た目の層(CLICKABLE_LAYERS /
+// PREF_CLICKABLE_LAYERS)は太さが重用の深さを表しているので広げられない
+// (mapspec.mjs の clickableHitLayers)。
+const CLICKABLE_HIT_LAYERS = CLICKABLE_LAYERS.map(hitLayerId);
+const PREF_CLICKABLE_HIT_LAYERS = PREF_CLICKABLE_LAYERS.map(hitLayerId);
+
 function wirePopups() {
-  for (const id of CLICKABLE_LAYERS) {
+  for (const id of CLICKABLE_HIT_LAYERS) {
     map.on('mouseenter', id, () => {
       overNational = true;
       syncCursor();
@@ -1496,7 +1523,7 @@ function wirePopups() {
       syncCursor();
     });
   }
-  for (const id of PREF_CLICKABLE_LAYERS) {
+  for (const id of PREF_CLICKABLE_HIT_LAYERS) {
     map.on('mouseenter', id, () => {
       overPref = true;
       syncCursor();
@@ -1517,7 +1544,7 @@ function wirePopups() {
     // 数えている集合が違うので、二つを一つの尺度で比べたことにならない。
     // 国道だけを見ている人にとって、押した結果は今までと同じである。
     const hits = map.queryRenderedFeatures(ev.point, {
-      layers: CLICKABLE_LAYERS,
+      layers: CLICKABLE_HIT_LAYERS,
     });
     if (hits.length) {
       const p = deepest(hits);
@@ -1528,7 +1555,7 @@ function wirePopups() {
 
     if (!prefPickable()) return;
     const prefHits = map.queryRenderedFeatures(ev.point, {
-      layers: PREF_CLICKABLE_LAYERS,
+      layers: PREF_CLICKABLE_HIT_LAYERS,
     });
     if (!prefHits.length) return;
     const p = deepest(prefHits);
