@@ -234,13 +234,16 @@ const report = await page.evaluate(() => {
     !!zoomGroup && !!compassGroup && zoomGroup !== compassGroup;
   // 左上の三つの面。押すまで開かないが、閉じたまま自分の大きさは述べ続ける
   // ——数まで隠す畳み方は、節約した面積より害が大きい。閉じた面の innerText は
-  // 描かれていないぶん空なので、数は textContent から読む。
+  // 描かれていないぶん空なので、数は textContent から読む。「道路を選択」は
+  // 例外で、選んでいる本数を面の外の #sel-count・#sel-none が述べており、
+  // 面自身は数を持たない。
   out.panes = ['select', 'ranking', 'shared'].map((name) => ({
     name,
     open: !document.querySelector(`#${name}-popover`).hidden,
-    count: document.querySelector(
-      `#${name === 'select' ? 'route' : name}-count`,
-    ).textContent,
+    count:
+      name === 'select'
+        ? null
+        : document.querySelector(`#${name}-count`).textContent,
   }));
   return out;
 });
@@ -347,18 +350,18 @@ ok(
   'the compass sits on its own group, apart from the zoom buttons',
 );
 // 参照用の一覧は面の中にあり、押すまで開かない。ただし、開いてみるまで中身の
-// 見当が付かない畳み方は、節約した面積より害が大きい。だからどの見出しも、閉じた
-// ままで中身を述べ続けなければならない。
-//
-// 述べる物は面によって違う。ランキングと起終点は動かない一覧なので件数を出す。
-// 「道路を選択」が述べるのは選んでいるかどうかで、選んでいなければ数ではなく
-// 「すべて」である——0 と書くと「何も出ていない」に読め、地図の見え方と逆になる。
+// 見当が付かない畳み方は、節約した面積より害が大きい。ランキングと起終点は
+// 動かない一覧なので、閉じたままでも件数を述べ続けなければならない。
+// 「道路を選択」は選んでいる本数を面の外の #sel-count・#sel-none が述べて
+// いるので、面自身が数を持つかどうかは見ない。
 for (const b of report.panes) {
   ok(b.open === false, `the ${b.name} pane starts closed`);
-  ok(
-    b.name === 'select' ? b.count.length > 0 : /\d/.test(b.count),
-    `the closed ${b.name} pane still states what is inside ("${b.count}")`,
-  );
+  if (b.name !== 'select') {
+    ok(
+      /\d/.test(b.count),
+      `the closed ${b.name} pane still states what is inside ("${b.count}")`,
+    );
+  }
 }
 
 /* 左上の台は面を開く。四つの面——道路を選択・ランキング・起終点・表示——は

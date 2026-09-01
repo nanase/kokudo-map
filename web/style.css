@@ -244,6 +244,12 @@ body {
 #select-btn:focus { border-radius: 4px 0 0 4px; }
 #sel-none:focus { border-radius: 0 4px 4px 0; }
 .ui-ctrl-row:has(> .ui-btn[hidden]) > #select-btn:focus { border-radius: 4px; }
+/* 選択解除は取り消す操作なので、ホバーで危険色の地に染める。国道を一時的に
+   隠すボタンの `.active` (地が --danger、字が白)と同じ組み合わせである。
+   id を持つ選択子なので、`.maplibregl-ctrl button:not(:disabled):hover`
+   (クラス 3 つ・要素 1 つ)には詳細度で自然に勝つ——`.sys-seg` のようにクラス
+   を重ねて稼ぐ必要が無い。 */
+#sel-none:hover { background: var(--danger); color: #fff; }
 /* 選んでいる本数。国道と都道府県道の合計で、系統は分けない——「道路を選択」が
    両方を引き受けるのと同じ理由である。 */
 .sel-count {
@@ -910,14 +916,20 @@ input[type="search"]::placeholder { font-size: .82em; }
    ぶんだけ空ける (app.js の applyMapPadding)。#map を細くして横に並べる
    と canvas の寸法が変わり、開くたびに全部描き直しになる。
 
-   大きさは固定する。路線によって中身の量は違うが、パネルが伸び縮みすると地図の
-   ずれ幅も毎回変わってしまう。入り切らないぶんは .detail-scroll が飲む。 */
+   幅は固定するが、高さは中身に合わせて縮む。路線によって中身の量は大きく違い、
+   高さまで固定すると短い路線ではパネルの下だけが空く。広い画面では
+   mapPadding() (app.js) が box.right だけを見て左の余白を決めており、高さは
+   関係しない——だから高さを中身に合わせても地図はずれない。入り切らないぶんは
+   .detail-scroll が飲む。860px 以下(下のメディアクエリ)も同じく中身に合わせて
+   縮む。そちらの mapPadding() は box.top(高さ)を見て下の余白を決めているので、
+   路線を切り替えるたびに地図がわずかに動くことがあるが、パネルの下に空きが
+   残るよりましだと判断した。 */
 #detail {
   /* 地図の左下に浮く。上を占めているのは見出しと台の列なので、そこへ届かない
      ところで高さを止める——184px はその列(12 + 32 + 8 + 29 + 8 + 29 + 8 + 29)と
      間の余白ぶんである。 */
   position: absolute; left: 12px; bottom: 12px; z-index: 4;
-  width: 340px; height: 340px; max-height: calc(100% - 184px);
+  width: 340px; max-height: calc(100% - 184px);
   display: flex; flex-direction: column;
   background: var(--panel); color: var(--ink);
   border: 1px solid var(--line); border-radius: 6px;
@@ -1170,11 +1182,12 @@ input[type="search"]::placeholder { font-size: .82em; }
 @media (max-width: 860px) {
   #map-ui { left: 8px; top: 8px; }
   /* 横に 340px を割く幅が無いので、詳細は画面の幅いっぱいの帯にして下端へ置く。
-     高さの上限は外す——上を占めているのは 29px の台が三つだけで、この帯と場所を
-     取り合わない。 */
+     高さは #detail 本体と同じく中身に合わせて縮む。上限は画面の高さの 42% か
+     240px の小さいほうに置く——上を占めているのは 29px の台が三つだけで、この帯
+     と場所を取り合わないぶん、上限そのものはゆるくてよい。 */
   #detail {
     left: 8px; right: 8px; bottom: 8px; width: auto;
-    height: min(42vh, 240px); max-height: none;
+    max-height: min(42vh, 240px);
   }
   #legend-bar { left: 8px; right: 8px; }
   /* 詳細パネルはこの幅では下端に出る。凡例と場所を取り合うので、開いているあいだ

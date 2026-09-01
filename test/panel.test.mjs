@@ -20,7 +20,6 @@ import {
   prefRowsHTML,
   rankingHTML,
   routeListHTML,
-  selectionLabel,
   sharedHTML,
   shareSummaryHTML,
   shareText,
@@ -101,19 +100,6 @@ describe('clearLabel', () => {
     // これがあるので、選択数を述べる行は別に不要です。
     expect(clearLabel(1)).toBe('1 路線を選択解除');
     expect(clearLabel(12)).toBe('12 路線を選択解除');
-  });
-});
-
-describe('selectionLabel', () => {
-  test('選択が無ければ全部が対象だと言う', () => {
-    // 0 と書くと「何も出ていない」と読めます。地図の見え方はその逆です。
-    expect(selectionLabel(0)).toBe('すべて');
-  });
-
-  test('選択があれば選んでいる本数を言う', () => {
-    // 分母は書きません。この面は両方の系統を引き受けているので、国道の 459 を
-    // 分母に置くと、都道府県道を選んだときに嘘になります。
-    expect(selectionLabel(3)).toBe('3 路線を選択中');
   });
 });
 
