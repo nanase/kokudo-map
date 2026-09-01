@@ -142,45 +142,108 @@ body {
 
 #app { position: relative; height: 100%; }
 
-/* 地図の上に浮かぶ左の列 --------------------------------------------------
-   操作面 (#panel) と路線の詳細 (#detail) は、どちらも地図の上に浮くパネルで、
-   同時に出る。別々に絶対配置すると重なりを二箇所で調整することになるので、
-   一本の縦列に入れて flex に任せる。列は画面の上下いっぱいまであり、操作面が
-   縮んで (flex-shrink) 詳細の場所を空ける。
+/* 地図の左上の列 ----------------------------------------------------------
+   見出しの板が一枚と、面を開く台が三つ。かつてここには 340px のサイドパネルが
+   あり、その中に見出しと三つの節が畳まれていた。パネルは畳めたが、畳むと中身
+   への口ごと消えた——選択解除も、都道府県道を戻す口もその中にあったので、
+   閉じた人は地図に効いている絞り込みを戻せなくなる。
 
-   列そのものは地図を掴む手を通す。パネルだけが受け取る。 */
-#left-stack {
-  position: absolute; left: 12px; top: 12px; bottom: 12px; width: 340px;
-  z-index: 4; display: flex; flex-direction: column; gap: 10px;
+   台は MapLibre 自身のボタンと同じ言葉(maplibregl-ctrl-group)で書いてある。
+   地の色・角丸・影は vendor/maplibre-gl.css とこのファイルの
+   `.maplibregl-ctrl-group` が既に述べており、ここが書き足すのは並べ方だけで
+   ある——右上の拡大・表示・地図の種類と、寸法まで揃う。
+
+   列そのものは地図を掴む手を通す。板と台だけが受け取る。 */
+#map-ui {
+  position: absolute; left: 12px; top: 12px; z-index: 4;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
   pointer-events: none;
 }
-#left-stack > * { pointer-events: auto; }
+#map-ui > * { pointer-events: auto; }
 
-/* ---------------------------------------------------------------- 操作面 --- */
-#panel {
-  /* 中身は列の高さを超える。縮む側はここで、詳細パネルは縮まない。 */
-  flex: 0 1 auto; min-height: 0;
-  background: var(--panel);
-  border: 1px solid var(--line); border-radius: 6px;
-  box-shadow: 0 6px 26px rgba(0,0,0,.26);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 0 8px;
+/* ------------------------------------------------------------ 地図の見出し --- */
+/* 台と同じ地・同じ角丸・同じ影で書く。名乗りとボタンが一枚に載っているだけで、
+   浮き方は他のボタンと変わらない。 */
+#brand {
+  display: flex; align-items: center; gap: 7px; height: 32px;
+  padding: 0 7px 0 10px;
+  background: var(--panel); color: var(--ink);
+  border-radius: 4px; box-shadow: 0 0 0 2px rgba(0,0,0,.1);
 }
-#panel header {
-  padding: 18px 18px 14px;
-  border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; background: var(--panel); z-index: 2;
-  display: flex; align-items: center; gap: 9px;
+.brand-icon { width: 16px; height: auto; flex: 0 0 auto; }
+#brand h1 {
+  margin: 0; font-size: .95rem; font-weight: 800; letter-spacing: -.01em;
+  white-space: nowrap;
 }
-.brand-icon { width: 20px; height: auto; flex: 0 0 auto; }
-#panel h1 {
-  margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em;
+/* 名乗りと、押せる二つを分ける線。 */
+.brand-sep { width: 1px; height: 17px; background: var(--line); flex: 0 0 auto; }
+/* 板の中のボタンは枠を持たない。板そのものが枠だからである。 */
+.brand-btn {
+  width: 24px; height: 24px; flex: 0 0 auto; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  background: none; border: 0; border-radius: 3px; color: var(--ink-2);
 }
-/* アイコン一つだけのボタン。#panel-toggle と同じ見た目の言葉を、パネルの中
-   でも使う。GitHub リンクのように <a> で使う箇所もあるので、要素は問わない。 */
+.brand-btn:hover { color: var(--sign-blue); background: var(--panel-2); }
+.brand-btn svg { width: 14px; height: 14px; }
+
+/* 面を開く台 --------------------------------------------------------------
+   maplibregl-ctrl-group が地・角丸・影を持つので、ここは並べ方と、面を右へ
+   出すための位置の基準(relative)だけを述べる。 */
+.ui-ctrl { position: relative; display: flex; }
+/* ボタンの規則はどれも `.ui-ctrl` から書き起こす。maplibre-gl.css の
+   `.maplibregl-ctrl-group button` は要素まで数えるぶん詳細度が一段高く、
+   クラス一つで書くと寸法も display も向こうが勝つ。 */
+.ui-ctrl .ui-btn {
+  width: 29px; height: 29px; padding: 0; flex: 0 0 auto;
+  display: grid; place-items: center; cursor: pointer;
+  background: none; border: 0; color: var(--ink-2);
+}
+/* display: grid は hidden の既定 (display: none) より強い。取り消す物が無い
+   あいだ ✕ は居ないので、ここで明示的に伏せる。 */
+.ui-ctrl .ui-btn[hidden] { display: none; }
+/* 数の札を抱えるぶんだけ横に伸びる。札が出ていないときは他と同じ 29px 角。 */
+.ui-ctrl .ui-btn-wide {
+  width: auto; min-width: 29px; padding: 0 6px;
+  grid-auto-flow: column; gap: 5px;
+}
+.ui-btn svg { width: 17px; height: 17px; display: block; }
+.ui-btn:hover { background: var(--panel-2); }
+/* 一つの台に二つ載る「道路を選択」だけが横に並ぶ。MapLibre の区切り線は縦積み
+   を前提に border-top を引くので、こちらは向きを 90 度倒す。 */
+.ui-ctrl-row .ui-btn + .ui-btn { border-top: 0; border-left: 1px solid var(--line); }
+/* 面が開いているあいだ、ボタンは押されたままである。地と字を入れ替えて示す
+   ——明暗どちらでも、関係はそのまま反転するだけになる。 */
+.ui-btn.active { background: var(--sign-blue); color: var(--panel); }
+.ui-btn.active:hover { background-color: var(--sign-blue); filter: brightness(1.12); }
+/* 台の角は台が丸めるが、押されたボタンの地は四角いまま外へはみ出す。台に
+   overflow: hidden を置くと面まで刈られるので、外側の角はボタン自身が丸める。 */
+.ui-ctrl > .ui-btn:only-of-type { border-radius: 4px; }
+.ui-ctrl-row > .ui-btn:first-of-type { border-radius: 4px 0 0 4px; }
+.ui-ctrl-row > .ui-btn:last-of-type { border-radius: 0 4px 4px 0; }
+/* ✕ が居ないあいだ、残った一つは台の四隅を丸める。:only-of-type は伏せた
+   ボタンも数えるので、当てにできない。 */
+.ui-ctrl-row:has(> .ui-btn[hidden]) > .ui-btn:not([hidden]) {
+  border-radius: 4px;
+}
+/* maplibre-gl.css は焦点の当たったボタンの角を、縦積みを前提に丸め直す
+   (button:focus:first-child は上の二隅)。横並びの台ではそれが直角の下辺に
+   なるので、id で押し戻す——#display-btn の :focus と同じ手当てである。 */
+#ranking-btn:focus, #shared-btn:focus { border-radius: 4px; }
+#select-btn:focus { border-radius: 4px 0 0 4px; }
+#sel-none:focus { border-radius: 0 4px 4px 0; }
+.ui-ctrl-row:has(> .ui-btn[hidden]) > #select-btn:focus { border-radius: 4px; }
+/* 選んでいる本数。国道と都道府県道の合計で、系統は分けない——「道路を選択」が
+   両方を引き受けるのと同じ理由である。 */
+.sel-count {
+  font-size: .62rem; font-weight: 700; line-height: 1.6;
+  padding: 0 5px; border-radius: 999px;
+  background: var(--sign-blue); color: var(--panel);
+  font-variant-numeric: tabular-nums;
+}
+.sel-count[hidden] { display: none; }
+.ui-btn.active .sel-count { background: var(--panel); color: var(--sign-blue); }
+/* アイコン一つだけのボタン。詳細パネルの中で使う。GitHub リンクのように
+   <a> で使う箇所もあるので、要素は問わない。 */
 .icon-btn {
   display: grid; place-items: center; padding: 0; width: 28px; height: 28px;
   background: var(--panel-2); color: var(--ink-2); cursor: pointer;
@@ -190,9 +253,6 @@ body {
 /* 押しても何も起きないボタンは、押せないと見えていなければならない。 */
 .icon-btn:disabled { color: var(--ink-3); opacity: .45; cursor: default; }
 .icon-btn svg { width: 15px; height: 15px; }
-/* 見出しの右に並ぶボタンの列。先頭だけが余りを飲んで右端へ寄せる。 */
-.about-btn { margin-left: auto; }
-.about-btn, .share-btn, #panel-close { flex: 0 0 auto; }
 /* 目には出さず、読み上げにだけ残す文字。display: none と違って描画はされる
    ので、aria-labelledby の指し先になれるし、Chromium の innerText にも出る
    (pipeline/render_check.mjs がパネルの名乗りをそこから読む)。 */
@@ -200,34 +260,26 @@ body {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
 }
-/* 余白は節の中身だけでなく、行の上に重ねるボタンの置き場所も決める(#sel-none)。
-   同じ数を二箇所に書かないよう、変数にして下の者へ渡す。
-   CodeRabbit は stylelint の declaration-empty-line-before に基づき、カスタム
-   プロパティと後続の宣言の間に空行を求める。ここに stylelint は無く、検査は
-   biome(JS/mjs のみ、CSS は対象外)である。同じ書き方はファイル全体にあり、
-   この行だけ直しても揃わないので採用しない(issue #92)。 */
-.block {
-  --pad-y: 10px; --pad-x: 18px;
-  position: relative; padding: var(--pad-y) var(--pad-x);
-  border-bottom: 1px solid var(--line-2);
-}
-/* 区切り線は節と節のあいだにだけ引く。最後の節の下はパネルの縁である。 */
-#panel > .block:last-child { border-bottom: 0; }
-.block-hd {
-  display: flex; align-items: baseline; justify-content: space-between;
-  gap: 10px; margin-bottom: 10px;
-}
 /* 節の見出しは、小さく・太く・字を離した帯である。等幅にしていたのはその
    見た目のためで、桁を揃えるためではない。等幅を頼むと、日本語の字だけが
    端末の代替書体へ落ちて、同じ 1 行の中で書体が二つになる。帯の見た目は
    字の大きさ・太さ・letter-spacing が作るので、書体は操作面のものでよい。
 
-   選択子に #panel を付けると id を含む分だけ詳細度が上がり、
+   id を含む選択子で書かないこと。詳細度が上がると
    .fold > summary:hover h2 の hover 色 (クラスのみ) に勝ってしまう——
    折りたたみの見出しだけホバーで色が変わらない不具合になる。 */
-.block h2, .map-popover h2 {
+.pane-hd h2, .map-popover h2 {
   margin: 0; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
+}
+/* 面の頭。見出しと、その面が抱えている数が一行に並ぶ。 */
+.pane-hd {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px;
+}
+.pane-hd .count {
+  font-size: .68rem; flex: 0 0 auto;
+  color: var(--ink-3); font-variant-numeric: tabular-nums;
 }
 /* 絞り込み欄。虫眼鏡は欄の中に置く——ラベルを書き足さずに、この欄が探す所で
    あることを述べる。押せる物ではないので、手は素通りさせる。 */
@@ -241,15 +293,11 @@ body {
 }
 
 /* 畳んだ節 --------------------------------------------------------------
-   Reference material that is worth having but not worth the sidebar height
-   it costs. Folded shut, the summary still states how much is inside. */
+   「国道マップについて」の但し書きが使う。読めば分かる物だが、開く前から場所を
+   取る理由が無い。畳んだままでも、見出しが中身の見当を述べる。 */
 .fold > summary {
   display: flex; align-items: center; gap: 10px; cursor: pointer;
-  list-style: none;
-  /* 「国道を選択」の行にだけボタンが重なる。行の高さをそのボタンに合わせておくと、
-     どの節も見出しの高さが揃い、字の上下の余白も釣り合う。ボタンのぶんだけ
-     背が高い節が一つあると、そこだけ字が上へ寄って見える。 */
-  min-height: 24px;
+  list-style: none; min-height: 24px;
 }
 .fold > summary::-webkit-details-marker { display: none; }
 .fold > summary::after {
@@ -260,22 +308,6 @@ body {
 .fold[open] > summary::after { transform: rotate(180deg); }
 .fold[open] > summary { margin-bottom: 10px; }
 .fold > summary:hover h2 { color: var(--sign-blue); }
-/* 選択解除のボタン。DOM では summary の外(節の直下)にあり、見える場所だけを
-   ここで summary の行へ戻す。並びは開閉の三角の左隣で、以前と同じである。 */
-#sel-none {
-  position: absolute; top: var(--pad-y);
-  /* 節の右余白 + 三角 8px + 三角との間 10px。 */
-  right: calc(var(--pad-x) + 18px);
-  width: 24px; height: 24px;
-}
-#sel-none svg { width: 14px; height: 14px; }
-/* ボタンは浮いているので場所を取らない。見出しの数がその下へ潜らないよう、
-   ボタン 24px と間 10px のぶんをここで空ける。 */
-#route-block > summary .count { margin-right: 34px; }
-.fold > summary .count {
-  font-size: .68rem;
-  color: var(--ink-3); font-variant-numeric: tabular-nums;
-}
 
 /* ボタンの骨格。about ダイアログのリンク (a.mini) もこれを借りる——`button.mini`
    と書いていたころは a に当たらず、色を誰も述べないまま既定の青と、訪問後の
@@ -299,8 +331,9 @@ input[type="search"]::placeholder { font-size: .82em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
 /* 路線のチェックボックスの並び --------------------------------------------
-   一覧は #route-block(details.fold)の中にあり、どの画面幅でも畳んだ状態で
-   始まる。開閉は details 自身が持つので、ここに書くことは無い。 */
+   一覧は「道路を選択」の面(#select-popover)の中にあり、面が開いているあいだ
+   だけ出る。開け閉ては app.js の registerPane が持つので、ここに書くことは
+   無い。 */
 .route-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
   gap: 3px; position: relative;
@@ -354,15 +387,14 @@ input[type="search"]::placeholder { font-size: .82em; }
    この地図で読むもの(どの番号がどこを通るか)には効かないので落とした。
 
    台は明暗どちらの配色でも白いままにする。凡例は地図の部品であり、隣にある
-   拡大のボタンも出典も、MapLibre が白い台に濃い灰色で描く——そこだけ地の色が
-   変わると、同じ列に別の紙が混ざる。 */
+   拡大のボタンも、MapLibre が白い台に濃い灰色で描く——そこだけ地の色が変わる
+   と、同じ列に別の紙が混ざる。 */
 #legend-bar {
   position: absolute; left: 12px; right: 12px; bottom: 28px; z-index: 3;
   display: flex; justify-content: flex-end;
   /* 帯そのものは地図を掴む手を通す。パネルだけが受け取る。 */
   pointer-events: none;
 }
-#app:not(.panel-off) #legend-bar { left: 364px; }
 .legend-box {
   pointer-events: auto; max-width: 100%;
   display: flex; align-items: flex-start; gap: 2px;
@@ -428,19 +460,20 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 #legend-close:hover { color: var(--ink); background: var(--panel-2); }
 #legend-close svg { width: 13px; height: 13px; }
-/* 開き直す口は地図の上の部品なので、#panel-toggle と同じ見た目の言葉で書く。
-   絵だけでは何の一覧かを指せないので、字を添える。 */
+/* 開き直す口は地図の上の部品なので、地図の上のボタンと同じ言葉で書く——
+   maplibregl-ctrl-group を自分で名乗り、地・角丸・影をそちらから借りる。
+   字は持たない。左上の三つも右上の五つも絵だけで名乗っており、ここだけ字を
+   添えると、同じ役目の物が二つの書き方で並ぶ。名前は title と aria-label に
+   ある。 */
 #legend-open {
-  pointer-events: auto; display: none; align-items: center; gap: 5px;
-  padding: 4px 9px; font: inherit; font-size: .72rem; line-height: 1.35;
-  background: var(--panel); color: var(--ink-2); cursor: pointer;
-  border: 1px solid var(--line); border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.24);
+  pointer-events: auto; display: none; place-items: center;
+  width: 29px; height: 29px; padding: 0; border: 0; cursor: pointer;
+  color: var(--ink-2);
 }
-#legend-open:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
-#legend-open svg { width: 13px; height: 13px; }
+#legend-open:hover { color: var(--sign-blue); }
+#legend-open svg { width: 17px; height: 17px; display: block; }
 :root[data-legend="off"] #legend-box { display: none; }
-:root[data-legend="off"] #legend-open { display: flex; }
+:root[data-legend="off"] #legend-open { display: grid; }
 
 /* 重用ランキング -------------------------------------------------------- */
 .ranking { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
@@ -560,25 +593,6 @@ input[type="search"]::placeholder { font-size: .82em; }
 #map-wrap { position: absolute; inset: 0; }
 #map { position: absolute; inset: 0; }
 
-/* パネルの開閉 ------------------------------------------------------------
-   畳んだパネルは visibility で伏せる。display:none にすると路線一覧の
-   スクロール位置が開き直すたびに戻ってしまう。伏せた要素は場所こそ取るが、
-   地図を掴む手も tab も通り抜ける——それでも読み上げには残るので、app.js が
-   inert を付けて塞ぐ。詳細パネルは列の下端に居るので、伏せたパネルが上に
-   場所を取っていても動かない。 */
-#app.panel-off #panel { visibility: hidden; }
-/* 開いている間は、閉じる口はパネル自身の × である。このボタンは開き直すためだけ
-   にあるので、開いているあいだは出さない。 */
-#app:not(.panel-off) #panel-toggle { display: none; }
-#panel-toggle {
-  position: absolute; top: 12px; left: 12px; z-index: 5;
-  width: 30px; height: 30px; padding: 0; display: grid; place-items: center;
-  background: var(--panel); color: var(--ink-2); cursor: pointer;
-  border: 1px solid var(--line); border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.24);
-}
-#panel-toggle:hover { color: var(--sign-blue); border-color: var(--sign-blue); }
-#panel-toggle svg { width: 18px; height: 18px; }
 #loading {
   position: absolute; inset: 0; display: grid; place-items: center;
   background: var(--panel-2); color: var(--ink-3);
@@ -647,14 +661,27 @@ input[type="search"]::placeholder { font-size: .82em; }
   display: grid; grid-template-columns: 1fr; gap: 15px 20px;
 }
 .map-popover[hidden] { display: none; }
+/* 左上の台から出る面は右へ向く。左には窓の端しか無い。
+
+   幅は決め打ちにする。中身(459 個のチェックボックス、標識を並べた行)はどれも
+   auto-fill の格子で、幅が定まらないと 1 列に潰れる——max-content は
+   auto-fill を 1 列と数えるためである。 */
+.map-popover.to-right {
+  right: auto; left: calc(100% + 8px);
+  width: 300px; max-width: calc(100vw - 64px);
+}
 /* 節の中は見出しと中身が一組。節どうしの間は面の gap が空ける。 */
 .map-popover > section { display: flex; flex-direction: column; gap: 9px; }
 /* 幅に余裕がある窓では上段に短い三節、下段に「表示」だけを置く。「表示」は
    項目が 6 つあり三節の中で頭一つ抜けて長いので、他と並べに行かず単独の段に
    任せ、残りの三節を上段で横に並べて詰める。560px は面の内側が崩れない
-   実測の下限。 */
+   実測の下限。
+
+   ここは「表示」の面だけの話である。.map-popover 全体に書いていたころ、左上の
+   三つの面まで 3 列の格子にされ、節を一つしか持たないそれらは名前の付いた
+   区画(grid-template-areas)の外へ落ちて、幅も中身も崩れていた。 */
 @media (min-width: 560px) {
-  .map-popover {
+  #display-popover {
     grid-template-columns: repeat(3, 1fr);
     grid-template-areas: "national conc color" "kind kind kind";
     max-width: min(560px, calc(100vw - 64px));
@@ -680,6 +707,10 @@ input[type="search"]::placeholder { font-size: .82em; }
    maplibre-gl.css 側のフォーカス時の角丸(:only-child だけ台と同じ丸みを
    継ぐ)が外れて上下どちらかの角が直角になる。ここで丸みを台の値へ戻す。 */
 .pitch-ctrl, .hide-routes-ctrl, .basemap-ctrl, .display-ctrl { position: relative; }
+/* 左上の台の面も同じ理由で手前に居る。台どうしは DOM の順で重なるので、
+   下の台の中身が上の台から出た面の上に載らないよう、開いている面を持つ台を
+   前に出す。 */
+.ui-ctrl:has(> .map-popover:not([hidden])) { z-index: 1; }
 /* 台どうしは DOM の順で重なる。表示の面 (#display-popover) を持つこの台は
    他の台より先に足してあるので、後の台の state-tip が面の上に出ていた——
    面は読むために開いたものであり、一瞬の返事に隠される筋合いがない。
@@ -777,10 +808,11 @@ input[type="search"]::placeholder { font-size: .82em; }
    大きさは固定する。路線によって中身の量は違うが、パネルが伸び縮みすると地図の
    ずれ幅も毎回変わってしまう。入り切らないぶんは .detail-scroll が飲む。 */
 #detail {
-  /* 位置は #left-stack が決める。列の中では下端に沿わせ、余りは上の
-     パネルへ渡す——margin-top: auto がそれをする。 */
-  position: relative; margin-top: auto; flex: 0 0 auto;
-  height: 340px; max-height: 100%;
+  /* 地図の左下に浮く。上を占めているのは見出しと台の列なので、そこへ届かない
+     ところで高さを止める——184px はその列(12 + 32 + 8 + 29 + 8 + 29 + 8 + 29)と
+     間の余白ぶんである。 */
+  position: absolute; left: 12px; bottom: 12px; z-index: 4;
+  width: 340px; height: 340px; max-height: calc(100% - 184px);
   display: flex; flex-direction: column;
   background: var(--panel); color: var(--ink);
   border: 1px solid var(--line); border-radius: 6px;
@@ -959,8 +991,8 @@ input[type="search"]::placeholder { font-size: .82em; }
    出典はここに無い。地図の上の表示が一度だけ述べている。 */
 #about-dialog { width: min(480px, 92vw); }
 .about-lead { margin: 0; font-size: .82rem; color: var(--ink-2); }
-/* 考え方の但し書き。三つとも .fold(#route-block などと同じ開閉の見た目)で
-   畳み、見出しだけを常に見せる——読む人は見出しを眺めて、要る項目だけ開く。
+/* 考え方の但し書き。三つとも .fold で畳み、見出しだけを常に見せる——読む人は
+   見出しを眺めて、要る項目だけ開く。
    データ基準 (.freshness) と同じ字の大きさにしてある。同じ紙の、同じ種類の
    但し書きだからである。 */
 .notes { display: flex; flex-direction: column; gap: 8px; }
@@ -1031,21 +1063,15 @@ input[type="search"]::placeholder { font-size: .82em; }
 .share-toggles li.off::before { content: "– "; color: var(--ink-3); }
 
 @media (max-width: 860px) {
-  /* 横に 340px を割く幅が無いので、列を画面の幅いっぱいまで広げる。上下の
-     並びは変わらない——上が操作面、下が詳細である。
-
-     右端だけは空けておく。拡大・方位・地図の種類は地図の右上に積まれており、
-     この幅では列がそこへ達する——覆うと、地図を操作する口が全部ふさがる。 */
-  #left-stack { left: 8px; right: 56px; top: 8px; bottom: 8px; width: auto; }
-  /* この幅で見に来た人が見たいのは地図なので、操作面は画面の半分までにする。
-     中身が入り切らないぶんはパネル自身が飲む。 */
-  #panel { max-height: 52%; }
-  #detail { height: min(42vh, 240px); }
-  #panel-toggle { top: 8px; left: 8px; }
-  /* 列が幅いっぱいなので、凡例は寄せる先を持たない。上の規則と同じ形の
-     選択子で書く——@media は詳細度を足さないので、#legend-bar だけでは
-     #app:not(.panel-off) #legend-bar に負ける。 */
-  #legend-bar, #app:not(.panel-off) #legend-bar { left: 8px; right: 8px; }
+  #map-ui { left: 8px; top: 8px; }
+  /* 横に 340px を割く幅が無いので、詳細は画面の幅いっぱいの帯にして下端へ置く。
+     高さの上限は外す——上を占めているのは 29px の台が三つだけで、この帯と場所を
+     取り合わない。 */
+  #detail {
+    left: 8px; right: 8px; bottom: 8px; width: auto;
+    height: min(42vh, 240px); max-height: none;
+  }
+  #legend-bar { left: 8px; right: 8px; }
   /* 詳細パネルはこの幅では下端に出る。凡例と場所を取り合うので、開いているあいだ
      は凡例を譲る——詳細を読んでいる人が見ているのはその路線であって、線の色
      の一覧ではない。 */

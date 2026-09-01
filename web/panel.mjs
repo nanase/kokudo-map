@@ -1,6 +1,6 @@
-/* サイドパネルが出すものを、データの関数として組み立てる。
+/* 地図の上の面と凡例が出すものを、データの関数として組み立てる。
  *
- * 操作面は自前の数を持たない。閲覧側はアークを手元に持たないので、合計も一覧も
+ * 面は自前の数を持たない。閲覧側はアークを手元に持たないので、合計も一覧も
  * 個数も、すべて national.meta.json から読む——その下にある二つの和は
  * aggregate.mjs にある。残るのはその答えを markup に直すことで、これも純関数
  * なので、検査できる場所に置く。
@@ -21,8 +21,8 @@ import {
 } from './mapspec.mjs';
 import { hexShield, prefRouteName, shieldRow } from './shield.mjs';
 
-/* 畳んだ一覧が出す行数。どちらもビルドが並べ替えて配るので、頭から取れば
- * 上位がそのまま出る。任意の抜き取りではない。 */
+/* 面が出す行数。どちらもビルドが並べ替えて配るので、頭から取れば上位が
+ * そのまま出る。任意の抜き取りではない。 */
 export const RANKING_ROWS = 25;
 export const SHARED_ROWS = 20;
 
@@ -59,7 +59,7 @@ export const clearLabel = (selectedCount) =>
   selectedCount ? `${selectedCount} 路線を選択解除` : '選択解除';
 
 /**
- * 畳んだ国道一覧の見出しが述べる数。
+ * 「道路を選択」の面の見出しが述べる数。
  *
  * 選択が無いときは 0 ではなく「すべて」と言う。選択が空であることは
  * 「何も出ていない」ではなく「全部出ている」を意味するので、0 と書くと
@@ -74,7 +74,7 @@ export const selectionLabel = (selectedCount, totalRoutes) =>
 /* 並べる行を選ぶのは aggregate.mjs の concurrencies() である。組み合わせ表を
    選択で絞る規則はそこに一度だけ書いてある。 */
 
-/** 畳んだ見出しに出す「25 / 1,237 組」。何も無いときは何も出さない。 */
+/** 面の見出しに出す「25 / 1,237 組」。何も無いときは何も出さない。 */
 export const countLabel = (shown, total, unit) =>
   total ? `${shown} / ${total} ${unit}` : '';
 

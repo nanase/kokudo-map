@@ -71,7 +71,7 @@
 <body>
 
 <!-- 二度以上出てくる絵は、ここで一度だけ描いて <use> で呼ぶ。共有のリンクアイコンは
-     サイドパネルの見出しと共有ダイアログの「文章で共有」に出る。同じ形を
+     地図の左上の見出しと共有ダイアログの「文章で共有」に出る。同じ形を
      二箇所に写すと、片方だけ直したときに暗黙のうちに食い違う。
      寸法は呼ぶ側の svg が持つので、ここは形だけを述べる。 -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -88,75 +88,78 @@
 <div id="app">
   <main id="map-wrap">
     <div id="map"></div>
-    <!-- 地図の上に置く。パネルを閉じている間だけ出て、開き直す口になる。 -->
-    <button type="button" id="panel-toggle" aria-controls="panel" aria-expanded="true"
-            title="サイドパネルを表示" aria-label="サイドパネルを表示">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor"
-              stroke-width="2.2" stroke-linecap="round"/>
-      </svg>
-    </button>
-    <!-- 地図の上に浮かぶ二つのパネル。上が操作面、下が路線の詳細で、地図のほうは
-         padding でこの列のぶんだけずらす (app.js の applyMapPadding)——地図の
-         要素を細くすると canvas ごと描き直しになる。 -->
-    <div id="left-stack">
-      <aside id="panel">
-        <header>
-          <img src="favicon.svg" alt="" class="brand-icon" width="495" height="475">
-          <h1>国道マップ</h1>
-          <!-- ラベルはダイアログの見出しと同じ文言にする。押す前と押した後で
-               呼び名が変わると、同じものだと分かるのに一手かかる。 -->
-          <button type="button" id="about-btn" class="icon-btn about-btn" title="国道マップについて" aria-label="国道マップについて">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="2"/>
-              <path d="M12 10.6v6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-              <circle cx="12" cy="7.2" r="1.25" fill="currentColor"/>
-            </svg>
-          </button>
-          <button type="button" id="share-btn" class="icon-btn share-btn" title="共有" aria-label="共有">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-share"/></svg>
-          </button>
-          <!-- 詳細パネルと同じく、浮いているパネルは自分で閉じられる。開き直す口は
-               地図の上に残る #panel-toggle である。 -->
-          <button type="button" id="panel-close" class="icon-btn" title="サイドパネルを閉じる" aria-label="サイドパネルを閉じる">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor"
-                    stroke-width="2.2" stroke-linecap="round"/>
-            </svg>
-          </button>
-        </header>
 
-        <section class="block">
-          <!-- 最初は畳んでおく。459 個のチェックボックスは、どの画面幅でも
-               サイドパネルの大半を占める——番号で絞り込むほうが速いので、一覧を
-               開くのは番号を眺めたい人だけでよい。
+    <!-- 地図の左上に居座る列。かつてここには 340px のサイドパネルがあり、
+         その中に見出しと三つの節が畳まれていた。パネルは畳めたが、畳むと
+         中身への口ごと消えた——選択解除も、都道府県道を戻す口もその中に
+         あったので、閉じた人は地図に効いている絞り込みを戻せなくなる。
 
-               絞り込み欄は一覧と一緒に畳む。絞り込むのは一覧を見ているあいだ
-               のことなので、閉じた一覧の上に入力欄だけが残る理由がない。
-               選択解除は逆で、畳んだままでも押せなければならない——選択は
-               地図に効いており、一覧を開かずに戻したいことがある。畳んでも
-               残るのは summary の行なので、見える場所はそこにする。
+         いまは見出しの板が一枚と、面を開く台が三つ。台は MapLibre 自身の
+         ボタンと同じ言葉(maplibregl-ctrl-group)で書いてあるので、右上の
+         拡大・表示・地図の種類と同じ寸法・同じ角丸・同じ影になる。畳む口は
+         持たない——畳むほどの大きさが無いためである。
 
-               ただし <summary> の中には入れない。開閉が先に手を取るので、
-               中に置いたボタンはキーボードや支援技術から確実には届かない。節を
-               土台にして、その行の上へ重ねて出す(style.css の #sel-none)。
+         列そのものは地図を掴む手を通す。板と台だけが受け取る。 -->
+    <div id="map-ui">
+      <div id="brand">
+        <img src="favicon.svg" alt="" class="brand-icon" width="495" height="475">
+        <h1>国道マップ</h1>
+        <span class="brand-sep" aria-hidden="true"></span>
+        <!-- ラベルはダイアログの見出しと同じ文言にする。押す前と押した後で
+             呼び名が変わると、同じものだと分かるのに一手かかる。 -->
+        <button type="button" id="about-btn" class="brand-btn" title="国道マップについて" aria-label="国道マップについて">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M12 10.6v6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            <circle cx="12" cy="7.2" r="1.25" fill="currentColor"/>
+          </svg>
+        </button>
+        <button type="button" id="share-btn" class="brand-btn" title="共有" aria-label="共有">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-share"/></svg>
+        </button>
+      </div>
 
-               文言は updateStats() が title と aria-label に入れる。
-               「N 路線を選択解除」は数で変わるので、ここには書かない。 -->
-          <button type="button" id="sel-none" class="icon-btn" disabled
-                  title="選択解除" aria-label="選択解除">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor"
-                    stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-              <path d="M3 3l18 18" fill="none" stroke="currentColor"
-                    stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <details id="route-block" class="fold">
-            <summary>
-              <h2>国道を選択</h2>
+      <!-- 一つの台に「開く」と「消す」が並ぶ。選択は地図に効いており、面を
+           開かずに戻したいことがあるので、解除は面の中ではなく外に居なければ
+           ならない。数の札は選んでいる本数で、国道と都道府県道を合わせて数える。
+
+           「国道を選択」を「道路を選択」と改めたのは、この台が両方の系統を
+           引き受けるためである。二つのどちらかが上位ということはない。
+
+           ✕ は選んでいるあいだだけ出る。取り消す物が無いボタンは、押せない姿で
+           居座るより、居ないほうがよい。
+
+           文言は updateStats() が title と aria-label に入れる。
+           「N 路線を選択解除」は数で変わるので、ここには書かない。 -->
+      <div class="maplibregl-ctrl maplibregl-ctrl-group ui-ctrl ui-ctrl-row">
+        <button type="button" id="select-btn" class="ui-btn ui-btn-wide"
+                aria-expanded="false" aria-controls="select-popover"
+                title="道路を選択" aria-label="道路を選択">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+          <span class="sel-count" id="sel-count" hidden></span>
+        </button>
+        <button type="button" id="sel-none" class="ui-btn" hidden
+                title="選択解除" aria-label="選択解除">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor"
+                  stroke-width="2.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <div id="select-popover" class="map-popover to-right" hidden>
+          <section>
+            <div class="pane-hd">
+              <h2>道路を選択</h2>
               <span class="count" id="route-count"></span>
-            </summary>
+            </div>
+            <!-- 一覧に出るのは国道だけである。都道府県道の索引 13,234 組を
+                 初期表示で読ませない判断(#109)はそのままで、県道を選ぶ口は
+                 地図の標識と、そこから開く詳細パネルにある。選んだ後にそれを
+                 戻す口は、この面の外——台の右半分の ✕ が引き受ける。 -->
+            <!-- 絞り込み欄。虫眼鏡は欄の中に置く——ラベルを書き足さずに、
+                 この欄が探す所であることを述べる。 -->
             <div class="filter-row">
               <svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="10.5" cy="10.5" r="6.4" fill="none" stroke="currentColor" stroke-width="2.2"/>
@@ -170,38 +173,64 @@
                    このまま消える。表示・非表示を別に持つ必要が無い。 -->
               <div class="route-list-spinner" aria-hidden="true"></div>
             </div>
-          </details>
-        </section>
+          </section>
+        </div>
+      </div>
 
-        <section class="block">
-          <details id="ranking-block" class="fold">
-            <summary>
-              <h2>重用ランキング</h2>
+      <div class="maplibregl-ctrl maplibregl-ctrl-group ui-ctrl">
+        <!-- 長さの違う三本の棒。順位そのものの印である。 -->
+        <button type="button" id="ranking-btn" class="ui-btn"
+                aria-expanded="false" aria-controls="ranking-popover"
+                title="国道重用区間ランキング" aria-label="国道重用区間ランキング">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 20V5M12 20v-9M19 20v-5" fill="none" stroke="currentColor"
+                  stroke-width="2.4" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <div id="ranking-popover" class="map-popover to-right" hidden>
+          <section>
+            <div class="pane-hd">
+              <h2>国道重用区間ランキング</h2>
               <span class="count" id="ranking-count"></span>
-            </summary>
+            </div>
             <div id="ranking" class="ranking"></div>
-          </details>
-        </section>
+          </section>
+        </div>
+      </div>
 
-        <section class="block">
-          <details id="shared-block" class="fold">
-            <summary>
-              <h2>起終点を共有する地点</h2>
+      <div class="maplibregl-ctrl maplibregl-ctrl-group ui-ctrl">
+        <!-- 一点へ四方から寄る道。地点そのものの印である。斜めに寄せるのは、
+             縦横だと現在位置ボタンの十字と見分けが付かないためである。 -->
+        <button type="button" id="shared-btn" class="ui-btn"
+                aria-expanded="false" aria-controls="shared-popover"
+                title="起点・終点を共有する地点" aria-label="起点・終点を共有する地点">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3.5 3.5 8 8M20.5 3.5 16 8M3.5 20.5 8 16M20.5 20.5 16 16"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="2"/>
+          </svg>
+        </button>
+        <div id="shared-popover" class="map-popover to-right" hidden>
+          <section>
+            <div class="pane-hd">
+              <h2>起点・終点を共有する地点</h2>
               <span class="count" id="shared-count"></span>
-            </summary>
+            </div>
             <div id="shared" class="ranking"></div>
-          </details>
-        </section>
-      </aside>
-      <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。 -->
-      <aside id="detail" hidden aria-labelledby="detail-title">
-        <button type="button" id="detail-close" class="dialog-close" aria-label="閉じる">×</button>
-        <div id="detail-body"></div>
-      </aside>
+          </section>
+        </div>
+      </div>
     </div>
+
+    <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。
+         地図の左下に浮く——上を占めているのは見出しと台の列である。 -->
+    <aside id="detail" hidden aria-labelledby="detail-title">
+      <button type="button" id="detail-close" class="dialog-close" aria-label="閉じる">×</button>
+      <div id="detail-body"></div>
+    </aside>
+
     <!-- 凡例。線の色と形が何を述べているかは、その線を見ながらでなければ
-         確かめようがない。操作面の中では地図と目を往復することになるので、
-         同じ画面の、地図の上に置く。
+         確かめようがない。同じ画面の、地図の上に置く。
 
          中身は panel.mjs の legendNHTML() / legendKindHTML() / legendPrefHTML()
          の出力そのもの。static にしてあるのは vendor/*.js の読み込みを待たずに
@@ -230,21 +259,23 @@
           </svg>
         </button>
       </div>
-      <!-- 凡例を畳んでいるあいだだけ、同じ角に出る。絵だけでは何の一覧かを
-           指せないので、字を添える。 -->
+      <!-- 凡例を畳んでいるあいだだけ、同じ角に出る。台は右上の拡大ボタンと
+           同じ maplibregl-ctrl-group で、寸法も角丸も影もそちらから借りる
+           ——地図の上のボタンはどれも同じ言葉で書く。名乗りは title と
+           aria-label が持つ。凡例が出ているあいだ、このボタンは居ない。 -->
       <button type="button" id="legend-open" aria-controls="legend-box" aria-expanded="true"
+              class="maplibregl-ctrl maplibregl-ctrl-group"
               title="凡例を表示" aria-label="凡例を表示">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M4 7h6M4 12h6M4 17h6M14 7h6M14 12h6M14 17h6" fill="none"
                 stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
         </svg>
-        凡例
       </button>
     </div>
     <!-- 地図の上のボタンから出る面。「何が地図に描かれるか」を決めるものは残らず
-         ここに集める——切り替えた結果は地図にしか現れないので、操作面ではなく
-         地図の側に置く。節を分けて一つの面に収めてあるのは、どれも同じ問いの
-         答えだからである。ボタンを分けると、どちらを押すか毎回考えることになる。
+         ここに集める——切り替えた結果は地図にしか現れないので、地図の側に置く。
+         節を分けて一つの面に収めてあるのは、どれも同じ問いの答えだからである。
+         ボタンを分けると、どちらを押すか毎回考えることになる。
 
          位置は app.js がボタンの台へ移してから CSS が決める。中身をここに置いて
          あるのは、データが届く前から state と結べるようにするためである。 -->
@@ -309,8 +340,8 @@
 
 
 <!-- この地図について。データがいつのものか、どこで作られているかは、地図を
-     読むあいだは不要である。必要になるのは知りたくなったときだけなので、操作面に常時
-     置かず、ここへ寄せる。
+     読むあいだは不要である。必要になるのは知りたくなったときだけなので、地図の
+     上に常時置かず、ここへ寄せる。
 
      出典はここに書かない。地図の上の表示が一度だけ述べている。 -->
 <dialog id="about-dialog" class="sheet">
@@ -329,7 +360,7 @@
       <dl id="freshness" class="freshness"></dl>
     </section>
     <!-- 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではない。
-         考え方の但し書きはここに置く——パネルは 1 路線の数を述べる場所で、
+         考え方の但し書きはここに置く——詳細パネルは 1 路線の数を述べる場所で、
          考え方そのものを述べる場所ではない。中身は panel.mjs の
          prefConcurrencyHTML() が入れる。三つは <details> で畳んであり、
          開閉の状態は残さない(panel.mjs のコメントに理由がある)。 -->

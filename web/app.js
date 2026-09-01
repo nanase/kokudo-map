@@ -30,7 +30,7 @@
  *   dataurl.mjs    配信データの URL の基点
  *   mapspec.mjs    スタイル、層、絞り込み式
  *   aggregate.mjs  画面が出す数を組み合わせ表から読む
- *   panel.mjs      サイドパネルの markup
+ *   panel.mjs      面の一覧・集計と、凡例の markup
  *   popup.mjs      押したアークが自分について述べること
  *   detail.mjs     一つの路線が自分について述べること
  *   termini.mjs    起点・終点を GeoJSON にする
@@ -610,21 +610,24 @@ const HideRoutesControl = buildCycleControl('hide-routes-ctrl', {
   tip: hideStateTip,
 });
 
-/* -------------------------------------------------------------- 表示の面 --- */
+/* -------------------------------------------------------- ボタンから出る面 --- */
 /**
- * ボタンを押すと出る面。「何が地図に描かれるか」を決めるものは残らずここに集める
- * ——切り替えた結果は地図にしか現れないので、操作面ではなく地図の側に置く。
- * 節を分けて一つの面に収めてあるのは、重用区間の見せ方も種別の出し入れも同じ
- * 問いの答えだからである。ボタンを分けると、どちらを押すか毎回考えることになる。
+ * 地図の上のボタンを押すと、その台の脇から出る面。四つが同じ仕掛けで動く——
+ * 左上の「道路を選択」「国道重用区間ランキング」「起点・終点を共有する地点」と、
+ * 右上の「表示」である。
  *
- * 中身の markup は index.html が持ち、ここは開け閉てだけを持つ。onAdd がその
- * 要素をボタンと同じ台へ移すので、面の位置はボタンを追う——位置合わせの計算は
- * どこにも無い。state-tip が同じ台に居るのと同じ仕掛けである。
+ * 面は自分のボタンと同じ台の中に居る。だから位置合わせの計算はどこにも無く、
+ * 面はボタンを追う(state-tip が同じ台に居るのと同じ仕掛けである)。CSS が向きを
+ * 決め、左上の台からは右へ、右上の台からは左へ出る——どちらも外側に窓の端しか
+ * 無い側を避ける形である。
+ *
+ * 一度に開くのは一つだけにする。四つとも地図の上に浮くので、二枚が並ぶと地図の
+ * 見えている面積が急に減る。
  */
-const displayPane = $('#display-popover');
-let displayBtn = null;
+const PANE_GAP = 12;
 
-const displayPaneOpen = () => !displayPane.hidden;
+/** 開け閉てを預かっている面。{ btn, pane, root } の並びである。 */
+const panes = [];
 
 /**
  * 面の上端はボタンに合わせる。それで窓の下からはみ出すなら、はみ出したぶん
@@ -632,34 +635,73 @@ const displayPaneOpen = () => !displayPane.hidden;
  * が先である。引き上げても入らない高さは面の中が巻き取る (style.css の
  * max-height)。
  */
-const PANE_GAP = 12;
-
-function fitDisplayPane() {
-  displayPane.style.top = '-1px';
+function fitPane(pane) {
+  pane.style.top = '-1px';
   const over =
-    displayPane.getBoundingClientRect().bottom -
-    (window.innerHeight - PANE_GAP);
-  if (over > 0) displayPane.style.top = `${-1 - over}px`;
+    pane.getBoundingClientRect().bottom - (window.innerHeight - PANE_GAP);
+  if (over > 0) pane.style.top = `${-1 - over}px`;
 }
 
-function setDisplayPane(open) {
-  displayPane.hidden = !open;
-  displayBtn.classList.toggle('active', open);
-  displayBtn.setAttribute('aria-expanded', String(open));
-  if (open) fitDisplayPane();
+function setPane(entry, open) {
+  entry.pane.hidden = !open;
+  entry.btn.classList.toggle('active', open);
+  entry.btn.setAttribute('aria-expanded', String(open));
+  if (open) fitPane(entry.pane);
+}
+
+const anyPaneOpen = () => panes.some((e) => !e.pane.hidden);
+
+function closePanes() {
+  for (const e of panes) setPane(e, false);
+}
+
+/**
+ * ボタンと面を結ぶ。`root` は「その面の持ち物」の範囲で、外を押したときに
+ * 閉じるかどうかをここで見分ける——台の中には面のほかにボタンも居るので、
+ * 面そのものだけを見ると、同じ台の ✕ を押しただけで一覧が畳まれる。
+ */
+function registerPane(btn, pane, root) {
+  const entry = { btn, pane, root };
+  panes.push(entry);
+  btn.addEventListener('click', () => {
+    const willOpen = pane.hidden;
+    closePanes();
+    if (willOpen) setPane(entry, true);
+  });
+  return entry;
 }
 
 // 窓を掴んでいる最中に面が窓からはみ出さないように。
 window.addEventListener('resize', () => {
-  if (displayPaneOpen()) fitDisplayPane();
+  for (const e of panes) if (!e.pane.hidden) fitPane(e.pane);
 });
 
-// 面の外を押したら閉じる。ボタン自身の click はそこで止めてあるので、ここへは
-// 上がってこない。
+// 面の持ち物の外を押したら閉じる。ボタン自身の click もここへ上がってくるが、
+// その台は root の中なので素通りする。
 document.addEventListener('click', (ev) => {
-  if (displayPaneOpen() && !displayPane.contains(ev.target))
-    setDisplayPane(false);
+  for (const e of panes) {
+    if (!e.pane.hidden && !e.root.contains(ev.target)) setPane(e, false);
+  }
 });
+
+/* 左上の三つ。markup は index.html が持ち、データが届く前から state と結べる。 */
+for (const [btnId, paneId] of [
+  ['#select-btn', '#select-popover'],
+  ['#ranking-btn', '#ranking-popover'],
+  ['#shared-btn', '#shared-popover'],
+]) {
+  const btn = $(btnId);
+  registerPane(btn, $(paneId), btn.closest('.ui-ctrl'));
+}
+
+/* -------------------------------------------------------------- 表示の面 --- */
+/**
+ * 「何が地図に描かれるか」を決めるものは残らずここに集める——切り替えた結果は
+ * 地図にしか現れないので、地図の側に置く。節を分けて一つの面に収めてあるのは、
+ * 重用区間の見せ方も種別の出し入れも同じ問いの答えだからである。ボタンを分ける
+ * と、どちらを押すか毎回考えることになる。
+ */
+const displayPane = $('#display-popover');
 
 /** つまみの付いた二本のスライダー。何を出すかを決める面の、ありふれた印である。 */
 const DISPLAY_ICON =
@@ -682,12 +724,8 @@ class DisplayControl {
     btn.setAttribute('aria-label', '表示');
     btn.setAttribute('aria-expanded', 'false');
     btn.setAttribute('aria-controls', 'display-popover');
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      setDisplayPane(!displayPaneOpen());
-    });
-    displayBtn = btn;
     container.append(btn, displayPane);
+    registerPane(btn, displayPane, container);
     this._container = container;
     return container;
   }
@@ -845,17 +883,15 @@ const BasemapControl = buildCycleControl(
 /**
  * 地図の上に浮いているパネルのぶんだけ、地図の「中心」をずらす。
  *
- * パネルは #left-stack に縦に並んでいる。操作面 (#panel) も詳細 (#detail) も、
- * 地図の要素を細くするのではなく上に浮かせてある——細くすると canvas の寸法が
- * 変わり、開け閉てのたびに全部描き直しになる。浮かせて padding をずらせば、
- * 地図が持っている絵はそのままで、fitBounds や flyTo の行き先だけがパネルを
- * 避ける。
+ * 詳細パネル (#detail) は、地図の要素を細くするのではなく上に浮かせてある
+ * ——細くすると canvas の寸法が変わり、開け閉てのたびに全部描き直しになる。
+ * 浮かせて padding をずらせば、地図が持っている絵はそのままで、fitBounds や
+ * flyTo の行き先だけがパネルを避ける。
  *
  * 寸法と位置は style.css が持つので、ここは実測した矩形に隙間ぶんを足すだけに
  * する——同じ数を二箇所で言わない。
  */
 const app = $('#app');
-const panel = $('#panel');
 const detail = $('#detail');
 const detailBody = $('#detail-body');
 const narrowMq = window.matchMedia(NARROW_QUERY);
@@ -863,51 +899,40 @@ const narrowMq = window.matchMedia(NARROW_QUERY);
 const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
 /** パネルと地図のあいだに残す余白。 */
 const BOX_GAP = 12;
-/** 一辺で覆ってよい上限と、向かい合う二辺の和の上限。狭い画面では操作面が上を、
- *  詳細が下を覆うので、これが無いと和が canvas の高さを超え、地図の中心が画面の
- *  外へ出る。 */
+/** 一辺で覆ってよい上限。これが無いと、低い窓では地図の中心が画面の外へ出る。 */
 const MAX_SIDE_RATIO = 0.6;
-const MAX_OPPOSITE_RATIO = 0.8;
 const EASE_MS = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   ? 0
   : 260;
 
-const panelOpen = () => !app.classList.contains('panel-off');
-
+/**
+ * 地図が中心と見なす点を、開いているパネルの外へ寄せる。
+ *
+ * 相手は詳細パネル一つである。地図の上に浮く物は他にもあるが——左上の見出しと
+ * 台、右上のボタン、右下の凡例——どれも小さく、避けると地図がそのぶん寄って
+ * かえって落ち着かない。面はボタンを押しているあいだだけの物なので、これも
+ * 数えない。
+ */
 function mapPadding() {
   const canvas = $('#map').getBoundingClientRect();
-  const panelBox = panelOpen() ? panel.getBoundingClientRect() : null;
-  const detailBox = detail.hidden ? null : detail.getBoundingClientRect();
-  if (!panelBox && !detailBox) return { ...NO_PADDING };
+  if (detail.hidden) return { ...NO_PADDING };
+  const box = detail.getBoundingClientRect();
 
-  // 広い画面では列は左端にあるので、左だけを空ける。
+  // 広い画面では詳細は左下にあるので、左だけを空ける。
   if (!narrowMq.matches) {
-    const right = Math.max(panelBox?.right ?? 0, detailBox?.right ?? 0);
     const left = Math.min(
-      right - canvas.left + BOX_GAP,
+      box.right - canvas.left + BOX_GAP,
       canvas.width * MAX_SIDE_RATIO,
     );
     return { ...NO_PADDING, left };
   }
 
-  // 狭い画面では列が画面の幅いっぱいなので、避ける向きは上下になる。操作面が
-  // 上を、詳細が下を覆う。
-  const cap = canvas.height * MAX_SIDE_RATIO;
-  const pad = { ...NO_PADDING };
-  if (panelBox) {
-    pad.top = Math.min(panelBox.bottom - canvas.top + BOX_GAP, cap);
-  }
-  if (detailBox) {
-    pad.bottom = Math.min(canvas.bottom - detailBox.top + BOX_GAP, cap);
-  }
-  // 二つとも出ているときは、和のほうが先に効く。
-  const both = pad.top + pad.bottom;
-  const room = canvas.height * MAX_OPPOSITE_RATIO;
-  if (both > room) {
-    pad.top *= room / both;
-    pad.bottom *= room / both;
-  }
-  return pad;
+  // 狭い画面では幅いっぱいの帯が下端に出るので、避ける向きは下になる。
+  const bottom = Math.min(
+    canvas.bottom - box.top + BOX_GAP,
+    canvas.height * MAX_SIDE_RATIO,
+  );
+  return { ...NO_PADDING, bottom };
 }
 
 /** 渡すのは padding だけである。center も zoom も渡さないので、地図が持って
@@ -934,58 +959,16 @@ function setPaddingKeepingView() {
   map.jumpTo({ padding, center: map.unproject([x, y]) });
 }
 
-/* ---------------------------------------------------------------- 操作面 --- */
-/**
- * 操作面を畳んで、地図に窓を丸ごと渡す。
- *
- * 開いているあいだ閉じる口はパネル自身の × で、閉じているあいだ開き直す口は
- * 地図の上の #panel-toggle である。後者は地図側の部品なので、データが届く前
- * から答えられるよう wireControls() ではなくここで配線する。
- *
- * 畳んだパネルを実際に無効化するのは `inert` である。CSS は visibility で
- * 伏せるだけで、伏せた要素も読み上げには残りうる。
- */
-(() => {
-  const toggle = $('#panel-toggle');
-
-  const set = (open, animate) => {
-    app.classList.toggle('panel-off', !open);
-    panel.inert = !open;
-    toggle.setAttribute('aria-expanded', String(open));
-    applyMapPadding(animate);
-    try {
-      localStorage.setItem('panel-open', open ? '1' : '0');
-    } catch {
-      /* プライベートブラウズ: 選択がタブより長く残らないだけである。 */
-    }
-  };
-
-  toggle.addEventListener('click', () => set(true, true));
-  $('#panel-close').addEventListener('click', () => set(false, true));
-
-  // 狭い画面では畳んで始める。浮いたパネルは画面の半分を占め、その下から地図が
-  // 見えるわけではない——この幅で見に来た人がまず見たいのは地図である。
-  // 一度でも自分で開け閉てした人の選択は、幅より優先する。
-  let open = !narrowMq.matches;
-  try {
-    const stored = localStorage.getItem('panel-open');
-    if (stored !== null) open = stored === '1';
-  } catch {
-    /* 同上 */
-  }
-  set(open, false);
-})();
-
 /* ------------------------------------------------------------ 凡例を畳む --- */
 /**
  * 凡例を畳んで、地図に角を返す。
  *
- * 操作面(#panel)と同じ形である——開いているあいだ閉じる口は凡例自身の ×、
+ * 詳細パネルと同じ形である——開いているあいだ閉じる口は凡例自身の ×、
  * 閉じているあいだ開き直す口は同じ角に残る #legend-open である。
  *
- * 状態は URL ではなく localStorage に残す。配色・下地図の種類と濃さ・操作面の
- * 開閉と同じ、読む人の表示の好みだからである。地図に何が描かれているかを決める
- * 物ではないので、共有したリンクが相手の凡例まで決める理由が無い。
+ * 状態は URL ではなく localStorage に残す。配色・下地図の種類と濃さと同じ、
+ * 読む人の表示の好みだからである。地図に何が描かれているかを決める物ではない
+ * ので、共有したリンクが相手の凡例まで決める理由が無い。
  *
  * 畳んだ状態を実際に効かせるのは CSS で、鍵は <html> の data-legend である。
  * ここが hidden を置かないのは、index.html の <head> が最初の描画の前に同じ
@@ -1323,19 +1306,31 @@ function updateStats() {
   const totals = statsFor(state.meta.combinations, sel);
   $('#stats').innerHTML = statsHTML(sel.size, state.routes.length, totals);
 
-  // 何もできないボタンは、押しても何も起きないのではなく、押せないことでそれを
-  // 述べる。文字を持たないボタンなので、どれだけ取り消すかはラベルが述べる。
+  // 選んでいる本数は両系統の合計である。「道路を選択」の台が国道と都道府県道の
+  // 両方を引き受けるので、数える側も消す側も系統を分けない。
+  const picked = sel.size + state.prefSelected.size;
+
+  // 取り消す物が無いあいだ、✕ は居ない。押せない姿で居座らせるより、選んで
+  // いるときだけ台が伸びるほうが、何が起きるかを地図の上で読み取りやすい。
+  // 文字を持たないボタンなので、どれだけ取り消すかはラベルが述べる。
   const clear = $('#sel-none');
-  clear.disabled = sel.size === 0;
-  const clearText = clearLabel(sel.size);
+  clear.hidden = picked === 0;
+  const clearText = clearLabel(picked);
   clear.title = clearText;
   clear.setAttribute('aria-label', clearText);
 
-  // 畳んだ一覧は中身を見せないので、選択がいくつあるかは見出しが述べる。
+  // 面を開かなくても、絞り込んでいることは台の上で分かっていなければならない。
+  // 数の札がそれを言う——0 のときは出さない。選択が空であることは「何も出て
+  // いない」ではなく「全部出ている」を意味するので、0 と書くと地図と逆になる。
+  const badge = $('#sel-count');
+  badge.textContent = picked ? String(picked) : '';
+  badge.hidden = picked === 0;
+
+  // 閉じた面は中身を見せないので、選択がいくつあるかは面の見出しが述べる。
   $('#route-count').textContent = selectionLabel(sel.size, state.routes.length);
 }
 
-/** 重用ランキングは既定で畳んであるので、大きさは見出しに出す。 */
+/** 面は押すまで開かないので、どれだけ入っているかは面の見出しが述べる。 */
 function renderRanking() {
   const matching = concurrencies(state.meta.combinations, state.selected);
   const rows = matching.slice(0, RANKING_ROWS);
@@ -1347,7 +1342,7 @@ function renderRanking() {
   $('#ranking').innerHTML = rankingHTML(rows);
 }
 
-/** ランキングと同じく畳んであるので、大きさは見出しが運ぶ。 */
+/** ランキングと同じく、大きさは面の見出しが運ぶ。 */
 function renderShared() {
   const all = state.meta.shared_termini;
   const rows = all.slice(0, SHARED_ROWS);
@@ -1528,8 +1523,8 @@ function showPopup(lngLat, html) {
  * のは地図が必要な三つ——開いたぶん地図をずらすこと、起終点へ飛ぶこと、選択を
  * 差し替えること——だけである。
  *
- * パネルの居場所と、地図をずらす量は #left-stack と applyMapPadding が持つ
- * (上の「地図をずらす」の節)。
+ * パネルの居場所は style.css の #detail が、地図をずらす量は applyMapPadding
+ * が持つ(上の「地図をずらす」の節)。
  */
 /**
  * パネルを開いた時点の居場所。閉じるときに、寄せたぶんを戻すかどうかを決める。
@@ -1717,8 +1712,8 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape') return;
   if ($('dialog[open]')) return; // ダイアログの Esc はそちらのものである
   // 開いている面が先に閉じる。Esc は一番手前のものを畳む鍵である。
-  if (displayPaneOpen()) {
-    setDisplayPane(false);
+  if (anyPaneOpen()) {
+    closePanes();
     return;
   }
   closeDetail();

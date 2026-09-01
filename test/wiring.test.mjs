@@ -8,6 +8,7 @@ import { Window } from 'happy-dom';
 
 import { routeListHTML } from '../web/panel.mjs';
 import {
+  clearSelection,
   NARROW_QUERY,
   setSelection,
   showRouteOnly,
@@ -61,7 +62,8 @@ function setup(routes = ROUTES) {
   const applyFilters = () => {
     applyCalls.push(new Set(state.selected));
     const clear = document.querySelector('#sel-none');
-    clear.disabled = state.selected.size === 0;
+    // 本物の updateStats と同じ数え方。両系統の合計が 0 のあいだ ✕ は居ない。
+    clear.hidden = state.selected.size + state.prefSelected.size === 0;
   };
 
   wireControls(document, state, applyFilters);
@@ -78,15 +80,15 @@ describe('wireControls — 路線の選択', () => {
     expect(state.selected.has(7)).toBe(false);
   });
 
-  test('選択が空のとき「選択解除」ボタンが disabled になる', () => {
+  test('選択が空のとき「選択解除」ボタンは出ない', () => {
     const { document } = setup();
     const clear = document.querySelector('#sel-none');
 
     document.querySelector('#route-list input[value="7"]').click();
-    expect(clear.disabled).toBe(false);
+    expect(clear.hidden).toBe(false);
 
     document.querySelector('#route-list input[value="7"]').click();
-    expect(clear.disabled).toBe(true);
+    expect(clear.hidden).toBe(true);
   });
 
   test('「選択解除」ボタンは選択を空にし、チェックボックスも外す', () => {
@@ -280,9 +282,55 @@ describe('wireControls — 表示のトグル', () => {
   });
 });
 
-/* 国道一覧はどの画面幅でも畳んだ状態で始まる。459 個のチェックボックスは
- * サイドパネルの大半を占めるので、開くのは番号を眺めたい人だけでよい。 */
-describe('国道一覧の折りたたみ', () => {
+/* 「選択削除」は国道と都道府県道の両方を引き受ける。「国道を選択」を
+ * 「道路を選択」と改めたのはそのためで、系統ごとに二つある絞り込みを、
+ * 一つの ✕ が戻す。 */
+describe('clearSelection — 両系統の選択解除', () => {
+  const tNational = (doc) => doc.querySelector('#t-national');
+
+  test('国道と都道府県道の両方を空にする', () => {
+    const { document, state, applyFilters } = setup();
+    document.querySelector('#route-list input[value="7"]').click();
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+
+    clearSelection(document, state, applyFilters);
+
+    expect(state.selected.size).toBe(0);
+    expect(state.prefSelected.size).toBe(0);
+  });
+
+  /* 詳細パネルを閉じても、地図の上の ✕ から戻せる。閉じたパネルの中にしか
+   * 解除が無かったころ、県道を 1 本選んだ人は国道へ戻れなかった。 */
+  test('都道府県道の「だけ表示」が消した国道を戻す', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+    expect(state.national).toBe(false);
+
+    document.querySelector('#sel-none').click();
+
+    expect(state.prefSelected.size).toBe(0);
+    expect(state.national).toBe(true);
+    expect(tNational(document).checked).toBe(true);
+  });
+
+  /* 都道府県道を選んでいないときは、これまでの #sel-none と同じ振る舞いで
+   * ある——手で消した系統を、選択と関係のない解除が点け直さない。 */
+  test('都道府県道を選んでいなければ、国道の系統に触らない', () => {
+    const { document, state, applyFilters } = setup();
+    state.national = false;
+    tNational(document).checked = false;
+
+    document.querySelector('#route-list input[value="7"]').click();
+    clearSelection(document, state, applyFilters);
+
+    expect(state.national).toBe(false);
+    expect(tNational(document).checked).toBe(false);
+  });
+});
+
+/* 地図の上のボタンから出る面。押すまで開かないので、最初は三つとも hidden で
+ * ある。開け閉ては app.js が持つので、ここが見るのは骨格だけである。 */
+describe('地図の上の面', () => {
   const load = (width) => {
     const window = new Window({
       url: 'https://example.invalid/',
@@ -293,49 +341,44 @@ describe('国道一覧の折りたたみ', () => {
     return window.document;
   };
 
-  test('広い画面でも畳まれている', () => {
-    expect(load(1280).querySelector('#route-block').open).toBe(false);
+  test('三つの面はどの画面幅でも閉じて始まる', () => {
+    for (const width of [1280, 375]) {
+      const document = load(width);
+      for (const id of [
+        '#select-popover',
+        '#ranking-popover',
+        '#shared-popover',
+      ]) {
+        expect(document.querySelector(id).hidden).toBe(true);
+      }
+    }
   });
 
-  test('狭い画面でも畳まれている', () => {
-    expect(load(375).querySelector('#route-block').open).toBe(false);
-  });
-
-  /* 絞り込み欄は一覧と一緒に畳む。選択解除は畳んだままでも押せなければ
-   * ならない——選択は地図に効いており、一覧を開かずに戻したいことがある。
-   * summary は閉じていても描かれるので、そこに置けば常に見える。 */
-  test('絞り込み欄は畳む側にある', () => {
+  /* 面は自分のボタンと同じ台の中に居る。位置合わせの計算をどこにも持たない
+   * ための約束で、app.js の registerPane が台を「面の持ち物」として使う。 */
+  test('面はボタンと同じ台の中にある', () => {
     const document = load(1280);
-    const block = document.querySelector('#route-block');
-    expect(block.contains(document.querySelector('#route-filter'))).toBe(true);
-    expect(
-      document
-        .querySelector('#route-block > summary')
-        .contains(document.querySelector('#route-filter')),
-    ).toBe(false);
+    for (const [btn, pane] of [
+      ['#select-btn', '#select-popover'],
+      ['#ranking-btn', '#ranking-popover'],
+      ['#shared-btn', '#shared-popover'],
+    ]) {
+      const ctrl = document.querySelector(btn).closest('.ui-ctrl');
+      expect(ctrl.contains(document.querySelector(pane))).toBe(true);
+    }
   });
 
-  /* 見える場所は summary の行のままだが、DOM では details の外に置く。
-   * <summary> の中の対話部品は、開閉が先に手を取るのでキーボードや支援技術
-   * から確実には届かない。 */
-  test('選択解除は details の外、同じ節の中にある', () => {
+  /* 絞り込み欄と一覧は面の中、選択解除は面の外。選択は地図に効いており、
+   * 面を開かずに戻したいことがある。 */
+  test('絞り込みと一覧は面の中、選択解除は面の外にある', () => {
     const document = load(1280);
+    const pane = document.querySelector('#select-popover');
+    expect(pane.contains(document.querySelector('#route-filter'))).toBe(true);
+    expect(pane.contains(document.querySelector('#route-list'))).toBe(true);
+
     const clear = document.querySelector('#sel-none');
-    expect(document.querySelector('#route-block').contains(clear)).toBe(false);
-    expect(
-      document.querySelector('#route-block').closest('.block').contains(clear),
-    ).toBe(true);
-  });
-
-  test('選択解除を押しても折りたたみは開かない', () => {
-    const { document } = setup();
-    const block = document.querySelector('#route-block');
-    expect(block.open).toBe(false);
-
-    document.querySelector('#route-list input[value="7"]').click();
-    document.querySelector('#sel-none').click();
-
-    expect(block.open).toBe(false);
+    expect(pane.contains(clear)).toBe(false);
+    expect(clear.closest('.ui-ctrl').contains(pane)).toBe(true);
   });
 
   /* 狭い画面と見なす幅は style.css の @media と wiring.mjs の二箇所にある。

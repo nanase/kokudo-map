@@ -45,23 +45,44 @@ function restoreSystem(doc, state, key, fallback) {
   doc.querySelector(toggle).checked = state[key];
 }
 
-/**
- * 路線の選択を丸ごと差し替える。#route-list の各チェックボックスへ反映した
- * うえで applyFilters を呼ぶ。wireControls の「選択解除」ボタンと、
- * app.js の標識クリック(popup)の両方から呼ばれるので、ここに一箇所だけ置く。
- *
- * 選択が空に戻ったときは、「この路線だけ表示」が消した都道府県道を戻す
- * (showRouteOnly)。控えが無ければ何もしない——このボタンは「だけ表示」の解除
- * ではなく選択を空にする物なので、手で切った系統を、そのついでに点け直す理由が
- * ない。行き先を今の値にしてあるのがその「何もしない」である。
- */
-export function setSelection(doc, state, refs, applyFilters) {
-  state.selected = new Set(refs);
-  if (!state.selected.size) restoreSystem(doc, state, 'pref', state.pref);
+/** 一覧のチェックを state.selected に合わせ直す。 */
+function syncRouteList(doc, state) {
   for (const cb of doc.querySelectorAll('#route-list input')) {
     cb.checked = state.selected.has(Number(cb.value));
     cb.closest('label').classList.toggle('on', cb.checked);
   }
+}
+
+/**
+ * 国道の選択を丸ごと差し替える。#route-list の各チェックボックスへ反映した
+ * うえで applyFilters を呼ぶ。「この路線だけ表示」と、app.js の標識クリック
+ * (popup)の両方から呼ばれるので、ここに一箇所だけ置く。
+ */
+export function setSelection(doc, state, refs, applyFilters) {
+  state.selected = new Set(refs);
+  syncRouteList(doc, state);
+  applyFilters();
+}
+
+/**
+ * 選択をすべて空に戻す。「道路を選択」の台にある ✕ が呼ぶ。
+ *
+ * 二つの系統を同じに扱う。国道と都道府県道のどちらかが上位ということはなく、
+ * 「道路を選択」も「選択解除」も両方のためにある——「国道を選択」を「道路を
+ * 選択」と改めたのはそのためである。だからここは二つを並べて書き、片方にだけ
+ * 効く条件を持たない。
+ *
+ * 系統は「この路線だけ表示」が消したぶんだけ戻す。控えが無ければ何もしない
+ * ——ここは「だけ表示」の解除ではなく選択を空にする物なので、手で切った系統を、
+ * そのついでに点け直す理由がない。行き先を今の値にしてあるのがその「何も
+ * しない」で、これも二つの系統で同じである。
+ */
+export function clearSelection(doc, state, applyFilters) {
+  state.selected = new Set();
+  state.prefSelected = new Set();
+  restoreSystem(doc, state, 'national', state.national);
+  restoreSystem(doc, state, 'pref', state.pref);
+  syncRouteList(doc, state);
   applyFilters();
 }
 
@@ -90,9 +111,10 @@ export function showRouteOnly(doc, state, ref, applyFilters) {
 /**
  * 都道府県道を 1 本だけ地図に残す。国道は消える。もう一度呼べば元へ戻す。
  *
- * 国道側(showRouteOnly)と違い、こちらは押した状態を持つ。操作面に都道府県道の
- * 節が無い以上、選んでいることを述べる場所も、解除する口も、このボタンのほかに
- * 無いためである(#109)。国道の選択解除は操作面の #sel-none が引き受ける。
+ * 国道側(showRouteOnly)と違い、こちらは押した状態を持つ。都道府県道の一覧は
+ * どこにも出さない(#109)ので、いま 1 本に絞っていることをこのボタン自身が
+ * 述べる必要がある。解除はここでもできるが、唯一の口ではない——詳細パネルを
+ * 閉じても地図の左上に残る ✕ (clearSelection)が同じことをする。
  */
 export function togglePrefOnly(doc, state, key, applyFilters) {
   const on = state.prefSelected.size === 1 && state.prefSelected.has(key);
@@ -112,7 +134,7 @@ export function togglePrefOnly(doc, state, key, applyFilters) {
 /** 画面が狭いと見なす幅。style.css の @media と同じ値である。 */
 export const NARROW_QUERY = '(max-width: 860px)';
 
-/** サイドパネルの一覧・絞り込み・表示トグルを state へ配線する。 */
+/** 面の一覧・絞り込みと、表示のトグルを state へ配線する。 */
 export function wireControls(doc, state, applyFilters) {
   const $ = (sel) => doc.querySelector(sel);
   const list = $('#route-list');
@@ -128,7 +150,7 @@ export function wireControls(doc, state, applyFilters) {
   });
 
   $('#sel-none').addEventListener('click', () => {
-    setSelection(doc, state, [], applyFilters);
+    clearSelection(doc, state, applyFilters);
   });
 
   $('#route-filter').addEventListener('input', (e) => {
