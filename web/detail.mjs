@@ -395,9 +395,7 @@ export function prefDetailHTML({
   // 押した後に何が起きるかをそのまま名乗る。押している間の名乗りは「解除」で
   // あって「表示」ではない——同じ文言のまま状態だけ変わると、押した結果が
   // 読み上げからも title からも分からなくなる。
-  const onlyText = selected
-    ? `${name}だけの表示を解除`
-    : `${name}だけを表示（国道も消えます）`;
+  const onlyText = selected ? `${name}だけの表示を解除` : `${name}だけを表示`;
   // 見た目は `active`、読み上げは `aria-pressed` が持つ。二つに分けるのは
   // app.js の地図の上のボタン(cycleButton)と同じ作法である。
   const only = region
