@@ -44,6 +44,13 @@
      には混ぜない。 */
   --success: light-dark(#1E8E3E, #4ADE80);
 
+  /* 「道路を選択」の系統ボタンで、都道府県道の側が押されている間の地。
+     明るい側は地図の主要地方道と同じ緑である(mapspec.mjs の PREF_MAJOR)——
+     どちらの系統の話かを、押されたボタンの色が地図と同じ言葉で述べる。
+     暗い側は --sign-blue と同じ扱いで、地と字を入れ替えられる明るさへ寄せる。
+     test/panel.test.mjs が明るい側の値を PREF_MAJOR と突き合わせる。 */
+  --pref-green: light-dark(#1B7A3E, #7ED2A0);
+
   /* 国道を一時的に隠すボタンが、隠している間だけ使う。白い字を載せる地なので、
      面が明るくても暗くてもこの赤のままでよい。 */
   --danger: #B3261E;
@@ -342,14 +349,30 @@ input[type="search"]::placeholder { font-size: .82em; }
 .sys-seg { display: flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
 .sys-seg .sys {
   flex: 1; font: inherit; font-size: .72rem; line-height: 1; padding: 6px 0;
+  /* 高さは自分で述べる。台の 29px と同じ拍子に揃えるためで、以前これが
+     maplibre-gl.css の `.maplibregl-ctrl-group button` から漏れて届いていた
+     ——面の中のボタンが台のボタンの寸法を借りるのは、たまたまである。 */
+  min-height: 29px;
   cursor: pointer; border: 0; background: var(--panel-2); color: var(--ink-2);
 }
 .sys-seg .sys + .sys { border-left: 1px solid var(--line); }
-.sys-seg .sys:hover { color: var(--sign-blue); }
+/* 押されている側は、その系統の色で沈む。国道は標識の青、都道府県道は地図の
+   主要地方道の緑である。 */
+.sys-seg #sys-national[aria-pressed="true"] { --sys-on: var(--sign-blue); }
+.sys-seg #sys-pref[aria-pressed="true"] { --sys-on: var(--pref-green); }
 .sys-seg .sys[aria-pressed="true"] {
-  background: var(--sign-blue); color: var(--panel); font-weight: 700;
+  background-color: var(--sys-on); color: var(--panel); font-weight: 700;
 }
-.sys-seg .sys[aria-pressed="true"]:hover { color: var(--panel); filter: brightness(1.12); }
+/* ホバーの地は選択子を四つ数えさせる。maplibre-gl.css の
+   `.maplibregl-ctrl button:not(:disabled):hover` はクラス 3 つと要素 1 つで、
+   この面が台の中にあるぶん、ここにも当たる——負けると地だけ薄い灰色に置き換わり、
+   白い字が白い地に(暗い側では暗い字が暗い地に)消える。 */
+.sys-seg .sys[aria-pressed="true"]:hover {
+  background-color: var(--sys-on); filter: brightness(1.12);
+}
+.sys-seg .sys[aria-pressed="false"]:hover {
+  background-color: var(--panel); color: var(--sign-blue);
+}
 
 /* 路線のチェックボックスの並び --------------------------------------------
    一覧は「道路を選択」の面(#select-popover)の中にあり、面が開いているあいだ
@@ -732,6 +755,17 @@ input[type="search"]::placeholder { font-size: .82em; }
   display: grid; grid-template-columns: 1fr; gap: 15px 20px;
 }
 .map-popover[hidden] { display: none; }
+/* 面の中のボタンは、台のボタンではない。
+   maplibre-gl.css の `.maplibregl-ctrl-group button` は 29px 角のコントロールを
+   前提に寸法を決めており、面が台の中にある(位置合わせをそこに任せている)ぶん、
+   その寸法が面の中身にまで及んでいた。一覧の行は高さ 29px に固定され、標識が
+   折り返したぶんが次の行の上へはみ出していた——行の高さは中身が決めるべきで、
+   揃っている必要はない。
+   台のクラスを頭に足して、記述順ではなく形で勝たせる。手放すのは寸法だけに
+   する——display まで書くと、この選択子は要素をひとつ数えるぶん強く、一覧の行が
+   自分で述べている `display: grid` にまで勝ってしまう。 */
+.maplibregl-ctrl-group .map-popover button { width: auto; height: auto; }
+
 /* 左上の台から出る面は右へ向く。左には窓の端しか無い。
 
    幅は決め打ちにする。中身(459 個のチェックボックス、標識を並べた行)はどれも
