@@ -910,14 +910,19 @@ input[type="search"]::placeholder { font-size: .82em; }
    ぶんだけ空ける (app.js の applyMapPadding)。#map を細くして横に並べる
    と canvas の寸法が変わり、開くたびに全部描き直しになる。
 
-   大きさは固定する。路線によって中身の量は違うが、パネルが伸び縮みすると地図の
-   ずれ幅も毎回変わってしまう。入り切らないぶんは .detail-scroll が飲む。 */
+   幅は固定するが、高さは中身に合わせて縮む。路線によって中身の量は大きく違い、
+   高さまで固定すると短い路線ではパネルの下だけが空く。広い画面では
+   mapPadding() (app.js) が box.right だけを見て左の余白を決めており、高さは
+   関係しない——だから高さを中身に合わせても地図はずれない。入り切らないぶんは
+   .detail-scroll が飲む。860px 以下(下のメディアクエリ)は高さを固定のまま
+   残す。そちらの mapPadding() は box.top を見て下の余白を決めており、高さが
+   中身で変わると路線を切り替えるたびに地図がわずかに動いてしまうためである。 */
 #detail {
   /* 地図の左下に浮く。上を占めているのは見出しと台の列なので、そこへ届かない
      ところで高さを止める——184px はその列(12 + 32 + 8 + 29 + 8 + 29 + 8 + 29)と
      間の余白ぶんである。 */
   position: absolute; left: 12px; bottom: 12px; z-index: 4;
-  width: 340px; height: 340px; max-height: calc(100% - 184px);
+  width: 340px; max-height: calc(100% - 184px);
   display: flex; flex-direction: column;
   background: var(--panel); color: var(--ink);
   border: 1px solid var(--line); border-radius: 6px;
