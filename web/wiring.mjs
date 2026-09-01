@@ -54,6 +54,8 @@ export function syncRouteList(doc, state) {
  *
  * 索引がまだ届いていないことがある。面を開いた時点で取りに行くので、開いてすぐ
  * 打った人だけがここに来る——空を出すと「無い」に読めるので、待っていると言う。
+ * 落ちたときは落ちたと言う。待っている表示のまま止めると、いつまでも読み込み中
+ * に見える。面を開き直せば取り直す。
  */
 export function applyRouteFilter(doc, state) {
   const q = doc.querySelector('#route-filter').value.trim();
@@ -84,7 +86,10 @@ export function applyRouteFilter(doc, state) {
   }
   if (!state.prefIndex) {
     head.textContent = '都道府県道';
-    rows.innerHTML = '<p class="rl-note">読み込んでいます…</p>';
+    rows.innerHTML = state.prefIndexFailed
+      ? '<p class="rl-note">都道府県道の一覧を読み込めませんでした。' +
+        '面を開き直すと取り直します。</p>'
+      : '<p class="rl-note">読み込んでいます…</p>';
     return;
   }
   const { matches, total } = matchPrefRoutes(

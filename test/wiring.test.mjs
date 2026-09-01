@@ -55,6 +55,7 @@ function setup(routes = ROUTES) {
       ['nagano', '長野県'],
       ['tokyo', '東京都'],
     ]),
+    prefIndexFailed: false,
     listNational: true,
     listPref: true,
     picked: null,
@@ -255,6 +256,17 @@ describe('wireControls — 絞り込み', () => {
     expect(prefRows(document)).toEqual([]);
     expect(document.querySelector('#rl-pref-rows').textContent).toContain(
       '読み込んでいます',
+    );
+  });
+
+  /* 落ちたときに待っている表示のまま止めると、いつまでも読み込み中に見えます。 */
+  test('索引が取れなかったときは、取れなかったと言う', () => {
+    const { document, window, state } = setup();
+    state.prefIndex = null;
+    state.prefIndexFailed = true;
+    type(document, window, '18');
+    expect(document.querySelector('#rl-pref-rows').textContent).toContain(
+      '読み込めませんでした',
     );
   });
 

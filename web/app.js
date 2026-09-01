@@ -134,6 +134,9 @@ const state = {
   // 取る(14.4 kB)。県 → 番号の配列で、番号で絞り込むためだけに要る。届くまでは
   // null である。
   prefIndex: null,
+  // 索引を取りに行って落ちたか。落ちたことを言わないと、待っている表示のまま
+  // 止まって「いつまでも読み込み中」になる。開き直せば取り直す。
+  prefIndexFailed: false,
   // 「道路を選択」の一覧に出す系統。地図に描く系統(下の national / pref)とは
   // 別の物で、こちらは探す先を絞るだけである。二つとも false にはならない。
   listNational: true,
@@ -1698,6 +1701,7 @@ let prefIndexPending = null;
 
 function loadPrefIndex() {
   if (prefIndexPending) return prefIndexPending;
+  state.prefIndexFailed = false;
   prefIndexPending = fetch(dataURL('pref/index.json'))
     .then((r) => {
       if (!r.ok) throw new Error(`pref/index.json: ${r.status}`);
@@ -1717,6 +1721,8 @@ function loadPrefIndex() {
       console.error(err);
       // 覚えたままにすると二度と取り直せない。prefMeta と同じ作法である。
       prefIndexPending = null;
+      state.prefIndexFailed = true;
+      applyRouteFilter(document, state);
     });
   return prefIndexPending;
 }
