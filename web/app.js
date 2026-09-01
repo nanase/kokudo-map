@@ -92,7 +92,6 @@ import {
   rankingHTML,
   routeListHTML,
   SHARED_ROWS,
-  selectionLabel,
   sharedHTML,
   statsHTML,
 } from './panel.mjs';
@@ -1364,9 +1363,6 @@ function updateStats() {
   const badge = $('#sel-count');
   badge.textContent = picked ? String(picked) : '';
   badge.hidden = picked === 0;
-
-  // 閉じた面は中身を見せないので、選択がいくつあるかは面の見出しが述べる。
-  $('#route-count').textContent = selectionLabel(picked);
 }
 
 /** 面は押すまで開かないので、どれだけ入っているかは面の見出しが述べる。 */
