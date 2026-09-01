@@ -540,16 +540,25 @@ export function routeLayers() {
 /* -------------------------------------------------------- 都道府県道の層 --- */
 /**
  * 都道府県道の配色。国道が既に青・橙・赤・紫を重用の深さに使っているので、
- * 残っている強い色相は緑しかない。同じ色相の中で、明るさと彩度をはっきり離した
- * 二色を格に当てる——細い線では、明るさの差より色相の差のほうが読めるが、緑の
- * 内側で色相を動かせる幅は狭いためである。
+ * 残っている強い色相は緑しかない。同じ色相の中で二色を格に当て、格の違いは
+ * 主に色相で読ませる——細い線では、明るさや彩度の差より色相の差のほうが読める
+ * が、緑の内側で色相を動かせる幅は狭いためである。
  *
  * 格(主要地方道か一般都道府県道か)を色に、重用の深さを持たせないのは、国道の
  * 四色と合わせて八色になると、どの色が何を述べているかが読めなくなるためである。
  * 都道府県道の重用は太さで述べる(`prefLineWidth`)。
+ *
+ * `PREF_GENERAL` は元々 #8CBF4A(白地に対するコントラスト比 2.17:1)だったが、
+ * 淡色地図の上で明るすぎて沈み、広域(z9 前後)ではほとんど判別できなかった。
+ * 単に暗くする案・`PREF_MAJOR` と同じ明るさまで沈める案も試したが、実地図での
+ * 比較の結果、`PREF_MAJOR`(色相 142°、青緑寄り)との色相の距離を広げる方向
+ * (黄色寄りの緑、色相 70°、コントラスト比 2.94:1)を選んだ。この結果
+ * `PREF_MAJOR` との明るさの差は縮み(コントラスト比 2.48:1 → 1.83:1)、彩度も
+ * ほぼ同じになった(64% 対 65%)——格の見分けは、明るさでも彩度でもなく
+ * 色相の差だけにかかっている。
  */
 export const PREF_MAJOR = '#1B7A3E';
-export const PREF_GENERAL = '#8CBF4A';
+export const PREF_GENERAL = '#8BA022';
 export const PREF_RANK_LABELS = {
   major: '主要地方道',
   general: '一般都道府県道',
@@ -569,15 +578,16 @@ export const colorByRank = [
 /**
  * 番号の札に使う一般都道府県道の色。線の `PREF_GENERAL` より暗い。
  *
- * 線としての #8CBF4A は淡色地図の上でよく読めるが、字としては白い地に対して
- * 2.15:1 しかない。線は幅を持つので薄くても形が出るが、字は画線が細く、同じ
- * 明るさでは読めなくなる。色相はそのままに暗くして 5.1:1 にする。主要地方道の
+ * 線の太さなら薄くても形が出るが、字は画線が細く、同じ明るさでは読めなくなる。
+ * `PREF_GENERAL` を色相をずらす方向に決め直した(#8BA022、色相 70°)ので、
+ * ここも同じ色相のまま暗くして白い地に対して 5.1:1 になる値を選び直した——
+ * 色相だけ違う字と線が並ぶと、同じ格を指しているように見えなくなる。主要地方道の
  * #1B7A3E は字のままでも 4.5:1 あるので、動かさない。
  *
  * 凡例が出すのは線の色である(panel.mjs)。凡例は線が何かを述べる物であって、
  * 札の字の色を述べる物ではない。
  */
-export const PREF_GENERAL_INK = '#4F7A1E';
+export const PREF_GENERAL_INK = '#657515';
 
 export const inkByRank = [
   'match',
@@ -809,3 +819,71 @@ export const CLICKABLE_LAYERS = [
   'foot',
   'ferry',
 ];
+
+/** 押せるレイヤーの当たり判定だけを太らせた透明な層の id。 */
+export const hitLayerId = (id) => `${id}-hit`;
+
+/** interpolate 式の各段に一定量を足す。zoom による補間そのものは変えない。 */
+function widened(expr, add) {
+  const [op, interp, input, ...stops] = expr;
+  const out = [op, interp, input];
+  for (let i = 0; i < stops.length; i += 2) {
+    out.push(stops[i], ['+', stops[i + 1], add]);
+  }
+  return out;
+}
+
+/* 見た目の太さは細い線ほどクリック・タップで外しやすいが、太さそのものは重用の
+ * 深さを読ませる符牒なので広げられない。そこで見た目と別に、線を追わない透明な
+ * 層を重ね、そちらだけを太らせて当たり判定に使う(app.js の wirePopups)。
+ *
+ * 層とタイル処理は増えるが、透明な層は不透明度 0 で描かれるだけで、ソースの
+ * 追加読み込みは発生しない。もう一つの手——`queryRenderedFeatures` に点でなく
+ * 矩形を渡す——は層を増やさないが、`mouseenter`/`mouseleave` は MapLibre 自身が
+ * 点でしか判定しないため、カーソルの形と実際に押せる範囲がずれる。透明な層なら
+ * 同じ id を hover にも click にも使えるので、この二つが常に揃う。
+ *
+ * 太らせる量は固定のピクセル数で、ズームによらない。マウスの狙いやすさが画面上の
+ * 距離で決まるのであって、地図の縮尺では決まらないためである。値は市街地の込み
+ * 合った場所で、隣の道路を誤って拾わないことを確かめて決めた。 */
+const HIT_ADD = 10;
+const PREF_HIT_ADD = 7;
+
+/** `CLICKABLE_LAYERS` に対応する、透明で太い当たり判定専用の層。 */
+export function clickableHitLayers() {
+  const byId = new Map(routeLayers().map((l) => [l.id, l]));
+  return CLICKABLE_LAYERS.map((id) => {
+    const layer = byId.get(id);
+    return {
+      ...layer,
+      id: hitLayerId(id),
+      paint: {
+        ...layer.paint,
+        'line-color': '#000000',
+        'line-opacity': 0,
+        'line-width': widened(layer.paint['line-width'], HIT_ADD),
+      },
+    };
+  });
+}
+
+/** `PREF_CLICKABLE_LAYERS` に対応する、透明で太い当たり判定専用の層。
+ *  太らせる理由は国道の `clickableHitLayers` と同じ。量が国道の 7 割ほどなのは、
+ *  都道府県道の線自体が国道のおよそ 0.65 倍しかなく、同じ量を足すと当たり判定が
+ *  線の太さに対して相対的に太すぎるためである。 */
+export function prefClickableHitLayers() {
+  const byId = new Map(prefLineLayers().map((l) => [l.id, l]));
+  return PREF_CLICKABLE_LAYERS.map((id) => {
+    const layer = byId.get(id);
+    return {
+      ...layer,
+      id: hitLayerId(id),
+      paint: {
+        ...layer.paint,
+        'line-color': '#000000',
+        'line-opacity': 0,
+        'line-width': widened(layer.paint['line-width'], PREF_HIT_ADD),
+      },
+    };
+  });
+}
