@@ -349,15 +349,15 @@ input[type="search"]::placeholder { font-size: .82em; }
 .radios input, .checks input { accent-color: var(--sign-blue); margin: 0; }
 
 /* 凡例 --------------------------------------------------------------------
-   凡例は地図の上、右下に浮かせる。縮尺と出典もその角にあるので、下端の 56px
-   はその二つのぶんである——凡例が上、縮尺と出典が下に並ぶ。左の列とは重なら
-   ないところまで内へ寄せてあるが、右端に寄せている限りふつうは効かない。
+   凡例は地図の上、右下に浮かせる。下端の 28px は出典の帯のぶんである——凡例が
+   上、出典が下に並ぶ。1 km の縮尺はここにあったが、地図の縮尺を数で述べても、
+   この地図で読むもの(どの番号がどこを通るか)には効かないので落とした。
 
    台は明暗どちらの配色でも白いままにする。凡例は地図の部品であり、隣にある
-   拡大のボタンも縮尺も出典も、MapLibre が白い台に濃い灰色で描く——そこだけ地の
-   色が変わると、同じ列に別の紙が混ざる。 */
+   拡大のボタンも出典も、MapLibre が白い台に濃い灰色で描く——そこだけ地の色が
+   変わると、同じ列に別の紙が混ざる。 */
 #legend-bar {
-  position: absolute; left: 12px; right: 12px; bottom: 56px; z-index: 3;
+  position: absolute; left: 12px; right: 12px; bottom: 28px; z-index: 3;
   display: flex; justify-content: flex-end;
   /* 帯そのものは地図を掴む手を通す。パネルだけが受け取る。 */
   pointer-events: none;
@@ -537,15 +537,23 @@ input[type="search"]::placeholder { font-size: .82em; }
 :root[data-theme="dark"] .maplibregl-ctrl-icon {
   filter: invert(1) hue-rotate(180deg);
 }
-.maplibregl-ctrl-scale {
-  background-color: var(--panel); border-color: var(--ink-2);
-  color: var(--ink-2);
-}
 /* 出典の地は二つのクラスで指定されている
    (.maplibregl-ctrl.maplibregl-ctrl-attrib)。片方だけで書くと特異度で負け、
-   字だけが変わって地が白いまま残る。 */
-.maplibregl-ctrl.maplibregl-ctrl-attrib { background-color: var(--panel); }
-.maplibregl-ctrl-attrib { color: var(--ink-2); }
+   字だけが変わって地が白いまま残る。
+
+   地は透かす。出典は地図の一部として常に出ているものであり、白い帯を敷くと
+   その幅ぶんの地図が隠れる。読めるかどうかは地ではなく字が引き受ける——同じ
+   色の淡い縁を字の周りへ回しておけば、濃い下地図の上でも輪郭が立つ。 */
+.maplibregl-ctrl.maplibregl-ctrl-attrib { background-color: transparent; }
+.maplibregl-ctrl-attrib {
+  color: var(--ink-2);
+  /* 同じ影を重ねて縁にする。1 枚では下地図の細い線が字に食い込む——地理院
+     タイルは配色を切り替えても明るいままなので、暗い側では明るい海の上に
+     明るい字が乗る場面がここだけ残る。 */
+  text-shadow:
+    0 0 2px var(--panel), 0 0 2px var(--panel), 0 0 2px var(--panel),
+    0 0 4px var(--panel), 0 0 4px var(--panel), 0 0 6px var(--panel);
+}
 .maplibregl-ctrl-attrib a { color: var(--sign-blue); }
 
 /* 地図は窓いっぱいである。操作面も詳細も、その上に浮いている。 */

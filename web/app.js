@@ -281,10 +281,8 @@ map.addControl(
   new maplibregl.NavigationControl({ showZoom: false, visualizePitch: false }),
   'top-right',
 );
-map.addControl(
-  new maplibregl.ScaleControl({ maxWidth: 110, unit: 'metric' }),
-  'bottom-right',
-);
+/* 縮尺の目盛りはここにあった。地図の縮尺を数で述べても、この地図で読むもの
+ * ——どの番号がどこを通るか——には効かない。右下は凡例と出典だけになる。 */
 
 /* -------------------------------------------------------- 押し続けて拡大 --- */
 /**
