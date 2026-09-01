@@ -1708,11 +1708,19 @@ function loadPrefIndex() {
       return r.json();
     })
     .then((raw) => {
-      // 県の並びは regions.json の順に揃える。一致した行の並びがこの順を継ぐ
-      // ので(prefroute.mjs の matchPrefRoutes)、索引の側の順に左右させない。
+      // 在る県を決めるのは索引そのものである。regions.json を読んで作る
+      // state.prefLabels で絞り込んではならない——あれは boot() が埋めるので、
+      // 埋まる前にここが解決すると索引が空のまま残る。しかも成功しているぶん
+      // prefIndexPending は解けず、開き直しても取り直さない。
+      //
+      // prefLabels は並べ替えにだけ使う。県の並びを regions.json の順に揃えて
+      // おくと、一致した行の並びがその順を継ぐ(prefroute.mjs の
+      // matchPrefRoutes)。まだ空なら順位が付かないので、索引の順のまま残る。
+      const rank = new Map([...state.prefLabels.keys()].map((r, i) => [r, i]));
+      const at = (region) => rank.get(region) ?? Number.MAX_SAFE_INTEGER;
       state.prefIndex = new Map(
-        [...state.prefLabels.keys()]
-          .filter((region) => raw[region])
+        Object.keys(raw)
+          .sort((a, b) => at(a) - at(b) || (a < b ? -1 : a > b ? 1 : 0))
           .map((region) => [region, decodeRoutes(raw[region])]),
       );
       applyRouteFilter(document, state);
