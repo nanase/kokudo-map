@@ -8,6 +8,8 @@ import { Window } from 'happy-dom';
 
 import { routeListHTML } from '../web/panel.mjs';
 import {
+  applyRouteFilter,
+  clearSelection,
   NARROW_QUERY,
   setSelection,
   showRouteOnly,
@@ -39,13 +41,23 @@ function setup(routes = ROUTES) {
   const window = new Window({ url: 'https://example.invalid/' });
   const document = window.document;
   document.write(indexHtml);
-  document.querySelector('#route-list').innerHTML = routeListHTML(routes);
+  document.querySelector('#rl-national-list').innerHTML = routeListHTML(routes);
 
   const state = {
     selected: new Set(),
     prefSelected: new Set(),
-    nationalBefore: null,
-    prefBefore: null,
+    // 県 → 番号。本物は pref/index.json を開いた物で、面を開いたときに届く。
+    prefIndex: new Map([
+      ['nagano', [18, 63, 180]],
+      ['tokyo', [7, 18, 181]],
+    ]),
+    prefLabels: new Map([
+      ['nagano', '長野県'],
+      ['tokyo', '東京都'],
+    ]),
+    prefIndexFailed: false,
+    listNational: true,
+    listPref: true,
     picked: null,
     conc: 'off',
     labels: true,
@@ -61,10 +73,12 @@ function setup(routes = ROUTES) {
   const applyFilters = () => {
     applyCalls.push(new Set(state.selected));
     const clear = document.querySelector('#sel-none');
-    clear.disabled = state.selected.size === 0;
+    // 本物の updateStats と同じ数え方。両系統の合計が 0 のあいだ ✕ は居ない。
+    clear.hidden = state.selected.size + state.prefSelected.size === 0;
   };
 
   wireControls(document, state, applyFilters);
+  applyRouteFilter(document, state);
   return { window, document, state, applyCalls, applyFilters };
 }
 
@@ -78,15 +92,15 @@ describe('wireControls — 路線の選択', () => {
     expect(state.selected.has(7)).toBe(false);
   });
 
-  test('選択が空のとき「選択解除」ボタンが disabled になる', () => {
+  test('選択が空のとき「選択解除」ボタンは出ない', () => {
     const { document } = setup();
     const clear = document.querySelector('#sel-none');
 
     document.querySelector('#route-list input[value="7"]').click();
-    expect(clear.disabled).toBe(false);
+    expect(clear.hidden).toBe(false);
 
     document.querySelector('#route-list input[value="7"]').click();
-    expect(clear.disabled).toBe(true);
+    expect(clear.hidden).toBe(true);
   });
 
   test('「選択解除」ボタンは選択を空にし、チェックボックスも外す', () => {
@@ -113,74 +127,50 @@ describe('wireControls — 路線の選択', () => {
   });
 });
 
-/* 「この路線だけ表示」は、押す場所によらず「その 1 本だけを地図に残す」を
- * 意味する。押した系統の 1 本を残し、もう一方の系統は消す。 */
+/* 「この路線だけ表示」は選択を差し替えるだけである。「だけ」を成り立たせて
+ * いるのは絞り込みの側(mapspec.mjs の shownSystems)で、押した場所によらず
+ * 同じ絵になる。系統トグルは触らない。 */
 describe('この路線だけ表示', () => {
   const tPref = (doc) => doc.querySelector('#t-pref');
   const tNational = (doc) => doc.querySelector('#t-national');
 
-  test('国道を 1 本残すと、都道府県道は消える', () => {
+  test('国道を 1 本残しても、系統トグルには触らない', () => {
     const { document, state, applyFilters } = setup();
     showRouteOnly(document, state, 8, applyFilters);
 
     expect(state.selected).toEqual(new Set([8]));
-    expect(state.pref).toBe(false);
-    expect(tPref(document).checked).toBe(false);
-  });
-
-  test('都道府県道を 1 本残すと、国道は消える', () => {
-    const { document, state, applyFilters } = setup();
-    togglePrefOnly(document, state, 'nagano-63', applyFilters);
-
-    expect(state.prefSelected).toEqual(new Set(['nagano-63']));
-    expect(state.national).toBe(false);
-    expect(tNational(document).checked).toBe(false);
-  });
-
-  test('もう一度押すと都道府県道の選択が解け、国道が戻る', () => {
-    const { document, state, applyFilters } = setup();
-    togglePrefOnly(document, state, 'nagano-63', applyFilters);
-    togglePrefOnly(document, state, 'nagano-63', applyFilters);
-
-    expect(state.prefSelected.size).toBe(0);
-    expect(state.national).toBe(true);
-    expect(tNational(document).checked).toBe(true);
-  });
-
-  test('別の路線を押したときは、その 1 本に入れ替わる', () => {
-    const { document, state, applyFilters } = setup();
-    togglePrefOnly(document, state, 'nagano-63', applyFilters);
-    togglePrefOnly(document, state, 'tokyo-18', applyFilters);
-
-    expect(state.prefSelected).toEqual(new Set(['tokyo-18']));
-    expect(state.national).toBe(false);
-  });
-
-  /* 押す前から消していた系統を、解除で勝手に点け直しません。ボタンが自分で
-     消したものを、自分で戻す形です。 */
-  test('押す前から国道を消していたら、解除しても消えたまま', () => {
-    const { document, state, applyFilters } = setup();
-    state.national = false;
-    tNational(document).checked = false;
-
-    togglePrefOnly(document, state, 'nagano-63', applyFilters);
-    togglePrefOnly(document, state, 'nagano-63', applyFilters);
-
-    expect(state.national).toBe(false);
-    expect(tNational(document).checked).toBe(false);
-  });
-
-  test('国道の選択解除で、消えていた都道府県道が戻る', () => {
-    const { document, state, applyFilters } = setup();
-    showRouteOnly(document, state, 8, applyFilters);
-    document.querySelector('#sel-none').click();
-
-    expect(state.selected.size).toBe(0);
     expect(state.pref).toBe(true);
     expect(tPref(document).checked).toBe(true);
   });
 
-  test('「だけ表示」を経ていない選択解除は、系統に触らない', () => {
+  test('都道府県道を 1 本選んでも、系統トグルには触らない', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(state, 'nagano-63', applyFilters);
+
+    expect(state.prefSelected).toEqual(new Set(['nagano-63']));
+    expect(state.national).toBe(true);
+    expect(tNational(document).checked).toBe(true);
+  });
+
+  test('もう一度押すと都道府県道の選択が解ける', () => {
+    const { state, applyFilters } = setup();
+    togglePrefOnly(state, 'nagano-63', applyFilters);
+    togglePrefOnly(state, 'nagano-63', applyFilters);
+
+    expect(state.prefSelected.size).toBe(0);
+  });
+
+  test('別の路線を押したときは、その 1 本に入れ替わる', () => {
+    const { state, applyFilters } = setup();
+    togglePrefOnly(state, 'nagano-63', applyFilters);
+    togglePrefOnly(state, 'tokyo-18', applyFilters);
+
+    expect(state.prefSelected).toEqual(new Set(['tokyo-18']));
+  });
+
+  /* 手で消した系統を、選択解除が点け直すことはありません。系統トグルは
+     選択とは別の物です。 */
+  test('選択解除は系統トグルに触らない', () => {
     const { document, state } = setup();
     state.pref = false;
     tPref(document).checked = false;
@@ -188,32 +178,28 @@ describe('この路線だけ表示', () => {
     document.querySelector('#route-list input[value="7"]').click();
     document.querySelector('#sel-none').click();
 
+    expect(state.selected.size).toBe(0);
     expect(state.pref).toBe(false);
-  });
-
-  /* 系統を手で切り替えた後は、ボタンが後から戻す物はありません。 */
-  test('系統を手で切り替えると、控えていた値を捨てる', () => {
-    const { document, window, state, applyFilters } = setup();
-    showRouteOnly(document, state, 8, applyFilters);
-
-    const t = tPref(document);
-    t.checked = true;
-    t.dispatchEvent(new window.Event('change', { bubbles: true }));
-    expect(state.prefBefore).toBeNull();
-
-    t.checked = false;
-    t.dispatchEvent(new window.Event('change', { bubbles: true }));
-    document.querySelector('#sel-none').click();
-    expect(state.pref).toBe(false);
+    expect(tPref(document).checked).toBe(false);
   });
 });
 
+/* 絞り込み欄は一つで、国道にも都道府県道にも当たる。国道は 459 行が最初から
+ * DOM に居るので伏せ、都道府県道は当たった行だけをその場で組む。 */
 describe('wireControls — 絞り込み', () => {
-  test('絞り込み入力が、一致しない行に hidden を付ける', () => {
-    const { document, window } = setup();
+  const type = (document, window, q) => {
     const input = document.querySelector('#route-filter');
-    input.value = '8';
+    input.value = q;
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  };
+  const prefRows = (document) =>
+    [...document.querySelectorAll('#rl-pref-rows input')].map(
+      (i) => i.dataset.pref,
+    );
+
+  test('絞り込み入力が、一致しない国道の行に hidden を付ける', () => {
+    const { document, window } = setup();
+    type(document, window, '8');
 
     const label = (ref) => document.querySelector(`label[data-ref="${ref}"]`);
     expect(label(8).classList.contains('hidden')).toBe(false);
@@ -222,15 +208,140 @@ describe('wireControls — 絞り込み', () => {
 
   test('絞り込みを空に戻すとすべて出す', () => {
     const { document, window } = setup();
-    const input = document.querySelector('#route-filter');
-    input.value = '8';
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
-    input.value = '';
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    type(document, window, '8');
+    type(document, window, '');
 
-    for (const label of document.querySelectorAll('#route-list label')) {
+    for (const label of document.querySelectorAll('#rl-national-list label')) {
       expect(label.classList.contains('hidden')).toBe(false);
     }
+  });
+
+  /* 打つまで都道府県道は出しません。13,234 組を並べても選べません。 */
+  test('打つまで都道府県道は出ない', () => {
+    const { document } = setup();
+    expect(prefRows(document)).toEqual([]);
+    expect(document.querySelector('#rl-pref-rows').textContent).toContain(
+      '番号を打つと',
+    );
+  });
+
+  test('打つと同じ欄が都道府県道にも当たる', () => {
+    const { document, window } = setup();
+    type(document, window, '18');
+
+    // 番号が先、同じ番号の中は県の順。前方一致なので 180・181 も残る。
+    expect(prefRows(document)).toEqual([
+      'nagano-18',
+      'tokyo-18',
+      'nagano-180',
+      'tokyo-181',
+    ]);
+  });
+
+  test('一致が無ければ、無いと言う', () => {
+    const { document, window } = setup();
+    type(document, window, '999');
+    expect(prefRows(document)).toEqual([]);
+    expect(document.querySelector('#rl-pref-rows').textContent).toContain(
+      '一致する都道府県道はありません',
+    );
+  });
+
+  /* 索引は面を開いたときに取りに行きます。開いてすぐ打った人には間に合わない
+     ことがあり、空を出すと「無い」に読めます。 */
+  test('索引が届く前は、待っていると言う', () => {
+    const { document, window, state } = setup();
+    state.prefIndex = null;
+    type(document, window, '18');
+    expect(prefRows(document)).toEqual([]);
+    expect(document.querySelector('#rl-pref-rows').textContent).toContain(
+      '読み込んでいます',
+    );
+  });
+
+  /* 落ちたときに待っている表示のまま止めると、いつまでも読み込み中に見えます。 */
+  test('索引が取れなかったときは、取れなかったと言う', () => {
+    const { document, window, state } = setup();
+    state.prefIndex = null;
+    state.prefIndexFailed = true;
+    type(document, window, '18');
+    expect(document.querySelector('#rl-pref-rows').textContent).toContain(
+      '読み込めませんでした',
+    );
+  });
+
+  test('都道府県道の行を押すと state.prefSelected が変わる', () => {
+    const { document, window, state } = setup();
+    type(document, window, '18');
+
+    const cb = document.querySelector('#rl-pref-rows input[value="nagano-18"]');
+    cb.click();
+    expect(state.prefSelected.has('nagano-18')).toBe(true);
+
+    cb.click();
+    expect(state.prefSelected.has('nagano-18')).toBe(false);
+  });
+
+  test('選んでいる都道府県道は、組み直しても印が付いたまま', () => {
+    const { document, window } = setup();
+    type(document, window, '18');
+    document.querySelector('#rl-pref-rows input[value="nagano-18"]').click();
+
+    type(document, window, '');
+    type(document, window, '18');
+
+    const cb = document.querySelector('#rl-pref-rows input[value="nagano-18"]');
+    expect(cb.checked).toBe(true);
+    expect(cb.closest('label').classList.contains('on')).toBe(true);
+  });
+});
+
+/* 一覧に出す系統は三状態しかありません。どちらも外れると一覧が空になり、
+ * 押した人が頼んでいないことが起きます。 */
+describe('wireControls — 一覧に出す系統', () => {
+  const pressed = (document, sel) =>
+    document.querySelector(sel).getAttribute('aria-pressed');
+
+  test('既定はどちらも選ばれている', () => {
+    const { document, state } = setup();
+    expect(state.listNational).toBe(true);
+    expect(state.listPref).toBe(true);
+    expect(pressed(document, '#sys-national')).toBe('true');
+    expect(pressed(document, '#sys-pref')).toBe('true');
+  });
+
+  test('片方を押すと、その系統だけが一覧から消える', () => {
+    const { document, state } = setup();
+    document.querySelector('#sys-pref').click();
+
+    expect(state.listPref).toBe(false);
+    expect(pressed(document, '#sys-pref')).toBe('false');
+    expect(document.querySelector('#rl-pref').hidden).toBe(true);
+    expect(document.querySelector('#rl-national').hidden).toBe(false);
+  });
+
+  test('最後の一枚は押しても外れない', () => {
+    const { document, state } = setup();
+    document.querySelector('#sys-pref').click();
+    document.querySelector('#sys-national').click();
+
+    expect(state.listNational).toBe(true);
+    expect(state.listPref).toBe(false);
+    expect(pressed(document, '#sys-national')).toBe('true');
+  });
+
+  /* 一覧から消えた系統の選択はそのまま残ります。ここは探す先を絞る欄で
+     あって、選んだものを捨てる場所ではありません。 */
+  test('一覧から消しても、選択は捨てない', () => {
+    const { document, window, state } = setup();
+    const input = document.querySelector('#route-filter');
+    input.value = '18';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    document.querySelector('#rl-pref-rows input[value="nagano-18"]').click();
+
+    document.querySelector('#sys-pref').click();
+
+    expect(state.prefSelected.has('nagano-18')).toBe(true);
   });
 });
 
@@ -280,9 +391,47 @@ describe('wireControls — 表示のトグル', () => {
   });
 });
 
-/* 国道一覧はどの画面幅でも畳んだ状態で始まる。459 個のチェックボックスは
- * サイドパネルの大半を占めるので、開くのは番号を眺めたい人だけでよい。 */
-describe('国道一覧の折りたたみ', () => {
+/* 「選択削除」は国道と都道府県道の両方を引き受ける。「国道を選択」を
+ * 「道路を選択」と改めたのはそのためで、系統をまたいで一つある選択を、
+ * 一つの ✕ が空に戻す。 */
+describe('clearSelection — 両系統の選択解除', () => {
+  test('国道と都道府県道の両方を空にする', () => {
+    const { document, state, applyFilters } = setup();
+    document.querySelector('#route-list input[value="7"]').click();
+    togglePrefOnly(state, 'nagano-63', applyFilters);
+
+    clearSelection(document, state, applyFilters);
+
+    expect(state.selected.size).toBe(0);
+    expect(state.prefSelected.size).toBe(0);
+  });
+
+  /* 詳細パネルを閉じても、地図の上の ✕ から戻せる。閉じたパネルの中にしか
+   * 解除が無かったころ、県道を 1 本選んだ人は国道へ戻れなかった。 */
+  test('都道府県道だけを選んでいても、✕ が解除する', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(state, 'nagano-63', applyFilters);
+
+    document.querySelector('#sel-none').click();
+
+    expect(state.prefSelected.size).toBe(0);
+  });
+
+  test('一覧のチェックも外す', () => {
+    const { document, state, applyFilters } = setup();
+    const cb = document.querySelector('#route-list input[value="7"]');
+    cb.click();
+
+    clearSelection(document, state, applyFilters);
+
+    expect(cb.checked).toBe(false);
+    expect(cb.closest('label').classList.contains('on')).toBe(false);
+  });
+});
+
+/* 地図の上のボタンから出る面。押すまで開かないので、最初は三つとも hidden で
+ * ある。開け閉ては app.js が持つので、ここが見るのは骨格だけである。 */
+describe('地図の上の面', () => {
   const load = (width) => {
     const window = new Window({
       url: 'https://example.invalid/',
@@ -293,49 +442,44 @@ describe('国道一覧の折りたたみ', () => {
     return window.document;
   };
 
-  test('広い画面でも畳まれている', () => {
-    expect(load(1280).querySelector('#route-block').open).toBe(false);
+  test('三つの面はどの画面幅でも閉じて始まる', () => {
+    for (const width of [1280, 375]) {
+      const document = load(width);
+      for (const id of [
+        '#select-popover',
+        '#ranking-popover',
+        '#shared-popover',
+      ]) {
+        expect(document.querySelector(id).hidden).toBe(true);
+      }
+    }
   });
 
-  test('狭い画面でも畳まれている', () => {
-    expect(load(375).querySelector('#route-block').open).toBe(false);
-  });
-
-  /* 絞り込み欄は一覧と一緒に畳む。選択解除は畳んだままでも押せなければ
-   * ならない——選択は地図に効いており、一覧を開かずに戻したいことがある。
-   * summary は閉じていても描かれるので、そこに置けば常に見える。 */
-  test('絞り込み欄は畳む側にある', () => {
+  /* 面は自分のボタンと同じ台の中に居る。位置合わせの計算をどこにも持たない
+   * ための約束で、app.js の registerPane が台を「面の持ち物」として使う。 */
+  test('面はボタンと同じ台の中にある', () => {
     const document = load(1280);
-    const block = document.querySelector('#route-block');
-    expect(block.contains(document.querySelector('#route-filter'))).toBe(true);
-    expect(
-      document
-        .querySelector('#route-block > summary')
-        .contains(document.querySelector('#route-filter')),
-    ).toBe(false);
+    for (const [btn, pane] of [
+      ['#select-btn', '#select-popover'],
+      ['#ranking-btn', '#ranking-popover'],
+      ['#shared-btn', '#shared-popover'],
+    ]) {
+      const ctrl = document.querySelector(btn).closest('.ui-ctrl');
+      expect(ctrl.contains(document.querySelector(pane))).toBe(true);
+    }
   });
 
-  /* 見える場所は summary の行のままだが、DOM では details の外に置く。
-   * <summary> の中の対話部品は、開閉が先に手を取るのでキーボードや支援技術
-   * から確実には届かない。 */
-  test('選択解除は details の外、同じ節の中にある', () => {
+  /* 絞り込み欄と一覧は面の中、選択解除は面の外。選択は地図に効いており、
+   * 面を開かずに戻したいことがある。 */
+  test('絞り込みと一覧は面の中、選択解除は面の外にある', () => {
     const document = load(1280);
+    const pane = document.querySelector('#select-popover');
+    expect(pane.contains(document.querySelector('#route-filter'))).toBe(true);
+    expect(pane.contains(document.querySelector('#route-list'))).toBe(true);
+
     const clear = document.querySelector('#sel-none');
-    expect(document.querySelector('#route-block').contains(clear)).toBe(false);
-    expect(
-      document.querySelector('#route-block').closest('.block').contains(clear),
-    ).toBe(true);
-  });
-
-  test('選択解除を押しても折りたたみは開かない', () => {
-    const { document } = setup();
-    const block = document.querySelector('#route-block');
-    expect(block.open).toBe(false);
-
-    document.querySelector('#route-list input[value="7"]').click();
-    document.querySelector('#sel-none').click();
-
-    expect(block.open).toBe(false);
+    expect(pane.contains(clear)).toBe(false);
+    expect(clear.closest('.ui-ctrl').contains(pane)).toBe(true);
   });
 
   /* 狭い画面と見なす幅は style.css の @media と wiring.mjs の二箇所にある。

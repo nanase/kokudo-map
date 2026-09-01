@@ -34,12 +34,62 @@ import {
   routeLayers,
   routeSources,
   SPECIAL_KINDS,
+  shownSystems,
   terminiFilter,
   withKind,
   withPrefSelection,
 } from '../web/mapspec.mjs';
 
 /* -------------------------------------------------------------- 絞り込み --- */
+
+/* 選択は系統をまたいで一つです。どちらかの系統で 1 本でも選んだら、地図に
+ * 残るのは選んだ道路だけになります——国道を選べば都道府県道は消え、都道府県道を
+ * 選べば国道が消えます。どちらかが上位ということはありません。 */
+describe('shownSystems', () => {
+  const shown = (o) =>
+    shownSystems({
+      national: true,
+      pref: true,
+      selected: 0,
+      prefSelected: 0,
+      ...o,
+    });
+
+  test('選択が空なら両方とも出す', () => {
+    // 空は「何も出ていない」ではなく「全部出ている」を意味します。
+    expect(shown({})).toEqual({ national: true, pref: true });
+  });
+
+  test('国道を選ぶと都道府県道は消える', () => {
+    expect(shown({ selected: 1 })).toEqual({ national: true, pref: false });
+  });
+
+  test('都道府県道を選ぶと国道は消える', () => {
+    expect(shown({ prefSelected: 1 })).toEqual({ national: false, pref: true });
+  });
+
+  test('両方から選んでいれば両方とも出す', () => {
+    expect(shown({ selected: 2, prefSelected: 1 })).toEqual({
+      national: true,
+      pref: true,
+    });
+  });
+
+  /* 系統トグル(表示の面の「国道」「都道府県道」)は選択とは別の物です。
+     選択に関わりなく、消してあれば消えたままです。 */
+  test('系統トグルは選択より後に効く', () => {
+    expect(shown({ national: false })).toEqual({ national: false, pref: true });
+    expect(shown({ pref: false, selected: 1 })).toEqual({
+      national: true,
+      pref: false,
+    });
+    // 選んだ系統そのものを消してあれば、選んでいても出ない。
+    expect(shown({ national: false, selected: 1 })).toEqual({
+      national: false,
+      pref: false,
+    });
+  });
+});
 describe('buildFilter', () => {
   test('選択も強調も無ければ、絞り込まない', () => {
     // `true` は「全部通す」であって、空の ['all'] ではありません。ここを配列にすると

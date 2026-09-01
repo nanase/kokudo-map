@@ -472,6 +472,7 @@ PR #104 が測った 1,307 本・562.4 km は、地域ファイルが運ぶ 355,
 | `regions.json` | 5.7 kB |
 | `prefectural-routes.pmtiles` | 100.3 MB、83,356 タイル、z0-14 |
 | `pref/{region}.meta.json` | 47 ファイルで 3.45 MB。最大 227 kB(北海道) |
+| `pref/index.json` | 14.4 kB。13,234 路線を県ごとの範囲表記に畳んだもの |
 
 中間の GeoJSON は国道が 47 ファイルで 159 MB、都道府県道が 47 ファイルで 182 MB です。どちらも配りません。
 

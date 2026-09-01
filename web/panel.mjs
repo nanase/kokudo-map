@@ -1,6 +1,6 @@
-/* サイドパネルが出すものを、データの関数として組み立てる。
+/* 地図の上の面と凡例が出すものを、データの関数として組み立てる。
  *
- * 操作面は自前の数を持たない。閲覧側はアークを手元に持たないので、合計も一覧も
+ * 面は自前の数を持たない。閲覧側はアークを手元に持たないので、合計も一覧も
  * 個数も、すべて national.meta.json から読む——その下にある二つの和は
  * aggregate.mjs にある。残るのはその答えを markup に直すことで、これも純関数
  * なので、検査できる場所に置く。
@@ -21,10 +21,17 @@ import {
 } from './mapspec.mjs';
 import { hexShield, prefRouteName, shieldRow } from './shield.mjs';
 
-/* 畳んだ一覧が出す行数。どちらもビルドが並べ替えて配るので、頭から取れば
- * 上位がそのまま出る。任意の抜き取りではない。 */
+/* 面が出す行数。どちらもビルドが並べ替えて配るので、頭から取れば上位が
+ * そのまま出る。任意の抜き取りではない。 */
 export const RANKING_ROWS = 25;
 export const SHARED_ROWS = 20;
+
+/* 「道路を選択」の面が一度に出す都道府県道の行数。
+ *
+ * 全国に 13,234 組ある。「1」の一致だけで数千件になり、それが打っている途中の
+ * 1 文字ごとに起きるので、DOM にする数はここで切る。切ったことは見出しが述べる
+ * (prefGroupLabel)ので、黙って落とすことにはならない。 */
+export const PREF_LIST_ROWS = 200;
 
 /* ------------------------------------------------------------------ 路線 --- */
 /** データにあるすべての路線を並べたチェックボックスの一覧。 */
@@ -59,22 +66,57 @@ export const clearLabel = (selectedCount) =>
   selectedCount ? `${selectedCount} 路線を選択解除` : '選択解除';
 
 /**
- * 畳んだ国道一覧の見出しが述べる数。
+ * 「道路を選択」の面の見出しが述べる数。
  *
  * 選択が無いときは 0 ではなく「すべて」と言う。選択が空であることは
  * 「何も出ていない」ではなく「全部出ている」を意味するので、0 と書くと
  * 地図の見え方と逆になる。共有ダイアログも同じ言い方をする。
+ *
+ * 数えるのは国道と都道府県道の合計である。分母は書かない——この面は両方の系統を
+ * 引き受けており、国道の 459 を分母に置くと、都道府県道を選んだときに嘘になる。
  */
-export const selectionLabel = (selectedCount, totalRoutes) =>
-  selectedCount
-    ? `${selectedCount} / ${totalRoutes} 路線`
-    : `すべて（${totalRoutes} 路線）`;
+export const selectionLabel = (selectedCount) =>
+  selectedCount ? `${selectedCount} 路線を選択中` : 'すべて';
+
+/**
+ * 都道府県道の群の見出し。切ったときはそう言う。
+ *
+ * 「上位」と言えるのは並びに意味があるからである(番号の昇順)。任意の 200 件を
+ * 抜いているのではない。
+ */
+export const prefGroupLabel = (shown, total) =>
+  total > shown
+    ? `都道府県道 ── 上位 ${shown} / ${total.toLocaleString()} 件`
+    : `都道府県道 ── ${total} 件`;
+
+/**
+ * 都道府県道の行。
+ *
+ * 番号は県の中でしか一意でない(県道 18 号は 47 本ある)ので、行は県を述べなければ
+ * 路線を名指したことにならない。標識は地図に出るものと同じヘキサで、番号だけを
+ * 中に入れ、県は隣に文字で置く——標識の中に県名を入れても、この大きさでは形に
+ * ならない(shield.mjs の hexShield)。
+ */
+export const prefRowsHTML = (rows, selected) =>
+  rows
+    .map(({ key, prefLabel, ref }) => {
+      const name = prefRouteName(prefLabel, ref);
+      const on = selected.has(key);
+      return (
+        `<label class="pref-row${on ? ' on' : ''}" title="${esc(name)}">` +
+        `<input type="checkbox" data-pref="${esc(key)}" value="${esc(key)}"` +
+        `${on ? ' checked' : ''}>` +
+        hexShield(prefLabel, ref, true) +
+        `<span class="nm">${esc(prefLabel)}</span></label>`
+      );
+    })
+    .join('');
 
 /* -------------------------------------------------------------- 重用一覧 --- */
 /* 並べる行を選ぶのは aggregate.mjs の concurrencies() である。組み合わせ表を
    選択で絞る規則はそこに一度だけ書いてある。 */
 
-/** 畳んだ見出しに出す「25 / 1,237 組」。何も無いときは何も出さない。 */
+/** 面の見出しに出す「25 / 1,237 組」。何も無いときは何も出さない。 */
 export const countLabel = (shown, total, unit) =>
   total ? `${shown} / ${total} ${unit}` : '';
 

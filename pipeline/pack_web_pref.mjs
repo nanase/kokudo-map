@@ -2,6 +2,7 @@
  *
  *   prefectural-routes.pmtiles   ベクタタイル。国道とは別のアーカイブ
  *   pref/{region}.meta.json      県ごとの集計。県を選んだときに 1 つだけ取る
+ *   pref/index.json              全国の県と番号だけの索引。選択パネルが読む
  *
  * 国道(pack_web.mjs)と分ける理由は三つある。国道の 55.9 MB を県道を直すたびに
  * 上げ直さずに済むこと。タイル化のメモリが 2 回に分かれること。県道側が壊れても
@@ -18,6 +19,7 @@
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { encodeRoutes } from '../web/urlstate.mjs';
 import { DATA, PREFECTURAL, ROOT } from './_paths.mjs';
 import { combinationsOf, crossingsOf } from './rollup.mjs';
 import { bboxOf, unionBbox, writeTiles } from './tiles.mjs';
@@ -92,6 +94,10 @@ let totalCombos = 0;
 let totalCrossings = 0;
 let metaBytes = 0;
 let biggest = { region: null, bytes: 0 };
+/* 全国の番号だけの索引。県別 meta には路線の集計が丸ごと入っていて 47 本で
+ * 3.29 MB あり、「番号で絞り込む」ためだけに読ませる量ではない。ここが番号だけ
+ * を抜いて 1 枚にする。 */
+const index = {};
 
 for (const region of regions) {
   const built = JSON.parse(
@@ -153,6 +159,8 @@ for (const region of regions) {
 
   const combos = combinationsOf(mine, (f) => ({ rank: f.properties.rank }));
   const crossings = crossingsOf(mine, byRef);
+  // その県に在る番号。組み合わせ表の鍵から番号だけを取り、重複を落とす。
+  index[region] = new Set(combos.flatMap((c) => c.refs.map(num)));
   const bbox = mine.reduce(
     (a, f) => unionBbox(a, f.bbox),
     [Infinity, Infinity, -Infinity, -Infinity],
@@ -199,6 +207,23 @@ console.log(
 console.log(
   `meta: ${regions.length} files, ${(metaBytes / 1e6).toFixed(2)} MB total, ` +
     `biggest ${biggest.region} ${(biggest.bytes / 1e3).toFixed(0)} kB`,
+);
+
+/* ----------------------------------------------------------------- 索引 --- */
+/* 番号は範囲表記に畳む。県の中の番号は塊で存在する(1-2,4,6-27,…)ので、羅列より
+ * 短くなる。畳み方は web/urlstate.mjs の encodeRoutes をそのまま借りる——閲覧側は
+ * 同じファイルの decodeRoutes で開くので、畳み方の答えが二箇所に分かれない。 */
+const indexText = JSON.stringify(
+  Object.fromEntries(
+    Object.entries(index).map(([region, refs]) => [region, encodeRoutes(refs)]),
+  ),
+);
+writeFileSync(join(METADIR, 'index.json'), indexText);
+console.log(
+  `index: ${Object.values(index)
+    .reduce((a, s) => a + s.size, 0)
+    .toLocaleString()} ` +
+    `routes in ${(Buffer.byteLength(indexText, 'utf8') / 1e3).toFixed(1)} kB`,
 );
 
 /* ----------------------------------------------------------------- tiles --- */

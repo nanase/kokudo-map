@@ -200,7 +200,7 @@ const report = await page.evaluate(() => {
     const rendered = m.queryRenderedFeatures({ layers: [id] });
     out.layers[id] = { exists: !!m.getLayer(id), rendered: rendered.length };
   }
-  out.routeCount = document.querySelectorAll('#route-list label').length;
+  out.routeCount = document.querySelectorAll('#rl-national-list label').length;
   out.rankingRows = document.querySelectorAll('#ranking .row').length;
   out.sharedRows = document.querySelectorAll('#shared .row').length;
   // #stats は今、閉じている「国道マップについて」のダイアログの中に居る。
@@ -217,11 +217,11 @@ const report = await page.evaluate(() => {
   // 地図の上のボタン。現在位置は MapLibre 自身の部品なので、あるかどうかだけを見る
   // (押すと端末の許可を求めるので、ここでは押さない)。方位は拡大・縮小とは
   // 別の台に乗っている——同じ群に並んでいると、拡大を連打する指が地図を回す。
-  // 重用区間と表示は地図の側にある。同じものが操作面にも残っていれば、
+  // 重用区間と表示は「表示」の面ひとつが持つ。同じものが他の面にも残っていれば、
   // どちらを押したかで結果が変わる二つの口ができてしまう。
-  out.togglesInPanel = document.querySelectorAll(
-    '#panel .checks input, #panel input[name=conc]',
-  ).length;
+  out.togglesOutsidePane = [
+    ...document.querySelectorAll('.checks input, input[name=conc]'),
+  ].filter((i) => !i.closest('#display-popover')).length;
   out.paneButtons = document.querySelectorAll('#display-btn').length;
   out.geolocateButtons = document.querySelectorAll(
     '.maplibregl-ctrl-geolocate',
@@ -232,10 +232,15 @@ const report = await page.evaluate(() => {
   const compassGroup = groupOf('.maplibregl-ctrl-compass');
   out.compassApart =
     !!zoomGroup && !!compassGroup && zoomGroup !== compassGroup;
-  out.folded = ['route', 'ranking', 'shared'].map((name) => ({
+  // 左上の三つの面。押すまで開かないが、閉じたまま自分の大きさは述べ続ける
+  // ——数まで隠す畳み方は、節約した面積より害が大きい。閉じた面の innerText は
+  // 描かれていないぶん空なので、数は textContent から読む。
+  out.panes = ['select', 'ranking', 'shared'].map((name) => ({
     name,
-    open: document.querySelector(`#${name}-block`).open,
-    count: document.querySelector(`#${name}-count`).innerText,
+    open: !document.querySelector(`#${name}-popover`).hidden,
+    count: document.querySelector(
+      `#${name === 'select' ? 'route' : name}-count`,
+    ).textContent,
   }));
   return out;
 });
@@ -286,7 +291,7 @@ const about = await page.evaluate(async () => {
   return {
     before,
     opened,
-    inPanel: !!document.querySelector('#panel #stats'),
+    onMap: !!document.querySelector('#map-ui #stats'),
   };
 });
 ok(
@@ -294,13 +299,13 @@ ok(
   'the info button opens the 国道マップについて dialog',
 );
 ok(
-  !about.inPanel,
-  'the data provenance is stated in that dialog, not also in the sidebar',
+  !about.onMap,
+  'the data provenance is stated in that dialog, not also on the map',
 );
 
 ok(
-  report.paneButtons === 1 && report.togglesInPanel === 0,
-  'the concurrency and display switches are on the map, not also in the sidebar',
+  report.paneButtons === 1 && report.togglesOutsidePane === 0,
+  'the concurrency and display switches live in one pane, not in two places',
 );
 /* 配色は同じ面の中から選ぶ。色そのものは style.css の light-dark() が両方
  * 述べているので、ここが確かめるのは「選んだ側が data-theme に出て、面の地の
@@ -308,7 +313,7 @@ ok(
 const themed = await page.evaluate(() => {
   const root = document.documentElement;
   const panelBg = () =>
-    getComputedStyle(document.querySelector('#panel')).backgroundColor;
+    getComputedStyle(document.querySelector('#brand')).backgroundColor;
   const pick = (value) => {
     const el = document.querySelector(`input[name=theme][value="${value}"]`);
     el.checked = true;
@@ -341,82 +346,79 @@ ok(
   report.compassApart,
   'the compass sits on its own group, apart from the zoom buttons',
 );
-// 参照用の一覧は畳んであるが、畳んだこと自体を隠す畳み方は、節約した高さより
-// 害が大きい。だからどの見出しも自分の大きさを述べ続けなければならない。
-for (const b of report.folded) {
-  ok(b.open === false, `the ${b.name} list starts folded`);
+// 参照用の一覧は面の中にあり、押すまで開かない。ただし、開いてみるまで中身の
+// 見当が付かない畳み方は、節約した面積より害が大きい。だからどの見出しも、閉じた
+// ままで中身を述べ続けなければならない。
+//
+// 述べる物は面によって違う。ランキングと起終点は動かない一覧なので件数を出す。
+// 「道路を選択」が述べるのは選んでいるかどうかで、選んでいなければ数ではなく
+// 「すべて」である——0 と書くと「何も出ていない」に読め、地図の見え方と逆になる。
+for (const b of report.panes) {
+  ok(b.open === false, `the ${b.name} pane starts closed`);
   ok(
-    /\d/.test(b.count),
-    `the folded ${b.name} list still states its size ("${b.count}")`,
+    b.name === 'select' ? b.count.length > 0 : /\d/.test(b.count),
+    `the closed ${b.name} pane still states what is inside ("${b.count}")`,
   );
 }
 
-/* 操作面は地図の上に浮いている。畳んでも canvas の寸法は変わらない——変わる
- * のは地図の padding、つまり「地図が中心と見なす点」がパネルをどれだけ避けるか
- * である。ここが守るのはその対応で、畳めば padding が消え、開き直せば戻る。
+/* 左上の台は面を開く。四つの面——道路を選択・ランキング・起終点・表示——は
+ * どれも地図の上に浮くだけなので、開いても canvas の寸法は変わらず、地図の
+ * padding も動かない。かつてここには 340px のサイドパネルがあり、padding が
+ * その幅ぶん左に寄っていた。
  *
- * 開いているあいだ閉じる口はパネル自身の × で、閉じているあいだ開き直す口は
- * 地図の上のボタンである。どちらか一方だけが出ていることも併せて見る。 */
-const folding = await page.evaluate(async () => {
-  /* padding の変化は easeTo なので、押した瞬間はまだ途中である。MapLibre が
-   * 落ち着いたと言うまで待つ。上限を置いて、来なければそのまま返す——下の
-   * ok() がそれを失敗として述べる。 */
-  const settled = () =>
-    new Promise((resolve) => {
-      const timer = setTimeout(resolve, 5000);
-      window.map.once('idle', () => {
-        clearTimeout(timer);
-        resolve();
-      });
-    });
-  const left = () => Math.round(window.map.getPadding().left);
-  const shown = (sel) => !!document.querySelector(sel).offsetParent;
-
-  const open = {
-    padding: left(),
-    toggleShown: shown('#panel-toggle'),
-    closeShown: shown('#panel-close'),
+ * 一度に開くのは一つだけである。二枚が並ぶと、地図の見えている面積が急に減る。 */
+const panes = await page.evaluate(async () => {
+  const open = (sel) => {
+    document.querySelector(sel).click();
+    return {
+      btn: sel,
+      shown: [
+        '#select-popover',
+        '#ranking-popover',
+        '#shared-popover',
+        '#display-popover',
+      ].filter((p) => !document.querySelector(p).hidden),
+      padding: Math.round(window.map.getPadding().left),
+      pressed: document.querySelector(sel).getAttribute('aria-expanded'),
+    };
   };
-  document.querySelector('#panel-close').click();
-  await settled();
-  const folded = {
-    padding: left(),
-    inert: document.querySelector('#panel').inert,
-    toggleShown: shown('#panel-toggle'),
-  };
-  document.querySelector('#panel-toggle').click();
-  await settled();
-  return { open, folded, back: left() };
+  const first = open('#select-btn');
+  const second = open('#ranking-btn');
+  // 外を押せば閉じる。地図そのものが「面の持ち物」の外である。
+  document.querySelector('#map').click();
+  const closed = [
+    '#select-popover',
+    '#ranking-popover',
+    '#shared-popover',
+    '#display-popover',
+  ].filter((p) => !document.querySelector(p).hidden);
+  return { first, second, closed };
 });
 ok(
-  folding.open.padding > 0,
-  `the open panel pushes the map centre clear of it (${folding.open.padding}px)`,
+  panes.first.shown.length === 1 &&
+    panes.first.shown[0] === '#select-popover' &&
+    panes.first.pressed === 'true',
+  `pressing 道路を選択 opens its pane and says so (${panes.first.shown.join(', ')})`,
 );
 ok(
-  folding.folded.padding === 0,
-  `folding the panel hands the map the whole window (${folding.folded.padding}px)`,
+  panes.second.shown.length === 1 &&
+    panes.second.shown[0] === '#ranking-popover',
+  `opening another pane closes the first (${panes.second.shown.join(', ')})`,
 );
 ok(
-  folding.folded.inert,
-  'the folded panel is inert, so tab cannot reach the controls parked behind it',
+  panes.closed.length === 0,
+  `clicking the map closes the open pane (${panes.closed.join(', ') || 'none open'})`,
 );
 ok(
-  folding.open.closeShown && !folding.open.toggleShown,
-  'while open, the panel is closed by its own × and the map button is out of the way',
-);
-ok(
-  folding.folded.toggleShown,
-  'while folded, the map still carries the button that opens the panel again',
-);
-ok(
-  folding.back === folding.open.padding,
-  `unfolding puts the map back (${folding.back} vs ${folding.open.padding})`,
+  panes.first.padding === 0 && panes.second.padding === 0,
+  `the panes float over the map without moving its centre ` +
+    `(${panes.first.padding}px)`,
 );
 
-// 選択の大きさを述べるのは、選択解除のボタンだけである。かつては一覧の下の
-// 補助の行も「1 路線を選択中。」と述べていた。一つの問いへの二つ目の答えで、
-// しかも古くなり放題だった。取り消す物が無いとき、ボタンは押しても何も起きない
-// のではなく、押せなくならなければならない。
+// 選択の大きさを述べるのは、選択解除のボタンと、その隣の数の札だけである。
+// かつては一覧の下の補助の行も「1 路線を選択中。」と述べていた。一つの問いへの
+// 二つ目の答えで、しかも古くなり放題だった。取り消す物が無いあいだ、ボタンは
+// 押せない姿で居座るのではなく、居なくならなければならない。
 // 文字を持たないボタンなので、どれだけ取り消すかはラベル (title/aria-label)
 // が述べる。
 const clearBtn = () =>
@@ -425,39 +427,127 @@ const clearBtn = () =>
     return {
       text: b.title,
       aria: b.getAttribute('aria-label'),
-      disabled: b.disabled,
-      open: document.querySelector('#route-block').open,
+      hidden: b.hidden,
+      badge: document.querySelector('#sel-count').textContent,
+      paneOpen: !document.querySelector('#select-popover').hidden,
     };
   });
 const idle = await clearBtn();
 ok(
-  idle.disabled && idle.text === '選択解除' && idle.aria === '選択解除',
-  `with nothing picked the clear button is unavailable ("${idle.text}", disabled=${idle.disabled})`,
+  idle.hidden && idle.text === '選択解除' && idle.aria === '選択解除',
+  `with nothing picked the clear button is not there ("${idle.text}", hidden=${idle.hidden})`,
 );
-// 一覧は畳んだ状態で始まるので、押す前に開く。
-await page.click('#route-block > summary');
+// 一覧は面の中にあるので、押す前に開く。
+await page.click('#select-btn');
 await settle();
 await page.locator('#route-list input').first().check();
 await settle();
 const one = await clearBtn();
 ok(
-  !one.disabled && one.text === '1 路線を選択解除',
+  !one.hidden && one.text === '1 路線を選択解除',
   `the clear button states how much it would undo ("${one.text}")`,
+);
+ok(
+  one.badge === '1',
+  `and the count beside it says the same without opening anything ("${one.badge}")`,
 );
 await page.click('#sel-none');
 await settle();
 const back = await clearBtn();
-// ボタンは summary の中に居る。押して折りたたみまで開け閉てしては、押した人が
-// 頼んでいないことが起きる。
-ok(back.open, 'clearing the selection does not fold the list away');
+// ✕ は面の外、同じ台の中に居る。押して面まで畳んでは、押した人が頼んでいない
+// ことが起きる。
+ok(back.paneOpen, 'clearing the selection does not close the pane');
 ok(
-  back.disabled &&
+  back.hidden &&
     back.text === '選択解除' &&
     (await page.evaluate(
       () => document.querySelectorAll('#route-list input:checked').length === 0,
     )),
-  `pressing it clears the selection and goes quiet again ("${back.text}")`,
+  `pressing it clears the selection and goes away again ("${back.text}")`,
 );
+
+/* 絞り込み欄は一つで、国道にも都道府県道にも当たる。都道府県道の番号は
+ * pref/index.json が持ち、この面を開いたときに 1 度だけ取る(14.4 kB)——県別
+ * meta 47 本 3.45 MB を読ませないためである。
+ *
+ * 打つまで都道府県道は出さない。13,234 組は眺めて選ぶ数ではなく、並べれば DOM も
+ * 打つたびに走る絞り込みも持たない。 */
+const quiet = await page.evaluate(
+  () => document.querySelectorAll('#rl-pref-rows input').length,
+);
+ok(
+  quiet === 0,
+  `with nothing typed the prefectural list stays empty (${quiet})`,
+);
+
+await page.fill('#route-filter', '18');
+await page
+  .waitForFunction(
+    () => document.querySelectorAll('#rl-pref-rows input').length > 0,
+    null,
+    { timeout: 20000 },
+  )
+  .catch(() => {});
+const typed = await page.evaluate(() => ({
+  rows: document.querySelectorAll('#rl-pref-rows input').length,
+  head: document.querySelector('#rl-pref-head').textContent,
+  nat: [...document.querySelectorAll('#rl-national-list label')].filter(
+    (l) => !l.classList.contains('hidden'),
+  ).length,
+}));
+ok(
+  typed.nat > 0 && typed.rows > 0,
+  `one field finds both systems (${typed.nat} national, ${typed.rows} prefectural)`,
+);
+ok(
+  /\d/.test(typed.head),
+  `the prefectural group states how many it found ("${typed.head}")`,
+);
+
+// 都道府県道を選べば、地図に残るのはその 1 本だけになる。国道の側と対称である。
+await page.locator('#rl-pref-rows input').first().check();
+await settle();
+const pickedPref = await page.evaluate(() => ({
+  roads: window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
+  url: location.search,
+  badge: document.querySelector('#sel-count').textContent,
+}));
+ok(
+  pickedPref.roads === 0 && pickedPref.url.includes('proutes='),
+  `picking a prefectural route takes the national ones off the map ` +
+    `(${pickedPref.roads} arcs, "${pickedPref.url}")`,
+);
+ok(
+  pickedPref.badge === '1',
+  `and the count beside the button counts it like any other road ` +
+    `("${pickedPref.badge}")`,
+);
+
+/* 一覧に出す系統は三状態しかない。どちらも外れると一覧が空になる。 */
+const seg = await page.evaluate(() => {
+  const press = (sel) => document.querySelector(sel).click();
+  press('#sys-pref');
+  const one = {
+    pref: document.querySelector('#rl-pref').hidden,
+    national: document.querySelector('#rl-national').hidden,
+  };
+  press('#sys-national'); // 最後の一枚は外れない
+  const still = document
+    .querySelector('#sys-national')
+    .getAttribute('aria-pressed');
+  press('#sys-pref'); // どちらもに戻す
+  return { one, still };
+});
+ok(
+  seg.one.pref && !seg.one.national,
+  'pressing a system button drops just that system from the list',
+);
+ok(seg.still === 'true', 'the last one cannot be switched off');
+
+await page.click('#sel-none');
+await page.fill('#route-filter', '');
+await settle();
+
 ok(
   await page.evaluate(() => !document.querySelector('#sel-hint')),
   'the selection size is not also stated in a hint under the list',
@@ -493,11 +583,11 @@ await page.screenshot({ path: shot('2-concurrent') });
 // --- 重用ランキングを開き、最も深い行を押す --------------------------------
 await openPane('#display-btn');
 await page.click('input[name=conc][value=off]');
-await page.click('#ranking-block > summary');
+await openPane('#ranking-btn');
 await settle();
 ok(
-  await page.evaluate(() => document.querySelector('#ranking-block').open),
-  'the ranking unfolds when its summary is clicked',
+  await page.evaluate(() => !document.querySelector('#ranking-popover').hidden),
+  'the ranking pane opens when its button is pressed',
 );
 // 行は 1 つの重用を名指しし、それがどこに在るかを述べる。押したらそこへ行き、
 // 一覧には手を触れないことが必要である——かつてはどちらも破れていた。視点は、
@@ -874,26 +964,49 @@ if (!target) {
   );
 
   /* 「だけ」は文字どおりの意味である(#109)。押した後の地図に残るのはその 1 本
-   * だけで、もう一方の系統——ここでは都道府県道——は消える。系統トグルを実際に
-   * 動かすので、消えたことはトグルにも URL にも出る。 */
+   * だけで、もう一方の系統——ここでは都道府県道——は消える。
+   *
+   * 消すのは選択そのものであって、系統トグルではない(mapspec.mjs の
+   * shownSystems)。かつてはボタンが裏でトグルを倒しており、同じ 1 本の選択が
+   * 一覧のチェックボックスから入ったときだけ都道府県道を残していた——同じ選択が
+   * 押した場所で違う絵になっていた。だからここは、トグルが立ったまま地図から
+   * 消えていること、URL に `pref=0` が乗らないことの両方を見る。 */
   const prefOff = await page.evaluate(() => ({
     checked: document.querySelector('#t-pref').checked,
     drawn: window.map.queryRenderedFeatures({ layers: ['pref-roads'] }).length,
     url: location.search,
   }));
   ok(
-    !prefOff.checked && prefOff.drawn === 0 && prefOff.url.includes('pref=0'),
-    `and hides the prefectural routes with it ` +
+    prefOff.checked && prefOff.drawn === 0 && !prefOff.url.includes('pref=0'),
+    `and hides the prefectural routes without touching the system toggle ` +
       `(toggle ${prefOff.checked}, ${prefOff.drawn} arcs, "${prefOff.url}")`,
   );
 
-  // 選択を解けば、ボタンが消した都道府県道は戻る。
+  // 一覧のチェックボックスから選んでも同じ絵になる。押す場所で変わらない。
+  await page.click('#select-btn');
+  await page.locator(`#route-list input[value="${ref}"]`).uncheck();
+  await page.locator(`#route-list input[value="${ref}"]`).check();
+  await page.keyboard.press('Escape');
+  await settle();
+  const viaList = await page.evaluate(
+    () => window.map.queryRenderedFeatures({ layers: ['pref-roads'] }).length,
+  );
+  ok(
+    viaList === 0,
+    `picking the same route from the list draws the same map (${viaList} arcs)`,
+  );
+
+  // 選択を解けば、都道府県道は戻る。
   await page.click('#sel-none');
   await settle();
-  const prefBack = await page.evaluate(
-    () => document.querySelector('#t-pref').checked,
+  const prefBack = await page.evaluate(() => ({
+    checked: document.querySelector('#t-pref').checked,
+    drawn: window.map.queryRenderedFeatures({ layers: ['pref-roads'] }).length,
+  }));
+  ok(
+    prefBack.checked && prefBack.drawn > 0,
+    `clearing the selection brings the prefectural routes back (${prefBack.drawn} arcs)`,
   );
-  ok(prefBack, 'clearing the selection brings the prefectural routes back');
 
   /* パネルは地図の一部を覆うので、開くあいだ地図は覆われたぶん脇へ寄る。開けて
    * 読んで閉じるだけなら、閉じたときに寄せたぶんが戻るのが正しい——開く前の
