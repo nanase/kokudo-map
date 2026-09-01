@@ -35,6 +35,11 @@ const {
   FILTERED_LAYERS,
   PREF_PICKED_LAYER,
   SPECIAL_KINDS,
+  CLICKABLE_LAYERS,
+  PREF_CLICKABLE_LAYERS,
+  clickableHitLayers,
+  prefClickableHitLayers,
+  hitLayerId,
 } = await import(pathToFileURL(join(ROOT, 'web', 'mapspec.mjs')).href);
 
 const require = createRequire(join(ROOT, 'package.json'));
@@ -98,18 +103,20 @@ function styleWith(filters, prefFilters) {
   // 検査すると、本物の地図が落ちるのに検査は通る。
   Object.assign(style.sources, routeSources(PMTILES_URL, PREF_PMTILES_URL));
   const layers = routeLayers();
+  const hitLayers = clickableHitLayers();
   if (filters) {
-    for (const l of layers)
+    for (const l of [...layers, ...hitLayers])
       if (filters[l.id] !== undefined) l.filter = filters[l.id];
   }
   // 閲覧側が addLayer する順(app.js の boot)をそのまま組む。県道の線は国道の
-  // すべての層の下、県道の札は国道の札のすぐ下である。層の順は描く順と札の
-  // 場所争いの両方を決めるので、検査するスタイルの並びが本物と違えば、検査した
-  // 物は本物ではない。
+  // すべての層の下、県道の札は国道の札のすぐ下、当たり判定の透明な層はどれよりも
+  // 後である。層の順は描く順と札の場所争いの両方を決めるので、検査するスタイルの
+  // 並びが本物と違えば、検査した物は本物ではない。
   const prefLines = prefLineLayers();
   const prefLabels = prefLabelLayer();
+  const prefHitLayers = prefClickableHitLayers();
   if (prefFilters) {
-    for (const l of [...prefLines, prefLabels])
+    for (const l of [...prefLines, prefLabels, ...prefHitLayers])
       if (prefFilters[l.id] !== undefined) l.filter = prefFilters[l.id];
   }
   const at = layers.findIndex((l) => l.id === 'route-labels');
@@ -119,6 +126,8 @@ function styleWith(filters, prefFilters) {
     ...layers.slice(0, at),
     prefLabels,
     ...layers.slice(at),
+    ...prefHitLayers,
+    ...hitLayers,
   ];
   return style;
 }
@@ -209,7 +218,11 @@ for (const [selected, conc, showFormer, label] of scenarios) {
   const base = buildFilter(selected, conc, showFormer);
   const filters = {};
   for (const { id, kinds, negate } of FILTERED_LAYERS) {
-    filters[id] = kinds ? withKind(base, kinds, negate) : base;
+    const filter = kinds ? withKind(base, kinds, negate) : base;
+    filters[id] = filter;
+    // 当たり判定の透明な層も、見た目の層と同じ絞り込みを持つ(app.js の
+    // applyFilters)。ここで検査しないと、本物が組む式の半分しか検査していない。
+    if (CLICKABLE_LAYERS.includes(id)) filters[hitLayerId(id)] = filter;
   }
   validate(styleWith(filters), `filters validate in the style — ${label}`);
 }
@@ -227,10 +240,14 @@ const prefScenarios = [
 for (const [selected, label] of prefScenarios) {
   const prefFilters = {};
   for (const l of [...prefLineLayers(), prefLabelLayer()]) {
-    prefFilters[l.id] =
+    const resolved =
       l.id === PREF_PICKED_LAYER
         ? pickedFilter(withPrefSelection(true, selected), 1234567)
         : withPrefSelection(l.filter ?? true, selected);
+    prefFilters[l.id] = resolved;
+    if (PREF_CLICKABLE_LAYERS.includes(l.id)) {
+      prefFilters[hitLayerId(l.id)] = resolved;
+    }
   }
   validate(
     styleWith(null, prefFilters),

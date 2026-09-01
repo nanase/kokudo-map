@@ -809,3 +809,71 @@ export const CLICKABLE_LAYERS = [
   'foot',
   'ferry',
 ];
+
+/** 押せるレイヤーの当たり判定だけを太らせた透明な層の id。 */
+export const hitLayerId = (id) => `${id}-hit`;
+
+/** interpolate 式の各段に一定量を足す。zoom による補間そのものは変えない。 */
+function widened(expr, add) {
+  const [op, interp, input, ...stops] = expr;
+  const out = [op, interp, input];
+  for (let i = 0; i < stops.length; i += 2) {
+    out.push(stops[i], ['+', stops[i + 1], add]);
+  }
+  return out;
+}
+
+/* 見た目の太さは細い線ほどクリック・タップで外しやすいが、太さそのものは重用の
+ * 深さを読ませる符牒なので広げられない。そこで見た目と別に、線を追わない透明な
+ * 層を重ね、そちらだけを太らせて当たり判定に使う(app.js の wirePopups)。
+ *
+ * 層とタイル処理は増えるが、透明な層は不透明度 0 で描かれるだけで、ソースの
+ * 追加読み込みは発生しない。もう一つの手——`queryRenderedFeatures` に点でなく
+ * 矩形を渡す——は層を増やさないが、`mouseenter`/`mouseleave` は MapLibre 自身が
+ * 点でしか判定しないため、カーソルの形と実際に押せる範囲がずれる。透明な層なら
+ * 同じ id を hover にも click にも使えるので、この二つが常に揃う。
+ *
+ * 太らせる量は固定のピクセル数で、ズームによらない。マウスの狙いやすさが画面上の
+ * 距離で決まるのであって、地図の縮尺では決まらないためである。値は市街地の込み
+ * 合った場所で、隣の道路を誤って拾わないことを確かめて決めた。 */
+const HIT_ADD = 10;
+const PREF_HIT_ADD = 7;
+
+/** `CLICKABLE_LAYERS` に対応する、透明で太い当たり判定専用の層。 */
+export function clickableHitLayers() {
+  const byId = new Map(routeLayers().map((l) => [l.id, l]));
+  return CLICKABLE_LAYERS.map((id) => {
+    const layer = byId.get(id);
+    return {
+      ...layer,
+      id: hitLayerId(id),
+      paint: {
+        ...layer.paint,
+        'line-color': '#000000',
+        'line-opacity': 0,
+        'line-width': widened(layer.paint['line-width'], HIT_ADD),
+      },
+    };
+  });
+}
+
+/** `PREF_CLICKABLE_LAYERS` に対応する、透明で太い当たり判定専用の層。
+ *  太らせる理由は国道の `clickableHitLayers` と同じ。量が国道の 7 割ほどなのは、
+ *  都道府県道の線自体が国道のおよそ 0.65 倍しかなく、同じ量を足すと当たり判定が
+ *  線の太さに対して相対的に太すぎるためである。 */
+export function prefClickableHitLayers() {
+  const byId = new Map(prefLineLayers().map((l) => [l.id, l]));
+  return PREF_CLICKABLE_LAYERS.map((id) => {
+    const layer = byId.get(id);
+    return {
+      ...layer,
+      id: hitLayerId(id),
+      paint: {
+        ...layer.paint,
+        'line-color': '#000000',
+        'line-opacity': 0,
+        'line-width': widened(layer.paint['line-width'], PREF_HIT_ADD),
+      },
+    };
+  });
+}
