@@ -456,17 +456,32 @@ describe('地図の上の面', () => {
   });
 
   /* 面は自分のボタンと同じ台の中に居る。位置合わせの計算をどこにも持たない
-   * ための約束で、app.js の registerPane が台を「面の持ち物」として使う。 */
+   * ための約束で、app.js の registerPane が台を「面の持ち物」として使う。
+   * 「道路を選択」だけは例外である——次のテストが理由とあわせて見る。 */
   test('面はボタンと同じ台の中にある', () => {
     const document = load(1280);
     for (const [btn, pane] of [
-      ['#select-btn', '#select-popover'],
       ['#ranking-btn', '#ranking-popover'],
       ['#shared-btn', '#shared-popover'],
     ]) {
       const ctrl = document.querySelector(btn).closest('.ui-ctrl');
       expect(ctrl.contains(document.querySelector(pane))).toBe(true);
     }
+  });
+
+  /* 「道路を選択」の面だけは #select-btn の台ではなく #ranking-btn の台に
+   * 居る。#select-btn は選んだ本数の札(#sel-count)ぶん幅が変わり、その台を
+   * 基準にすると路線を選ぶたびに面が横へズレ動く。#ranking-btn の台に札は
+   * 無く幅が変わらないので、位置の基準として借りる(#128)。開け閉ては
+   * 変わらず #select-btn が持つ。 */
+  test('「道路を選択」の面は #ranking-btn の台を位置の基準にする', () => {
+    const document = load(1280);
+    const rankingCtrl = document
+      .querySelector('#ranking-btn')
+      .closest('.ui-ctrl');
+    expect(
+      rankingCtrl.contains(document.querySelector('#select-popover')),
+    ).toBe(true);
   });
 
   /* 絞り込み欄と一覧は面の中、選択解除は面の外。選択は地図に効いており、
@@ -479,7 +494,6 @@ describe('地図の上の面', () => {
 
     const clear = document.querySelector('#sel-none');
     expect(pane.contains(clear)).toBe(false);
-    expect(clear.closest('.ui-ctrl').contains(pane)).toBe(true);
   });
 
   /* 狭い画面と見なす幅は style.css の @media と wiring.mjs の二箇所にある。

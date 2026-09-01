@@ -641,7 +641,7 @@ const HideRoutesControl = buildCycleControl('hide-routes-ctrl', {
  */
 const PANE_GAP = 12;
 
-/** 開け閉てを預かっている面。{ btn, pane, root } の並びである。 */
+/** 開け閉てを預かっている面。{ btn, pane, roots } の並びである。 */
 const panes = [];
 
 /**
@@ -674,9 +674,14 @@ function closePanes() {
  * ボタンと面を結ぶ。`root` は「その面の持ち物」の範囲で、外を押したときに
  * 閉じるかどうかをここで見分ける——台の中には面のほかにボタンも居るので、
  * 面そのものだけを見ると、同じ台の ✕ を押しただけで一覧が畳まれる。
- */
+ *
+ * 普段は台一つで足りるが、「道路を選択」はボタン(#select-btn)と面
+ * (#select-popover)が別の台に分かれている——面は選んだ本数の札で幅が
+ * 変わらない #ranking-btn の台へ位置合わせのため移してある(index.html)。
+ * 両方の台を渡せば、どちらを押しても「持ち物の中」と見なせる。 */
 function registerPane(btn, pane, root) {
-  const entry = { btn, pane, root };
+  const roots = Array.isArray(root) ? root : [root];
+  const entry = { btn, pane, roots };
   panes.push(entry);
   btn.addEventListener('click', () => {
     const willOpen = pane.hidden;
@@ -695,22 +700,30 @@ window.addEventListener('resize', () => {
 // その台は root の中なので素通りする。
 document.addEventListener('click', (ev) => {
   for (const e of panes) {
-    if (!e.pane.hidden && !e.root.contains(ev.target)) setPane(e, false);
+    if (!e.pane.hidden && !e.roots.some((r) => r.contains(ev.target))) {
+      setPane(e, false);
+    }
   }
 });
 
 /* 左上の三つ。markup は index.html が持ち、データが届く前から state と結べる。 */
 for (const [btnId, paneId] of [
-  ['#select-btn', '#select-popover'],
   ['#ranking-btn', '#ranking-popover'],
   ['#shared-btn', '#shared-popover'],
 ]) {
   const btn = $(btnId);
   registerPane(btn, $(paneId), btn.closest('.ui-ctrl'));
 }
+// 「道路を選択」の面は #ranking-btn の台へ移してある(index.html)ので、
+// 持ち物の範囲はボタン自身の台とその台の両方になる。
+const selectBtn = $('#select-btn');
+registerPane(selectBtn, $('#select-popover'), [
+  selectBtn.closest('.ui-ctrl'),
+  $('#ranking-btn').closest('.ui-ctrl'),
+]);
 // 「道路を選択」を開いたら、都道府県道の番号を取りに行く。開かない人には
 // 取りに行かない。二度目以降は覚えてある物を返すだけである。
-$('#select-btn').addEventListener('click', loadPrefIndex);
+selectBtn.addEventListener('click', loadPrefIndex);
 
 /* -------------------------------------------------------------- 表示の面 --- */
 /**
