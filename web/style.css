@@ -207,14 +207,19 @@ body {
   grid-auto-flow: column; gap: 5px;
 }
 .ui-btn svg { width: 17px; height: 17px; display: block; }
-.ui-btn:hover { background: var(--panel-2); }
 /* 一つの台に二つ載る「道路を選択」だけが横に並ぶ。MapLibre の区切り線は縦積み
    を前提に border-top を引くので、こちらは向きを 90 度倒す。 */
 .ui-ctrl-row .ui-btn + .ui-btn { border-top: 0; border-left: 1px solid var(--line); }
 /* 面が開いているあいだ、ボタンは押されたままである。地と字を入れ替えて示す
    ——明暗どちらでも、関係はそのまま反転するだけになる。 */
+/* ホバーの地は `.maplibregl-ctrl button:not(:disabled):hover` が既に述べている
+   ので、ここでは書かない。押されているあいだだけは上書きが要る——あちらは
+   クラス 3 つと要素 1 つで、クラス 3 つのこちらでは足りず、青が薄い灰色に
+   置き換わって、白い絵が白い地に消えていた。`.ui-ctrl` を頭に足して勝つ。 */
 .ui-btn.active { background: var(--sign-blue); color: var(--panel); }
-.ui-btn.active:hover { background-color: var(--sign-blue); filter: brightness(1.12); }
+.ui-ctrl .ui-btn.active:hover {
+  background-color: var(--sign-blue); filter: brightness(1.12);
+}
 /* 台の角は台が丸めるが、押されたボタンの地は四角いまま外へはみ出す。台に
    overflow: hidden を置くと面まで刈られるので、外側の角はボタン自身が丸める。 */
 .ui-ctrl > .ui-btn:only-of-type { border-radius: 4px; }
@@ -477,7 +482,16 @@ input[type="search"]::placeholder { font-size: .82em; }
 
 /* 重用ランキング -------------------------------------------------------- */
 .ranking { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+/* 面の高さを止め、あふれたぶんはこの一覧が巻き取る。25 行・20 行は窓の高さを
+   ほとんど使い切るので、止めないと面が地図を上から下まで覆う。 */
+#ranking-popover .ranking, #shared-popover .ranking {
+  max-height: 46vh; overflow-y: auto; padding-right: 2px;
+}
 .ranking .row {
+  /* 縦に積む flex の中に居るので、縮まないと明示する。巻き取る一覧の中では
+     既定の flex-shrink: 1 が行を content より低く潰し、標識が折り返した行の
+     中身が次の行の上へはみ出していた。 */
+  flex: 0 0 auto;
   display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
   padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 3px;
   background: var(--panel-2); cursor: pointer; text-align: left;
@@ -565,6 +579,17 @@ input[type="search"]::placeholder { font-size: .82em; }
    現在位置の青や方位の赤まで反対の色にしないためである。 */
 .maplibregl-ctrl-group { background: var(--panel); }
 .maplibregl-ctrl-group button + button { border-top-color: var(--line); }
+/* 台は角を丸めるが、その中のボタンは既定では四角い。ふだんは地を持たないので
+   台の丸みがそのまま見えており、ホバーや「押されている」で自分の地を持った
+   瞬間だけ、四隅が台からはみ出して矩形に見えていた。台に overflow: hidden を
+   置くと、そこから出る面(.map-popover)まで刈られる。だから外側の角はボタン
+   自身が継ぐ。
+
+   数えるのは button だけにする(:first-child ではなく :first-of-type)。台には
+   状態のラベル(.state-tip)や面が同居しており、:last-child はそちらに当たる。 */
+.maplibregl-ctrl-group > button:first-of-type { border-radius: 4px 4px 0 0; }
+.maplibregl-ctrl-group > button:last-of-type { border-radius: 0 0 4px 4px; }
+.maplibregl-ctrl-group > button:only-of-type { border-radius: 4px; }
 /* maplibre-gl.css 側と同じ形の選択子で書き、記述順ではなく形で並ばせる。 */
 .maplibregl-ctrl button:not(:disabled):hover { background-color: var(--panel-2); }
 :root[data-theme="dark"] .maplibregl-ctrl-icon {
