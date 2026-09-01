@@ -877,26 +877,49 @@ if (!target) {
   );
 
   /* 「だけ」は文字どおりの意味である(#109)。押した後の地図に残るのはその 1 本
-   * だけで、もう一方の系統——ここでは都道府県道——は消える。系統トグルを実際に
-   * 動かすので、消えたことはトグルにも URL にも出る。 */
+   * だけで、もう一方の系統——ここでは都道府県道——は消える。
+   *
+   * 消すのは選択そのものであって、系統トグルではない(mapspec.mjs の
+   * shownSystems)。かつてはボタンが裏でトグルを倒しており、同じ 1 本の選択が
+   * 一覧のチェックボックスから入ったときだけ都道府県道を残していた——同じ選択が
+   * 押した場所で違う絵になっていた。だからここは、トグルが立ったまま地図から
+   * 消えていること、URL に `pref=0` が乗らないことの両方を見る。 */
   const prefOff = await page.evaluate(() => ({
     checked: document.querySelector('#t-pref').checked,
     drawn: window.map.queryRenderedFeatures({ layers: ['pref-roads'] }).length,
     url: location.search,
   }));
   ok(
-    !prefOff.checked && prefOff.drawn === 0 && prefOff.url.includes('pref=0'),
-    `and hides the prefectural routes with it ` +
+    prefOff.checked && prefOff.drawn === 0 && !prefOff.url.includes('pref=0'),
+    `and hides the prefectural routes without touching the system toggle ` +
       `(toggle ${prefOff.checked}, ${prefOff.drawn} arcs, "${prefOff.url}")`,
   );
 
-  // 選択を解けば、ボタンが消した都道府県道は戻る。
+  // 一覧のチェックボックスから選んでも同じ絵になる。押す場所で変わらない。
+  await page.click('#select-btn');
+  await page.locator(`#route-list input[value="${ref}"]`).uncheck();
+  await page.locator(`#route-list input[value="${ref}"]`).check();
+  await page.keyboard.press('Escape');
+  await settle();
+  const viaList = await page.evaluate(
+    () => window.map.queryRenderedFeatures({ layers: ['pref-roads'] }).length,
+  );
+  ok(
+    viaList === 0,
+    `picking the same route from the list draws the same map (${viaList} arcs)`,
+  );
+
+  // 選択を解けば、都道府県道は戻る。
   await page.click('#sel-none');
   await settle();
-  const prefBack = await page.evaluate(
-    () => document.querySelector('#t-pref').checked,
+  const prefBack = await page.evaluate(() => ({
+    checked: document.querySelector('#t-pref').checked,
+    drawn: window.map.queryRenderedFeatures({ layers: ['pref-roads'] }).length,
+  }));
+  ok(
+    prefBack.checked && prefBack.drawn > 0,
+    `clearing the selection brings the prefectural routes back (${prefBack.drawn} arcs)`,
   );
-  ok(prefBack, 'clearing the selection brings the prefectural routes back');
 
   /* パネルは地図の一部を覆うので、開くあいだ地図は覆われたぶん脇へ寄る。開けて
    * 読んで閉じるだけなら、閉じたときに寄せたぶんが戻るのが正しい——開く前の

@@ -78,6 +78,7 @@ import {
   prefLineLayers,
   routeLayers,
   routeSources,
+  shownSystems,
   terminiFilter,
   withKind,
   withPrefSelection,
@@ -115,10 +116,6 @@ const state = {
   // 一意でないので、国道のように数では持てない(prefroute.mjs)。空は「すべて」を
   // 意味し、そこは国道の `selected` と同じである。
   prefSelected: new Set(),
-  // 「この路線だけ表示」が消した系統の、消す前の値。解除でここへ戻す
-  // (wiring.mjs の SYSTEMS)。控えが無いあいだは null である。
-  nationalBefore: null,
-  prefBefore: null,
   // 県の名前を引く表。regions.json を起動時に読んだもので、`nagano` から
   // 「長野県」を返す。都道府県道の標識も詳細も、県を伴わなければ路線を名指した
   // ことにならない。
@@ -1210,11 +1207,24 @@ const PREF_DEFAULT_FILTERS = new Map(
 );
 
 /* -------------------------------------------------------------- 絞り込み --- */
+/**
+ * いま地図に出す系統。規則そのものは mapspec.mjs の shownSystems が持つ
+ * ——絞り込みの式と同じ場所に置いて、検査スクリプトが本物を読めるようにする。
+ */
+const shown = () =>
+  shownSystems({
+    national: state.national,
+    pref: state.pref,
+    selected: state.selected.size,
+    prefSelected: state.prefSelected.size,
+  });
+
 function applyFilters() {
   const base = buildFilter([...state.selected], state.conc, state.former);
+  const { national, pref } = shown();
 
   for (const { id, kinds, negate, toggle } of FILTERED_LAYERS) {
-    if (!state.national || (toggle && !state[toggle])) {
+    if (!national || (toggle && !state[toggle])) {
       map.setFilter(id, NOTHING);
       continue;
     }
@@ -1223,28 +1233,25 @@ function applyFilters() {
 
   map.setFilter(
     'picked',
-    state.national ? pickedFilter(base, state.picked) : NOTHING,
+    national ? pickedFilter(base, state.picked) : NOTHING,
   );
 
   // 都道府県道の選択。層が既に持っている区分の式へ重ねる(withPrefSelection)。
   // 空なら全部出す——国道の buildFilter と同じ約束である。
   const prefSel = [...state.prefSelected];
   for (const [id, filter] of PREF_DEFAULT_FILTERS) {
-    map.setFilter(
-      id,
-      state.pref ? withPrefSelection(filter, prefSel) : NOTHING,
-    );
+    map.setFilter(id, pref ? withPrefSelection(filter, prefSel) : NOTHING);
   }
 
   map.setFilter(
     PREF_PICKED_LAYER,
-    state.pref
+    pref
       ? pickedFilter(withPrefSelection(true, prefSel), state.prefPicked)
       : NOTHING,
   );
 
   const tFilter =
-    !state.national || !state.termini
+    !national || !state.termini
       ? ['==', ['get', 'count'], -1]
       : terminiFilter([...state.selected]);
   map.setFilter('termini-dot', tFilter);
@@ -1270,10 +1277,11 @@ function applyFilters() {
  * 「凡例を畳む」の節が <html> の data-legend で持つ。
  */
 function syncLegend() {
-  $('#legend-n').hidden = !state.national;
-  $('#legend-kind').hidden = !state.national;
-  $('#legend-pref').hidden = !state.pref;
-  $('#legend-bar').hidden = !state.national && !state.pref;
+  const { national, pref } = shown();
+  $('#legend-n').hidden = !national;
+  $('#legend-kind').hidden = !national;
+  $('#legend-pref').hidden = !pref;
+  $('#legend-bar').hidden = !national && !pref;
 }
 
 /**
@@ -1442,9 +1450,8 @@ let overNational = false;
 let overPref = false;
 
 function syncCursor() {
-  const on =
-    (overNational && state.national) ||
-    (overPref && state.pref && prefPickable());
+  const { national, pref } = shown();
+  const on = (overNational && national) || (overPref && pref && prefPickable());
   const want = on ? 'pointer' : '';
   // ズームは 1 フレームごとに届く。同じ値を書き直さない。
   const canvas = map.getCanvas();
@@ -1748,7 +1755,7 @@ document.addEventListener('click', (ev) => {
   const only = ev.target.closest('.detail-only');
   if (only) {
     if (only.dataset.pref) {
-      togglePrefOnly(document, state, only.dataset.pref, applyFilters);
+      togglePrefOnly(state, only.dataset.pref, applyFilters);
       // 押した状態はこのボタン自身が述べる。開き直して aria-pressed と
       // 名乗りを入れ替える——県別 meta は取得済みなので、待ちは挟まらない。
       openPrefDetail(only.dataset.pref);
