@@ -613,7 +613,9 @@ function hideStateTip(hidden) {
 
 function setRoutesHidden(hidden) {
   routesHidden = hidden;
-  for (const { id } of routeLayers()) {
+  // 当たり判定の透明な層は routeLayers() に含まれない別の層なので、ここで
+  // 一緒に隠さないと、隠したはずの国道がカーソルとクリックには残り続ける。
+  for (const { id } of [...routeLayers(), ...clickableHitLayers()]) {
     map.setLayoutProperty(id, 'visibility', hidden ? 'none' : 'visible');
   }
 }
