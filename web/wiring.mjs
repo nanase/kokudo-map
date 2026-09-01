@@ -81,7 +81,7 @@ export function applyRouteFilter(doc, state) {
   if (q === '') {
     head.textContent = '都道府県道';
     rows.innerHTML =
-      '<p class="rl-note">番号を打つと、47 都道府県から探します。</p>';
+      '<p class="rl-note">番号を入力すると候補が表示されます</p>';
     return;
   }
   if (!state.prefIndex) {

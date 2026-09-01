@@ -221,7 +221,7 @@ describe('wireControls — 絞り込み', () => {
     const { document } = setup();
     expect(prefRows(document)).toEqual([]);
     expect(document.querySelector('#rl-pref-rows').textContent).toContain(
-      '番号を打つと',
+      '番号を入力すると候補が表示されます',
     );
   });
 
