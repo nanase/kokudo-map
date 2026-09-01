@@ -99,10 +99,17 @@ import {
 import { deepest, popupHTML, prefPopupHTML } from './popup.mjs';
 import { comparePrefKeys, prefRefOf, prefRegionOf } from './prefroute.mjs';
 import { terminiFeatures } from './termini.mjs';
-import { decodeURLState, encodeState, MANAGED_KEYS } from './urlstate.mjs';
 import {
+  decodeRoutes,
+  decodeURLState,
+  encodeState,
+  MANAGED_KEYS,
+} from './urlstate.mjs';
+import {
+  applyRouteFilter,
   NARROW_QUERY,
   showRouteOnly,
+  syncRouteList,
   togglePrefOnly,
   wireControls,
   wireShare,
@@ -123,6 +130,14 @@ const state = {
   // 県別 meta の置き場。県を初めて開いたときに 1 県ぶんだけ取りに行く
   // (prefMeta)。47 県ぶんは 3.45 MB あり、初期表示では読まない。
   prefMetas: new Map(),
+  // 全国の県と番号だけの索引。「道路を選択」の面を初めて開いたときに 1 度だけ
+  // 取る(14.4 kB)。県 → 番号の配列で、番号で絞り込むためだけに要る。届くまでは
+  // null である。
+  prefIndex: null,
+  // 「道路を選択」の一覧に出す系統。地図に描く系統(下の national / pref)とは
+  // 別の物で、こちらは探す先を絞るだけである。二つとも false にはならない。
+  listNational: true,
+  listPref: true,
   // ポップアップが開いているアークの OSM way id。開いていなければ null。
   // 使い道はその下に敷く影だけで、地図の他の物は 1 本に絞られていない。
   picked: null,
@@ -690,6 +705,9 @@ for (const [btnId, paneId] of [
   const btn = $(btnId);
   registerPane(btn, $(paneId), btn.closest('.ui-ctrl'));
 }
+// 「道路を選択」を開いたら、都道府県道の番号を取りに行く。開かない人には
+// 取りに行かない。二度目以降は覚えてある物を返すだけである。
+$('#select-btn').addEventListener('click', loadPrefIndex);
 
 /* -------------------------------------------------------------- 表示の面 --- */
 /**
@@ -1139,11 +1157,7 @@ function applyURLState() {
  * 変化は逆向きに、listener から `state` へ流れるので、ここは二度と走らない。
  */
 function syncControls() {
-  for (const cb of document.querySelectorAll('#route-list input')) {
-    const checked = state.selected.has(Number(cb.value));
-    cb.checked = checked;
-    cb.closest('label').classList.toggle('on', checked);
-  }
+  syncRouteList(document, state);
   $(`input[name=conc][value="${state.conc}"]`).checked = true;
   $('#t-national').checked = state.national;
   $('#t-pref').checked = state.pref;
@@ -1302,8 +1316,9 @@ function syncURL() {
 
 /* -------------------------------------------------------- 画面の組み立て --- */
 function buildUI() {
-  $('#route-list').innerHTML = routeListHTML(state.routes);
+  $('#rl-national-list').innerHTML = routeListHTML(state.routes);
   $('#route-filter').value = '';
+  applyRouteFilter(document, state);
   $('#freshness').innerHTML = freshnessHTML(state.meta);
   $('#pref-concurrency').innerHTML = prefConcurrencyHTML();
   renderShared();
@@ -1335,7 +1350,7 @@ function updateStats() {
   badge.hidden = picked === 0;
 
   // 閉じた面は中身を見せないので、選択がいくつあるかは面の見出しが述べる。
-  $('#route-count').textContent = selectionLabel(sel.size, state.routes.length);
+  $('#route-count').textContent = selectionLabel(picked);
 }
 
 /** 面は押すまで開かないので、どれだけ入っているかは面の見出しが述べる。 */
@@ -1667,6 +1682,43 @@ async function openPrefDetail(key) {
     }),
     formerKm: formerKmFor(combos, sel),
   });
+}
+
+/**
+ * 全国の県と番号だけの索引を取る。一度取ったら覚えておく。
+ *
+ * 「道路を選択」の面を開いたときに呼ぶ。開かない人には取りに行かない——番号で
+ * 絞り込むためだけの物で、地図を見るのに要らない。県別 meta 47 本 3.45 MB を
+ * 読ませないために、ビルドが番号だけを抜いて 1 枚にしてある
+ * (pipeline/pack_web_pref.mjs)。
+ *
+ * 畳み方は URL の選択と同じ範囲表記なので、開くのも同じ decodeRoutes である。
+ */
+let prefIndexPending = null;
+
+function loadPrefIndex() {
+  if (prefIndexPending) return prefIndexPending;
+  prefIndexPending = fetch(dataURL('pref/index.json'))
+    .then((r) => {
+      if (!r.ok) throw new Error(`pref/index.json: ${r.status}`);
+      return r.json();
+    })
+    .then((raw) => {
+      // 県の並びは regions.json の順に揃える。一致した行の並びがこの順を継ぐ
+      // ので(prefroute.mjs の matchPrefRoutes)、索引の側の順に左右させない。
+      state.prefIndex = new Map(
+        [...state.prefLabels.keys()]
+          .filter((region) => raw[region])
+          .map((region) => [region, decodeRoutes(raw[region])]),
+      );
+      applyRouteFilter(document, state);
+    })
+    .catch((err) => {
+      console.error(err);
+      // 覚えたままにすると二度と取り直せない。prefMeta と同じ作法である。
+      prefIndexPending = null;
+    });
+  return prefIndexPending;
 }
 
 /**

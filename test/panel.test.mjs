@@ -16,6 +16,8 @@ import {
   PREF_SPECIAL_LABEL,
   PREF_SPECIAL_TIP,
   prefConcurrencyHTML,
+  prefGroupLabel,
+  prefRowsHTML,
   rankingHTML,
   routeListHTML,
   selectionLabel,
@@ -105,11 +107,13 @@ describe('clearLabel', () => {
 describe('selectionLabel', () => {
   test('選択が無ければ全部が対象だと言う', () => {
     // 0 と書くと「何も出ていない」と読めます。地図の見え方はその逆です。
-    expect(selectionLabel(0, 459)).toBe('すべて（459 路線）');
+    expect(selectionLabel(0)).toBe('すべて');
   });
 
-  test('選択があれば全体に対する数を言う', () => {
-    expect(selectionLabel(3, 459)).toBe('3 / 459 路線');
+  test('選択があれば選んでいる本数を言う', () => {
+    // 分母は書きません。この面は両方の系統を引き受けているので、国道の 459 を
+    // 分母に置くと、都道府県道を選んだときに嘘になります。
+    expect(selectionLabel(3)).toBe('3 路線を選択中');
   });
 });
 
@@ -517,5 +521,49 @@ describe('prefConcurrencyHTML', () => {
       expect(html).toContain(`<summary>${n.head}</summary>`);
       expect(html).toContain(`<span>${n.body}</span>`);
     }
+  });
+});
+
+/* 都道府県道の行は県を述べなければ路線を名指したことになりません。県道 18 号は
+ * 47 本あります。 */
+describe('prefRowsHTML', () => {
+  const rows = [
+    { key: 'nagano-63', prefLabel: '長野県', ref: 63 },
+    { key: 'tokyo-18', prefLabel: '東京都', ref: 18 },
+  ];
+
+  test('鍵をチェックボックスが持ち、県名を字が持つ', () => {
+    const html = prefRowsHTML(rows, new Set());
+    expect(html).toContain('data-pref="nagano-63"');
+    expect(html).toContain('>長野県</span>');
+    expect(html).toContain('>東京都</span>');
+  });
+
+  test('標識はヘキサで、中は番号だけである', () => {
+    // 県名は隣に文字で置きます。この大きさでは標識の中の字は形になりません。
+    const html = prefRowsHTML(rows, new Set());
+    expect(html).toContain('class="shield hex sm"');
+    expect(html).toContain('aria-label="長野県道63号"');
+  });
+
+  test('選んでいる行は最初から印が付いている', () => {
+    // 打ち直すたびに組み直すので、印は組むときに入れます。
+    const html = prefRowsHTML(rows, new Set(['tokyo-18']));
+    expect(html).toContain('data-pref="tokyo-18" value="tokyo-18" checked');
+    expect(html).toContain('class="pref-row on"');
+    expect(html).not.toContain(
+      'data-pref="nagano-63" value="nagano-63" checked',
+    );
+  });
+});
+
+describe('prefGroupLabel', () => {
+  test('全部出しているときは件数だけを言う', () => {
+    expect(prefGroupLabel(47, 47)).toBe('都道府県道 ── 47 件');
+  });
+
+  test('切ったときは、切ったと言う', () => {
+    // 黙って落とすと「これで全部」と読まれます。
+    expect(prefGroupLabel(200, 5123)).toBe('都道府県道 ── 上位 200 / 5,123 件');
   });
 });

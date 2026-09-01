@@ -44,6 +44,10 @@ FILES = [
     "national.meta.json",
     "regions.json",
     "prefectural-routes.pmtiles",
+    # 全国の県と番号だけの索引。選択パネルが番号で絞り込むために 1 度だけ読む。
+    # 県別 meta 47 本(3.29 MB)を読ませずに済ませるためのもので、pack_web_pref が
+    # 作る。glob は *.meta.json なので、これは名指しで挙げる。
+    "pref/index.json",
 ]
 
 

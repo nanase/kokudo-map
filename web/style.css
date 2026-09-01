@@ -335,13 +335,31 @@ input[type="search"] {
 input[type="search"]::placeholder { font-size: .82em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
+/* 一覧に出す系統 ----------------------------------------------------------
+   状態は三つだけで、どちらも外れることはない。二枚が一枚の板に見えるので、
+   二つで一組であることを形が言う。地図の絞り込みではなく、この一覧の絞り込み
+   である。 */
+.sys-seg { display: flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.sys-seg .sys {
+  flex: 1; font: inherit; font-size: .72rem; line-height: 1; padding: 6px 0;
+  cursor: pointer; border: 0; background: var(--panel-2); color: var(--ink-2);
+}
+.sys-seg .sys + .sys { border-left: 1px solid var(--line); }
+.sys-seg .sys:hover { color: var(--sign-blue); }
+.sys-seg .sys[aria-pressed="true"] {
+  background: var(--sign-blue); color: var(--panel); font-weight: 700;
+}
+.sys-seg .sys[aria-pressed="true"]:hover { color: var(--panel); filter: brightness(1.12); }
+
 /* 路線のチェックボックスの並び --------------------------------------------
    一覧は「道路を選択」の面(#select-popover)の中にあり、面が開いているあいだ
    だけ出る。開け閉ては app.js の registerPane が持つので、ここに書くことは
-   無い。 */
+   無い。
+
+   中は系統ごとの群に分かれる。国道は 459 行が最初から居て当たらない行を伏せ、
+   都道府県道は当たった行だけをその場で組む(wiring.mjs の applyRouteFilter)。 */
 .route-list {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-  gap: 3px; position: relative;
+  display: flex; flex-direction: column; gap: 8px;
   /* 高さは固定する。459 路線は常にこれより多く、絞り込み一覧は読み込み前も
      読み込み後もこの高さで埋まるので、`max-height` だと読み込み前の空の
      状態だけ小さく潰れ、データが届いた瞬間に膨らんで見えていた。 */
@@ -349,6 +367,32 @@ input[type="search"]::placeholder { font-size: .82em; }
   border: 1px solid var(--line-2); border-radius: 3px; padding: 5px;
   background: var(--panel-2);
 }
+.rl-group { display: flex; flex-direction: column; gap: 4px; }
+.rl-group[hidden] { display: none; }
+/* 群の名前。節の見出し(.pane-hd h2)より一段小さく、同じ帯の言葉で書く。 */
+.rl-head {
+  font-size: .6rem; font-weight: 700; letter-spacing: .1em; color: var(--ink-3);
+  padding-left: 2px;
+}
+.rl-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 3px; position: relative; min-height: 26px;
+}
+.rl-rows { display: flex; flex-direction: column; gap: 2px; }
+/* 一覧の中で状態を述べる一行。空・待ち・次の一手を同じ形で言う。 */
+.rl-note { margin: 0; padding: 4px 3px; font-size: .7rem; color: var(--ink-3); }
+.rl-note[hidden] { display: none; }
+/* 都道府県道の行。番号は県の中でしか一意でないので、ヘキサの隣に県名を置く。 */
+.pref-row {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  -webkit-user-select: none; user-select: none;
+  padding: 1px 3px; border-radius: 2px; color: var(--ink-2); font-size: .74rem;
+}
+.pref-row:hover { background: var(--panel); color: var(--ink); }
+.pref-row.on { color: var(--sign-blue); font-weight: 700; }
+.pref-row input { margin: 0; accent-color: var(--sign-blue); flex: 0 0 auto; }
+.pref-row .shield { height: 18px; }
+.pref-row .nm { white-space: nowrap; }
 /* データが届く前、この場所に何も無いのは「壊れている」と読めてしまう。
    buildUI() が innerHTML を丸ごと差し替えると一緒に消えるので、消す側の
    コードは不要である。 */
@@ -362,7 +406,9 @@ input[type="search"]::placeholder { font-size: .82em; }
 @media (prefers-reduced-motion: reduce) {
   .route-list-spinner { animation-duration: 2.4s; }
 }
-.route-list label {
+/* 国道の行。選択子を .rl-grid から書き起こす——.route-list から書くと
+   都道府県道の行(.pref-row)にも当たり、要素まで数えるぶん詳細度で勝ってしまう。 */
+.rl-grid label {
   display: flex; align-items: center; gap: 4px; cursor: pointer;
   /* 数字を選ばせない。459 個の的が 3 px 間隔で並んでいるので、少しでも
      手が動くとチェックではなく文字の範囲選択になってしまう。 */
@@ -373,11 +419,11 @@ input[type="search"]::placeholder { font-size: .82em; }
      操作面の書体はもともと数字が等幅である。 */
   font-variant-numeric: tabular-nums;
 }
-.route-list label:hover { background: var(--panel); color: var(--ink); }
-.route-list label.on { color: var(--sign-blue); font-weight: 700; }
-.route-list label.hidden { display: none; }
-.route-list input { margin: 0; accent-color: var(--sign-blue); }
-.route-list .mn { font-size: .62rem; color: var(--ink-3); font-weight: 400; }
+.rl-grid label:hover { background: var(--panel); color: var(--ink); }
+.rl-grid label.on { color: var(--sign-blue); font-weight: 700; }
+.rl-grid label.hidden { display: none; }
+.rl-grid input { margin: 0; accent-color: var(--sign-blue); }
+.rl-grid .mn { font-size: .62rem; color: var(--ink-3); font-weight: 400; }
 
 .radios, .checks { display: flex; flex-flow: row wrap; gap: 6px 16px; }
 .radios label, .checks label {

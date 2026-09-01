@@ -154,24 +154,45 @@
               <h2>道路を選択</h2>
               <span class="count" id="route-count"></span>
             </div>
-            <!-- 一覧に出るのは国道だけである。都道府県道の索引 13,234 組を
-                 初期表示で読ませない判断(#109)はそのままで、県道を選ぶ口は
-                 地図の標識と、そこから開く詳細パネルにある。選んだ後にそれを
-                 戻す口は、この面の外——台の右半分の ✕ が引き受ける。 -->
             <!-- 絞り込み欄。虫眼鏡は欄の中に置く——ラベルを書き足さずに、
-                 この欄が探す所であることを述べる。 -->
+                 この欄が探す所であることを述べる。番号は国道と都道府県道の
+                 どちらにも当てる。 -->
             <div class="filter-row">
               <svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="10.5" cy="10.5" r="6.4" fill="none" stroke="currentColor" stroke-width="2.2"/>
                 <path d="M15.3 15.3 20.5 20.5" fill="none" stroke="currentColor"
                       stroke-width="2.4" stroke-linecap="round"/>
               </svg>
-              <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 15）" autocomplete="off">
+              <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 18）" autocomplete="off">
             </div>
-            <div id="route-list" class="route-list" role="group" aria-label="国道の選択">
-              <!-- buildUI() が innerHTML を丸ごと差し替えるので、データが届けば
-                   このまま消える。表示・非表示を別に持つ必要が無い。 -->
-              <div class="route-list-spinner" aria-hidden="true"></div>
+            <!-- 一覧に出す系統。状態は三つだけで、どちらも外れることはない
+                 ——最後の一枚は押しても外れず、押した先に空の一覧が残らない。
+                 二枚が一枚の板に見えるので、二つで一組であることを形が言う。
+
+                 これは一覧の絞り込みであって、地図の絞り込みではない。地図に
+                 どの系統を描くかは表示の面の「国道」「都道府県道」が持つ。 -->
+            <div class="sys-seg" role="group" aria-label="一覧に出す系統">
+              <button type="button" id="sys-national" class="sys" aria-pressed="true">国道</button>
+              <button type="button" id="sys-pref" class="sys" aria-pressed="true">都道府県道</button>
+            </div>
+            <div id="route-list" class="route-list" role="group" aria-label="道路の選択">
+              <div class="rl-group" id="rl-national">
+                <div class="rl-head">国道</div>
+                <div class="rl-grid" id="rl-national-list">
+                  <!-- buildUI() が innerHTML を丸ごと差し替えるので、データが
+                       届けばこのまま消える。表示・非表示を別に持つ必要が無い。 -->
+                  <div class="route-list-spinner" aria-hidden="true"></div>
+                </div>
+                <p class="rl-note" id="rl-national-note" hidden>一致する国道はありません。</p>
+              </div>
+              <!-- 都道府県道は打つまで出さない。13,234 組は眺めて選ぶ数ではなく、
+                   全部並べれば DOM も、打つたびに走る絞り込みも持たない。番号は
+                   pref/index.json が持ち、この面を初めて開いたときに 1 度だけ
+                   取る(14.4 kB)——県別 meta 47 本 3.45 MB を読ませないためである。 -->
+              <div class="rl-group" id="rl-pref">
+                <div class="rl-head" id="rl-pref-head">都道府県道</div>
+                <div class="rl-rows" id="rl-pref-rows"></div>
+              </div>
             </div>
           </section>
         </div>

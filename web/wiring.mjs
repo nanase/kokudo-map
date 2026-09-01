@@ -11,15 +11,120 @@
  * test/wiring.test.mjs の検査対象にしていない。
  */
 
-import { shareSummaryHTML, shareText } from './panel.mjs';
-import { comparePrefKeys, prefRefOf, prefRegionOf } from './prefroute.mjs';
+import {
+  PREF_LIST_ROWS,
+  prefGroupLabel,
+  prefRowsHTML,
+  shareSummaryHTML,
+  shareText,
+} from './panel.mjs';
+import {
+  comparePrefKeys,
+  matchPrefRoutes,
+  prefRefOf,
+  prefRegionOf,
+} from './prefroute.mjs';
 
-/** 一覧のチェックを state.selected に合わせ直す。 */
-function syncRouteList(doc, state) {
+/**
+ * 一覧のチェックを選択に合わせ直す。
+ *
+ * 国道の行は番号を、都道府県道の行は `nagano-63` の形の鍵を持つ。番号は県の
+ * 中でしか一意でないので、二つは同じ欄では持てない——見分けるのは
+ * `data-pref` である。
+ */
+export function syncRouteList(doc, state) {
   for (const cb of doc.querySelectorAll('#route-list input')) {
-    cb.checked = state.selected.has(Number(cb.value));
-    cb.closest('label').classList.toggle('on', cb.checked);
+    const on = cb.dataset.pref
+      ? state.prefSelected.has(cb.dataset.pref)
+      : state.selected.has(Number(cb.value));
+    cb.checked = on;
+    cb.closest('label').classList.toggle('on', on);
   }
+}
+
+/**
+ * 打たれた番号と、系統の絞り込みを一覧へ反映する。
+ *
+ * 国道は 459 行が最初から DOM に居るので、当たらない行に印を付けて伏せる。
+ * 都道府県道は 13,234 組あり、並べておくことも、打つたびに 13,234 個の class を
+ * 付け直すこともできないので、当たった行だけをその場で組む。
+ *
+ * 打っていないあいだ都道府県道は出さない。全部並べれば選ぶどころではないし、
+ * 「番号を打つ」という次の一手をそこで述べたほうが早い。
+ *
+ * 索引がまだ届いていないことがある。面を開いた時点で取りに行くので、開いてすぐ
+ * 打った人だけがここに来る——空を出すと「無い」に読めるので、待っていると言う。
+ */
+export function applyRouteFilter(doc, state) {
+  const q = doc.querySelector('#route-filter').value.trim();
+
+  const natGroup = doc.querySelector('#rl-national');
+  let shown = 0;
+  for (const el of doc.querySelectorAll('#rl-national-list label')) {
+    const hit = q === '' || el.dataset.ref.startsWith(q);
+    el.classList.toggle('hidden', !hit);
+    if (hit) shown++;
+  }
+  natGroup.hidden = !state.listNational;
+  doc.querySelector('#rl-national-note').hidden = shown > 0;
+
+  const prefGroup = doc.querySelector('#rl-pref');
+  const head = doc.querySelector('#rl-pref-head');
+  const rows = doc.querySelector('#rl-pref-rows');
+  prefGroup.hidden = !state.listPref;
+  if (!state.listPref) {
+    rows.innerHTML = '';
+    return;
+  }
+  if (q === '') {
+    head.textContent = '都道府県道';
+    rows.innerHTML =
+      '<p class="rl-note">番号を打つと、47 都道府県から探します。</p>';
+    return;
+  }
+  if (!state.prefIndex) {
+    head.textContent = '都道府県道';
+    rows.innerHTML = '<p class="rl-note">読み込んでいます…</p>';
+    return;
+  }
+  const { matches, total } = matchPrefRoutes(
+    state.prefIndex,
+    q,
+    PREF_LIST_ROWS,
+  );
+  head.textContent = prefGroupLabel(matches.length, total);
+  rows.innerHTML = total
+    ? prefRowsHTML(
+        matches.map((m) => ({
+          ...m,
+          prefLabel: state.prefLabels.get(m.region) ?? '',
+        })),
+        state.prefSelected,
+      )
+    : '<p class="rl-note">一致する都道府県道はありません。</p>';
+}
+
+/**
+ * 一覧に出す系統を切り替える。
+ *
+ * 状態は三つだけである——どちらも、国道だけ、都道府県道だけ。最後の一枚は
+ * 押しても外れない。外れたら一覧が空になり、押した人が頼んでいないことが
+ * 起きるからである。
+ *
+ * ここが決めるのは一覧の中身だけで、地図には効かない。地図にどの系統を描くかは
+ * 表示の面の系統トグルが持つ(app.js の shown)。
+ */
+function toggleListSystem(doc, state, key, applyFilters) {
+  const other = key === 'listNational' ? 'listPref' : 'listNational';
+  if (state[key] && !state[other]) return;
+  state[key] = !state[key];
+  doc
+    .querySelector(key === 'listNational' ? '#sys-national' : '#sys-pref')
+    .setAttribute('aria-pressed', String(state[key]));
+  applyRouteFilter(doc, state);
+  // 一覧から消えた系統の選択はそのまま残る。ここは探す先を絞る欄であって、
+  // 選んだものを捨てる場所ではない。地図は applyFilters が描き直す。
+  applyFilters();
 }
 
 /**
@@ -91,9 +196,14 @@ export function wireControls(doc, state, applyFilters) {
   list.addEventListener('change', (e) => {
     const cb = e.target.closest('input[type=checkbox]');
     if (!cb) return;
-    const ref = Number(cb.value);
-    if (cb.checked) state.selected.add(ref);
-    else state.selected.delete(ref);
+    if (cb.dataset.pref) {
+      if (cb.checked) state.prefSelected.add(cb.dataset.pref);
+      else state.prefSelected.delete(cb.dataset.pref);
+    } else {
+      const ref = Number(cb.value);
+      if (cb.checked) state.selected.add(ref);
+      else state.selected.delete(ref);
+    }
     cb.closest('label').classList.toggle('on', cb.checked);
     applyFilters();
   });
@@ -102,11 +212,15 @@ export function wireControls(doc, state, applyFilters) {
     clearSelection(doc, state, applyFilters);
   });
 
-  $('#route-filter').addEventListener('input', (e) => {
-    const q = e.target.value.trim();
-    for (const el of list.querySelectorAll('label')) {
-      el.classList.toggle('hidden', q !== '' && !el.dataset.ref.startsWith(q));
-    }
+  $('#route-filter').addEventListener('input', () => {
+    applyRouteFilter(doc, state);
+  });
+
+  $('#sys-national').addEventListener('click', () => {
+    toggleListSystem(doc, state, 'listNational', applyFilters);
+  });
+  $('#sys-pref').addEventListener('click', () => {
+    toggleListSystem(doc, state, 'listPref', applyFilters);
   });
 
   for (const el of doc.querySelectorAll('input[name=conc]')) {

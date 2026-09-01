@@ -13,6 +13,7 @@
 | `web/data/regions.json` | 地域の一覧。`?region=` の初期表示に使う |
 | `web/data/prefectural-routes.pmtiles` | 都道府県道のベクタタイル |
 | `web/data/pref/{region}.meta.json` | 県ごとの集計。47 個 |
+| `web/data/pref/index.json` | 全国の県と番号だけの索引。「道路を選択」が番号で絞り込むために読む |
 
 どれも git では追跡しません。理由は二つあります。道路データは ODbL 1.0 で、MIT のコードと同じ木に置くと配布条件の違う二つを一度に配ることになります。それにタイルは既に gzip されていて圧縮も差分も効かないので、作り直すたびに同じ大きさの塊が履歴へ丸ごと積まれます。
 

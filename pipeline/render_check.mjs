@@ -200,7 +200,7 @@ const report = await page.evaluate(() => {
     const rendered = m.queryRenderedFeatures({ layers: [id] });
     out.layers[id] = { exists: !!m.getLayer(id), rendered: rendered.length };
   }
-  out.routeCount = document.querySelectorAll('#route-list label').length;
+  out.routeCount = document.querySelectorAll('#rl-national-list label').length;
   out.rankingRows = document.querySelectorAll('#ranking .row').length;
   out.sharedRows = document.querySelectorAll('#shared .row').length;
   // #stats は今、閉じている「国道マップについて」のダイアログの中に居る。
@@ -347,13 +347,17 @@ ok(
   'the compass sits on its own group, apart from the zoom buttons',
 );
 // 参照用の一覧は面の中にあり、押すまで開かない。ただし、開いてみるまで中身の
-// 見当が付かない畳み方は、節約した面積より害が大きい。だからどの見出しも自分の
-// 大きさを述べ続けなければならない。
+// 見当が付かない畳み方は、節約した面積より害が大きい。だからどの見出しも、閉じた
+// ままで中身を述べ続けなければならない。
+//
+// 述べる物は面によって違う。ランキングと起終点は動かない一覧なので件数を出す。
+// 「道路を選択」が述べるのは選んでいるかどうかで、選んでいなければ数ではなく
+// 「すべて」である——0 と書くと「何も出ていない」に読め、地図の見え方と逆になる。
 for (const b of report.panes) {
   ok(b.open === false, `the ${b.name} pane starts closed`);
   ok(
-    /\d/.test(b.count),
-    `the closed ${b.name} pane still states its size ("${b.count}")`,
+    b.name === 'select' ? b.count.length > 0 : /\d/.test(b.count),
+    `the closed ${b.name} pane still states what is inside ("${b.count}")`,
   );
 }
 
@@ -461,6 +465,89 @@ ok(
     )),
   `pressing it clears the selection and goes away again ("${back.text}")`,
 );
+
+/* 絞り込み欄は一つで、国道にも都道府県道にも当たる。都道府県道の番号は
+ * pref/index.json が持ち、この面を開いたときに 1 度だけ取る(14.4 kB)——県別
+ * meta 47 本 3.45 MB を読ませないためである。
+ *
+ * 打つまで都道府県道は出さない。13,234 組は眺めて選ぶ数ではなく、並べれば DOM も
+ * 打つたびに走る絞り込みも持たない。 */
+const quiet = await page.evaluate(
+  () => document.querySelectorAll('#rl-pref-rows input').length,
+);
+ok(
+  quiet === 0,
+  `with nothing typed the prefectural list stays empty (${quiet})`,
+);
+
+await page.fill('#route-filter', '18');
+await page
+  .waitForFunction(
+    () => document.querySelectorAll('#rl-pref-rows input').length > 0,
+    null,
+    { timeout: 20000 },
+  )
+  .catch(() => {});
+const typed = await page.evaluate(() => ({
+  rows: document.querySelectorAll('#rl-pref-rows input').length,
+  head: document.querySelector('#rl-pref-head').textContent,
+  nat: [...document.querySelectorAll('#rl-national-list label')].filter(
+    (l) => !l.classList.contains('hidden'),
+  ).length,
+}));
+ok(
+  typed.nat > 0 && typed.rows > 0,
+  `one field finds both systems (${typed.nat} national, ${typed.rows} prefectural)`,
+);
+ok(
+  /\d/.test(typed.head),
+  `the prefectural group states how many it found ("${typed.head}")`,
+);
+
+// 都道府県道を選べば、地図に残るのはその 1 本だけになる。国道の側と対称である。
+await page.locator('#rl-pref-rows input').first().check();
+await settle();
+const pickedPref = await page.evaluate(() => ({
+  roads: window.map.queryRenderedFeatures({ layers: ['roads'] }).length,
+  url: location.search,
+  badge: document.querySelector('#sel-count').textContent,
+}));
+ok(
+  pickedPref.roads === 0 && pickedPref.url.includes('proutes='),
+  `picking a prefectural route takes the national ones off the map ` +
+    `(${pickedPref.roads} arcs, "${pickedPref.url}")`,
+);
+ok(
+  pickedPref.badge === '1',
+  `and the count beside the button counts it like any other road ` +
+    `("${pickedPref.badge}")`,
+);
+
+/* 一覧に出す系統は三状態しかない。どちらも外れると一覧が空になる。 */
+const seg = await page.evaluate(() => {
+  const press = (sel) => document.querySelector(sel).click();
+  press('#sys-pref');
+  const one = {
+    pref: document.querySelector('#rl-pref').hidden,
+    national: document.querySelector('#rl-national').hidden,
+  };
+  press('#sys-national'); // 最後の一枚は外れない
+  const still = document
+    .querySelector('#sys-national')
+    .getAttribute('aria-pressed');
+  press('#sys-pref'); // どちらもに戻す
+  return { one, still };
+});
+ok(
+  seg.one.pref && !seg.one.national,
+  'pressing a system button drops just that system from the list',
+);
+ok(seg.still === 'true', 'the last one cannot be switched off');
+
+await page.click('#sel-none');
+await page.fill('#route-filter', '');
+await settle();
+
 ok(
   await page.evaluate(() => !document.querySelector('#sel-hint')),
   'the selection size is not also stated in a hint under the list',

@@ -8,6 +8,7 @@ import { Window } from 'happy-dom';
 
 import { routeListHTML } from '../web/panel.mjs';
 import {
+  applyRouteFilter,
   clearSelection,
   NARROW_QUERY,
   setSelection,
@@ -40,11 +41,22 @@ function setup(routes = ROUTES) {
   const window = new Window({ url: 'https://example.invalid/' });
   const document = window.document;
   document.write(indexHtml);
-  document.querySelector('#route-list').innerHTML = routeListHTML(routes);
+  document.querySelector('#rl-national-list').innerHTML = routeListHTML(routes);
 
   const state = {
     selected: new Set(),
     prefSelected: new Set(),
+    // 県 → 番号。本物は pref/index.json を開いた物で、面を開いたときに届く。
+    prefIndex: new Map([
+      ['nagano', [18, 63, 180]],
+      ['tokyo', [7, 18, 181]],
+    ]),
+    prefLabels: new Map([
+      ['nagano', '長野県'],
+      ['tokyo', '東京都'],
+    ]),
+    listNational: true,
+    listPref: true,
     picked: null,
     conc: 'off',
     labels: true,
@@ -65,6 +77,7 @@ function setup(routes = ROUTES) {
   };
 
   wireControls(document, state, applyFilters);
+  applyRouteFilter(document, state);
   return { window, document, state, applyCalls, applyFilters };
 }
 
@@ -170,12 +183,22 @@ describe('この路線だけ表示', () => {
   });
 });
 
+/* 絞り込み欄は一つで、国道にも都道府県道にも当たる。国道は 459 行が最初から
+ * DOM に居るので伏せ、都道府県道は当たった行だけをその場で組む。 */
 describe('wireControls — 絞り込み', () => {
-  test('絞り込み入力が、一致しない行に hidden を付ける', () => {
-    const { document, window } = setup();
+  const type = (document, window, q) => {
     const input = document.querySelector('#route-filter');
-    input.value = '8';
+    input.value = q;
     input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  };
+  const prefRows = (document) =>
+    [...document.querySelectorAll('#rl-pref-rows input')].map(
+      (i) => i.dataset.pref,
+    );
+
+  test('絞り込み入力が、一致しない国道の行に hidden を付ける', () => {
+    const { document, window } = setup();
+    type(document, window, '8');
 
     const label = (ref) => document.querySelector(`label[data-ref="${ref}"]`);
     expect(label(8).classList.contains('hidden')).toBe(false);
@@ -184,15 +207,129 @@ describe('wireControls — 絞り込み', () => {
 
   test('絞り込みを空に戻すとすべて出す', () => {
     const { document, window } = setup();
-    const input = document.querySelector('#route-filter');
-    input.value = '8';
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
-    input.value = '';
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    type(document, window, '8');
+    type(document, window, '');
 
-    for (const label of document.querySelectorAll('#route-list label')) {
+    for (const label of document.querySelectorAll('#rl-national-list label')) {
       expect(label.classList.contains('hidden')).toBe(false);
     }
+  });
+
+  /* 打つまで都道府県道は出しません。13,234 組を並べても選べません。 */
+  test('打つまで都道府県道は出ない', () => {
+    const { document } = setup();
+    expect(prefRows(document)).toEqual([]);
+    expect(document.querySelector('#rl-pref-rows').textContent).toContain(
+      '番号を打つと',
+    );
+  });
+
+  test('打つと同じ欄が都道府県道にも当たる', () => {
+    const { document, window } = setup();
+    type(document, window, '18');
+
+    // 番号が先、同じ番号の中は県の順。前方一致なので 180・181 も残る。
+    expect(prefRows(document)).toEqual([
+      'nagano-18',
+      'tokyo-18',
+      'nagano-180',
+      'tokyo-181',
+    ]);
+  });
+
+  test('一致が無ければ、無いと言う', () => {
+    const { document, window } = setup();
+    type(document, window, '999');
+    expect(prefRows(document)).toEqual([]);
+    expect(document.querySelector('#rl-pref-rows').textContent).toContain(
+      '一致する都道府県道はありません',
+    );
+  });
+
+  /* 索引は面を開いたときに取りに行きます。開いてすぐ打った人には間に合わない
+     ことがあり、空を出すと「無い」に読めます。 */
+  test('索引が届く前は、待っていると言う', () => {
+    const { document, window, state } = setup();
+    state.prefIndex = null;
+    type(document, window, '18');
+    expect(prefRows(document)).toEqual([]);
+    expect(document.querySelector('#rl-pref-rows').textContent).toContain(
+      '読み込んでいます',
+    );
+  });
+
+  test('都道府県道の行を押すと state.prefSelected が変わる', () => {
+    const { document, window, state } = setup();
+    type(document, window, '18');
+
+    const cb = document.querySelector('#rl-pref-rows input[value="nagano-18"]');
+    cb.click();
+    expect(state.prefSelected.has('nagano-18')).toBe(true);
+
+    cb.click();
+    expect(state.prefSelected.has('nagano-18')).toBe(false);
+  });
+
+  test('選んでいる都道府県道は、組み直しても印が付いたまま', () => {
+    const { document, window } = setup();
+    type(document, window, '18');
+    document.querySelector('#rl-pref-rows input[value="nagano-18"]').click();
+
+    type(document, window, '');
+    type(document, window, '18');
+
+    const cb = document.querySelector('#rl-pref-rows input[value="nagano-18"]');
+    expect(cb.checked).toBe(true);
+    expect(cb.closest('label').classList.contains('on')).toBe(true);
+  });
+});
+
+/* 一覧に出す系統は三状態しかありません。どちらも外れると一覧が空になり、
+ * 押した人が頼んでいないことが起きます。 */
+describe('wireControls — 一覧に出す系統', () => {
+  const pressed = (document, sel) =>
+    document.querySelector(sel).getAttribute('aria-pressed');
+
+  test('既定はどちらも選ばれている', () => {
+    const { document, state } = setup();
+    expect(state.listNational).toBe(true);
+    expect(state.listPref).toBe(true);
+    expect(pressed(document, '#sys-national')).toBe('true');
+    expect(pressed(document, '#sys-pref')).toBe('true');
+  });
+
+  test('片方を押すと、その系統だけが一覧から消える', () => {
+    const { document, state } = setup();
+    document.querySelector('#sys-pref').click();
+
+    expect(state.listPref).toBe(false);
+    expect(pressed(document, '#sys-pref')).toBe('false');
+    expect(document.querySelector('#rl-pref').hidden).toBe(true);
+    expect(document.querySelector('#rl-national').hidden).toBe(false);
+  });
+
+  test('最後の一枚は押しても外れない', () => {
+    const { document, state } = setup();
+    document.querySelector('#sys-pref').click();
+    document.querySelector('#sys-national').click();
+
+    expect(state.listNational).toBe(true);
+    expect(state.listPref).toBe(false);
+    expect(pressed(document, '#sys-national')).toBe('true');
+  });
+
+  /* 一覧から消えた系統の選択はそのまま残ります。ここは探す先を絞る欄で
+     あって、選んだものを捨てる場所ではありません。 */
+  test('一覧から消しても、選択は捨てない', () => {
+    const { document, window, state } = setup();
+    const input = document.querySelector('#route-filter');
+    input.value = '18';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    document.querySelector('#rl-pref-rows input[value="nagano-18"]').click();
+
+    document.querySelector('#sys-pref').click();
+
+    expect(state.prefSelected.has('nagano-18')).toBe(true);
   });
 });
 
