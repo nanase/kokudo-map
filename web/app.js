@@ -1658,6 +1658,9 @@ async function openPrefDetail(key) {
         selected,
         failed: true,
       });
+      // 高さは中身に合わせて変わる。プレースホルダーぶんで計算した padding は
+      // ここでは古いので、地図をずらす量を新しい高さで取り直す。
+      showDetail();
     }
     return;
   }
@@ -1676,6 +1679,7 @@ async function openPrefDetail(key) {
       selected,
       failed: true,
     });
+    showDetail();
     return;
   }
   const sel = new Set([key]);
@@ -1694,6 +1698,7 @@ async function openPrefDetail(key) {
     }),
     formerKm: formerKmFor(combos, sel),
   });
+  showDetail();
 }
 
 /**
