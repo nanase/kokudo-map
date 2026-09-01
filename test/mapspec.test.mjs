@@ -520,8 +520,8 @@ describe('都道府県道のレイヤー', () => {
   });
 
   test('札の字は線より濃い。主要地方道だけは同じ色でよい', () => {
-    // #8CBF4A は線としては読めますが、字としては白い地に対して 2.15:1 です。
-    // 線は幅を持つので形が出ますが、字は画線が細く、同じ明るさでは読めません。
+    // 線は幅を持つので `PREF_GENERAL` の明るさでも形が出ますが、字は画線が細く、
+    // 同じ明るさでは読めません(mapspec.mjs の PREF_GENERAL_INK)。
     expect(inkByRank[3]).toBe(colorByRank[3]);
     expect(inkByRank[4]).not.toBe(colorByRank[4]);
     expect(inkByRank[4]).toBe(PREF_GENERAL_INK);
