@@ -2,8 +2,9 @@
  * 受け取るだけなので、地図を作らずに import できる。test/wiring.test.mjs は
  * happy-dom に流した index.html へ直接配線して検査する。
  *
- * MapLibre のコントロールと localStorage は含めない。wireShare() は navigator.
- * share・navigator.clipboard を呼ぶので、happy-dom では検査対象にしていない。
+ * MapLibre のコントロールと localStorage は含めない。wireShare() は
+ * navigator.share・navigator.clipboard を呼ぶので、happy-dom では検査対象に
+ * していない。
  */
 
 import { onlyButtonHTML } from './detail.mjs';

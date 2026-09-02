@@ -184,10 +184,10 @@ export const shareSummaryHTML = ({
   '</ul></div>';
 
 /**
- * SNS の共有シートが期待する、題と URL の 1 行(「国道マップ - 292号\nhttps:
- * //…」)。`url` は `location` から読まず引数で受け取り、状態の
- * 純関数のままにする。都道府県道は「長野県道63号」と県ごと書く。番号だけでは
- * 47 本のどれか決まらない。
+ * SNS の共有シートが期待する、題と URL の 1 行
+ * (「国道マップ - 292号\nhttps://…」)。`url` は `location` から読まず引数で
+ * 受け取り、状態の純関数のままにする。都道府県道は「長野県道63号」と県ごと
+ * 書く。番号だけでは 47 本のどれか決まらない。
  */
 export const shareText = (url, { selectedRefs, prefRoutes = [] }) => {
   const names = [];
@@ -218,8 +218,8 @@ const swatch = (color, text, dashed, tip) =>
  * 走れない区分も格の色のまま描かれる(mapspec.mjs の `pref-special`)ので、
  * どちらの格でも破線になることを見本が示す。色は `border-top-color` ではなく
  * `color` で渡す。半分ずつに割ると 1 本が 10px になり、
- * `border-top-style: dashed` が刻みを 1 本に丸めて実線に見える。破線は style.
- * css の repeating-linear-gradient が `currentcolor` で描く。
+ * `border-top-style: dashed` が刻みを 1 本に丸めて実線に見える。破線は
+ * style.css の repeating-linear-gradient が `currentcolor` で描く。
  */
 const duoRule = (major, general) =>
   '<span class="swatch duo">' +
