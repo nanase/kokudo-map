@@ -109,7 +109,6 @@ function writeAll(fd, buf) {
  * @param {number} [o.lowMaxZoom]  低ズーム側の索引の maxZoom。既定は `split - 1`
  * @param {Function} [o.lowProperties]  低ズームで載せる属性を選ぶ写像
  * @returns {{total: number, bytes: number}}
- * number, bytes: number}}
  */
 export function writeTiles(o) {
   const {

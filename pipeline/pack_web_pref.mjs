@@ -1,8 +1,8 @@
 /* 都道府県道の生成物を、閲覧側が実際に取る形にする。
  *
- * prefectural-routes.pmtiles ベクタタイル。国道とは別のアーカイブ
- * pref/{region}.meta.json 県ごとの集計。県を選んだときに 1 つだけ取る
- * pref/index.json 全国の県と番号だけの索引。選択パネルが読む
+ *   prefectural-routes.pmtiles   ベクタタイル。国道とは別のアーカイブ
+ *   pref/{region}.meta.json      県ごとの集計。県を選んだときに 1 つだけ取る
+ *   pref/index.json              全国の県と番号だけの索引。選択パネルが読む
  *
  * 国道(pack_web.mjs)と分ける理由は三つある。国道の 55.9 MB を県道を直すたびに
  * 上げ直さずに済み、タイル化のメモリが 2 回に分かれ、県道側が壊れても国道の
