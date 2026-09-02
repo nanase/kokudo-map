@@ -539,26 +539,26 @@ export function routeLayers() {
 
 /* -------------------------------------------------------- 都道府県道の層 --- */
 /**
- * 都道府県道の配色。国道が既に青・橙・赤・紫を重用の深さに使っているので、
- * 残っている強い色相は緑しかない。同じ色相の中で二色を格に当て、格の違いは
- * 主に色相で読ませる——細い線では、明るさや彩度の差より色相の差のほうが読める
- * が、緑の内側で色相を動かせる幅は狭いためである。
+ * 都道府県道の配色。線の輪郭は縁取り(`PREF_CASING`)が引き受け、塗りの色に
+ * 残る役目は「隣の線と見分けられること」だけである。
+ *
+ * 塗りの明るさに輪郭まで持たせようとすると、下地図の上で行き詰まる。淡色地図は
+ * 市街地で 49.5%、山間部で 71.4% が純白で、そこに白を引いていた縁取りは輝度比
+ * 1.01、つまり何もしていなかった。塗りだけが線を支えていたので、白地に対して
+ * 3:1 に届く暗さと、写真の上で沈まない明るさの両方を一色に求めることになる。
+ *
+ * 縁取りを薄い灰に替えると輪郭がそちらに移り、塗りは明るさで選ばなくてよく
+ * なる。だから格の二色は色相の間隔で選ぶ。`PREF_GENERAL` の黄は白地に対して
+ * 1.24 しかないが、縁取りがあるから読める——地図帳の黄色い一般県道と同じ
+ * 成り立ちである。CIELAB 上の距離は、格の二色どうしで 68.2、縁取りとの間で
+ * 73.2 と 101.8 ある。
  *
  * 格(主要地方道か一般都道府県道か)を色に、重用の深さを持たせないのは、国道の
  * 四色と合わせて八色になると、どの色が何を述べているかが読めなくなるためである。
  * 都道府県道の重用は太さで述べる(`prefLineWidth`)。
- *
- * `PREF_GENERAL` は元々 #8CBF4A(白地に対するコントラスト比 2.17:1)だったが、
- * 淡色地図の上で明るすぎて沈み、広域(z9 前後)ではほとんど判別できなかった。
- * 単に暗くする案・`PREF_MAJOR` と同じ明るさまで沈める案も試したが、実地図での
- * 比較の結果、`PREF_MAJOR`(色相 142°、青緑寄り)との色相の距離を広げる方向
- * (黄色寄りの緑、色相 70°、コントラスト比 2.94:1)を選んだ。この結果
- * `PREF_MAJOR` との明るさの差は縮み(コントラスト比 2.48:1 → 1.83:1)、彩度も
- * ほぼ同じになった(64% 対 65%)——格の見分けは、明るさでも彩度でもなく
- * 色相の差だけにかかっている。
  */
-export const PREF_MAJOR = '#1B7A3E';
-export const PREF_GENERAL = '#8BA022';
+export const PREF_MAJOR = '#2BBB5E';
+export const PREF_GENERAL = '#F2EB1F';
 export const PREF_RANK_LABELS = {
   major: '主要地方道',
   general: '一般都道府県道',
@@ -576,24 +576,55 @@ export const colorByRank = [
 ];
 
 /**
- * 番号の札に使う一般都道府県道の色。線の `PREF_GENERAL` より暗い。
+ * 都道府県道の縁取りの色。線に足す輪郭であって、格を述べる色ではない。
  *
- * 線の太さなら薄くても形が出るが、字は画線が細く、同じ明るさでは読めなくなる。
- * `PREF_GENERAL` を色相をずらす方向に決め直した(#8BA022、色相 70°)ので、
- * ここも同じ色相のまま暗くして白い地に対して 5.1:1 になる値を選び直した——
- * 色相だけ違う字と線が並ぶと、同じ格を指しているように見えなくなる。主要地方道の
- * #1B7A3E は字のままでも 4.5:1 あるので、動かさない。
+ * 薄い灰と明るい緑は輝度比が 1.29 しかない。それでも縁として読めるのは、灰に
+ * 彩度がほとんど無く、緑の彩度が 68 あるためで、CIELAB 上の距離は 73.2 ある
+ * ——縁を作っているのは明るさの差ではなく鮮やかさの差である。
+ *
+ * 写真の下地図のときだけ、主要地方道の縁取りを濃くする。写真は明るい面と暗い面
+ * の振れ幅が大きく、緑が弱くなるのは暗い森ではなく、雪や造成地のような明るい面
+ * である。そこに対して薄い灰は 2.50 と 1.71 しか出ないが、濃い灰なら 6.93 と
+ * 4.74 出る。暗い森では逆転するが、そこは緑自身が 3.34 あって足りている。
+ *
+ * 一般都道府県道の黄は写真のどの面に対しても明るいので、どの下地図でも薄い灰の
+ * ままで縁が立つ。替えるのは主要地方道だけである。
+ */
+export const PREF_CASING = '#85909F';
+export const PREF_CASING_PHOTO_MAJOR = '#414A57';
+
+/** 縁取りの層の id。下地図を替えるたびに app.js がこの層の色を差し替える。 */
+export const PREF_CASING_LAYER = 'pref-casing';
+
+/** 下地図に合わせた縁取りの色。閲覧側の起動時と切り替え時が同じ関数を読む
+ *  ので、最初に描かれる絵と、切り替えたあとの絵が食い違うことはない。 */
+export const prefCasingColor = (basemap = DEFAULT_BASEMAP) =>
+  basemap === 'photo'
+    ? ['match', ['get', 'rank'], 'major', PREF_CASING_PHOTO_MAJOR, PREF_CASING]
+    : PREF_CASING;
+
+/**
+ * 番号の札に使う色。線の色は札には使えない。
+ *
+ * 線は幅を持ち、そのうえ縁取りが輪郭を作っているので、塗りが明るくても形が
+ * 出る。字にあるのは白い縁(`text-halo-color`)だけで、画線も細い。線と同じ
+ * 明るさのままでは、どちらの格の札も読めなくなる。
+ *
+ * どちらも色相は線のまま保ち、白い地に対して 5.5:1 前後になるところまで暗く
+ * した値である——色相だけ違う字と線が並ぶと、同じ格を指しているように見えなく
+ * なる。
  *
  * 凡例が出すのは線の色である(panel.mjs)。凡例は線が何かを述べる物であって、
  * 札の字の色を述べる物ではない。
  */
-export const PREF_GENERAL_INK = '#657515';
+export const PREF_MAJOR_INK = '#1B7A3E';
+export const PREF_GENERAL_INK = '#6F6A08';
 
 export const inkByRank = [
   'match',
   ['get', 'rank'],
   'major',
-  PREF_MAJOR,
+  PREF_MAJOR_INK,
   PREF_GENERAL_INK,
 ];
 
@@ -613,14 +644,21 @@ const PREF_RANK_MULT = ['match', ['get', 'rank'], 'major', 1.2, 0.85];
 // 大きく開いても、開いたぶんが描かれる場所がほとんど無い。
 const PREF_N_MULT = ['match', ['get', 'n'], 1, 1, 2, 1.35, 1.6];
 
-/** 都道府県道の線の太さ。`lineWidth` と同じ理由で、掛け算は補間の出力側に置く。 */
+/* 縁取りが線に足す量。段ごとに持つのは、一つの数では浅いところで縁のほうが
+ * 太くなるためである——z9 の線は 0.94px しかなく、そこに以前の +1.8 を足すと、
+ * 線より縁が厚い絵になっていた。線の太さそのものは動かさない。 */
+const PREF_CASING_ADD = [0.7, 1, 1.7, 2.4]; // PREF_ZOOM_STOPS と同じ並び
+
+/** 都道府県道の線の太さ。`lineWidth` と同じ理由で、掛け算は補間の出力側に置く。
+ *  `add` は 1 つの数か、`PREF_ZOOM_STOPS` と同じ並びの段ごとの量である。 */
 function prefLineWidth({ add = 0, scaleByN = true } = {}) {
   const out = ['interpolate', ['linear'], ['zoom']];
-  for (const [z, w] of PREF_ZOOM_STOPS) {
+  PREF_ZOOM_STOPS.forEach(([z, w], i) => {
     let base = ['*', w, PREF_RANK_MULT];
     if (scaleByN) base = ['*', base, PREF_N_MULT];
-    out.push(z, add ? ['+', base, add] : base);
-  }
+    const at = Array.isArray(add) ? add[i] : add;
+    out.push(z, at ? ['+', base, at] : base);
+  });
   return out;
 }
 
@@ -659,8 +697,11 @@ export const PREF_CLICKABLE_LAYERS = ['pref-roads', 'pref-special'];
  * 都道府県道は持たない。破線であること自体が「走れない」の印なので、色は格の
  * ままにして、1 層にまとめる——`line-dasharray` はデータ駆動にできないが、
  * `line-color` はできるので、分ける必要があるのは破線の形だけである。
+ *
+ * `basemap` は縁取りの色だけに効く(`prefCasingColor`)。省くと配る既定の
+ * 下地図の値になるので、層が在ることだけを問う側は今までどおり引数を渡さない。
  */
-export function prefLineLayers() {
+export function prefLineLayers(basemap = DEFAULT_BASEMAP) {
   return [
     {
       // 国道の `picked` と同じで、ポップアップが説明している 1 本を下地図から
@@ -681,18 +722,23 @@ export function prefLineLayers() {
       },
     },
     {
-      // 白い縁取り。国道の `casing` と同じ役目で、ラスタの下地図の上でも線が
+      // 灰の縁取り。国道の `casing` と同じ役目で、ラスタの下地図の上でも線が
       // 読めるようにする。破線の区分には敷かない——国道側も敷いていない。
-      id: 'pref-casing',
+      //
+      // 国道の縁取りと違って白ではなく、薄めもしない(PREF_CASING)。淡色地図の
+      // 半分以上は純白で、そこに白を 0.85 で引いても輝度比は 1.01 にしかならず、
+      // 輪郭がどこにも無かった。灰は塗りの色より弱くてよいが、透けてよい物では
+      // ない——透かすと、輪郭を持たせた意味がその分だけ戻る。
+      id: PREF_CASING_LAYER,
       type: 'line',
       source: PREF_SOURCE,
       'source-layer': SOURCE_LAYER,
       filter: kindTest(PREF_KIND_DRIVEABLE),
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'line-color': '#FFFFFF',
-        'line-opacity': formerOpacity(0.85),
-        'line-width': prefLineWidth({ add: 1.8 }),
+        'line-color': prefCasingColor(basemap),
+        'line-opacity': formerOpacity(),
+        'line-width': prefLineWidth({ add: PREF_CASING_ADD }),
       },
     },
     {

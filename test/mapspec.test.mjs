@@ -21,15 +21,20 @@ import {
   inkByRank,
   kindTest,
   NOTHING,
+  PREF_CASING,
+  PREF_CASING_LAYER,
+  PREF_CASING_PHOTO_MAJOR,
   PREF_CLICKABLE_LAYERS,
   PREF_GENERAL,
   PREF_GENERAL_INK,
   PREF_KIND_DRIVEABLE,
   PREF_MAJOR,
+  PREF_MAJOR_INK,
   PREF_PICKED_LAYER,
   PREF_POPUP_MINZOOM,
   PREF_SOURCE,
   pickedFilter,
+  prefCasingColor,
   prefClickableHitLayers,
   prefLabelLayer,
   prefLayers,
@@ -519,12 +524,57 @@ describe('都道府県道のレイヤー', () => {
     expect(labels.paint['text-color']).toEqual(inkByRank);
   });
 
-  test('札の字は線より濃い。主要地方道だけは同じ色でよい', () => {
-    // 線は幅を持つので `PREF_GENERAL` の明るさでも形が出ますが、字は画線が細く、
-    // 同じ明るさでは読めません(mapspec.mjs の PREF_GENERAL_INK)。
-    expect(inkByRank[3]).toBe(colorByRank[3]);
+  test('札の字はどちらの格も線より濃い', () => {
+    // 線は幅を持ち、そのうえ縁取りが輪郭を作っているので、明るい塗りでも形が
+    // 出ます。字にあるのは白い縁だけで、画線も細いので、線と同じ明るさでは
+    // どちらの格の札も読めません(mapspec.mjs の PREF_MAJOR_INK)。
+    expect(inkByRank[3]).not.toBe(colorByRank[3]);
+    expect(inkByRank[3]).toBe(PREF_MAJOR_INK);
     expect(inkByRank[4]).not.toBe(colorByRank[4]);
     expect(inkByRank[4]).toBe(PREF_GENERAL_INK);
+  });
+
+  test('縁取りは灰で、旧道以外は薄めない', () => {
+    // 白い縁取りは淡色地図の上で何もしていませんでした。純白の地に白を引いた
+    // 輝度比は 1.01 です。薄めるのも同じ向きの損なので、下げるのは旧道のぶん
+    // だけにします(mapspec.mjs の pref-casing)。
+    const casing = drawn.find((l) => l.id === PREF_CASING_LAYER);
+    expect(casing.paint['line-color']).toBe(PREF_CASING);
+    expect(casing.paint['line-opacity']).toEqual(formerOpacity());
+  });
+
+  test('縁取りの足し量はズームで変わり、線より太くならない', () => {
+    // 一つの数で持つと、浅いところで縁のほうが厚くなります。z9 の線は 0.94px
+    // しかなく、以前の +1.8 はその倍近くありました。
+    const casing = drawn.find((l) => l.id === PREF_CASING_LAYER);
+    const roads = drawn.find((l) => l.id === 'pref-roads');
+    const adds = stopAdds(
+      casing.paint['line-width'],
+      roads.paint['line-width'],
+    );
+    expect(new Set(adds).size).toBe(adds.length);
+    for (let i = 1; i < adds.length; i += 1) {
+      expect(adds[i]).toBeGreaterThan(adds[i - 1]);
+    }
+  });
+
+  test('写真の下地図でだけ、主要地方道の縁取りが濃くなる', () => {
+    // 写真で緑が弱くなるのは暗い森ではなく、雪や造成地のような明るい面です。
+    // 一般都道府県道の黄はどの面に対しても明るいので、そちらは替えません。
+    expect(prefCasingColor('pale')).toBe(PREF_CASING);
+    expect(prefCasingColor('std')).toBe(PREF_CASING);
+    expect(prefCasingColor('photo')).toEqual([
+      'match',
+      ['get', 'rank'],
+      'major',
+      PREF_CASING_PHOTO_MAJOR,
+      PREF_CASING,
+    ]);
+    // 層は起動時の下地図をそのまま持つ。切り替えたときと同じ関数が答えます。
+    const photo = prefLineLayers('photo').find(
+      (l) => l.id === PREF_CASING_LAYER,
+    );
+    expect(photo.paint['line-color']).toEqual(prefCasingColor('photo'));
   });
 
   test('影の層はいちばん下で、押されるまで何も描かない', () => {

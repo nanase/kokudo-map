@@ -4,7 +4,12 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 // 色の写しは置かない。凡例の見本が地図の線と同じ色かどうかを見るので、地図の
 // 定義そのものを読む。
-import { PREF_GENERAL, PREF_MAJOR } from '../web/mapspec.mjs';
+import {
+  PREF_CASING,
+  PREF_GENERAL,
+  PREF_MAJOR,
+  PREF_MAJOR_INK,
+} from '../web/mapspec.mjs';
 import {
   clearLabel,
   countLabel,
@@ -363,10 +368,24 @@ describe('凡例', () => {
   });
 
   /* 「道路を選択」の系統ボタンも、押されている間は系統の色で沈みます。都道府県道
-     の側の緑は地図の主要地方道と同じ色で、CSS の写しがずれると、押したボタンと
-     地図の線が別の緑になります。 */
-  test('系統ボタンの緑は、地図の主要地方道と同じ色である', () => {
-    expect(styleCss).toContain(`--pref-green: light-dark(${PREF_MAJOR},`);
+     の側の緑は地図の主要地方道の札と同じ色で、CSS の写しがずれると、押した
+     ボタンと地図が別の緑で同じ系統を指します。
+
+     地図の線そのものの緑(PREF_MAJOR)ではありません。あちらは縁取りが輪郭を
+     持つ前提の明るい緑で、白い字を載せると 2.5:1 しか出ません。 */
+  test('系統ボタンの緑は、地図の主要地方道の札と同じ色である', () => {
+    expect(styleCss).toContain(`--pref-green: light-dark(${PREF_MAJOR_INK},`);
+    expect(styleCss).not.toContain(`--pref-green: light-dark(${PREF_MAJOR},`);
+  });
+
+  /* 地図では線の輪郭を縁取りが引き受けています(mapspec.mjs の pref-casing)。
+     塗りだけを写した見本は地図の線と別の物になり、一般都道府県道の黄は白い地の
+     上でほとんど消えます。 */
+  test('都道府県道の見本は、地図と同じ色の縁取りを持つ', () => {
+    expect(styleCss).toContain(`--pref-casing: ${PREF_CASING};`);
+    expect(styleCss).toContain(
+      '#legend-pref .swatch { box-shadow: 0 0 0 1px var(--pref-casing); }',
+    );
   });
 
   test('走れない都道府県道の見本は、格の二色を半分ずつ並べる', () => {
