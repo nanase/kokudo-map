@@ -1684,9 +1684,18 @@ async function openPrefDetail(key) {
 
   // 押した状態は state から読む。ボタンが自分の見た目を覚えるのではなく、
   // 選択そのものが一つあって、それを毎回描き直す形にする。
-  const selected = isOnly(state.prefSelected, key);
+  //
+  // 控えず、書き込む直前に毎回聞く。県別 meta を待つあいだにボタンは押せる
+  // ので、開いた時点の値を控えると、届いた中身がそれを古い姿へ塗り戻す——
+  // 押されているのに「だけを表示」と名乗り、次の押下が名乗りと逆に働く。
+  const selected = () => isOnly(state.prefSelected, key);
   closePopup();
-  detailBody.innerHTML = prefDetailHTML({ region, prefLabel, ref, selected });
+  detailBody.innerHTML = prefDetailHTML({
+    region,
+    prefLabel,
+    ref,
+    selected: selected(),
+  });
   showDetail();
 
   let meta;
@@ -1699,7 +1708,7 @@ async function openPrefDetail(key) {
         region,
         prefLabel,
         ref,
-        selected,
+        selected: selected(),
         failed: true,
       });
       // 高さは中身に合わせて変わる。プレースホルダーぶんで計算した padding は
@@ -1720,7 +1729,7 @@ async function openPrefDetail(key) {
       region,
       prefLabel,
       ref,
-      selected,
+      selected: selected(),
       failed: true,
     });
     showDetail();
@@ -1731,7 +1740,7 @@ async function openPrefDetail(key) {
     region,
     prefLabel,
     ref,
-    selected,
+    selected: selected(),
     route,
     rank: prefRankOf(combos, key),
     kinds: kindsFor(combos, sel),
