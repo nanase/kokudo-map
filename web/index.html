@@ -7,9 +7,9 @@
 <meta name="description" content="日本の一般国道 459 路線を全国 1 枚で表示する地図。重用区間では重なるすべての番号を出し、縮尺を引いても番号を省略しない。出典は OpenStreetMap。">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
-<!-- ホーム画面に追加したときの表示。theme-color はアイコンの地と同じ標識の青で、
-     ステータスバーに出る。apple-touch-icon は iOS 側の同義語で、Safari は manifest
-     の icons をほぼ見ないので、無いと角の透けたアイコンになる。 -->
+<!-- ホーム画面に追加したときの表示。theme-color はアイコンの地と同じ標識の
+     青で、ステータスバーに出る。apple-touch-icon は iOS 側の同義語で、Safari は
+     manifest の icons をほぼ見ないので、無いと角の透けたアイコンになる。 -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#00449E">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -27,15 +27,15 @@
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
 
-<!-- 配色は app.js が決めるが、その JS は文書を読み終えるまで走らない。端末が暗く、
-     この地図では明るいほうを選んでいる人には、その間だけ暗い面が出て、地図に着く
-     までに色が二度変わっていた。ここで選択を先に置き、最初の描画からその側で出す。
-     'auto' のときは何も置かない。選択を書くのも 'auto' を解くのも app.js で、ここは
-     app.js が書いた物を置き直すだけである。
+<!-- 配色は app.js が決めるが、その JS は文書を読み終えるまで走らない。端末が
+     暗く、この地図では明るいほうを選んでいる人には、その間だけ暗い面が出て、
+     地図に着くまでに色が二度変わっていた。ここで選択を先に置き、最初の
+     描画からその側で出す。'auto' のときは何も置かない。選択を書くのも 'auto' を
+     解くのも app.js で、ここは app.js が書いた物を置き直すだけである。
 
-     凡例を畳んでいるかどうかも同じ理由で置く。凡例は vendor/*.js を待たずに出せる
-     静的な HTML なので(下の #legend-bar)、ここが無いと畳んだ人の画面に凡例が一度
-     出てから消える。 -->
+     凡例を畳んでいるかどうかも同じ理由で置く。凡例は vendor/*.js を待たずに
+     出せる静的な HTML なので(下の #legend-bar)、ここが無いと畳んだ人の画面に
+     凡例が一度出てから消える。 -->
 <script>
   try {
     const t = localStorage.getItem('theme');
@@ -53,9 +53,9 @@
 <link rel="preload" href="vendor/roboto-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <!-- 操作面の書体(LINE Seed JP)。日本語 1 書体は 7000 字あるので、Fontsource が
-     unicode-range で分けた約 120 片の @font-face の表になっている。降りてくるのは
-     画面に出ている字を含む片だけである。scripts/vendor_web.mjs が node_modules
-     から作る。 -->
+     unicode-range で分けた約 120 片の @font-face の表になっている。
+     降りてくるのは画面に出ている字を含む片だけである。scripts/vendor_web.mjs が
+     node_modules から作る。 -->
 <link rel="stylesheet" href="vendor/line-seed-jp.css">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -79,12 +79,12 @@
   <main id="map-wrap">
     <div id="map"></div>
 
-    <!-- 地図の左上の列。見出しのバーが一枚と、ポップオーバーを開くグループが三つ。
-         かつては 340px のサイドパネルがあり、畳むと選択解除や都道府県道を戻す操作
-         ごと消えた。グループは MapLibre 自身のボタンと同じクラス
-         (maplibregl-ctrl-group)で書くので、右上のボタンと同じ寸法・角丸・影になる。
-         畳むほどの大きさが無いので畳む操作は持たない。列そのものは地図を掴む操作を
-         通し、バーとグループだけが受け取る。 -->
+    <!-- 地図の左上の列。見出しのバーが一枚と、ポップオーバーを開くグループが
+         三つ。かつては 340px のサイドパネルがあり、畳むと選択解除や都道府県道を
+         戻す操作ごと消えた。グループは MapLibre 自身のボタンと同じクラス
+         (maplibregl-ctrl-group)で書くので、右上のボタンと同じ寸法・角丸・
+         影になる。畳むほどの大きさが無いので畳む操作は持たない。列そのものは
+         地図を掴む操作を通し、バーとグループだけが受け取る。 -->
     <div id="map-ui">
       <div id="brand">
         <img src="favicon.svg" alt="" class="brand-icon" width="495" height="475">
@@ -106,10 +106,10 @@
 
       <!-- 一つのグループに「開く」と「消す」が並ぶ。選択は地図に効いており、
            ポップオーバーを開かずに戻したいことがあるので、解除は外に置く。数の
-           バッジは選んでいる本数で、国道と都道府県道を合わせて数える。
-           「道路を選択」と名付けたのは、このグループが両方の系統を引き受ける
-           ためである。✕ は選んでいるあいだだけ出る。文言は updateStats() が title
-           と aria-label に入れる。 -->
+           バッジは選んでいる本数で、国道と都道府県道を合わせて数える。「道路を
+           選択」と名付けたのは、このグループが両方の系統を
+           引き受けるためである。✕ は選んでいるあいだだけ出る。文言は
+           updateStats() が title と aria-label に入れる。 -->
       <div class="maplibregl-ctrl maplibregl-ctrl-group ui-ctrl ui-ctrl-row">
         <button type="button" id="select-btn" class="ui-btn ui-btn-wide"
                 aria-expanded="false" aria-controls="select-popover"
@@ -146,9 +146,10 @@
           </svg>
         </button>
         <!-- 「道路を選択」のポップオーバーはこのグループを位置の基準にする。
-             #select-btn は選んだ本数のバッジ(#sel-count)ぶん幅が変わり、そちらを
-             基準にすると路線を選ぶたびに横へずれる。開け閉ては変わらず #select-btn
-             で、aria-controls もそちらが持つ(app.js の registerPane)。 -->
+             #select-btn は選んだ本数のバッジ(#sel-count)ぶん幅が変わり、
+             そちらを基準にすると路線を選ぶたびに横へずれる。開け閉ては変わらず
+             #select-btn で、aria-controls もそちらが持つ(app.js の
+             registerPane)。 -->
         <div id="select-popover" class="map-popover to-right" hidden>
           <section>
             <h2>道路を選択</h2>
@@ -161,10 +162,10 @@
               </svg>
               <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 18）" autocomplete="off">
             </div>
-            <!-- 一覧に出す系統。状態は三つだけで、最後の一枚は押しても外れず、空の
-                 一覧が残らない。これは一覧の絞り込みであって、地図の絞り込みでは
-                 ない。地図にどの系統を描くかは表示のポップオーバーの「国道」
-                 「都道府県道」が持つ。 -->
+            <!-- 一覧に出す系統。状態は三つだけで、最後の一枚は押しても外れず、
+                 空の一覧が残らない。これは一覧の絞り込みであって、地図の
+                 絞り込みではない。地図にどの系統を描くかは表示の
+                 ポップオーバーの「国道」「都道府県道」が持つ。 -->
             <div class="sys-seg" role="group" aria-label="一覧に出す系統">
               <button type="button" id="sys-national" class="sys" aria-pressed="true">国道</button>
               <button type="button" id="sys-pref" class="sys" aria-pressed="true">都道府県道</button>
@@ -174,14 +175,16 @@
                 <div class="rl-head">国道</div>
                 <div class="rl-grid" id="rl-national-list">
                   <!-- buildUI() が innerHTML を丸ごと差し替えるので、データが
-                       届けばこのまま消える。表示・非表示を別に持つ必要が無い。 -->
+                       届けばこのまま消える。表示・非表示を別に持つ必要が
+                       無い。 -->
                   <div class="route-list-spinner" aria-hidden="true"></div>
                 </div>
                 <p class="rl-note" id="rl-national-note" hidden>一致する国道はありません。</p>
               </div>
-              <!-- 都道府県道は打つまで出さない。13,234 組は眺めて選ぶ数ではない。
-                   番号は pref/index.json が持ち、初めて開いたときに 1 度だけ取る
-                   (14.4 kB)。県別 meta 47 本 3.45 MB を読ませないためである。 -->
+              <!-- 都道府県道は打つまで出さない。13,234 組は眺めて
+                   選ぶ数ではない。番号は pref/index.json が持ち、初めて
+                   開いたときに 1 度だけ取る(14.4 kB)。県別 meta 47 本 3.45 MB
+                   を読ませないためである。 -->
               <div class="rl-group" id="rl-pref">
                 <div class="rl-head" id="rl-pref-head">都道府県道</div>
                 <div class="rl-rows" id="rl-pref-rows"></div>
@@ -224,20 +227,20 @@
       </div>
     </div>
 
-    <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。地図の
-         左下に浮く。 -->
+    <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。
+         地図の左下に浮く。 -->
     <aside id="detail" hidden aria-labelledby="detail-title">
       <button type="button" id="detail-close" class="dialog-close" aria-label="閉じる">×</button>
       <div id="detail-body"></div>
     </aside>
 
-    <!-- 凡例。線の色と形が何を表すかは、その線を見ながらでなければ確かめようが
-         ないので、地図の上に置く。中身は panel.mjs の legendNHTML() /
-         legendKindHTML() / legendPrefHTML() の出力そのもの。static にしてあるのは
-         vendor/*.js を待たずに最初の描画から出すためで、test/panel.test.mjs が
-         関数との一致を検査する。出ていない系統の行は app.js が起動後に hidden で
-         隠す。畳んでいるかどうかは <html> の data-legend が持ち、上の <head> が
-         前回の選択を最初の描画の前に置く。 -->
+    <!-- 凡例。線の色と形が何を表すかは、その線を見ながらでなければ
+         確かめようがないので、地図の上に置く。中身は panel.mjs の legendNHTML()
+         / legendKindHTML() / legendPrefHTML() の出力そのもの。static
+         にしてあるのは vendor/*.js を待たずに最初の描画から出すためで、
+         test/panel.test.mjs が関数との一致を検査する。出ていない系統の行は app.
+         js が起動後に hidden で隠す。畳んでいるかどうかは <html> の data-legend
+         が持ち、上の <head> が前回の選択を最初の描画の前に置く。 -->
     <div id="legend-bar">
       <div id="legend-box" class="legend-box">
         <div class="legend-rows">
@@ -255,8 +258,8 @@
         </button>
       </div>
       <!-- 凡例を畳んでいるあいだだけ、同じ角に出る。右上の拡大ボタンと同じ
-           maplibregl-ctrl-group で、寸法も角丸も影もそちらから借りる。名前は title
-           と aria-label が持つ。 -->
+           maplibregl-ctrl-group で、寸法も角丸も影もそちらから借りる。名前は
+           title と aria-label が持つ。 -->
       <button type="button" id="legend-open" aria-controls="legend-box" aria-expanded="true"
               class="maplibregl-ctrl maplibregl-ctrl-group"
               title="凡例を表示" aria-label="凡例を表示">
@@ -266,10 +269,10 @@
         </svg>
       </button>
     </div>
-    <!-- 地図の上のボタンから出るポップオーバー。「何が地図に描かれるか」を決める
-         ものはすべてここに集める。位置は app.js がボタンのグループへ移してから
-         CSS が決める。中身をここに置くのは、データが届く前から state と結べる
-         ようにするためである。 -->
+    <!-- 地図の上のボタンから出るポップオーバー。「何が地図に描かれるか」を
+         決めるものはすべてここに集める。位置は app.js がボタンのグループへ
+         移してから CSS が決める。中身をここに置くのは、データが届く前から state
+         と結べるようにするためである。 -->
     <div id="display-popover" class="map-popover" hidden>
       <section>
         <h2>路線の系統</h2>
@@ -348,10 +351,10 @@
       <dl id="stats" class="stats"></dl>
       <dl id="freshness" class="freshness"></dl>
     </section>
-    <!-- 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではない。考え方の
-         但し書きはここに置く。詳細パネルは 1 路線の数を出す場所である。中身は
-         panel.mjs の prefConcurrencyHTML() が入れる。三つは <details> で畳み、
-         開閉の状態は残さない(理由は panel.mjs)。 -->
+    <!-- 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではない。
+         考え方の但し書きはここに置く。詳細パネルは 1 路線の数を出す場所である。
+         中身は panel.mjs の prefConcurrencyHTML() が入れる。三つは <details> で
+         畳み、開閉の状態は残さない(理由は panel.mjs)。 -->
     <section>
       <h3>都道府県道の重用の考え方</h3>
       <div id="pref-concurrency" class="notes"></div>
@@ -373,8 +376,8 @@
           </svg>
           GitHub リポジトリ
         </a>
-        <!-- X のアイコンは使わず、外へ出るリンクのアイコンにする。どこへ飛ぶかは
-             宛先が答える。 -->
+        <!-- X のアイコンは使わず、外へ出るリンクのアイコンにする。どこへ
+             飛ぶかは宛先が答える。 -->
         <a href="https://x.com/nanase_coder" target="_blank" rel="noopener"
            class="mini about-link">
           <svg viewBox="0 0 24 24" aria-hidden="true">

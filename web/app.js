@@ -1,36 +1,33 @@
 /* 国道マップ
  *
  * 前提: アークは、その上に載る指定の全体を `refs = ",18,117,406,"` の形で
- * 最初から持つ。「N 号だけを出す」も「重用区間だけを出す」も属性の絞り込みで
- * あり、スタイルの式で評価できる。再計算もサーバも不要である。
+ * 最初から持つ。「N 号だけを出す」も「重用区間だけを出す」も属性の
+ * 絞り込みであり、スタイルの式で評価できる。再計算もサーバも不要である。
  *
  * ビルドは地域ごとに走る(裏取りが都道府県で閉じているため)が、閲覧側は全国
- * 1 組のタイルを読むので、県を選ぶ場面は無い。範囲を広げるのはデータの変更で
- * あって、画面の変更ではない。
+ * 1 組のタイルを読むので、県を選ぶ場面は無い。範囲を広げるのはデータの
+ * 変更であって、画面の変更ではない。
  *
- * 全国で約 13 万アークあり、ベクタタイルで届くので、手元にあるのは画面に出て
- * いる物だけである。操作面が出す合計(路線の一覧、重用ランキング、選択の集計)は
- * すべて national.meta.json から読む。継ぎ目を重複排除したうえでビルドが書く。
+ * 全国で約 13 万アークあり、ベクタタイルで届くので、手元にあるのは画面に
+ * 出ている物だけである。操作面が出す合計(路線の一覧、重用ランキング、選択の
+ * 集計)はすべて national.meta.json から読む。継ぎ目を重複排除したうえでビルドが
+ * 書く。
  *
  * スタイルと絞り込み式は mapspec.mjs にある。検査スクリプトが本物をそのまま
  * 検査するためである。
  *
  * このファイルに残るのは、生きた地図とページが必要な部分である。地図、唯一の
  * 可変な `state`、絞り込み、listener、起動の順である。データの純関数は test/ で
- * 直接検査できるよう外へ出した。wireControls() と wireShare() は純粋ではないが、
- * document・state・applyFilters しか必要とせず地図が不要なので、wiring.mjs に
- * 置いて happy-dom の index.html で検査する。
+ * 直接検査できるよう外へ出した。wireControls() と wireShare() は
+ * 純粋ではないが、document・state・applyFilters しか必要とせず地図が
+ * 不要なので、wiring.mjs に置いて happy-dom の index.html で検査する。
  *
- *   dataurl.mjs    配信データの URL の基点
- *   mapspec.mjs    スタイル、層、絞り込み式
- *   aggregate.mjs  画面が出す数を組み合わせ表から読む
- *   panel.mjs      ポップオーバーの一覧・集計と、凡例の markup
- *   popup.mjs      押したアークのポップアップ
- *   detail.mjs     一つの路線の詳細パネル
- *   termini.mjs    起点・終点を GeoJSON にする
- *   shield.mjs     国道番号標識
- *   html.mjs       エスケープ。OSM の文字は信用できない
- *   wiring.mjs     index.html の要素と state の対応づけ
+ * dataurl.mjs 配信データの URL の基点 mapspec.mjs スタイル、層、絞り込み式
+ * aggregate.mjs 画面が出す数を組み合わせ表から読む panel.mjs ポップオーバーの
+ * 一覧・集計と、凡例の markup popup.mjs 押したアークのポップアップ detail.mjs
+ * 一つの路線の詳細パネル termini.mjs 起点・終点を GeoJSON にする shield.mjs
+ * 国道番号標識 html.mjs エスケープ。OSM の文字は信用できない wiring.mjs index.
+ * html の要素と state の対応づけ
  */
 
 import {
@@ -119,9 +116,9 @@ const state = {
   meta: null,
   routes: [],
   selected: new Set(),
-  // 都道府県道の選択。`nagano-63` の形のキーである。番号は県の中でしか一意で
-  // ないので、国道のように数では持てない(prefroute.mjs)。空は「すべて」を意味し、
-  // 国道の `selected` と同じである。
+  // 都道府県道の選択。`nagano-63` の形のキーである。番号は県の中でしか
+  // 一意でないので、国道のように数では持てない(prefroute.mjs)。空は「すべて」を
+  // 意味し、国道の `selected` と同じである。
   prefSelected: new Set(),
   // 県名の表。regions.json から `nagano` → 「長野県」を引く。都道府県道は県を
   // 伴わなければ路線を名指したことにならない。
@@ -132,8 +129,8 @@ const state = {
   // 全国の県と番号だけの索引(14.4 kB)。「道路を選択」を初めて開いたときに
   // 1 度だけ取る。番号で絞り込むためだけに使う。届くまでは null。
   prefIndex: null,
-  // 索引の取得に失敗したか。伝えないと「いつまでも読み込み中」になる。開き直せば
-  // 取り直す。
+  // 索引の取得に失敗したか。伝えないと「いつまでも読み込み中」になる。
+  // 開き直せば取り直す。
   prefIndexFailed: false,
   // 「道路を選択」の一覧に出す系統。地図に描く系統(national / pref)とは別で、
   // 探す先を絞るだけである。二つとも false にはならない。
@@ -224,10 +221,10 @@ for (const el of document.querySelectorAll('input[name=theme]')) {
 /**
  * 共有されたリンクが表示位置を指定しているか。
  *
- * 地図を作る前に読む。`hash: true` の MapLibre は作った時点で既定の中心へ jumpTo
- * し、その moveend で自分の hash を同期に書く。作った後に読むと、共有された hash
- * と地図が書いた hash を見分けられない。見分けが付かないあいだ fitInitialView()
- * は呼ばれず、`?region=` は誰にも届いていなかった。
+ * 地図を作る前に読む。`hash: true` の MapLibre は作った時点で既定の中心へ
+ * jumpTo し、その moveend で自分の hash を同期に書く。作った後に読むと、
+ * 共有された hash と地図が書いた hash を見分けられない。見分けが付かないあいだ
+ * fitInitialView()は呼ばれず、`?region=` は誰にも届いていなかった。
  */
 const sharedView = Boolean(location.hash);
 
@@ -260,16 +257,16 @@ const map = new maplibregl.Map({
 // 調査用と pipeline/render_check.mjs のために出しておく
 window.map = map;
 
-// 同期で登録する。`load` は一度しか発生しないが、`map.loaded()` はソースの取得
-// 中に false へ戻る。後者で場合分けすると、`load` が済んだ後に `once('load')` を
-// 足して `boot()` がエラーも出さずに止まる。ブラウザのキャッシュが効く再読み込み
-// で再現した。
+// 同期で登録する。`load` は一度しか発生しないが、`map.loaded()` はソースの
+// 取得中に false へ戻る。後者で場合分けすると、`load` が済んだ後に
+// `once('load')` を足して `boot()` がエラーも出さずに止まる。ブラウザの
+// キャッシュが効く再読み込みで再現した。
 const mapLoaded = new Promise((res) => map.once('load', res));
 
-// 拡大・縮小と方位を別のグループに分ける。既定では三つが一つの角丸にまとまるが、
-// 拡大・縮小は範囲を変え、方位は北を戻すだけで、押す場面も頻度も違う。同じ
-// グループだと拡大を連打した指が方位に触れて地図が回る。二つ addControl すれば
-// MapLibre がグループごとに積んで隙間を空ける。
+// 拡大・縮小と方位を別のグループに分ける。既定では三つが一つの
+// 角丸にまとまるが、拡大・縮小は範囲を変え、方位は北を戻すだけで、押す場面も
+// 頻度も違う。同じグループだと拡大を連打した指が方位に触れて地図が回る。二つ
+// addControl すれば MapLibre がグループごとに積んで隙間を空ける。
 map.addControl(
   new maplibregl.NavigationControl({ showCompass: false }),
   'top-right',
@@ -417,18 +414,19 @@ function attachStateTip(container) {
 
 /* ------------------------------------------------------------ ボタン工場 --- */
 /**
- * 地図の右上のボタンは同じ形をしている。押すと `order` を一つ進め、値からアイコン
- * とラベルを描き直す。`get`/`apply` はボタンの外の状態(地図の層、localStorage)を
- * 触るので、ここが持つのはボタンだけである。
+ * 地図の右上のボタンは同じ形をしている。押すと `order` を一つ進め、値から
+ * アイコンとラベルを描き直す。`get`/`apply` はボタンの外の状態(地図の層、
+ * localStorage)を触るので、ここが持つのはボタンだけである。
  *
  * `order` が二値なら切り替えなので、`active` と `aria-pressed` を付ける。三値は
  * 付けない。`tip` は既定で `label` と同じで、「次に押すと何が起きるか」と「いま
- * 何になったか」で言い方を変えるのは国道を隠すボタンだけである(`hideStateTip`)。
+ * 何になったか」で言い方を変えるのは国道を隠すボタンだけである
+ * (`hideStateTip`)。
  *
- * `onExternalChange` を渡すと `render` を手渡す。押していないところで状態が動く
- * ボタン(視点は Ctrl+ドラッグでも変わる)が描き直すために使う。`isPressed` も
- * 同じ事情で、視点の `get()` はドラッグが残した任意の角度を返しうるので、真上
- * でない限り「押されている」と見なす。
+ * `onExternalChange` を渡すと `render` を手渡す。押していないところで状態が
+ * 動くボタン(視点は Ctrl+ドラッグでも変わる)が描き直すために使う。`isPressed`
+ * も同じ事情で、視点の `get()` はドラッグが残した任意の角度を返しうるので、
+ * 真上でない限り「押されている」と見なす。
  */
 function cycleButton(
   {
@@ -602,12 +600,12 @@ const HideRoutesControl = buildCycleControl('hide-routes-ctrl', {
 /* -------------------------------------------------------- ボタンから出る面 --- */
 /**
  * 地図の上のボタンを押すと、そのグループの脇から出るポップオーバー。左上の
- * 「道路を選択」「国道重用区間ランキング」「起点・終点を共有する地点」と、右上の
- * 「表示」の四つが同じ仕掛けで動く。
+ * 「道路を選択」「国道重用区間ランキング」「起点・終点を共有する地点」と、
+ * 右上の「表示」の四つが同じ仕掛けで動く。
  *
- * ポップオーバーはボタンと同じグループの中にあるので、位置合わせの計算は無く
- * ボタンを追う(state-tip と同じ)。CSS が向きを決め、左上からは右へ、右上からは
- * 左へ出る。窓の端しか無い側を避ける。
+ * ポップオーバーはボタンと同じグループの中にあるので、位置合わせの計算は
+ * 無くボタンを追う(state-tip と同じ)。CSS が向きを決め、左上からは右へ、
+ * 右上からは左へ出る。窓の端しか無い側を避ける。
  *
  * 一度に開くのは一つだけにする。四つとも地図の上に浮くので、二枚並ぶと地図の
  * 見える面積が急に減る。
@@ -618,9 +616,9 @@ const PANE_GAP = 12;
 const panes = [];
 
 /**
- * 上端はボタンに合わせる。窓の下からはみ出すなら、はみ出したぶんだけ引き上げる。
- * 低い窓ではボタンに揃えることより中身が見えることが先である。引き上げても
- * 入らない高さは中でスクロールする(style.css の max-height)。
+ * 上端はボタンに合わせる。窓の下からはみ出すなら、はみ出したぶんだけ
+ * 引き上げる。低い窓ではボタンに揃えることより中身が見えることが先である。
+ * 引き上げても入らない高さは中でスクロールする(style.css の max-height)。
  */
 function fitPane(pane) {
   pane.style.top = '-1px';
@@ -643,9 +641,10 @@ function closePanes() {
 }
 
 /**
- * ボタンとポップオーバーを結ぶ。`root` は「そのポップオーバーの持ち物」の範囲で、
- * 外を押したときに閉じるかどうかをこれで見分ける。グループにはボタンもあるので、
- * ポップオーバーだけを見ると、同じグループの ✕ を押しただけで一覧が畳まれる。
+ * ボタンとポップオーバーを結ぶ。`root` は「そのポップオーバーの持ち物」の
+ * 範囲で、外を押したときに閉じるかどうかをこれで見分ける。グループには
+ * ボタンもあるので、ポップオーバーだけを見ると、同じグループの ✕ を
+ * 押しただけで一覧が畳まれる。
  *
  * 「道路を選択」はボタン(#select-btn)とポップオーバー(#select-popover)が別の
  * グループにある。選んだ本数のバッジで幅が変わらない #ranking-btn のグループへ
@@ -678,7 +677,8 @@ document.addEventListener('click', (ev) => {
   }
 });
 
-/* 左上の三つ。markup は index.html が持ち、データが届く前から state と結べる。 */
+/* 左上の三つ。markup は index.html が持ち、データが届く前から state と
+ * 結べる。 */
 for (const [btnId, paneId] of [
   ['#ranking-btn', '#ranking-popover'],
   ['#shared-btn', '#shared-popover'],
@@ -700,8 +700,8 @@ selectBtn.addEventListener('click', loadPrefIndex);
 /* -------------------------------------------------------------- 表示の面 --- */
 /**
  * 「何が地図に描かれるか」を決めるものはすべてここに集める。結果は地図にしか
- * 現れないので地図の側に置き、節を分けて一つに収める。ボタンを分けると、どちらを
- * 押すか毎回考えることになる。
+ * 現れないので地図の側に置き、節を分けて一つに収める。ボタンを分けると、
+ * どちらを押すか毎回考えることになる。
  */
 const displayPane = $('#display-popover');
 
@@ -899,7 +899,8 @@ const narrowMq = window.matchMedia(NARROW_QUERY);
 const NO_PADDING = { top: 0, bottom: 0, left: 0, right: 0 };
 /** パネルと地図のあいだに残す余白。 */
 const BOX_GAP = 12;
-/** 一辺で覆ってよい上限。これが無いと、低い窓では地図の中心が画面の外へ出る。 */
+/** 一辺で覆ってよい上限。これが無いと、低い窓では地図の中心が画面の外へ
+ * 出る。 */
 const MAX_SIDE_RATIO = 0.6;
 const EASE_MS = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   ? 0
@@ -942,9 +943,9 @@ function applyMapPadding(animate) {
 }
 
 /**
- * padding を変えても絵を動かさない。padding は中心と見なす点をずらすので、変える
- * と絵は逆へ滑る。新しい padding のもとで中心になる画素に今写っている地点を、
- * そのまま新しい中心に据え直す。
+ * padding を変えても絵を動かさない。padding は中心と見なす点をずらすので、
+ * 変えると絵は逆へ滑る。新しい padding のもとで中心になる画素に今写っている
+ * 地点を、そのまま新しい中心に据え直す。
  */
 function setPaddingKeepingView() {
   const padding = mapPadding();
@@ -1079,8 +1080,8 @@ async function boot() {
    * 理由が画面のどこにも無く、「壊れている」に見える。
    *
    * 2 本以上を名指した URL では開かない。パネルは 1 路線について述べる場所で、
-   * どれを代表にしても残りを落とすことになる。画面からその形は作れず、手で書いた
-   * URL だけが持ちうる。 */
+   * どれを代表にしても残りを落とすことになる。画面からその形は作れず、手で
+   * 書いた URL だけが持ちうる。 */
   if (state.prefSelected.size === 1) {
     openPrefDetail([...state.prefSelected][0]);
   }
@@ -1152,8 +1153,8 @@ function fitInitialView(index) {
     [w, s],
     [e, n],
   ];
-  // 浮いているパネルのぶんは地図の padding が持つ。fitBounds の padding はそれを
-  // 置き換えるので、余白を足した形で渡し直す。
+  // 浮いているパネルのぶんは地図の padding が持つ。fitBounds の padding
+  // はそれを置き換えるので、余白を足した形で渡し直す。
   const p = map.getPadding();
   const clear = {
     top: p.top + 24,
@@ -1161,9 +1162,9 @@ function fitInitialView(index) {
     left: p.left + 24,
     right: p.right + 24,
   };
-  // パネルを避けた残りに地域が入らない画面(縦に長い狭い画面)では cameraForBounds
-  // が何も返さないので、避けるのをやめて窓いっぱいに合わせる。端が操作面の下に
-  // 少し潜るが、パネルは閉じられる。
+  // パネルを避けた残りに地域が入らない画面(縦に長い狭い画面)では
+  // cameraForBounds が何も返さないので、避けるのをやめて窓いっぱいに合わせる。
+  // 端が操作面の下に少し潜るが、パネルは閉じられる。
   const padding = map.cameraForBounds(bounds, { padding: clear }) ? clear : 24;
   map.fitBounds(bounds, { padding, duration: 0 });
 }
@@ -1271,9 +1272,9 @@ function syncLegend() {
 }
 
 /**
- * クエリ文字列を `state` に合わせ続ける。MapLibre が書く hash と、このモジュールが
- * 管理しないキーには触れない。`?region=` は起動時に一度読むだけなので、触れば
- * 最初の絞り込みで消える。
+ * クエリ文字列を `state` に合わせ続ける。MapLibre が書く hash と、この
+ * モジュールが管理しないキーには触れない。`?region=` は起動時に
+ * 一度読むだけなので、触れば最初の絞り込みで消える。
  */
 function syncURL() {
   const params = new URLSearchParams(location.search);
@@ -1301,8 +1302,8 @@ function updateStats() {
   const totals = statsFor(state.meta.combinations, sel);
   $('#stats').innerHTML = statsHTML(sel.size, state.routes.length, totals);
 
-  // 選んでいる本数は両系統の合計である。「道路を選択」が国道と都道府県道の両方を
-  // 引き受けるので、数える側も消す側も系統を分けない。
+  // 選んでいる本数は両系統の合計である。「道路を選択」が国道と都道府県道の
+  // 両方を引き受けるので、数える側も消す側も系統を分けない。
   const picked = sel.size + state.prefSelected.size;
 
   // 取り消す物が無いあいだ ✕ は出さない。押せない姿で置くより、選んでいるとき
@@ -1346,9 +1347,10 @@ function renderShared() {
  * 重用ランキングと起終点共有の行を押すと、その場所へ飛ぶ。
  *
  * どの行も自分が名指しする 1 つの物の広がり(組み合わせの bbox か、起終点の座標)
- * を持つので、視点はそこへだけ送る。以前は行の番号のうち 2 つを共有する組み
- * 合わせを表から拾い直して広がりを求めており、高知市で 4 km を一緒に走る国道
- * 32・55・56・195・197・493 号を押すと四国の大半(東経 132.5〜134.7 度)が入った。
+ * を持つので、視点はそこへだけ送る。以前は行の番号のうち 2 つを共有する
+ * 組み合わせを表から拾い直して広がりを求めており、高知市で 4 km を一緒に
+ * 走る国道 32・55・56・195・197・493 号を押すと四国の大半(東経 132.5〜134.7 度)
+ * が入った。
  *
  * 押しても選択は変えない。ランキングは選択を映すので、行の路線を選ぶと指の下で
  * 一覧が組み直され、押した行が動くか消える。1 路線に絞るのはチェックボックスの
@@ -1368,8 +1370,8 @@ document.addEventListener('click', (ev) => {
     map.flyTo({ center: [lon, lat], zoom: 12 });
     return;
   }
-  // 短い重用区間は数 m の車道でありうるし、アーク 1 本ぶんなら広がりを持たない。
-  // 潰れた bbox が無限の縮尺を要求しないよう、maxZoom で止める。
+  // 短い重用区間は数 m の車道でありうるし、アーク 1 本ぶんなら広がりを
+  // 持たない。潰れた bbox が無限の縮尺を要求しないよう、maxZoom で止める。
   const [w, s, e, n] = row.dataset.bbox.split(',').map(Number);
   map.fitBounds(
     [
@@ -1382,11 +1384,11 @@ document.addEventListener('click', (ev) => {
 
 /* ---------------------------------------------------------- ポップアップ --- */
 /**
- * 開いているポップアップは多くても 1 つで、地図の上の影はそのポップアップの
- * ものである。MapLibre の `closeOnClick` は、このファイルより後に登録された
- * click の handler から前のポップアップを閉じる。古いほうの後始末が、新しい
- * ポップアップが影を受け取った後に届いて影を奪う。ここで持って明示的に閉じれば、
- * 閉じ方によらず歩調が揃う。
+ * 開いているポップアップは多くても 1 つで、地図の上の影はその
+ * ポップアップのものである。MapLibre の `closeOnClick` は、このファイルより後に
+ * 登録された click の handler から前のポップアップを閉じる。古いほうの
+ * 後始末が、新しいポップアップが影を受け取った後に届いて影を奪う。ここで持って
+ * 明示的に閉じれば、閉じ方によらず歩調が揃う。
  */
 let popup = null;
 
@@ -1508,12 +1510,13 @@ function showPopup(lngLat, html) {
  * である。居場所は style.css の #detail が、ずらす量は applyMapPadding が持つ。
  */
 /**
- * パネルを開いた時点の表示位置。閉じるときに、寄せたぶんを戻すかどうかを決める。
+ * パネルを開いた時点の表示位置。閉じるときに、寄せたぶんを戻すかどうかを
+ * 決める。
  *
- * padding を外せば地図は中心を画面の真ん中へ戻すので、絵は寄せたときと逆へ動く。
- * 開けて読んで閉じるだけなら開く前に戻るのが正しい。開いているあいだに動いた
- * (掴んで送った、起終点へ飛んだ)なら、今の表示位置は利用者が選んだものなので、
- * padding を外しても絵を動かさない。
+ * padding を外せば地図は中心を画面の真ん中へ戻すので、絵は寄せたときと逆へ
+ * 動く。開けて読んで閉じるだけなら開く前に戻るのが正しい。開いているあいだに
+ * 動いた(掴んで送った、起終点へ飛んだ)なら、今の表示位置は利用者が
+ * 選んだものなので、padding を外しても絵を動かさない。
  *
  * 見るのは中心と縮尺だけである。padding だけの ease はどちらも変えない。傾きと
  * 向きは場所ではないので数えない。
@@ -1547,9 +1550,9 @@ function openDetail(ref) {
   // 路線について述べるので、両方出ていると同じ画面で別のことを述べる。狭い画面
   // では重なりもする。影はポップアップのものなので closePopup() が一緒に消す。
   closePopup();
-  // kinds と former は必ず同じ絞り方で読む(aggregate.mjs の touched() が一箇所に
-  // ある理由と同じ)。Set を二回作ると食い違いの第一歩になるので、一つを両方に
-  // 渡す。
+  // kinds と former は必ず同じ絞り方で読む(aggregate.mjs の touched() が
+  // 一箇所にある理由と同じ)。Set を二回作ると食い違いの第一歩になるので、一つを
+  // 両方に渡す。
   const sel = new Set([ref]);
   detailBody.innerHTML = detailHTML({
     route,
@@ -1557,8 +1560,8 @@ function openDetail(ref) {
     termini: decreeTerminiOf(state.meta, ref),
     related: relatedRoutesOf(state.meta, ref),
     formerKm: formerKmFor(state.meta.combinations, sel),
-    // 押した状態は state から読む。ボタンが見た目を覚えるのではなく、選択そのもの
-    // を毎回描き直す(openPrefDetail も同じ)。
+    // 押した状態は state から読む。ボタンが見た目を覚えるのではなく、
+    // 選択そのものを毎回描き直す(openPrefDetail も同じ)。
     selected: isOnly(state.selected, state.prefSelected, ref),
   });
   showDetail();
@@ -1577,9 +1580,9 @@ async function openPrefDetail(key) {
   const ref = prefRefOf(key);
   const serial = ++detailSerial;
 
-  // 押した状態は state から読み、書き込む直前に毎回聞く。県別 meta を待つあいだ
-  // にボタンは押せるので、開いた時点の値を控えると、届いた中身が古い姿へ塗り戻し、
-  // 次の押下がラベルと逆に働く。
+  // 押した状態は state から読み、書き込む直前に毎回聞く。県別 meta を
+  // 待つあいだにボタンは押せるので、開いた時点の値を控えると、届いた中身が
+  // 古い姿へ塗り戻し、次の押下がラベルと逆に働く。
   const selected = () => isOnly(state.prefSelected, state.selected, key);
   closePopup();
   detailBody.innerHTML = prefDetailHTML({
@@ -1603,8 +1606,8 @@ async function openPrefDetail(key) {
         selected: selected(),
         failed: true,
       });
-      // 高さは中身で変わる。プレースホルダーで計算した padding は古いので、新しい
-      // 高さで取り直す。
+      // 高さは中身で変わる。プレースホルダーで計算した padding は古いので、
+      // 新しい高さで取り直す。
       showDetail();
     }
     return;
@@ -1648,9 +1651,10 @@ async function openPrefDetail(key) {
 
 /**
  * 全国の県と番号だけの索引を取る。一度取ったら覚えておく。「道路を選択」を
- * 開いたときに呼び、開かない人には取らない。県別 meta 47 本 3.45 MB を読ませない
- * ために、ビルドが番号だけを抜いて 1 枚にしてある(pipeline/pack_web_pref.mjs)。
- * 畳み方は URL の選択と同じ範囲表記なので、開くのも同じ decodeRoutes である。
+ * 開いたときに呼び、開かない人には取らない。県別 meta 47 本 3.45 MB を
+ * 読ませないために、ビルドが番号だけを抜いて 1 枚にしてある
+ * (pipeline/pack_web_pref.mjs)。畳み方は URL の選択と同じ範囲表記なので、
+ * 開くのも同じ decodeRoutes である。
  */
 let prefIndexPending = null;
 
@@ -1663,13 +1667,14 @@ function loadPrefIndex() {
       return r.json();
     })
     .then((raw) => {
-      // ある県を決めるのは索引そのものである。state.prefLabels で絞ってはならない。
-      // あれは boot() が埋めるので、埋まる前にここが解決すると索引が空のまま残り、
-      // 成功しているぶん prefIndexPending は解けず、開き直しても取り直さない。
+      // ある県を決めるのは索引そのものである。state.prefLabels で
+      // 絞ってはならない。あれは boot() が埋めるので、埋まる前にここが
+      // 解決すると索引が空のまま残り、成功しているぶん prefIndexPending は
+      // 解けず、開き直しても取り直さない。
       //
-      // prefLabels は並べ替えにだけ使う。県の並びを regions.json の順に揃えると、
-      // 一致した行もその順を継ぐ(prefroute.mjs の matchPrefRoutes)。まだ空なら
-      // 索引の順のまま残る。
+      // prefLabels は並べ替えにだけ使う。県の並びを regions.json の順に
+      // 揃えると、一致した行もその順を継ぐ(prefroute.mjs の matchPrefRoutes)。
+      // まだ空なら索引の順のまま残る。
       const rank = new Map([...state.prefLabels.keys()].map((r, i) => [r, i]));
       const at = (region) => rank.get(region) ?? Number.MAX_SAFE_INTEGER;
       state.prefIndex = new Map(
@@ -1730,8 +1735,8 @@ function closeDetail() {
 
 $('#detail-close').addEventListener('click', closeDetail);
 
-// ダイアログが開いているあいだの Esc はそちらのものである。<dialog> のキャンセル
-// は document まで上がるので、譲らないと後ろのパネルまで閉じる。
+// ダイアログが開いているあいだの Esc はそちらのものである。<dialog> の
+// キャンセルは document まで上がるので、譲らないと後ろのパネルまで閉じる。
 document.addEventListener('keydown', (ev) => {
   if (ev.key !== 'Escape') return;
   if ($('dialog[open]')) return; // ダイアログの Esc はそちらのものである
@@ -1757,18 +1762,20 @@ document.addEventListener('click', (ev) => {
   // パネルに入れ替わる。パネルは路線 1 本について述べる場所である。
   const shieldBtn = ev.target.closest('.shield-btn');
   if (shieldBtn) {
-    // 都道府県道の標識は県を伴うキーを持つ。番号だけでは 47 本のどれか決まらない。
+    // 都道府県道の標識は県を伴うキーを持つ。番号だけでは 47 本のどれか
+    // 決まらない。
     if (shieldBtn.dataset.pref) openPrefDetail(shieldBtn.dataset.pref);
     else openDetail(Number(shieldBtn.dataset.ref));
     return;
   }
 
-  // 選択の持ち主は state のままである。wiring の関数を呼ぶだけで、一覧のチェック
-  // も系統のトグルもそちらが合わせる。
+  // 選択の持ち主は state のままである。wiring の関数を呼ぶだけで、一覧の
+  // チェックも系統のトグルもそちらが合わせる。
   const only = ev.target.closest('.detail-only');
   if (only) {
-    // 押した状態の描き直しはしない。選択が変われば applyFilters が syncDetailOnly
-    // を通るので、一覧のチェックや ✕ から変わったときと同じ経路になる。
+    // 押した状態の描き直しはしない。選択が変われば applyFilters が
+    // syncDetailOnly を通るので、一覧のチェックや ✕ から変わったときと
+    // 同じ経路になる。
     if (only.dataset.pref) {
       togglePrefOnly(document, state, only.dataset.pref, applyFilters);
     } else {
