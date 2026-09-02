@@ -142,6 +142,13 @@ class Tally:
         self.paired_km: dict[tuple[str, str, bool], float] = defaultdict(float)
 
     def add(self, doc: dict) -> None:
+        """候補の way を 1 本、この県の台帳に足す。
+
+        指定延長は指定の数だけ数え、実延長は道 1 本ぶんしか数えない。国道でもある
+        way は実延長に入らない——道路法が、重なった区間を格の高い路線の側に寄せる
+        ためである。種別の割り振りは、その way が持つ番号のどれか 1 つでも主要地方道
+        なら主要地方道の側に置く。上の rank_of がその判断を持つ。
+        """
         refs = doc["refs"]
         if not refs:
             return
