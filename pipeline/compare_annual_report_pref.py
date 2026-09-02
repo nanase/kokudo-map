@@ -29,17 +29,17 @@
 これは年報の定義そのものであって、こちらが考えた近似ではない。この置き方だと
 表11 = 表12 + 表13 が計算のうえでも成り立つ。
 
-種別は番号帯で分ける。主要地方道か一般都道府県道かは、政令で決まる法令上の区別である。OSM はそれを
+種別は番号で分ける。主要地方道か一般都道府県道かは、政令で決まる法令上の区別である。OSM はそれを
 直接持たない。持っているのは道の格(primary・secondary)と番号で、実測では
 primary の 95.5% が `ref` 100 以下、secondary の 99.5% が 101 以上である。
 
-分けるのに使うのは番号帯のほうである。格は道の作りを述べるのであって、路線の
-格付けを述べるのではない。二つが食い違う way は、下の「番号帯と道路の格」で
+分けるのに使うのは番号のほうである。格は道の作りを述べるのであって、路線の
+格付けを述べるのではない。二つが食い違う way は、下の「種別と道路の格」で
 そのまま報告する。数えるのに使わなかった側を、代わりに見張りに使う。
 
-境目そのものは build_prefectural.MAJOR_MAX から読む。判定と検証で別々に書くと、
-書き写した複製を検査することになる。番号帯が北海道と沖縄県で崩れることは実測して
-あり、量と理由は PREFECTURAL.md にある。
+どの番号が主要地方道かは build_prefectural.rank_of から読む。判定と検証で別々に
+書くと、書き写した複製を検査することになる。番号の振り方が 5 都道県で通例から
+外れることと、その書き下しは PREFECTURAL.md にある。
 
 県別の突き合わせでは、年報は県の行と政令指定都市の行を分ける。地図は道路管理者を区別しないので、
 突き合わせる相手は両方の和である(annual_report.Prefecture)。
@@ -65,7 +65,7 @@ from collections import defaultdict
 
 import annual_report
 from _paths import SURVEY
-from build_prefectural import GENERAL, MAJOR, MAJOR_MAX, RANK_LABEL, rank_of
+from build_prefectural import GENERAL, MAJOR, RANK_LABEL, rank_of
 from compare_annual_report import (
     KIND_GROUP,
     SAMPLE_M,
@@ -78,9 +78,8 @@ from compare_annual_report import (
 from regions import REGIONS
 
 # --------------------------------------------------------------------- 種別 ---
-# 境目(MAJOR_MAX)と呼び名は判定が持つ。ここで同じ値を書き直すと、書き写した複製を
-# 検査することになる。境目を選んだ理由と、その選択が北海道と沖縄県で生む誤りは
-# PREFECTURAL.md にある。
+# 分け方(rank_of)と呼び名は判定が持つ。ここで同じ規則を書き直すと、書き写した複製を
+# 検査することになる。番号で分ける理由と、5 都道県ぶんの例外は PREFECTURAL.md にある。
 #
 # どの表と突き合わせるかだけは、この突き合わせ自身の問いなのでここにある。
 RANKS = (MAJOR, GENERAL)
@@ -143,14 +142,21 @@ class Tally:
         self.paired_km: dict[tuple[str, str, bool], float] = defaultdict(float)
 
     def add(self, doc: dict) -> None:
+        """候補の way を 1 本、この県の台帳に足す。
+
+        指定延長は指定の数だけ数え、実延長は道 1 本ぶんしか数えない。国道でもある
+        way は実延長に入らない——道路法が、重なった区間を格の高い路線の側に寄せる
+        ためである。種別の割り振りは、その way が持つ番号のどれか 1 つでも主要地方道
+        なら主要地方道の側に置く。上の rank_of がその判断を持つ。
+        """
         refs = doc["refs"]
         if not refs:
             return
         km = doc["m"] / 1000
         self.ways += 1
         for ref in refs:
-            self.designated_km[rank_of(ref)] += km
-            self.numbers[rank_of(ref)].add((self.region, ref))
+            self.designated_km[rank_of(self.region, ref)] += km
+            self.numbers[rank_of(self.region, ref)].add((self.region, ref))
         if doc["grade"]:
             self.grade_ways[doc["grade"]] += 1
             self.grade_km[doc["grade"]] += km
@@ -167,7 +173,8 @@ class Tally:
             return
         # ここから先は、台帳が実延長として数える側である。
         self.dedup_km += km
-        self.actual_km[MAJOR if any(r <= MAJOR_MAX for r in refs) else GENERAL] += km
+        self.actual_km[MAJOR if any(rank_of(self.region, r) == MAJOR
+                                    for r in refs) else GENERAL] += km
         self.km_by_kind[doc["kind"]] += km
         self.arcs_by_kind[doc["kind"]] += 1
         if doc["link"]:
@@ -283,18 +290,18 @@ def measure_pairs(docs: list[dict], reach: float) -> dict[tuple[str, str, bool],
 LABEL_WIDTH = 26
 
 
-def report_mismatched_band(rows: list[tuple], limit: int = 10) -> None:
-    """番号帯と道路の格が食い違う way。
+def report_mismatched_rank(rows: list[tuple], limit: int = 10) -> None:
+    """種別と道路の格が食い違う way。
 
     どちらかが誤りである。番号が誤っていればその路線は別の県道になり、格が誤って
     いれば地図の線の太さと配信の分け方が変わる。どちらであるかはここでは決めない
     ——決めれば判定になる。量と、上から順の実例を出す。
     """
-    print("\n番号帯と道路の格")
+    print("\n種別と道路の格")
     for grade, expect in (("primary", GENERAL), ("secondary", MAJOR)):
         bad = [r for r in rows if r[0] == grade and r[1] == expect]
         km = sum(r[2] for r in bad)
-        print(f"  {grade:10} なのに {RANK_LABEL[expect]:8} の番号帯: "
+        print(f"  {grade:10} なのに {RANK_LABEL[expect]:8} の番号: "
               f"{len(bad):6,} ways  {km:9,.1f} km")
         for _, _, way_km, region, refs, wid in sorted(bad, key=lambda r: -r[2])[:limit]:
             print(f"    {REGIONS[region]['label']:6} {refs!s:14} "
@@ -347,7 +354,7 @@ def main() -> None:
 
     nation = Tally()
     per_region: dict[str, Tally] = {}
-    band_rows: list[tuple] = []
+    rank_rows: list[tuple] = []
     base: set[str] = set()
 
     print(f"道路統計年報2025 表11・表12・表13〈都道府県道〉 令和6年3月31日現在 "
@@ -365,12 +372,12 @@ def main() -> None:
         for d in docs:
             tally.add(d)
             if d["grade"] and d["refs"]:
-                band = {rank_of(r) for r in d["refs"]}
-                if d["grade"] == "primary" and band == {GENERAL}:
-                    band_rows.append(("primary", GENERAL, d["m"] / 1000, region,
+                ranks = {rank_of(region, r) for r in d["refs"]}
+                if d["grade"] == "primary" and ranks == {GENERAL}:
+                    rank_rows.append(("primary", GENERAL, d["m"] / 1000, region,
                                       d["refs"], d["id"]))
-                elif d["grade"] == "secondary" and band == {MAJOR}:
-                    band_rows.append(("secondary", MAJOR, d["m"] / 1000, region,
+                elif d["grade"] == "secondary" and ranks == {MAJOR}:
+                    rank_rows.append(("secondary", MAJOR, d["m"] / 1000, region,
                                       d["refs"], d["id"]))
         if pairing:
             tally.paired_km.update(measure_pairs(docs, reach))
@@ -395,7 +402,7 @@ def main() -> None:
           f"{sum(len(nation.numbers[r]) for r in RANKS):>12}"
           "   ※ 地図は(県, 番号)の組の数")
 
-    print("\n種別ごと(番号帯で分ける)")
+    print("\n種別ごと(番号で分ける)")
     for rank in RANKS:
         t = ledger[RANK_TABLE[rank]]
         print(f"  表{RANK_TABLE[rank]} {RANK_LABEL[rank]}")
@@ -523,7 +530,7 @@ def main() -> None:
 
     report_number_range(per_region, by_pref)
 
-    report_mismatched_band(band_rows)
+    report_mismatched_rank(rank_rows)
 
     print("\n測ったもの")
     print(f"  way {nation.ways:,}  重複排除 {nation.dedup_km:,.1f} km  "
