@@ -103,8 +103,8 @@ export function routeSources(url, prefURL) {
     // それより下が描かれなくなったことがある。
     routes: { type: 'vector', url: `pmtiles://${url}` },
     [PREF_SOURCE]: { type: 'vector', url: `pmtiles://${prefURL}` },
-    // 起終点は数千点しかなく、どれも操作面に既に出ているので、素の GeoJSON の
-    // まま置く。
+    // 起終点は数千点しかなく、どれも操作パネルに既に出ているので、素の
+    // GeoJSON のまま置く。
     termini: {
       type: 'geojson',
       data: { type: 'FeatureCollection', features: [] },

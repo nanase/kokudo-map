@@ -1,4 +1,5 @@
-/* 国道マップ。標識の青を基調にした操作面。地図に主役を譲るため彩度は抑える。 */
+/* 国道マップ。標識の青を基調にした操作パネル。
+   地図に主役を譲るため彩度は抑える。 */
 :root {
   /* 明るいときと暗いときの色を light-dark() で一つの宣言に書く。どちらを
      使うかは color-scheme が決める。既定の `light dark` は端末の設定に従い、
@@ -16,7 +17,7 @@
   /* 重用の深さの色はここに無い。地図の線も凡例の見本も web/mapspec.mjs の
      N_COLORS から取るので、CSS に写しを置くと二箇所になる。 */
 
-  /* 明るい側の地は真っ白ではなく地図の白(#FDFDFE)にする。操作面は地図の上に
+  /* 明るい側の地は真っ白ではなく地図の白(#FDFDFE)にする。操作パネルは地図の上に
      浮いており、純白だと画面で一番明るい面になって地図より前へ出る。#FDFDFE
      はごく薄く青が入っているので、一段沈めた --panel-2 も同じ側へ寄せる。
 
@@ -32,8 +33,8 @@
   --ink-3: light-dark(#6C7E93, #8799AE);
   --focus: light-dark(#1E6FD9, #79AEF7);
 
-  /* スクロールバー。地図と操作面のあいだで一番目に入る必要のないものなので、
-     溝は透かし、つまみだけを枠線の色より一段濃くする。 */
+  /* スクロールバー。地図と操作パネルのあいだで一番目に入る必要のないもの
+     なので、溝は透かし、つまみだけを枠線の色より一段濃くする。 */
   --scroll-thumb: light-dark(#C2CDDC, #33445C);
   --scroll-thumb-hover: light-dark(#9FB0C5, #48607E);
 
@@ -54,7 +55,7 @@
      PREF_CASING)である。一般都道府県道の黄は白い地に対して 1.24:1 しかなく、
      見本だけ縁を外すと凡例の中でその行が消える。test/panel.test.mjs が値を
      突き合わせる。写真の下地図では地図側の主要地方道が濃い灰になるが、凡例は
-     操作面の地に載っているので追わない。 */
+     操作パネルの地に載っているので追わない。 */
   --pref-casing: #85909F;
 
   /* 国道を一時的に隠すボタンが、隠している間だけ使う。白い字を載せる地なので、
@@ -62,11 +63,11 @@
   --danger: #B3261E;
   --danger-hover: #8C1F19;
 
-  /* 操作面の書体。先頭の 1 書体だけが自前で、残りは端末の書体である。届くのは
-     画面に出ている字を含む片だけだが数百 kB は待つ。font-display が swap
-     なのでその間は次の候補で出て、届いた時点で入れ替わる。標識の番号(.shield
-     text)もこの並びを Roboto の後ろに繋いで使う。並びを二箇所に書くと片方が
-     暗黙のうちに古くなる。 */
+  /* 操作パネルの書体。先頭の 1 書体だけが自前で、残りは端末の書体である。
+     届くのは画面に出ている字を含む片だけだが数百 kB は待つ。font-display が
+     swap なのでその間は次の候補で出て、届いた時点で入れ替わる。標識の番号
+     (.shield text)もこの並びを Roboto の後ろに繋いで使う。並びを二箇所に
+     書くと片方が暗黙のうちに古くなる。 */
   --ui-font: "LINE Seed JP", "Hiragino Kaku Gothic ProN", "Hiragino Sans",
              "Yu Gothic UI", "Yu Gothic", "Noto Sans JP", "Segoe UI",
              system-ui, sans-serif;
@@ -435,7 +436,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   font-size: .78rem;
   padding: 2px 3px; border-radius: 2px; color: var(--ink-2);
   /* 1 桁から 3 桁までが縦に並ぶ。桁を揃えるのは等幅ではなくこれの仕事で、
-     操作面の書体はもともと数字が等幅である。 */
+     操作パネルの書体はもともと数字が等幅である。 */
   font-variant-numeric: tabular-nums;
 }
 .rl-grid label:hover { background: var(--panel); color: var(--ink); }
@@ -494,7 +495,7 @@ input[type="search"]::placeholder { font-size: .82em; }
    (mapspec.mjs の pref-casing)、塗りだけの見本では一般都道府県道の黄が白い地の
    上でほとんど消える。破線の見本(.duo)にも足す。10px の刻みが
    二つ並ぶだけなので、黄の側が沈むと緑の破線 1 本に見える。国道の見本には
-   足さない。縁取りは白のままで、白い操作面の上では引いても引かなくても
+   足さない。縁取りは白のままで、白い操作パネルの上では引いても引かなくても
    同じである。 */
 #legend-pref .swatch { box-shadow: 0 0 0 1px var(--pref-casing); }
 /* 都道府県道の破線の見本だけが二色を半分ずつ並べる。地図では走れない区分も格の
@@ -668,7 +669,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .maplibregl-ctrl-attrib a { color: var(--sign-blue); }
 
-/* 地図は窓いっぱいである。操作面も詳細も、その上に浮いている。 */
+/* 地図は窓いっぱいである。操作パネルも詳細も、その上に浮いている。 */
 #map-wrap { position: absolute; inset: 0; }
 #map { position: absolute; inset: 0; }
 
@@ -868,7 +869,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   margin: 0; font-size: .72rem; font-variant-numeric: tabular-nums;
 }
 /* ポップアップの中の anchor は OSM の way へのリンクだけである。ブラウザの
-   既定の青は暗い操作面で消えるので、配色に追随する標識の青にする。 */
+   既定の青は暗い操作パネルで消えるので、配色に追随する標識の青にする。 */
 .maplibregl-popup-content a { color: var(--sign-blue); }
 
 /* 詳細パネル --------------------------------------------------------------
@@ -923,7 +924,7 @@ input[type="search"]::placeholder { font-size: .82em; }
    の WIKIPEDIA_ICON)。印だけ 17px にしてある。他の印は線で引いた図で 15px でも
    形が残るが、これは字なので同じ 15px では小さく見え、隣の漏斗と
    釣り合わない。 */
-/* 「この路線だけ表示」が押されている状態。操作面に都道府県道の節が無いので
+/* 「この路線だけ表示」が押されている状態。操作パネルに都道府県道の節が無いので
    (#109)、絞っていることを示す場所がこのボタンのほかに無い。 */
 .detail-only.active {
   background: var(--sign-blue); color: var(--panel); border-color: var(--sign-blue);
@@ -1046,7 +1047,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   display: flex; align-items: center; justify-content: space-between;
 }
 .sheet h2 { margin: 0; font-size: 1rem; font-weight: 800; }
-/* 節の見出し。操作面の h2 と同じ小さな大文字の帯で、同じものだと分かる。 */
+/* 節の見出し。操作パネルの h2 と同じ小さな大文字の帯で、同じものだと分かる。 */
 .sheet h3 {
   margin: 0 0 8px; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
