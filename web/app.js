@@ -71,11 +71,13 @@ import {
   hitLayerId,
   NOTHING,
   PMTILES_URL,
+  PREF_CASING_LAYER,
   PREF_CLICKABLE_LAYERS,
   PREF_PICKED_LAYER,
   PREF_PMTILES_URL,
   PREF_POPUP_MINZOOM,
   pickedFilter,
+  prefCasingColor,
   prefClickableHitLayers,
   prefLabelLayer,
   prefLineLayers,
@@ -887,6 +889,14 @@ function applyBasemap(id) {
   map.setLayoutProperty(gsiLayerId(basemap), 'visibility', 'none');
   basemap = id;
   map.setLayoutProperty(gsiLayerId(basemap), 'visibility', 'visible');
+  // 敷く絵が替わると、都道府県道の縁取りに要る濃さも替わる(mapspec.mjs の
+  // prefCasingColor)。起動時の色は boot が同じ関数から入れているので、ここは
+  // 切り替えのぶんだけを述べる。
+  map.setPaintProperty(
+    PREF_CASING_LAYER,
+    'line-color',
+    prefCasingColor(basemap),
+  );
   try {
     localStorage.setItem('gsi-basemap', basemap);
   } catch {
@@ -1077,7 +1087,7 @@ async function boot() {
    *
    * 県道の札だけは線より上でなければ国道の線に潜るので、線の層とは別に、
    * 国道の札のすぐ下へ差し込む。場所争いの優先も同時に決まる(prefLabelLayer)。 */
-  for (const layer of prefLineLayers()) map.addLayer(layer);
+  for (const layer of prefLineLayers(basemap)) map.addLayer(layer);
   for (const layer of routeLayers()) map.addLayer(layer);
   map.addLayer(prefLabelLayer(), 'route-labels');
   // 当たり判定だけを太らせた透明な層。見た目の層より後に足す——不透明度 0 なので
