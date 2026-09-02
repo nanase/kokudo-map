@@ -61,9 +61,9 @@ export function routesOf(combos, compare = byNumber) {
 /**
  * その都道府県道 1 本の格。主要地方道か一般都道府県道かである。
  *
- * 境目の番号を持っているのは判定(pipeline/build_prefectural.py の `MAJOR_MAX`)
- * なので、番号から決め直さない。読むのは組み合わせ表の `rank` だが、読めるのは
- * その路線 1 本だけの行に限る——重用の行の `rank` は「重なっている路線のうち
+ * どの番号が主要地方道かを持っているのは判定(pipeline/build_prefectural.py の
+ * `rank_of`)なので、番号から決め直さない。読むのは組み合わせ表の `rank` だが、
+ * 読めるのはその路線 1 本だけの行に限る——重用の行の `rank` は「重なっている路線のうち
  * 一つでも主要地方道なら major」なので、一般都道府県道が主要地方道と重用して
  * いる行にも major と書いてある。
  *

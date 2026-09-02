@@ -56,32 +56,51 @@ from regions import REGIONS, named_regions
 # 都市高速が `ref=4` を名乗るのと同じことが、一段下の格で起きている。
 MAX_REF = 1199
 
-# 主要地方道の番号帯の上限。主要地方道かどうかは政令で決まる法令上の区別で、OSM は
-# それを直接持たない。持っているのは道の格と番号で、実測では primary の 95.5% が
-# `ref` 100 以下、secondary の 99.5% が 101 以上である。
+# 主要地方道の番号。主要地方道かどうかは政令で決まる法令上の区別で、OSM はそれを直接
+# 持たない。持っているのは道の格と番号で、実測では primary の 95.5% が `ref` 100 以下、
+# secondary の 99.5% が 101 以上である。
 #
-# 分けるのに使うのは番号帯のほうである。格は道の作りを述べるのであって、路線の格付けを
-# 述べるのではない。番号帯で分けた延長は年報の表12 と 62,782.0 対 62,411.2 km(-0.6%)、
-# 表13 と 80,176.2 対 80,853.4 km(+0.8%)で合う。道の格で分けると路線数はよく合うが
-# (幅からの外れが 47 県で 102 から 57 へ)、東京都で 633.8 km の一般都道が主要地方道に
-# なる。県ごとに境目を測って動かす案は、沖縄県でどの測り方でも壊れる。四つの案の実測は
-# PREFECTURAL.md にある。
+# 分けるのに使うのは番号のほうである。格は道の作りを述べるのであって、路線の格付けを
+# 述べるのではない。しかも格で分けると、東京都で 633.8 km の一般都道が主要地方道に
+# なる。県ごとに境目を実測して動かす案は、沖縄県でどの測り方でも壊れる。四つの案の
+# 突き合わせは PREFECTURAL.md にある。
 #
-# 番号帯は北海道と沖縄県で崩れる。北海道の主要道道は 100 を超える番号を持ち(道道106・
-# 118・121・123 号など)、沖縄県の一般県道は 100 以下の番号を持つ(県道2・8・13 号など)。
-# 量は北海道が -46 路線・-1,667.3 km、沖縄県が +35 路線・+288.3 km である。使わなかった
-# 格のほうは、下の `band_mismatch` が見張りに回す。
+# 42 県では 1〜100 が主要地方道である。残る 5 都道県では、政令の指定が番号の付け方から
+# 外れる。外れているのは番号の読み方ではなく、その都道県の番号の振り方そのものなので、
+# 都道県ごとに書き下す。
 #
-# 同じ境目を compare_annual_report_pref.MAJOR_MAX も持っている。値も理由も同じなので、
-# 一方に寄せるべきである。あちらは検証なので、寄せ方は判定の側だけでは決められない。
-MAJOR_MAX = 100
+#   北海道   主要道道は 101〜199 も持つ(道道106・118・121・123 号など)
+#   東京都   特例都道の 300 番台も主要地方道である(都道311号環八・318号環七など)
+#   福岡県   151 号だけが 100 を超える主要地方道である
+#   大分県   57 号は主要地方道ではない。国道57号からの指定変更で番号がそのまま残った
+#   沖縄県   政令の指定が飛び飛びなので、帯ではなく番号を並べる
+#
+# ここは法令の写しであって、実データを測って決めた値ではない。出どころは Wikipedia
+# 「主要地方道」の路線番号の節と、各都道県の県道の一覧である。測って動かしてはならない。
+#
+# 番号と道の格が食い違う way は、下の `rank_mismatch` が見張りに回す。
+MAJOR_BAND = frozenset(range(1, 101))
+
+MAJOR_REFS: dict[str, frozenset[int]] = {
+    "hokkaido": MAJOR_BAND | frozenset(range(101, 200)),
+    "tokyo": MAJOR_BAND | frozenset(range(300, 400)),
+    "fukuoka": MAJOR_BAND | {151},
+    "oita": MAJOR_BAND - {57},
+    "okinawa": frozenset({7, 10, 23, 29, 38, *range(70, 76), *range(77, 80),
+                          *range(81, 92)}),
+}
 
 MAJOR, GENERAL = "major", "general"
 RANK_LABEL = {MAJOR: "主要地方道", GENERAL: "一般都道府県道"}
 
 
-def rank_of(ref: int) -> str:
-    return MAJOR if ref <= MAJOR_MAX else GENERAL
+def rank_of(region: str, ref: int) -> str:
+    """その都道府県のその番号が主要地方道か。
+
+    番号だけでは決められない。県道57号は 47 本あり、そのうち大分県の 1 本だけが
+    一般県道である。種別も路線の同一性と同じく (県, 番号) の組で決まる。
+    """
+    return MAJOR if ref in MAJOR_REFS.get(region, MAJOR_BAND) else GENERAL
 
 
 # ------------------------------------------------------------------ 指定 ---
@@ -145,19 +164,18 @@ def admits_by_tag(doc: dict) -> bool:
     return doc["grade"] is not None and not doc["link"] and bool(doc["tag_refs"])
 
 
-def band_mismatch(grade: str | None, refs: list[int]) -> str | None:
-    """番号帯と道路の格が食い違うか。食い違うならその格を返す。
+def rank_mismatch(region: str, grade: str | None, refs: list[int]) -> str | None:
+    """種別と道路の格が食い違うか。食い違うならその格を返す。
 
-    数えるのに使わなかったほうを見張りに回す。`primary` なのに番号が 101 以上は
-    北海道に、`secondary` なのに 100 以下は沖縄県に集まる。この二県では格のほうが
-    正しく、崩れているのは番号帯である(上の MAJOR_MAX を参照)。だからこの数は
-    タグの誤りの数ではなく、二つの証拠が割れている量である。
+    数えるのに使わなかったほうを見張りに回す。`primary` なのに番号が一般都道府県道、
+    `secondary` なのに主要地方道、という way の数である。タグの誤りの数ではなく、
+    二つの証拠が割れている量である。
     """
     if grade is None or not refs:
         return None
-    if grade == "primary" and all(r > MAJOR_MAX for r in refs):
+    if grade == "primary" and all(rank_of(region, r) == GENERAL for r in refs):
         return "primary"
-    if grade == "secondary" and all(r <= MAJOR_MAX for r in refs):
+    if grade == "secondary" and all(rank_of(region, r) == MAJOR for r in refs):
         return "secondary"
     return None
 
@@ -250,8 +268,8 @@ def build(region: str) -> dict:
         # 重用するアークは種別の違う路線を同時に持ちうる。上の格を採る——
         # compare_annual_report_pref.py が実延長を表12 と表13 に割るときと同じ扱いで
         # ある。路線ごとの種別は下の `routes` が rank_of で持つ。
-        rank = MAJOR if any(r <= MAJOR_MAX for r in refs) else GENERAL
-        bad = band_mismatch(w["grade"], refs)
+        rank = MAJOR if any(rank_of(region, r) == MAJOR for r in refs) else GENERAL
+        bad = rank_mismatch(region, w["grade"], refs)
         if bad:
             mismatch[bad] += 1
         if w["national_relation"] or w["national_tag"]:
@@ -281,7 +299,7 @@ def build(region: str) -> dict:
     routes: dict[int, dict] = {}
     for a in arcs:
         for r in a["refs"]:
-            e = routes.setdefault(r, {"ref": r, "rank": rank_of(r), "km": 0.0,
+            e = routes.setdefault(r, {"ref": r, "rank": rank_of(region, r), "km": 0.0,
                                       "arcs": 0, "max_n": 1, "kinds": Counter()})
             e["km"] += a["km"]
             e["arcs"] += 1
@@ -310,7 +328,7 @@ def build(region: str) -> dict:
               f"{dict(sorted(over_max.items()))}")
     for grade, count in sorted(mismatch.items()):
         want = GENERAL if grade == "primary" else MAJOR
-        print(f"  band mismatch: {grade} but every number is {RANK_LABEL[want]}: "
+        print(f"  rank mismatch: {grade} but every number is {RANK_LABEL[want]}: "
               f"{count:,} arcs")
     print(f"\nroutes present: {len(routes)}  "
           f"({sum(1 for e in routes.values() if e['rank'] == MAJOR)} 主要地方道, "
@@ -342,7 +360,7 @@ def build(region: str) -> dict:
                       RANK_LABEL[GENERAL]: ranks[GENERAL]},
             "former_arcs": formers,
             "national_overlap_arcs": national_overlap,
-            "band_mismatch": {k: v for k, v in sorted(mismatch.items())},
+            "rank_mismatch": {k: v for k, v in sorted(mismatch.items())},
             "rejected_above_max": {str(k): v for k, v in sorted(over_max.items())},
             "n_histogram": {str(k): v for k, v in sorted(n_hist.items())},
             "routes": [
