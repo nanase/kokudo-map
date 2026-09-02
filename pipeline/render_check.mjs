@@ -999,6 +999,43 @@ if (!target) {
     `picking the same route from the list draws the same map (${viaList} arcs)`,
   );
 
+  /* ボタンは押した状態を持ち、もう一度押せば解ける。押した人が同じ場所で
+   * 戻せなければ、押せるのに解けないボタンである——都道府県道の側は初めから
+   * 戻せたので、国道だけがそうなっていた。
+   *
+   * 見た目(active)と読み上げ(aria-pressed)と名乗り(aria-label)の三つを見る。
+   * どれか一つが取り残されると、押した結果が画面か読み上げのどちらかから
+   * 分からなくなる。 */
+  const onlyButton = () =>
+    page.evaluate(() => {
+      const b = document.querySelector('#detail .detail-only');
+      return {
+        pressed: b?.getAttribute('aria-pressed'),
+        active: b?.classList.contains('active') ?? false,
+        label: b?.getAttribute('aria-label') ?? '',
+        picked: document.querySelectorAll('#route-list input:checked').length,
+      };
+    });
+  const held = await onlyButton();
+  ok(
+    held.pressed === 'true' && held.active && held.label.includes('解除'),
+    `the pressed 「だけを表示」 says so (aria-pressed ${held.pressed}, ` +
+      `active ${held.active}, "${held.label}")`,
+  );
+  await page.click('.detail-only');
+  await settle();
+  const released = await onlyButton();
+  ok(
+    released.pressed === 'false' && !released.active && released.picked === 0,
+    `pressing it again releases the route (aria-pressed ${released.pressed}, ` +
+      `${released.picked} still checked)`,
+  );
+
+  // 選び直して、今度は地図の左上の ✕ で解く。選択を変える口はボタンだけでは
+  // ないので、そちらから変わったときも名乗りが追いつかなければならない。
+  await page.click('.detail-only');
+  await settle();
+
   // 選択を解けば、都道府県道は戻る。
   await page.click('#sel-none');
   await settle();
@@ -1009,6 +1046,15 @@ if (!target) {
   ok(
     prefBack.checked && prefBack.drawn > 0,
     `clearing the selection brings the prefectural routes back (${prefBack.drawn} arcs)`,
+  );
+
+  const afterClear = await onlyButton();
+  ok(
+    afterClear.pressed === 'false' &&
+      !afterClear.active &&
+      afterClear.label.includes('だけを表示'),
+    `and the open box stops claiming to be pressed ` +
+      `(aria-pressed ${afterClear.pressed}, "${afterClear.label}")`,
   );
 
   /* パネルは地図の一部を覆うので、開くあいだ地図は覆われたぶん脇へ寄る。開けて

@@ -6,14 +6,17 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 
+import { detailHTML, prefDetailHTML } from '../web/detail.mjs';
 import { routeListHTML } from '../web/panel.mjs';
 import {
   applyRouteFilter,
   clearSelection,
+  isOnly,
   NARROW_QUERY,
   setSelection,
-  showRouteOnly,
+  syncDetailOnly,
   togglePrefOnly,
+  toggleRouteOnly,
   wireControls,
 } from '../web/wiring.mjs';
 
@@ -136,16 +139,49 @@ describe('この路線だけ表示', () => {
 
   test('国道を 1 本残しても、系統トグルには触らない', () => {
     const { document, state, applyFilters } = setup();
-    showRouteOnly(document, state, 8, applyFilters);
+    toggleRouteOnly(document, state, 8, applyFilters);
 
     expect(state.selected).toEqual(new Set([8]));
     expect(state.pref).toBe(true);
     expect(tPref(document).checked).toBe(true);
   });
 
+  /* 押して 1 本にしたボタンは、同じ場所で押せば戻せる。都道府県道だけが
+     解除できて国道はできない、という非対称を作らない。 */
+  test('もう一度押すと国道の選択が解ける', () => {
+    const { document, state, applyFilters } = setup();
+    toggleRouteOnly(document, state, 8, applyFilters);
+    toggleRouteOnly(document, state, 8, applyFilters);
+
+    expect(state.selected.size).toBe(0);
+    expect(document.querySelector('#route-list input[value="8"]').checked).toBe(
+      false,
+    );
+  });
+
+  test('別の国道を押したときは、その 1 本に入れ替わる', () => {
+    const { document, state, applyFilters } = setup();
+    toggleRouteOnly(document, state, 8, applyFilters);
+    toggleRouteOnly(document, state, 7, applyFilters);
+
+    expect(state.selected).toEqual(new Set([7]));
+  });
+
+  /* 一覧から 2 本選んでいるあいだは「だけ」になっていない。そこで押すのは
+     解除ではなく、その 1 本へ絞ることである。 */
+  test('複数選んでいるときに押すと、その 1 本へ絞る', () => {
+    const { document, state, applyFilters } = setup();
+    document.querySelector('#route-list input[value="7"]').click();
+    document.querySelector('#route-list input[value="8"]').click();
+
+    toggleRouteOnly(document, state, 8, applyFilters);
+
+    expect(state.selected).toEqual(new Set([8]));
+  });
+
   test('都道府県道を 1 本選んでも、系統トグルには触らない', () => {
     const { document, state, applyFilters } = setup();
-    togglePrefOnly(state, 'nagano-63', applyFilters);
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
 
     expect(state.prefSelected).toEqual(new Set(['nagano-63']));
     expect(state.national).toBe(true);
@@ -153,19 +189,67 @@ describe('この路線だけ表示', () => {
   });
 
   test('もう一度押すと都道府県道の選択が解ける', () => {
-    const { state, applyFilters } = setup();
-    togglePrefOnly(state, 'nagano-63', applyFilters);
-    togglePrefOnly(state, 'nagano-63', applyFilters);
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
 
     expect(state.prefSelected.size).toBe(0);
   });
 
   test('別の路線を押したときは、その 1 本に入れ替わる', () => {
-    const { state, applyFilters } = setup();
-    togglePrefOnly(state, 'nagano-63', applyFilters);
-    togglePrefOnly(state, 'tokyo-18', applyFilters);
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+    togglePrefOnly(document, state, 'tokyo-18', applyFilters);
 
     expect(state.prefSelected).toEqual(new Set(['tokyo-18']));
+  });
+
+  /* 国道と同じ扱いである。2 本選んでいるあいだのボタンは「解除」ではない。 */
+  test('都道府県道も、複数選んでいるときは 1 本へ絞る', () => {
+    const { document, state, applyFilters } = setup();
+    state.prefSelected = new Set(['nagano-63', 'tokyo-18']);
+
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+
+    expect(state.prefSelected).toEqual(new Set(['nagano-63']));
+  });
+
+  /* 「だけ」は系統をまたいで文字どおりの意味である。国道63号と長野県道63号を
+     選んでいる画面は 2 本を描いているので、そこでボタンは「解除」ではなく、
+     押せばもう一方の系統の選択も空になります。 */
+  test('もう一方の系統に残っていた選択も空にする', () => {
+    const { document, state, applyFilters } = setup();
+    document.querySelector('#route-list input[value="7"]').click();
+    state.prefSelected = new Set(['nagano-63']);
+
+    toggleRouteOnly(document, state, 7, applyFilters);
+
+    expect(state.selected).toEqual(new Set([7]));
+    expect(state.prefSelected.size).toBe(0);
+  });
+
+  test('都道府県道の側も、国道の選択を空にして一覧のチェックを外す', () => {
+    const { document, state, applyFilters } = setup();
+    const cb = document.querySelector('#route-list input[value="7"]');
+    cb.click();
+
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+
+    expect(state.prefSelected).toEqual(new Set(['nagano-63']));
+    expect(state.selected.size).toBe(0);
+    expect(cb.checked).toBe(false);
+  });
+
+  /* 二つの系統に 1 本ずつ選んでいるあいだは「だけ」になっていません。ここで
+     ボタンが「解除」と名乗ると、押した人は国道が丸ごと消える画面を受け取り
+     ます(mapspec.mjs の shownSystems)。 */
+  test('他系統に選択が残っていれば、押されていない扱いにする', () => {
+    const { state } = setup();
+    state.selected = new Set([63]);
+    state.prefSelected = new Set(['nagano-63']);
+
+    expect(isOnly(state.selected, state.prefSelected, 63)).toBe(false);
+    expect(isOnly(state.prefSelected, state.selected, 'nagano-63')).toBe(false);
   });
 
   /* 手で消した系統を、選択解除が点け直すことはありません。系統トグルは
@@ -398,7 +482,7 @@ describe('clearSelection — 両系統の選択解除', () => {
   test('国道と都道府県道の両方を空にする', () => {
     const { document, state, applyFilters } = setup();
     document.querySelector('#route-list input[value="7"]').click();
-    togglePrefOnly(state, 'nagano-63', applyFilters);
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
 
     clearSelection(document, state, applyFilters);
 
@@ -410,7 +494,7 @@ describe('clearSelection — 両系統の選択解除', () => {
    * 解除が無かったころ、県道を 1 本選んだ人は国道へ戻れなかった。 */
   test('都道府県道だけを選んでいても、✕ が解除する', () => {
     const { document, state, applyFilters } = setup();
-    togglePrefOnly(state, 'nagano-63', applyFilters);
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
 
     document.querySelector('#sel-none').click();
 
@@ -505,5 +589,99 @@ describe('地図の上の面', () => {
     );
     expect(NARROW_QUERY).toBe('(max-width: 860px)');
     expect(css).toContain(`@media ${NARROW_QUERY}`);
+  });
+});
+
+/* 選択が変わる口はパネルのボタンだけではありません。一覧のチェックからも、
+ * 地図の左上の ✕ からも変わります。開いたままのパネルがそれを知らないと、
+ * 解除した後もボタンだけが押されたまま残ります。
+ *
+ * 本物のパネル(detail.mjs)を流し込んで検査します。押した状態の名乗りを組む
+ * のはあちらなので、写しを置くとその写しを検査することになります。 */
+describe('syncDetailOnly — 開いているパネルの名乗り', () => {
+  const only = (doc) => doc.querySelector('#detail-body .detail-only');
+  const shown = (doc) => ({
+    pressed: only(doc).getAttribute('aria-pressed'),
+    active: only(doc).classList.contains('active'),
+    label: only(doc).getAttribute('aria-label'),
+  });
+
+  const openNational = (doc, ref, selected) => {
+    doc.querySelector('#detail-body').innerHTML = detailHTML({
+      route: { ref, km: 20, arcs: 1, max_n: 1 },
+      selected,
+    });
+  };
+  const openPref = (doc, selected) => {
+    doc.querySelector('#detail-body').innerHTML = prefDetailHTML({
+      region: 'nagano',
+      prefLabel: '長野県',
+      ref: 63,
+      selected,
+    });
+  };
+
+  test('✕ で解いたら、国道のパネルも押されていない姿に戻る', () => {
+    const { document, state, applyFilters } = setup();
+    toggleRouteOnly(document, state, 8, applyFilters);
+    openNational(document, 8, true);
+
+    clearSelection(document, state, applyFilters);
+    syncDetailOnly(document, state);
+
+    expect(shown(document)).toEqual({
+      pressed: 'false',
+      active: false,
+      label: '国道8号だけを表示',
+    });
+  });
+
+  /* 利用者が最初に見つけた不具合はこちらです。都道府県道は解除できるのに、
+     パネルの側が押された姿のまま残っていました。 */
+  test('✕ で解いたら、都道府県道のパネルも戻る', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+    openPref(document, true);
+
+    clearSelection(document, state, applyFilters);
+    syncDetailOnly(document, state);
+
+    expect(shown(document)).toEqual({
+      pressed: 'false',
+      active: false,
+      label: '長野県道63号だけを表示',
+    });
+  });
+
+  test('一覧から選び直したら、押された姿になる', () => {
+    const { document, state, applyFilters } = setup();
+    openNational(document, 8, false);
+
+    setSelection(document, state, [8], applyFilters);
+    syncDetailOnly(document, state);
+
+    expect(shown(document)).toEqual({
+      pressed: 'true',
+      active: true,
+      label: '国道8号だけの表示を解除',
+    });
+  });
+
+  /* 押した直後のボタンには焦点が載っています。要素ごと入れ替えると、
+     キーボードで押した人はその場で居場所を失います。 */
+  test('ボタンそのものは入れ替えない', () => {
+    const { document, state, applyFilters } = setup();
+    openNational(document, 8, false);
+    const before = only(document);
+
+    setSelection(document, state, [8], applyFilters);
+    syncDetailOnly(document, state);
+
+    expect(only(document)).toBe(before);
+  });
+
+  test('パネルが開いていなければ何もしない', () => {
+    const { document, state } = setup();
+    expect(() => syncDetailOnly(document, state)).not.toThrow();
   });
 });

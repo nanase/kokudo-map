@@ -11,6 +11,7 @@
  * test/wiring.test.mjs の検査対象にしていない。
  */
 
+import { onlyButtonHTML } from './detail.mjs';
 import {
   PREF_LIST_ROWS,
   prefGroupLabel,
@@ -110,6 +111,51 @@ export function applyRouteFilter(doc, state) {
 }
 
 /**
+ * 開いている詳細パネルの「この路線だけ表示」を、いまの選択に合わせ直す。
+ *
+ * 選択が変わる口はボタンだけではない。一覧のチェック、地図の左上の ✕、
+ * ボタン自身——どこから変わっても地図は applyFilters が描き直すので、ボタンの
+ * 名乗りもそこで一緒に直す(app.js)。ここを通さないと、✕ で選択を解いた後も
+ * パネルのボタンだけが押されたまま残る。
+ *
+ * パネルの中身は組み直さない。開いたまま読まれている場所なので、組み直せば
+ * 読んでいた位置まで先頭に戻る。都道府県道なら県別 meta を取りに行く経路にも
+ * 戻ってしまう。
+ *
+ * ボタンそのものも置き換えず、属性だけを移す。押した直後のボタンには焦点が
+ * 載っていて、要素ごと入れ替えるとその焦点が body へ落ちる——キーボードで
+ * 押した人は、押した瞬間に居場所を失う。
+ *
+ * 名乗りを組むのはあくまで detail.mjs である(onlyButtonHTML)。同じ文言を
+ * ここでも組むと、片方が暗黙のうちに古くなる。
+ */
+export function syncDetailOnly(doc, state) {
+  const btn = doc.querySelector('#detail-body .detail-only');
+  if (!btn) return;
+  const key = btn.dataset.pref;
+  const html = key
+    ? onlyButtonHTML({
+        prefKey: key,
+        prefLabel: state.prefLabels.get(prefRegionOf(key)) ?? '',
+        selected: isOnly(state.prefSelected, state.selected, key),
+      })
+    : onlyButtonHTML({
+        ref: Number(btn.dataset.ref),
+        selected: isOnly(
+          state.selected,
+          state.prefSelected,
+          Number(btn.dataset.ref),
+        ),
+      });
+  const box = doc.createElement('div');
+  box.innerHTML = html;
+  // 出す属性は onlyButtonHTML が毎回すべて書くので、移すだけで足りる。
+  for (const { name, value } of box.firstElementChild.attributes) {
+    btn.setAttribute(name, value);
+  }
+}
+
+/**
  * 一覧に出す系統を切り替える。
  *
  * 状態は三つだけである——どちらも、国道だけ、都道府県道だけ。最後の一枚は
@@ -159,35 +205,65 @@ export function clearSelection(doc, state, applyFilters) {
 }
 
 /**
- * 「この路線だけ表示」——国道を 1 本だけ選ぶ。
+ * いまこの 1 本だけに絞っているか。
  *
- * 選択そのもの以外は何もしない。「だけ」を成り立たせているのは絞り込みの側で
- * ある(app.js の showsNational / showsPref)——どちらかの系統で 1 本でも選べば、
- * 地図に残るのは選んだ道路だけになる。
+ * 「この路線だけ表示」が押された状態かどうかは、この問いの答えそのものである。
+ * 一覧から 2 本選んでいるあいだは押されていない——そこで押せば「だけ」に
+ * なるのであって、解除にはならないからである。詳細パネルの描画(app.js)と、
+ * 下の二つのトグルが同じ関数に聞く。
+ *
+ * 数えるのは両系統ぶんである。国道 63 号と長野県道 63 号を選んでいる画面は
+ * 2 本を描いており、そこで国道のボタンが「解除」と名乗ってはならない。系統を
+ * またいで一つある選択を、系統ごとに数えると「だけ」の意味が画面と食い違う。
+ */
+export const isOnly = (selected, other, key) =>
+  selected.size === 1 && other.size === 0 && selected.has(key);
+
+/**
+ * 「この路線だけ表示」——その 1 本だけを選び、もう一度呼べば解く。
+ *
+ * 「だけ」は文字どおりの意味である。押した後に選ばれているのはこの 1 本で、
+ * もう一方の系統に残っていた選択も一緒に空になる。片方だけを入れ替えると、
+ * 「国道63号だけを表示」を押した画面に長野県道63号が残る。
+ *
+ * 「だけ」の絵を作るのは絞り込みの側である(mapspec.mjs の shownSystems)——
+ * どちらかの系統で 1 本でも選べば、地図に残るのは選んだ道路だけになる。ここが
+ * 渡すのは選択そのものだけで、系統トグルには触らない。
  *
  * 以前はここが都道府県道の系統トグルを裏で倒し、消す前の値を控えていた。同じ
  * 選択が、一覧のチェックボックスから入ったか、このボタンから入ったかで違う絵に
  * なる形だった——控えの出し入れも、`pref=0` が URL に乗るのも、そのために
  * 要っていた仕掛けである。絞り込みの側を直したので、どちらも要らない。
+ *
+ * 解けるのは都道府県道側(togglePrefOnly)と揃えるためである。押して 1 本に
+ * したボタンが、同じ場所で押しても戻せないのは、押した人にとって同じボタンが
+ * 途中から効かなくなったのと変わらない。
  */
-export function showRouteOnly(doc, state, ref, applyFilters) {
+export function toggleRouteOnly(doc, state, ref, applyFilters) {
+  if (isOnly(state.selected, state.prefSelected, ref)) {
+    clearSelection(doc, state, applyFilters);
+    return;
+  }
+  state.prefSelected = new Set();
   setSelection(doc, state, [ref], applyFilters);
 }
 
 /**
- * 都道府県道を 1 本だけ選ぶ。もう一度呼べば解く。
+ * 都道府県道を 1 本だけ選ぶ。もう一度呼べば解く。国道側と同じ約束である。
  *
- * 国道側(showRouteOnly)と違い、こちらは押した状態を持つ。都道府県道の一覧は
- * どこにも出さない(#109)ので、いま 1 本に絞っていることをこのボタン自身が
- * 述べる必要がある。解除はここでもできるが、唯一の口ではない——詳細パネルを
- * 閉じても地図の左上に残る ✕ (clearSelection)が同じことをする。
+ * 解除はここでもできるが、唯一の口ではない——詳細パネルを閉じても地図の左上に
+ * 残る ✕ (clearSelection)が同じことをする。
  *
- * 都道府県道の一覧は画面に無いので、この関数だけは `doc` を要らない。
+ * `doc` を受けるのは、国道の選択を空にするぶん一覧のチェックも外れなければ
+ * ならないからである。setSelection が二つの系統の行をまとめて合わせる。
  */
-export function togglePrefOnly(state, key, applyFilters) {
-  const on = state.prefSelected.size === 1 && state.prefSelected.has(key);
-  state.prefSelected = on ? new Set() : new Set([key]);
-  applyFilters();
+export function togglePrefOnly(doc, state, key, applyFilters) {
+  if (isOnly(state.prefSelected, state.selected, key)) {
+    clearSelection(doc, state, applyFilters);
+    return;
+  }
+  state.prefSelected = new Set([key]);
+  setSelection(doc, state, [], applyFilters);
 }
 
 /** 画面が狭いと見なす幅。style.css の @media と同じ値である。 */

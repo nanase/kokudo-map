@@ -111,10 +111,12 @@ import {
 } from './urlstate.mjs';
 import {
   applyRouteFilter,
+  isOnly,
   NARROW_QUERY,
-  showRouteOnly,
+  syncDetailOnly,
   syncRouteList,
   togglePrefOnly,
+  toggleRouteOnly,
   wireControls,
   wireShare,
 } from './wiring.mjs';
@@ -1318,6 +1320,8 @@ function applyFilters() {
   syncLegend();
   // 系統を消したなら、その線の上に置いたままの指も押せなくなっている。
   syncCursor();
+  // 開いているパネルのボタンも、選択が変わればここで名乗り直す(wiring.mjs)。
+  syncDetailOnly(document, state);
   updateStats();
   renderRanking();
   syncURL();
@@ -1654,6 +1658,9 @@ function openDetail(ref) {
     termini: decreeTerminiOf(state.meta, ref),
     related: relatedRoutesOf(state.meta, ref),
     formerKm: formerKmFor(state.meta.combinations, sel),
+    // 押した状態は state から読む。都道府県道の側(openPrefDetail)と同じで、
+    // ボタンが自分の見た目を覚えるのではなく、選択そのものを毎回描き直す。
+    selected: isOnly(state.selected, state.prefSelected, ref),
   });
   showDetail();
 }
@@ -1677,9 +1684,18 @@ async function openPrefDetail(key) {
 
   // 押した状態は state から読む。ボタンが自分の見た目を覚えるのではなく、
   // 選択そのものが一つあって、それを毎回描き直す形にする。
-  const selected = state.prefSelected.has(key);
+  //
+  // 控えず、書き込む直前に毎回聞く。県別 meta を待つあいだにボタンは押せる
+  // ので、開いた時点の値を控えると、届いた中身がそれを古い姿へ塗り戻す——
+  // 押されているのに「だけを表示」と名乗り、次の押下が名乗りと逆に働く。
+  const selected = () => isOnly(state.prefSelected, state.selected, key);
   closePopup();
-  detailBody.innerHTML = prefDetailHTML({ region, prefLabel, ref, selected });
+  detailBody.innerHTML = prefDetailHTML({
+    region,
+    prefLabel,
+    ref,
+    selected: selected(),
+  });
   showDetail();
 
   let meta;
@@ -1692,7 +1708,7 @@ async function openPrefDetail(key) {
         region,
         prefLabel,
         ref,
-        selected,
+        selected: selected(),
         failed: true,
       });
       // 高さは中身に合わせて変わる。プレースホルダーぶんで計算した padding は
@@ -1713,7 +1729,7 @@ async function openPrefDetail(key) {
       region,
       prefLabel,
       ref,
-      selected,
+      selected: selected(),
       failed: true,
     });
     showDetail();
@@ -1724,7 +1740,7 @@ async function openPrefDetail(key) {
     region,
     prefLabel,
     ref,
-    selected,
+    selected: selected(),
     route,
     rank: prefRankOf(combos, key),
     kinds: kindsFor(combos, sel),
@@ -1871,13 +1887,13 @@ document.addEventListener('click', (ev) => {
   // サイドパネルのチェックも系統のトグルもそちらが合わせる。
   const only = ev.target.closest('.detail-only');
   if (only) {
+    // 押した状態の描き直しはここでしない。選択が変われば applyFilters が
+    // syncDetailOnly を通るので、一覧のチェックや ✕ から変わったときと
+    // 同じ経路で入れ替わる。
     if (only.dataset.pref) {
-      togglePrefOnly(state, only.dataset.pref, applyFilters);
-      // 押した状態はこのボタン自身が述べる。開き直して aria-pressed と
-      // 名乗りを入れ替える——県別 meta は取得済みなので、待ちは挟まらない。
-      openPrefDetail(only.dataset.pref);
+      togglePrefOnly(document, state, only.dataset.pref, applyFilters);
     } else {
-      showRouteOnly(document, state, Number(only.dataset.ref), applyFilters);
+      toggleRouteOnly(document, state, Number(only.dataset.ref), applyFilters);
     }
     return;
   }

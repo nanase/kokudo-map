@@ -140,6 +140,20 @@ describe('detailHTML — 見出しとボタン', () => {
     // 字が消えてアイコンだけになったので、名乗りは aria-label が持ちます。
     expect(html).toContain('aria-label="国道459号だけを表示"');
   });
+
+  /* 都道府県道のパネル(prefDetailHTML)と同じボタンです。押した状態を持たな
+     かったころ、国道は押して 1 本にできるのに、同じ場所で解除できませんでした。 */
+  test('押した状態は active と aria-pressed と名乗りに出る', () => {
+    const off = detailHTML({ route: route({ ref: 459 }) });
+    expect(off).toContain('class="icon-btn detail-only"');
+    expect(off).toContain('aria-pressed="false"');
+    expect(off).toContain('国道459号だけを表示');
+
+    const on = detailHTML({ route: route({ ref: 459 }), selected: true });
+    expect(on).toContain('class="icon-btn detail-only active"');
+    expect(on).toContain('aria-pressed="true"');
+    expect(on).toContain('国道459号だけの表示を解除');
+  });
 });
 
 describe('detailHTML — 統計', () => {
