@@ -272,7 +272,7 @@ ok(
   JSON.stringify(report.concOptions) === JSON.stringify(['off', 'all']),
   `concurrency has two modes, not three (${report.concOptions.join(', ')})`,
 );
-// データがいつのものかは「国道マップについて」の中にある。操作面には無い。
+// データがいつのものかは「国道マップについて」の中にある。操作パネルには無い。
 const about = await page.evaluate(async () => {
   const dialog = document.querySelector('#about-dialog');
   const before = dialog.open;
@@ -1339,7 +1339,7 @@ for (const ref of [10, 4]) {
 }
 
 // --- どの地域のデータも実際に地図に載っていること --------------------------
-// 1 地域がアーカイブに入り損ねても、操作面から見た姿はほとんど変わらない。
+// 1 地域がアーカイブに入り損ねても、操作パネルから見た姿はほとんど変わらない。
 // だから県を全部訪ね、その道を数える。
 console.log('');
 const empty = [];
