@@ -137,11 +137,15 @@ export function syncDetailOnly(doc, state) {
     ? onlyButtonHTML({
         prefKey: key,
         prefLabel: state.prefLabels.get(prefRegionOf(key)) ?? '',
-        selected: isOnly(state.prefSelected, key),
+        selected: isOnly(state.prefSelected, state.selected, key),
       })
     : onlyButtonHTML({
         ref: Number(btn.dataset.ref),
-        selected: isOnly(state.selected, Number(btn.dataset.ref)),
+        selected: isOnly(
+          state.selected,
+          state.prefSelected,
+          Number(btn.dataset.ref),
+        ),
       });
   const box = doc.createElement('div');
   box.innerHTML = html;
@@ -207,16 +211,24 @@ export function clearSelection(doc, state, applyFilters) {
  * 一覧から 2 本選んでいるあいだは押されていない——そこで押せば「だけ」に
  * なるのであって、解除にはならないからである。詳細パネルの描画(app.js)と、
  * 下の二つのトグルが同じ関数に聞く。
+ *
+ * 数えるのは両系統ぶんである。国道 63 号と長野県道 63 号を選んでいる画面は
+ * 2 本を描いており、そこで国道のボタンが「解除」と名乗ってはならない。系統を
+ * またいで一つある選択を、系統ごとに数えると「だけ」の意味が画面と食い違う。
  */
-export const isOnly = (selected, key) =>
-  selected.size === 1 && selected.has(key);
+export const isOnly = (selected, other, key) =>
+  selected.size === 1 && other.size === 0 && selected.has(key);
 
 /**
- * 「この路線だけ表示」——国道を 1 本だけ選ぶ。もう一度呼べば解く。
+ * 「この路線だけ表示」——その 1 本だけを選び、もう一度呼べば解く。
  *
- * 選択そのもの以外は何もしない。「だけ」を成り立たせているのは絞り込みの側で
- * ある(app.js の showsNational / showsPref)——どちらかの系統で 1 本でも選べば、
- * 地図に残るのは選んだ道路だけになる。
+ * 「だけ」は文字どおりの意味である。押した後に選ばれているのはこの 1 本で、
+ * もう一方の系統に残っていた選択も一緒に空になる。片方だけを入れ替えると、
+ * 「国道63号だけを表示」を押した画面に長野県道63号が残る。
+ *
+ * 「だけ」の絵を作るのは絞り込みの側である(mapspec.mjs の shownSystems)——
+ * どちらかの系統で 1 本でも選べば、地図に残るのは選んだ道路だけになる。ここが
+ * 渡すのは選択そのものだけで、系統トグルには触らない。
  *
  * 以前はここが都道府県道の系統トグルを裏で倒し、消す前の値を控えていた。同じ
  * 選択が、一覧のチェックボックスから入ったか、このボタンから入ったかで違う絵に
@@ -228,29 +240,30 @@ export const isOnly = (selected, key) =>
  * 途中から効かなくなったのと変わらない。
  */
 export function toggleRouteOnly(doc, state, ref, applyFilters) {
-  setSelection(
-    doc,
-    state,
-    isOnly(state.selected, ref) ? [] : [ref],
-    applyFilters,
-  );
+  if (isOnly(state.selected, state.prefSelected, ref)) {
+    clearSelection(doc, state, applyFilters);
+    return;
+  }
+  state.prefSelected = new Set();
+  setSelection(doc, state, [ref], applyFilters);
 }
 
 /**
- * 都道府県道を 1 本だけ選ぶ。もう一度呼べば解く。
+ * 都道府県道を 1 本だけ選ぶ。もう一度呼べば解く。国道側と同じ約束である。
  *
- * 都道府県道の一覧はどこにも出さない(#109)ので、いま 1 本に絞っていることを
- * このボタン自身が述べる必要がある。解除はここでもできるが、唯一の口では
- * ない——詳細パネルを閉じても地図の左上に残る ✕ (clearSelection)が同じことを
- * する。
+ * 解除はここでもできるが、唯一の口ではない——詳細パネルを閉じても地図の左上に
+ * 残る ✕ (clearSelection)が同じことをする。
  *
- * 都道府県道の一覧は画面に無いので、この関数だけは `doc` を要らない。
+ * `doc` を受けるのは、国道の選択を空にするぶん一覧のチェックも外れなければ
+ * ならないからである。setSelection が二つの系統の行をまとめて合わせる。
  */
-export function togglePrefOnly(state, key, applyFilters) {
-  state.prefSelected = isOnly(state.prefSelected, key)
-    ? new Set()
-    : new Set([key]);
-  applyFilters();
+export function togglePrefOnly(doc, state, key, applyFilters) {
+  if (isOnly(state.prefSelected, state.selected, key)) {
+    clearSelection(doc, state, applyFilters);
+    return;
+  }
+  state.prefSelected = new Set([key]);
+  setSelection(doc, state, [], applyFilters);
 }
 
 /** 画面が狭いと見なす幅。style.css の @media と同じ値である。 */

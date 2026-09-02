@@ -1660,7 +1660,7 @@ function openDetail(ref) {
     formerKm: formerKmFor(state.meta.combinations, sel),
     // 押した状態は state から読む。都道府県道の側(openPrefDetail)と同じで、
     // ボタンが自分の見た目を覚えるのではなく、選択そのものを毎回描き直す。
-    selected: isOnly(state.selected, ref),
+    selected: isOnly(state.selected, state.prefSelected, ref),
   });
   showDetail();
 }
@@ -1688,7 +1688,7 @@ async function openPrefDetail(key) {
   // 控えず、書き込む直前に毎回聞く。県別 meta を待つあいだにボタンは押せる
   // ので、開いた時点の値を控えると、届いた中身がそれを古い姿へ塗り戻す——
   // 押されているのに「だけを表示」と名乗り、次の押下が名乗りと逆に働く。
-  const selected = () => isOnly(state.prefSelected, key);
+  const selected = () => isOnly(state.prefSelected, state.selected, key);
   closePopup();
   detailBody.innerHTML = prefDetailHTML({
     region,
@@ -1891,7 +1891,7 @@ document.addEventListener('click', (ev) => {
     // syncDetailOnly を通るので、一覧のチェックや ✕ から変わったときと
     // 同じ経路で入れ替わる。
     if (only.dataset.pref) {
-      togglePrefOnly(state, only.dataset.pref, applyFilters);
+      togglePrefOnly(document, state, only.dataset.pref, applyFilters);
     } else {
       toggleRouteOnly(document, state, Number(only.dataset.ref), applyFilters);
     }
