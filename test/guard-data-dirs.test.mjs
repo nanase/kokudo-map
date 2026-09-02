@@ -30,9 +30,9 @@ import { decide } from '../.claude/hooks/guard-data-dirs.mjs';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const HOOK = join(ROOT, '.claude', 'hooks', 'guard-data-dirs.mjs');
 
-/* .claude/settings.json はフックを node で起動する。bun test の process.
- * execPath は bun なので、本番と同じ処理系を名指しする。「取り決め」だけが
- * 使う。 */
+/* .claude/settings.json はフックを node で起動する。bun test の
+ * process.execPath は bun なので、本番と同じ処理系を名指しする。
+ * 「取り決め」だけが使う。 */
 const NODE = 'node';
 
 /* 仮の木。守る場所と同じ形だけを作る。 */
