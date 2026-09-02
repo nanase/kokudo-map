@@ -145,10 +145,11 @@ def prefectural(judge: bool) -> None:
     if judge:
         stage("都道府県道 — build/survey から判定する",
               ["uv", "run", str(HERE / "build_prefectural.py")])
-    # 国道の 151,004 本に対して 290,529 本あるが、低ズームでは属性を減らすので、
-    # 国道の半分以下のヒープで通る。実測では 1,280 MB で通り、896 MB で落ちる。
+    # 国道の 151,004 本に対して 290,529 本ある。低ズームでは属性を減らすものの、
+    # lowMaxZoom が 1 段深いぶん山になる z0-7 の索引が大きく、国道の倍を積む。
+    # 実測では 1,280 MB で通り、1,024 MB で落ちる。
     stage("配信データ — 都道府県道のタイルを切る",
-          ["node", "--max-old-space-size=2048", str(HERE / "pack_web_pref.mjs")])
+          ["node", "--max-old-space-size=1536", str(HERE / "pack_web_pref.mjs")])
 
 
 def positive_jobs(value: str | None) -> int:
@@ -276,9 +277,11 @@ def main() -> None:
     stage("台帳 — 政令の別表から起点・終点を取り込む",
           ["uv", "run", str(HERE / "decree.py")])
     # 47 県ぶんの GeoJSON、結合した特徴量、タイルのピラミッド全体がここで同時に
-    # 生きている。既定のヒープでは足りない。
+    # 生きている。既定のヒープでは足りず、実測では 640 MB で通り、512 MB で落ちる。
+    # 上限は余らせない。V8 は与えたぶんまでゴミを溜めるので、渡した値がそのまま
+    # プロセスのピークを押し上げる。
     stage("配信データ — 地域を結合してタイルを切る",
-          ["node", "--max-old-space-size=6144", str(HERE / "pack_web.mjs")])
+          ["node", "--max-old-space-size=1024", str(HERE / "pack_web.mjs")])
     prefectural(judge=not pack_only)
     # アーカイブは国道と都道府県道で別々である。引数を渡さなければ、切ってある
     # 物をすべて詰める。
