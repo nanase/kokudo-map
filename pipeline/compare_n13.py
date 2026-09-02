@@ -280,7 +280,8 @@ class Mesh:
     pts     (点数, 2) float64。(緯度, 経度) をレコードの順に繋げてある
     starts  (レコード数 + 1,) int32。レコード i の座標は
             pts[starts[i]:starts[i + 1]] である
-    rdctg   (レコード数,) S2。道路分類(rdCtg)。DBF の N13_003 は幅 2 の Character
+    rdctg   (レコード数,) S2。道路分類(rdCtg)。DBF の N13_003 は幅 2 の
+            Character なので、2 バイトで元の値をそのまま持てる
     """
     pts: np.ndarray
     starts: np.ndarray
