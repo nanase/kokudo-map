@@ -72,7 +72,7 @@ def main() -> None:
     if not no_pack:
         stages += [
             ("配信データ — 地域を結合してタイルを切る",
-             ["node", "--max-old-space-size=6144", str(HERE / "pack_web.mjs")]),
+             ["node", "--max-old-space-size=1024", str(HERE / "pack_web.mjs")]),
             ("配信データ — PMTiles にまとめる",
              ["uv", "run", str(HERE / "pack_pmtiles.py")]),
             ("全国検証 — 結合後にしか答えられないことを確認する",
