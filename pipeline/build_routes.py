@@ -325,11 +325,12 @@ def write_index() -> list[dict]:
     """build/regions/ に在る meta から regions.json を作り直す。
 
     閲覧側が地域を選べるようにするためで、読むのは decree.py と pack_web.mjs
-    である。揃っている物すべての話なので県ごとの判定はここを呼ばず、県の集合を
-    回し終えた build_all.py と pipeline.py が `--index-only` で 1 度だけ呼ぶ。
-    かつては判定の最後に走っていたが、県を並列にすると 47 本が同じ 1 ファイルを
-    置き換えに来る。Windows の os.replace は相手を誰かが開いているあいだ
-    PermissionError(WinError 5)で落ち、並列度 4 で実際に落ちた(issue #103)。
+    である。**揃っている物すべての話なので、県ごとの判定はここを呼ばない。**
+    呼ぶのは県の集合を回し終えた build_all.py と pipeline.py で、`--index-only`
+    で 1 度だけ呼ぶ。かつては判定の最後に走っていたが、県を並列にすると 47 本が
+    同じ 1 ファイルを置き換えに来る。Windows の os.replace は相手を誰かが開いて
+    いるあいだ PermissionError(WinError 5)で落ち、並列度 4 で実際に
+    落ちた(issue #103)。
     """
     index = []
     for p in sorted(OUT.glob("*.meta.json")):

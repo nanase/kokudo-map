@@ -130,8 +130,7 @@ def kept_tags(tags) -> dict[str, str]:
     return {k: v for k, v in tags if k in TAGS_USED}
 
 
-# -------------------------------------------------------------------- passes
-# ---
+# -------------------------------------------------------------------- passes ---
 def read_header(path: str) -> str:
     """切り出した時刻を、OSM の基準時刻として返す。
 
@@ -344,7 +343,7 @@ def is_national_relation(tags: dict[str, str]) -> bool:
     ふつうの証拠は `network=JP:national` だが、全国で測ると 国道N号 という名前の
     route=road のリレーションのうち 582 がそれを持ち、43 は `network` を
     持たない。43 の大半は他のリレーションが保証する路線の旧道・バイパス・
-    支線だが、国道 478号(京都縦貫自動車道)はタグの無いリレーションが唯一で、
+    支線だが、国道478号(京都縦貫自動車道)はタグの無いリレーションが唯一で、
     路線が丸ごと京都府から欠けていた。だから名前でも認める。RULES.md 問 1 規則 b
     が way について認めるのと同じ証拠である。読むのは `name` と `name:ja`
     だけで、三重県の番号を山梨県へ持ち込んだ `official_name` は読まない(CASES.md
@@ -363,15 +362,16 @@ def is_national_relation(tags: dict[str, str]) -> bool:
 # 本物の国道と共有する way の下で、競合する番号を主張しうる route=road の
 # リレーション。大半は都道府県道だが、それだけではない。way/560259106(首都高速
 # 都心環状線、`ref=1`)は `network=首都高速道路`、`ref=1` の relation/4256244 に
-# 載っている。名前が 高速N号 ではないので CASES.md 9 の見張りに当たらず、国道
-# 1号との衝突が通っていた。`network` が在って `JP:` で始まらない形は、県道の
-# `JP:prefectural` と同じで、ある主体が自分の路線番号の体系を名乗っている。
+# 載っている。名前が 高速N号 ではないので CASES.md 9 の見張りに当たらず、
+# 国道1号との衝突が通っていた。`network` が在って `JP:` で始まらない形は、
+# 県道の `JP:prefectural` と同じで、ある主体が自分の路線番号の体系を名乗って
+# いる。
 #
 # 全国で、`network` が空でなく `JP:` で始まらない route=road のリレーションは
 # 34 件(首都高速道路、阪神高速道路、名古屋高速道路など)。うち 33 件が実在する
 # JP:national の番号と衝突する `ref` を主張し、メンバーの way は 1,009 本に
-# 及ぶ。ほぼすべて都市高速の路線群である(首都高速の 1〜11、阪神高速の 33〜
-# 46 など)。CASES.md 20 を参照。
+# 及ぶ。ほぼすべて都市高速の路線群である(首都高速の 1〜11、阪神高速の
+# 33〜46 など)。CASES.md 20 を参照。
 def is_competing_relation(tags: dict[str, str]) -> bool:
     net = tags.get("network") or ""
     if net.startswith(PREFECTURAL):

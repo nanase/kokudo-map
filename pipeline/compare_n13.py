@@ -405,11 +405,11 @@ def pack_mesh(mesh: str, refresh: bool) -> None:
     # 落ちる。同じディレクトリなら付け替えが 1 つのファイルシステムで済み、
     # 不可分になる。
     #
-    # 3 本のあいだの取り決めは 1 つで、pts が在ることが 3 本が揃っている印である
-    # (load_mesh はそれしか見ない)。だから pts は最後に書き、書き直す前にまず
-    # 消す。消さないと --refresh の途中で止まったとき、古い pts と新しい starts
-    # の組が「揃っている」ように見え、区切りが中身とずれた物を暗黙のうちに使う
-    # (CodeRabbit のレビュー)。
+    # 3 本のあいだの取り決めは 1 つである。**pts が在ることが、3 本が揃っている
+    # 印である。**load_mesh はそれしか見ない。だから pts は最後に書き、書き直す
+    # 前にまず消す。消さないと --refresh の途中で止まったとき、古い pts と
+    # 新しい starts の組が「揃っている」ように見え、区切りが中身とずれた物を
+    # 暗黙のうちに使う(CodeRabbit のレビュー)。
     pts_p = mesh_cache_paths(mesh)[2]
     pts_p.unlink(missing_ok=True)
     for path, arr in zip(mesh_cache_paths(mesh), arrays, strict=True):

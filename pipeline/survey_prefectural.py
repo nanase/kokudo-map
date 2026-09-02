@@ -76,8 +76,7 @@ PREFECTURAL_GRADES = frozenset({"primary", "secondary"})
 PREFECTURAL_NETWORK = "JP:prefectural"
 
 
-# -------------------------------------------------------------------- 読み方
-# ---
+# -------------------------------------------------------------------- 読み方 ---
 def numbers(ref: str | None) -> list[int]:
     """`ref` に入っている都道府県道の番号。トークンごとに読む。
 
@@ -139,8 +138,7 @@ def relation_numbers(rels: dict[int, dict], prefectural: list[int]) -> dict[int,
     return own
 
 
-# ------------------------------------------------------------------- 通し読み
-# ---
+# ------------------------------------------------------------------- 通し読み ---
 def points(ways: Ways, wid: int) -> list[tuple[float, float]]:
     """way の形を (緯度, 経度) の列で返す。
 
@@ -236,9 +234,9 @@ def main() -> None:
     order = list(ways.start)
     print(f"  ways kept: {len(order):,}  coordinates: {len(ways.lat):,}")
 
-    # 所属都道府県。ノードの位置の索引を手放した後に読む。全国のノード位置は数
-    # GB を占め、行政区域の面はさらに 0.7 GB 必要である。二つを同時に持つ必要は
-    # 無い。
+    # 所属都道府県。ノードの位置の索引を手放した後に読む。全国のノード位置は
+    # 数 GB を占め、行政区域の面はさらに 0.7 GB 必要である。二つを同時に持つ
+    # 必要は無い。
     print("\nreading N03 municipal boundaries", flush=True)
     prefs = Prefectures()
     print(f"  {prefs.polygon_count:,} polygons", flush=True)
