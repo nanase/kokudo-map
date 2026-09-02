@@ -24,9 +24,9 @@ import osmium
 from _paths import PBF
 from regions import PREF_CODE, REGIONS
 
-# ISO 3166-2:JP -> (slug, 日本語ラベル)。符号と slug の対応は regions.py が持ち、
-# ラベルも同じ表にある。ここで打ち直せば、片方が暗黙のうちに古くなる。ファイルが
-# 与えるのは形だけである。
+# ISO 3166-2:JP -> (slug, 日本語ラベル)。符号と slug の対応は regions.py が
+# 持ち、ラベルも同じ表にある。ここで打ち直せば、片方が暗黙のうちに古くなる。
+# ファイルが与えるのは形だけである。
 JP = {
     f"JP-{code}": (slug, REGIONS[slug]["label"])
     for code, slug in PREF_CODE.items()

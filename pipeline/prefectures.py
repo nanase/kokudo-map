@@ -10,7 +10,7 @@
 いる。
 
 面は国土数値情報 N03(行政区域)から作る。県ごとに配られる市区町村の多角形を、
-その県の物としてまとめて持つ。溶かして 1 つの輪郭にする必要は無い——ある点が
+その県の物としてまとめて持つ。溶かして 1 つの輪郭にする必要は無い。ある点が
 その県に在ることと、その県のどれかの市区町村に在ることは同じである。
 
 判定は中央の 1 点ではなく線で行う。全国で測るとこうなる。
@@ -91,9 +91,9 @@ class Prefectures:
     """N03 の面を読み、線に所属都道府県を与える。"""
 
     def __init__(self) -> None:
-        # VINTAGES は新しい順である。所属を決めるのに要るのは現行の年版だけで、
-        # decree.py が読む 2000 年版は、平成の大合併で消えた市区町村の名前の
-        # ためにある。県の輪郭はその合併で動いていない。
+        # VINTAGES は新しい順である。所属を決めるのに必要なのは現行の
+        # 年版だけで、decree.py が読む 2000 年版は、平成の大合併で消えた
+        # 市区町村の名前のためにある。県の輪郭はその合併で動いていない。
         self.vintage, url, _ = VINTAGES[0]
         self.regions = tuple(PREF_CODE[code] for code in PREF_CODES)
         geoms: list = []
@@ -101,7 +101,7 @@ class Prefectures:
         for i, code in enumerate(PREF_CODES):
             z, base = archive(self.vintage, url, code)
             # DBF は読まない。配布物は県ごとに分かれているので、このファイルに
-            # 在る多角形はすべてこの県の物である。市区町村の名前が要るのは
+            # 在る多角形はすべてこの県の物である。市区町村の名前が必要なのは
             # decree.py であって、ここではない。所属未定地も県の一部なので、
             # あちらのように除きもしない。
             sf = shapefile.Reader(shp=io.BytesIO(z.read(base + ".shp")),
@@ -157,7 +157,7 @@ class Prefectures:
         )
 
         # 触れた面をまとめて訊く。way ごとに集合を持たせると、35 万本ぶんの
-        # set だけで数十 MB になる。要るのは「最初に当たった県」と「二つ目に
+        # set だけで数十 MB になる。必要なのは「最初に当たった県」と「二つ目に
         # 別の県が当たったか」の二つだけである。
         hit_line, hit_poly = self._tree.query(lines, predicate="intersects")
         first = np.full(n, -1, dtype=np.int16)
@@ -227,7 +227,7 @@ def assign_docs(index: Prefectures, docs: Iterable[dict]) -> list[tuple[int, Ass
             ways.append(d)
         else:
             # 点が 1 つも無い、あるいは 1 つしかない way。線にならないので面とは
-            # 交われない。key は置く——way の辞書を読む側に、有る無しと null の
+            # 交われない。key は置く。way の辞書を読む側に、有る無しと null の
             # 二通りを見分けさせないためである。
             d["pref"] = None
     lat = [p["lat"] for d in ways for p in d["geometry"]]

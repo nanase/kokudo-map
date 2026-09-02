@@ -4,33 +4,34 @@
 # ///
 """全国 1 つの .osm.pbf から、地域ごとの生の OSM の物を切り出す。
 
-全国を生成するとき、これが Overpass からの取得の代わりになる。地域ごとにまったく
-同じ三つの問いに答え、まったく同じキャッシュファイルを書くので、build_routes.py
-も verify.py も audit.py も違いに気付かない。
+全国を生成するとき、Overpass からの取得の代わりになる。地域ごとに同じ三つの
+問いに答え、同じキャッシュファイルを書くので、build_routes.py も verify.py も
+audit.py も違いに気付かない。
 
   1. core        — bbox に触れる国道のルートリレーション、その子リレーション、
-                   そして bbox の中にあるメンバーの way
+                   bbox の中にあるメンバーの way
   2. candidates  — bbox の中の、国道の格を持ち数字だけの `ref` を持つ way と、
                    国道N号 という名前の way
   3. competing   — bbox に触れる、国道でない route=road のリレーションと、その
-                   タグとメンバー。負の証拠である。大半は都道府県道のリレーション
-                   だが、事業者が自分の番号を名乗る物(network=首都高速道路 など)
-                   も同じ理由で同じ証拠になる——CASES.md 20 を参照。
+                   タグとメンバー。負の証拠である。大半は都道府県道の
+                   リレーションだが、事業者が自分の番号を名乗る物
+                   (network=首都高速道路 など)も同じ理由で同じ証拠になる
+                   (CASES.md 20)
 
 書き出す way には所属都道府県 `pref` が付く。矩形では決まらないので、国土数値
-情報 N03 の行政区域の面で決める——理由と実測は prefectures.py にある。地域の
-分け方は矩形のままである。そこを面にすると build_routes.py の裏取りが持つ保証
-集合が変わり、国道の判定そのものが変わってしまう。
+情報 N03 の行政区域の面で決める(理由と実測は prefectures.py)。地域の分け方は
+矩形のままである。面にすると build_routes.py の裏取りが持つ保証集合が変わり、
+国道の判定そのものが変わる。
 
-Overpass を使い続けない理由。47 都道府県は約 140 件の問い合わせと約 1 GB の応答
-になり、公開ミラーから何時間もかけて取ることになる。2.5 GB のファイルを一度
-落とすほうが速く、しかもミラーの用途にも合う。
+Overpass を使い続けない理由。47 都道府県は約 140 件の問い合わせと約 1 GB の
+応答になり、公開ミラーから何時間もかけて取ることになる。2.5 GB のファイルを
+一度落とすほうが速く、ミラーの用途にも合う。
 
-意図して変えていないこと。作業の単位は地域のままである。build_routes.py の裏取り
-が濾せるのは、その地域のリレーションが保証する路線番号の集合が小さいからである。
-全国でまとめて判定するとその集合は 459 番すべてに近づき、裏取りは何も濾さなくなる
-——長野県道372号がふたたび国道372号として戻る。取得は全国、判定は bbox の中の
-ままである。RULES.md 裏取り と CASES.md 1・2 を参照。
+意図して変えていないこと。作業の単位は地域のままである。build_routes.py の
+裏取りが濾せるのは、その地域のリレーションが保証する路線番号の集合が小さい
+からである。全国でまとめて判定するとその集合は 459 番すべてに近づき、裏取りは
+何も濾さなくなる。長野県道372号がふたたび国道372号として戻る。取得は全国、
+判定は bbox の中のままである。RULES.md 裏取り と CASES.md 1・2 を参照。
 
 使い方:  uv run pipeline/extract_pbf.py [地域 ...]   (既定: 全地域)
          uv run pipeline/extract_pbf.py --pbf path/to/japan-latest.osm.pbf
@@ -48,20 +49,19 @@ import osmium
 from _paths import CACHE, PBF
 from regions import REGIONS, named_regions
 
-# 生成が読む way のタグはこれだけで、他は読まない。残りを保つと、何の役にも
-# 立たないままこの処理の使うメモリが三倍になる。正典は build_routes.TAGS_USED で
-# ある。書き写さず import するので、二つが離れていくことはない。
+# 生成が読む way のタグはこれだけで、他は読まない。残りを保つと、役に立たない
+# ままこの処理のメモリが三倍になる。正典は build_routes.TAGS_USED である。
+# 書き写さず import するので、二つが離れない。
 #
 # `tokens` を import するのも同じ理由である。`ref` が国道番号を持つかどうかは
-# build_routes.py が一度だけ答えており、二つ目の正規表現で答え直すのではなく、
-# ここではその答えを読む。二つ目の正規表現こそ、第二神明道路(`ref=E93;2`、国道2号
-# のリレーションが無い)と神戸淡路鳴門自動車道(`ref=E28;28`、リレーションが 1 つも
-# 無い)が全国から消えた原因である。全体一致の `^[0-9]+(;[0-9]+)*$` は、セミコロン
-# で区切られたトークンの 1 つが E ナンバーの接頭辞を持った瞬間に `ref` 全体を
-# 拒否した。だからその道は候補にすらならず、build_routes.py は裏取りの前にそれを
-# 見ることが無かった。`tokens()` は元からトークンごとに検査する——`ref=4;6;14;17`
-# を受け入れるにはそうするしかない——ので、同じ理由で `E93;2` も受け入れる。
-# accepts `2;28;250`.
+# build_routes.py が一度だけ答えており、二つ目の正規表現で答え直さない。二つ目の
+# 正規表現こそ、第二神明道路(`ref=E93;2`、国道2号のリレーションが無い)と
+# 神戸淡路鳴門自動車道(`ref=E28;28`、リレーションが 1 つも無い)が全国から消えた
+# 原因である。全体一致の `^[0-9]+(;[0-9]+)*$` は、セミコロン区切りのトークンの
+# 1 つが E ナンバーの接頭辞を持った瞬間に `ref` 全体を拒否した。その道は候補に
+# すらならず、build_routes.py は裏取りの前にそれを見なかった。`tokens()` は
+# 元からトークンごとに検査する(`ref=4;6;14;17` を受け入れるにはそうするしか
+# ない)ので、同じ理由で `E93;2` も受け入れる。
 from build_routes import TAGS_USED, tokens
 from prefectures import Assignment, Prefectures, report, write_pref
 
@@ -71,15 +71,16 @@ SOURCE_URL = "https://download.geofabrik.de/asia/japan-latest.osm.pbf"
 CANDIDATE_GRADES = {"trunk", "motorway", "construction"}
 NAME_KOKUDO = re.compile(r"^国道[0-9]+号")
 
-# リレーションの名前についても同じ形だが、全角数字を許す——実際に
+# リレーションの名前についても同じ形だが、全角数字を許す。実際に
 # 「国道３２５号（阿蘇大橋）の応急的な迂回路」という名前のリレーションがある。
 REL_KOKUDO = re.compile(r"^国道\s*\d+\s*号")
 
 NATIONAL = "JP:national"
 PREFECTURAL = "JP:prefectural"
 
-# libosmium はメンバーの種別を 'n'・'w'・'r' と綴る。キャッシュは build_routes.py
-# が読むので Overpass の綴りにする。ここで訳しておけば、あちらに手を入れずに済む。
+# libosmium はメンバーの種別を 'n'・'w'・'r' と書く。キャッシュは
+# build_routes.py が読むので Overpass の書き方にする。ここで訳せば、あちらに手を
+# 入れずに済む。
 MEMBER_TYPE = {"n": "node", "w": "way", "r": "relation"}
 
 
@@ -139,7 +140,8 @@ def kept_tags(tags) -> dict[str, str]:
     return {k: v for k, v in tags if k in TAGS_USED}
 
 
-# -------------------------------------------------------------------- passes ---
+# -------------------------------------------------------------------- passes
+# ---
 def read_header(path: str) -> str:
     """切り出した時刻を、OSM の基準時刻として返す。
 
@@ -159,8 +161,8 @@ def read_header(path: str) -> str:
 def pass_relations(path: str) -> tuple[dict[int, dict], set[int]]:
     """道路のルートリレーションすべてと、それが抱えるリレーションの id。
 
-    二度読む。子リレーションは自分がルートだとタグ付けされているとは限らないので、
-    どれが効くかは親を読み終えて初めて分かる。
+    二度読む。子リレーションは自分がルートだとタグ付けされているとは
+    限らないので、どれが効くかは親を読み終えて初めて分かる。
     """
     rels: dict[int, dict] = {}
     wanted: set[int] = set()
@@ -205,10 +207,11 @@ def pass_ways(path: str, member_ways: set[int], member_nodes: set[int], idx: str
     nodes: dict[int, tuple[float, float]] = {}
     print("  pass 3/3: node locations and way geometry", flush=True)
 
-    # 日本には約 2 億 7000 万のノードがある。位置のキャッシュはその全部を見る
-    # 必要があるが、それは C++ の中で起きる。1 つずつ Python 側へ渡して捨てると、
-    # この処理の残り全部を合わせたより高く付く。この絞り込みはキャッシュを残した
-    # まま受け渡しだけを飛ばす。メンバーのノードは、後からキャッシュに読みに行く。
+    # 日本には約 2 億 7000 万のノードがある。位置のキャッシュはその全部を
+    # 見る必要があるが、それは C++ の中で起きる。1 つずつ Python 側へ渡して
+    # 捨てると、この処理の残り全部を合わせたより高く付く。この絞り込みは
+    # キャッシュを残したまま受け渡しだけを飛ばす。メンバーのノードは、後から
+    # キャッシュに読みに行く。
     proc = (
         osmium.FileProcessor(
             path, osmium.osm.osm_entity_bits.NODE | osmium.osm.osm_entity_bits.WAY
@@ -242,8 +245,8 @@ def pass_ways(path: str, member_ways: set[int], member_nodes: set[int], idx: str
             continue
         ways.add(o.id, kept_tags(tags), o.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"), pts)
 
-    # リレーションはノードをメンバーに持つことがある——路線が通る交差点などで
-    # ある。数は少ないが、bbox の中に在る物がそのノードだけであっても、その
+    # リレーションはノードをメンバーに持つことがある(路線が通る交差点など)。
+    # 数は少ないが、bbox の中に在る物がそのノードだけであっても、その
     # リレーションはそこに在ると数える。Overpass もそう数えていた。
     store = proc.node_location_storage
     for nid in member_nodes:
@@ -262,15 +265,15 @@ def write_region(region: str, box, rels, national, competing, ways, nodes, base_
     # どの way がこの bbox に触れるかを、一度だけ訊く。
     #
     # `in_box` は way のノードを、1 つが中に落ちるまで辿る。下の三つの問い合わせ
-    # は同じ way に同じ問いを四、五回ずつ訊いていた——その way を抱える国道の
+    # は同じ way に同じ問いを四、五回訊いていた。その way を抱える国道の
     # リレーションごとに 1 回、core の一覧でもう 1 回、競合するリレーションで
-    # さらに 2 回である。1 つの地域の中で答えが変わることはないので、ここで一度
-    # だけ取り、後は引くだけにする。
+    # さらに 2 回である。1 つの地域の中で答えは変わらないので、ここで一度だけ
+    # 取り、後は引くだけにする。
     #
     # 355,570 本すべてに真偽を持たせるのではなく、中に在る way の集合を持つ。
-    # 1 県の bbox に入るのは数万本なので、こちらのほうが小さく、読みやすくもある。
+    # 1 県の bbox に入るのは数万本なので、こちらのほうが小さく読みやすい。
     # `wid in inside` は、呼ぶ側が持っていた `wid in ways.start` の判定も畳み
-    # 込む。ways.start に無い物がここに入ることはないからである。
+    # 込む。ways.start に無い物はここに入らない。
     inside_box = {wid for wid in ways.start if ways.in_box(wid, box)}
 
     # 問い合わせ 1。bbox に触れる国道のリレーションと、その子。
@@ -290,10 +293,10 @@ def write_region(region: str, box, rels, national, competing, ways, nodes, base_
         if m["type"] == "way" and m["ref"] in inside_box
     })
 
-    # 問い合わせ 2。候補。リレーションが抱えているかどうかは問わない。Overpass の
-    # 問い合わせにこの除外は無いが、二つの `out` が返した way はどのみち
+    # 問い合わせ 2。候補。リレーションが抱えているかは問わない。Overpass に
+    # この除外は無いが、二つの `out` が返した way はどのみち
     # build_routes.py が重複排除するので、ここで飛ばせばキャッシュが半分になる。
-    # 競合するリレーションだけが抱えている way は、今も候補である。
+    # 競合するリレーションだけが抱えている way は今も候補である。
     core_set = set(core_way_ids)
     cand_ids = sorted(
         wid for wid in inside_box
@@ -301,7 +304,7 @@ def write_region(region: str, box, rels, national, competing, ways, nodes, base_
     )
 
     # 問い合わせ 3。負の証拠。平らな way id の集合ではなく、リレーションのまま
-    # (タグとメンバー)保つ——ただ所属していることが失格の証拠になり得ない理由は
+    # (タグとメンバー)保つ。所属だけが失格の証拠になり得ない理由は
     # build_routes.resolve_competing_claims を参照。
     competing_relations = [
         rel for rel in (
@@ -352,17 +355,16 @@ def write_region(region: str, box, rels, national, competing, ways, nodes, base_
 def is_national_relation(tags: dict[str, str]) -> bool:
     """このルートリレーションは国道のリレーションか。
 
-    ふつうの証拠は `network=JP:national` である。それが唯一の証拠ではない。全国で
-    測ると、国道N号 という名前の route=road のリレーションのうち 582 がその
-    network を持ち、43 は `network` タグを 1 つも持たない。43 の大半は、他の
-    リレーションが既に保証している路線の旧道・バイパス・支線だが、二つの路線番号
-    には他に何も無い——国道478号(京都縦貫自動車道)については、タグの無い
-    リレーションが唯一の存在なので、路線が丸ごと京都府から欠けていた。
+    ふつうの証拠は `network=JP:national` だが、それだけではない。全国で測ると、
+    国道N号 という名前の route=road のリレーションのうち 582 がその network を
+    持ち、43 は `network` タグを持たない。43 の大半は、他のリレーションが既に
+    保証している路線の旧道・バイパス・支線だが、国道478号(京都縦貫自動車道)は
+    タグの無いリレーションが唯一の存在なので、路線が丸ごと京都府から欠けていた。
 
     だから 国道N号 という名前のリレーションは、その名前で認める。RULES.md 問 1
-    規則 b が way について既に認めているのと同じ証拠である。名前を読むのは `name`
-    と `name:ja` だけで、`official_name` は決して読まない——三重県の路線番号を
-    山梨県へ持ち込んだのがその欄である(CASES.md 2)。
+    規則 b が way について認めているのと同じ証拠である。名前を読むのは `name`
+    と `name:ja` だけで、`official_name` は読まない。三重県の路線番号を山梨県へ
+    持ち込んだのがその欄である(CASES.md 2)。
     """
     net = tags.get("network") or ""
     if net.startswith(NATIONAL):
@@ -378,16 +380,16 @@ def is_national_relation(tags: dict[str, str]) -> bool:
 # リレーション。大半は都道府県道のリレーションだが、それだけではない。
 # way/560259106(首都高速都心環状線、`ref=1`)は relation/4256244 に載っており、
 # そちらは `network=首都高速道路`、`ref=1` である。way 自身の名前は 高速N号 と
-# 述べていない(CASES.md 9 の見張りはその文字列を必要とし、都心環状線は持たない)
-# ので、国道1号との衝突は捕まらずに通っていた。`network` が在って `JP:` で
-# 始まらない形は、県道の `JP:prefectural` と同じ形である——ある主体が自分の路線
-# 番号の体系を名乗っており、それが日本の行政区画の体系ではない、というだけである。
+# 述べていない(CASES.md 9 の見張りはその文字列を必要とする)ので、国道1号との
+# 衝突は捕まらずに通っていた。`network` が在って `JP:` で始まらない形は、県道の
+# `JP:prefectural` と同じ形である。ある主体が自分の路線番号の体系を
+# 名乗っており、それが日本の行政区画の体系ではない、というだけである。
 #
 # 全国で測ると、`network` タグが空でなく `JP:` で始まらない route=road の
 # リレーションは 34 件ある(首都高速道路、阪神高速道路、名古屋高速道路など)。
-# そのうち 33 件が、日本のどこかに実在する JP:national の路線番号と衝突する `ref`
-# を主張しており、メンバーの way は 1,009 本に及ぶ——ほぼすべて都市高速の路線群
-# である(首都高速の 1〜11、阪神高速の 33〜46 など)。CASES.md 20 を参照。
+# そのうち 33 件が、日本のどこかに実在する JP:national の路線番号と衝突する
+# `ref` を主張しており、メンバーの way は 1,009 本に及ぶ。ほぼすべて都市高速の
+# 路線群である(首都高速の 1〜11、阪神高速の 33〜46 など)。CASES.md 20 を参照。
 def is_competing_relation(tags: dict[str, str]) -> bool:
     net = tags.get("network") or ""
     if net.startswith(PREFECTURAL):
@@ -458,13 +460,12 @@ def main() -> None:
     ways, nodes = pass_ways(path, member_ways, member_nodes, node_index)
     print(f"  ways kept: {len(ways.start):,}  coordinates: {len(ways.lat):,}")
 
-    # 所属都道府県。bbox は県の輪郭に沿わないので、どの県の道かは矩形では
-    # 決まらない——理由と実測は prefectures.py にある。ここで決めるのは、全国を
-    # 一度に持っているのがここだけだからである。地域ごとに決め直すと、同じ way に
-    # 47 回まで答えることになる。
+    # 所属都道府県。bbox は県の輪郭に沿わないので、矩形では決まらない(理由と
+    # 実測は prefectures.py)。ここで決めるのは、全国を一度に持っているのがここ
+    # だけだからである。地域ごとに決め直すと、同じ way に 47 回まで答える。
     #
     # ノードの位置の索引を手放した後に読む。全国のノード位置は数 GB を占め、
-    # 行政区域の面はさらに 0.7 GB 要る。二つを同時に持つ必要は無い。
+    # 行政区域の面はさらに 0.7 GB 必要である。二つを同時に持つ必要は無い。
     print("\nreading N03 municipal boundaries", flush=True)
     prefs = Prefectures()
     print(f"  {prefs.polygon_count:,} polygons", flush=True)
@@ -479,10 +480,10 @@ def main() -> None:
                      ways, nodes, base_ts, fetched)
 
     # 網羅の確認。どの地域の bbox も覆わない way は、地図が出せない way である。
-    # 手で引いた矩形の組であれば隠してしまう類の失敗が、これである。
+    # 手で引いた矩形の組が隠してしまう類の失敗がこれである。
     #
-    # 数えるのは国道のメンバーだけである。都道府県道が外へ落ちるのは想定どおりで
-    # ある。東京都の bbox は本土だけで、三宅島と小笠原の都道は、設計としてどの
+    # 数えるのは国道のメンバーだけである。都道府県道が外へ落ちるのは想定どおり
+    # である。東京都の bbox は本土だけで、三宅島と小笠原の都道は設計としてどの
     # bbox の外にもある。取りこぼしが国道であれば、bbox のほうが誤っている。
     boxes = [REGIONS[r]["bbox"] for r in REGIONS]
     national_ways = {

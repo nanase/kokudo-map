@@ -53,8 +53,8 @@ class RangeHandler(SimpleHTTPRequestHandler):
         if os.path.isdir(path):
             return super().send_head()
         try:
-            # このファイルはこのメソッドより長く生きる——下で返す _Slice を通して
-            # 後から読まれるので、ここで with を使うと早く閉じすぎる。
+            # このファイルはこのメソッドより長く生きる。下で返す _Slice を通して
+            # 後から読まれるので、with で開くと早く閉じすぎる。
             f = open(path, "rb")  # noqa: SIM115
         except OSError:
             self.send_error(404, "File not found")
