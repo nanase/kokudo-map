@@ -1,10 +1,8 @@
-/* 絞り込み式と、層とそれを切り替えるコードの対応づけ。
- *
- * これが MapLibre の仕様に適合するかは check_expressions.mjs が既に訊いており、
- * 地域が生成済みなら実データのアークで評価もします。そちらが訊けないのは、
- * 何も選んでいないときに式が正しい意味になるか、app.js が層を動かすのに使う表が
- * 実在する層を指しているか、です。どちらもコードの形についての問いなので、
- * ここに置いてどこでも走らせます。
+/* 絞り込み式と、層とそれを切り替えるコードの対応づけ。MapLibre の仕様への適合は
+ * check_expressions.mjs が既に確かめ、地域が生成済みなら実データでも
+ * 評価します。そちらが確かめられないのは、何も選んでいないときに式が正しい
+ * 意味になるか、app.js が層を動かすのに使う表が実在する層を指しているか、です。
+ * どちらもコードの形についての問いなので、ここに置いてどこでも走らせます。
  */
 import { describe, expect, test } from 'bun:test';
 
@@ -48,7 +46,8 @@ import {
   withPrefSelection,
 } from '../web/mapspec.mjs';
 
-/** interpolate 式の各段が、元の式の同じ段より一定量だけ大きいことを確かめる。 */
+/** interpolate 式の各段が、元の式の同じ段より一定量だけ大きいことを
+ * 確かめる。 */
 function stopAdds(widenedExpr, baseExpr) {
   const widenedStops = widenedExpr.slice(3);
   const baseStops = baseExpr.slice(3);
@@ -63,8 +62,7 @@ function stopAdds(widenedExpr, baseExpr) {
 /* -------------------------------------------------------------- 絞り込み --- */
 
 /* 選択は系統をまたいで一つです。どちらかの系統で 1 本でも選んだら、地図に
- * 残るのは選んだ道路だけになります——国道を選べば都道府県道は消え、都道府県道を
- * 選べば国道が消えます。どちらかが上位ということはありません。 */
+ * 残るのは選んだ道路だけになります。 */
 describe('shownSystems', () => {
   const shown = (o) =>
     shownSystems({
@@ -95,8 +93,8 @@ describe('shownSystems', () => {
     });
   });
 
-  /* 系統トグル(表示の面の「国道」「都道府県道」)は選択とは別の物です。
-     選択に関わりなく、消してあれば消えたままです。 */
+  /* 系統トグル(表示のポップオーバーの「国道」「都道府県道」)は選択とは別の
+   * 物です。選択に関わりなく、消してあれば消えたままです。 */
   test('系統トグルは選択より後に効く', () => {
     expect(shown({ national: false })).toEqual({ national: false, pref: true });
     expect(shown({ pref: false, selected: 1 })).toEqual({
@@ -112,8 +110,8 @@ describe('shownSystems', () => {
 });
 describe('buildFilter', () => {
   test('選択も強調も無ければ、絞り込まない', () => {
-    // `true` は「全部通す」であって、空の ['all'] ではありません。ここを配列にすると
-    // 何も描かれない側に倒れます。
+    // `true` は「全部通す」であって、空の ['all'] ではありません。ここを
+    // 配列にすると何も描かれない側に倒れます。
     expect(buildFilter([], 'off')).toBe(true);
   });
 
@@ -122,8 +120,8 @@ describe('buildFilter', () => {
   });
 
   test('重用のみは n>=2 で、選択とは独立に効く', () => {
-    // 重用かどうかは道路の性質であって選択の結果ではありません。18 と 117 が重なる
-    // 区間は、両方を選んでいなくても重用区間です。
+    // 重用かどうかは道路の性質であって選択の結果ではありません。18 と 117 が
+    // 重なる区間は、両方を選んでいなくても重用区間です。
     expect(buildFilter([], 'all')).toEqual(['all', ['>=', ['get', 'n'], 2]]);
     expect(buildFilter([18], 'all')).toEqual([
       'all',
@@ -153,7 +151,8 @@ describe('buildFilter', () => {
 
 describe('hasRef', () => {
   test('区切り文字で囲むので、部分一致で誤爆しない', () => {
-    // これを `['in', '4', ['get','refs']]` と書くと 14 号も 400 号も引っ掛かります。
+    // これを `['in', '4', ['get','refs']]` と書くと 14 号も 400 号も
+    // 引っ掛かります。
     expect(hasRef(4)).toEqual(['in', ',4,', ['get', 'refs']]);
   });
 
@@ -190,8 +189,8 @@ describe('withPrefSelection', () => {
     expect(withPrefSelection(true, [])).toBe(true);
   });
 
-  /* 鍵は県を伴う文字列です。番号は県の中でしか一意でないので、`63` では
-     47 本のどれか決まりません(prefroute.mjs)。 */
+  /* キーは県を伴う文字列です。番号は県の中でしか一意でないので、`63` では
+   * 47 本のどれか決まりません(prefroute.mjs)。 */
   test('選択は県を伴う鍵で any に並べる', () => {
     expect(withPrefSelection(true, ['nagano-63'])).toEqual([
       'any',
@@ -297,8 +296,8 @@ describe('レイヤーと絞り込みの対応', () => {
 });
 
 /* ------------------------------------------------------------ 当たり判定 --- */
-/* 見た目の太さは重用の深さを読ませる符牒なので広げられない。押しやすさは、
- * 見た目とは別の透明な層(clickableHitLayers)だけを太らせて確保する。 */
+/* 見た目の太さは重用の深さを表すので広げられない。押しやすさは、見た目とは別の
+ * 透明な層(clickableHitLayers)だけを太らせて確保する。 */
 describe('当たり判定の透明な層', () => {
   const layers = routeLayers();
   const byId = new Map(layers.map((l) => [l.id, l]));
@@ -321,8 +320,8 @@ describe('当たり判定の透明な層', () => {
       expect(l['source-layer']).toBe(source['source-layer']);
       const adds = stopAdds(l.paint['line-width'], source.paint['line-width']);
       for (const add of adds) expect(add).toBeGreaterThan(0);
-      // 太らせる量はズームによらず一定である——狙いやすさは画面上の距離で
-      // 決まり、縮尺では決まらないため。
+      // 太らせる量はズームによらず一定である。狙いやすさは画面上の距離で
+      // 決まり、縮尺では決まらない。
       expect(new Set(adds).size).toBe(1);
     }
   });
@@ -479,8 +478,8 @@ describe('都道府県道のレイヤー', () => {
   });
 
   test('走れる区分と走れない区分で、アークを重複も脱落も無く分ける', () => {
-    // 実線の層と破線の層は互いの否定です。片方だけを直すと、どちらにも
-    // 入らないアークが黙って消えるか、同じ線が二度描かれます。
+    // 実線の層と破線の層は互いの否定です。片方だけを直すと、どちらにも入らない
+    // アークが暗黙のうちに消えるか、同じ線が二度描かれます。
     const solid = drawn.filter((l) => l.id !== 'pref-special');
     for (const l of solid) {
       expect(l.filter).toEqual(kindTest(PREF_KIND_DRIVEABLE));
@@ -525,9 +524,9 @@ describe('都道府県道のレイヤー', () => {
   });
 
   test('札の字はどちらの格も線より濃い', () => {
-    // 線は幅を持ち、そのうえ縁取りが輪郭を作っているので、明るい塗りでも形が
-    // 出ます。字にあるのは白い縁だけで、画線も細いので、線と同じ明るさでは
-    // どちらの格の札も読めません(mapspec.mjs の PREF_MAJOR_INK)。
+    // 線は幅と縁取りが輪郭を作るので、明るい塗りでも形が出ます。字にあるのは
+    // 白い縁だけで画線も細いので、線と同じ明るさではどちらの格のラベルも
+    // 読めません(mapspec.mjs の PREF_MAJOR_INK)。
     expect(inkByRank[3]).not.toBe(colorByRank[3]);
     expect(inkByRank[3]).toBe(PREF_MAJOR_INK);
     expect(inkByRank[4]).not.toBe(colorByRank[4]);
@@ -610,7 +609,8 @@ describe('都道府県道のレイヤー', () => {
 
   test('札だけが z8 から出る。線にズーム下限は無い', () => {
     // 縮尺で番号を省略しないのがこの地図の存在理由です。線は z0 から出ます。
-    // 札が z8 からなのは、z0-7 のタイルが `label` を持たないためです(#100)。
+    // ラベルが z8 からなのは、z0-7 のタイルが `label` を持たないためです
+    // (#100)。
     for (const l of lines) expect(l.minzoom).toBeUndefined();
     expect(labels.minzoom).toBe(8);
   });

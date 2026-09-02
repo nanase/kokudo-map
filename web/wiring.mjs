@@ -1,14 +1,9 @@
-/* index.html の要素と state の対応づけ。
+/* index.html の要素と state の対応づけ。document・state・applyFilters を引数で
+ * 受け取るだけなので、地図を作らずに import できる。test/wiring.test.mjs は
+ * happy-dom に流した index.html へ直接配線して検査する。
  *
- * app.js が地図を作って boot() を呼ぶのに対し、ここは document・state・
- * 地図側の呼び出し(applyFilters)を引数で受け取るだけなので、地図を作らずに
- * import できる。test/wiring.test.mjs はこの性質を使い、happy-dom に流した
- * index.html へ直接配線して検査する。
- *
- * MapLibre のコントロールと localStorage はここに含めない——対象は
- * 「index.html の要素と state の対応」だけである。wireShare() は
- * navigator.share・navigator.clipboard を呼ぶので、happy-dom では
- * test/wiring.test.mjs の検査対象にしていない。
+ * MapLibre のコントロールと localStorage は含めない。wireShare() は navigator.
+ * share・navigator.clipboard を呼ぶので、happy-dom では検査対象にしていない。
  */
 
 import { onlyButtonHTML } from './detail.mjs';
@@ -27,11 +22,8 @@ import {
 } from './prefroute.mjs';
 
 /**
- * 一覧のチェックを選択に合わせ直す。
- *
- * 国道の行は番号を、都道府県道の行は `nagano-63` の形の鍵を持つ。番号は県の
- * 中でしか一意でないので、二つは同じ欄では持てない——見分けるのは
- * `data-pref` である。
+ * 一覧のチェックを選択に合わせ直す。国道の行は番号を、都道府県道の行は
+ * `nagano-63` の形のキーを持つ。見分けるのは `data-pref` である。
  */
 export function syncRouteList(doc, state) {
   for (const cb of doc.querySelectorAll('#route-list input')) {
@@ -44,19 +36,15 @@ export function syncRouteList(doc, state) {
 }
 
 /**
- * 打たれた番号と、系統の絞り込みを一覧へ反映する。
+ * 打たれた番号と、系統の絞り込みを一覧へ反映する。国道は 459 行が最初から DOM
+ * にあるので、当たらない行を伏せる。都道府県道は 13,234 組あり、
+ * 並べておくことも打つたびに class を付け直すこともできないので、当たった
+ * 行だけをその場で組む。打っていないあいだ都道府県道は出さず、「番号を打つ」
+ * という次の一手を示す。
  *
- * 国道は 459 行が最初から DOM に居るので、当たらない行に印を付けて伏せる。
- * 都道府県道は 13,234 組あり、並べておくことも、打つたびに 13,234 個の class を
- * 付け直すこともできないので、当たった行だけをその場で組む。
- *
- * 打っていないあいだ都道府県道は出さない。全部並べれば選ぶどころではないし、
- * 「番号を打つ」という次の一手をそこで述べたほうが早い。
- *
- * 索引がまだ届いていないことがある。面を開いた時点で取りに行くので、開いてすぐ
- * 打った人だけがここに来る——空を出すと「無い」に読めるので、待っていると言う。
- * 落ちたときは落ちたと言う。待っている表示のまま止めると、いつまでも読み込み中
- * に見える。面を開き直せば取り直す。
+ * 索引がまだ届いていないことがある(開いてすぐ打った人)。空を出すと「無い」に
+ * 読めるので、待っていると言う。落ちたときは落ちたと言う。待っている表示のまま
+ * 止めると、いつまでも読み込み中に見える。
  */
 export function applyRouteFilter(doc, state) {
   const q = doc.querySelector('#route-filter').value.trim();
@@ -111,23 +99,18 @@ export function applyRouteFilter(doc, state) {
 }
 
 /**
- * 開いている詳細パネルの「この路線だけ表示」を、いまの選択に合わせ直す。
+ * 開いている詳細パネルの「この路線だけ表示」を、いまの選択に合わせ直す。選択が
+ * 変わる経路はボタンだけではなく(一覧のチェック、地図の左上の ✕)、どこから
+ * 変わっても applyFilters が描き直すので、ボタンのラベルもそこで直す(app.js)。
+ * ここを通さないと、✕ で選択を解いた後もパネルのボタンだけが押されたまま残る。
  *
- * 選択が変わる口はボタンだけではない。一覧のチェック、地図の左上の ✕、
- * ボタン自身——どこから変わっても地図は applyFilters が描き直すので、ボタンの
- * 名乗りもそこで一緒に直す(app.js)。ここを通さないと、✕ で選択を解いた後も
- * パネルのボタンだけが押されたまま残る。
+ * パネルの中身は組み直さない。読んでいた位置が先頭に戻り、都道府県道なら県別
+ * meta を取りに行く経路にも戻る。ボタンも置き換えず属性だけを移す。押した直後の
+ * ボタンには焦点が載っていて、要素ごと入れ替えると焦点が body へ落ち、
+ * キーボードで押した人が居場所を失う。
  *
- * パネルの中身は組み直さない。開いたまま読まれている場所なので、組み直せば
- * 読んでいた位置まで先頭に戻る。都道府県道なら県別 meta を取りに行く経路にも
- * 戻ってしまう。
- *
- * ボタンそのものも置き換えず、属性だけを移す。押した直後のボタンには焦点が
- * 載っていて、要素ごと入れ替えるとその焦点が body へ落ちる——キーボードで
- * 押した人は、押した瞬間に居場所を失う。
- *
- * 名乗りを組むのはあくまで detail.mjs である(onlyButtonHTML)。同じ文言を
- * ここでも組むと、片方が暗黙のうちに古くなる。
+ * ラベルを組むのは detail.mjs である(onlyButtonHTML)。同じ文言をここでも組むと
+ * 片方が暗黙のうちに古くなる。
  */
 export function syncDetailOnly(doc, state) {
   const btn = doc.querySelector('#detail-body .detail-only');
@@ -156,14 +139,10 @@ export function syncDetailOnly(doc, state) {
 }
 
 /**
- * 一覧に出す系統を切り替える。
- *
- * 状態は三つだけである——どちらも、国道だけ、都道府県道だけ。最後の一枚は
- * 押しても外れない。外れたら一覧が空になり、押した人が頼んでいないことが
- * 起きるからである。
- *
- * ここが決めるのは一覧の中身だけで、地図には効かない。地図にどの系統を描くかは
- * 表示の面の系統トグルが持つ(app.js の shown)。
+ * 一覧に出す系統を切り替える。状態は三つだけ(どちらも、国道だけ、
+ * 都道府県道だけ)で、最後の一枚は押しても外れない。外れたら一覧が空になる。
+ * ここが決めるのは一覧の中身だけで、地図にどの系統を描くかは表示の
+ * ポップオーバーの系統トグルが持つ(app.js の shown)。
  */
 function toggleListSystem(doc, state, key, applyFilters) {
   const other = key === 'listNational' ? 'listPref' : 'listNational';
@@ -173,8 +152,8 @@ function toggleListSystem(doc, state, key, applyFilters) {
     .querySelector(key === 'listNational' ? '#sys-national' : '#sys-pref')
     .setAttribute('aria-pressed', String(state[key]));
   applyRouteFilter(doc, state);
-  // 一覧から消えた系統の選択はそのまま残る。ここは探す先を絞る欄であって、
-  // 選んだものを捨てる場所ではない。地図は applyFilters が描き直す。
+  // 一覧から消えた系統の選択はそのまま残る。ここは探す先を絞る欄で、
+  // 選んだものを捨てる場所ではない。
   applyFilters();
 }
 
@@ -190,12 +169,8 @@ export function setSelection(doc, state, refs, applyFilters) {
 }
 
 /**
- * 選択をすべて空に戻す。「道路を選択」の台にある ✕ が呼ぶ。
- *
- * 二つの系統を同じに扱う。国道と都道府県道のどちらかが上位ということはなく、
- * 「道路を選択」も「選択解除」も両方のためにある——「国道を選択」を「道路を
- * 選択」と改めたのはそのためである。だからここは二つを並べて書き、片方にだけ
- * 効く条件を持たない。
+ * 選択をすべて空に戻す。「道路を選択」のグループにある ✕ が呼ぶ。二つの系統を
+ * 同じに扱い、片方にだけ効く条件を持たない。
  */
 export function clearSelection(doc, state, applyFilters) {
   state.selected = new Set();
@@ -205,39 +180,28 @@ export function clearSelection(doc, state, applyFilters) {
 }
 
 /**
- * いまこの 1 本だけに絞っているか。
+ * いまこの 1 本だけに絞っているか。「この路線だけ表示」が押された状態かどうかの
+ * 答えである。一覧から 2 本選んでいるあいだは押されていない(そこで押せば
+ * 「だけ」になり、解除にはならない)。詳細パネルの描画(app.js)と下の二つの
+ * トグルが同じ関数に聞く。
  *
- * 「この路線だけ表示」が押された状態かどうかは、この問いの答えそのものである。
- * 一覧から 2 本選んでいるあいだは押されていない——そこで押せば「だけ」に
- * なるのであって、解除にはならないからである。詳細パネルの描画(app.js)と、
- * 下の二つのトグルが同じ関数に聞く。
- *
- * 数えるのは両系統ぶんである。国道 63 号と長野県道 63 号を選んでいる画面は
- * 2 本を描いており、そこで国道のボタンが「解除」と名乗ってはならない。系統を
- * またいで一つある選択を、系統ごとに数えると「だけ」の意味が画面と食い違う。
+ * 両系統ぶん数える。国道 63 号と長野県道 63 号を選んでいる画面は 2 本を
+ * 描いており、そこで国道のボタンが「解除」と名乗ってはならない。
  */
 export const isOnly = (selected, other, key) =>
   selected.size === 1 && other.size === 0 && selected.has(key);
 
 /**
- * 「この路線だけ表示」——その 1 本だけを選び、もう一度呼べば解く。
+ * 「この路線だけ表示」。その 1 本だけを選び、もう一度呼べば解く。「だけ」は
+ * 文字どおりで、もう一方の系統に残っていた選択も一緒に空になる。片方だけを
+ * 入れ替えると、「国道63号だけを表示」を押した画面に長野県道63号が残る。
  *
- * 「だけ」は文字どおりの意味である。押した後に選ばれているのはこの 1 本で、
- * もう一方の系統に残っていた選択も一緒に空になる。片方だけを入れ替えると、
- * 「国道63号だけを表示」を押した画面に長野県道63号が残る。
+ * 「だけ」の絵を作るのは絞り込みの側である(mapspec.mjs の shownSystems)。ここは
+ * 選択だけを渡し、系統トグルには触らない。以前はここが都道府県道の系統トグルを
+ * 裏で倒して消す前の値を控えており、同じ選択が入り口によって
+ * 違う絵になっていた。
  *
- * 「だけ」の絵を作るのは絞り込みの側である(mapspec.mjs の shownSystems)——
- * どちらかの系統で 1 本でも選べば、地図に残るのは選んだ道路だけになる。ここが
- * 渡すのは選択そのものだけで、系統トグルには触らない。
- *
- * 以前はここが都道府県道の系統トグルを裏で倒し、消す前の値を控えていた。同じ
- * 選択が、一覧のチェックボックスから入ったか、このボタンから入ったかで違う絵に
- * なる形だった——控えの出し入れも、`pref=0` が URL に乗るのも、そのために
- * 要っていた仕掛けである。絞り込みの側を直したので、どちらも要らない。
- *
- * 解けるのは都道府県道側(togglePrefOnly)と揃えるためである。押して 1 本に
- * したボタンが、同じ場所で押しても戻せないのは、押した人にとって同じボタンが
- * 途中から効かなくなったのと変わらない。
+ * 解けるのは都道府県道側(togglePrefOnly)と揃えるためである。
  */
 export function toggleRouteOnly(doc, state, ref, applyFilters) {
   if (isOnly(state.selected, state.prefSelected, ref)) {
@@ -249,13 +213,9 @@ export function toggleRouteOnly(doc, state, ref, applyFilters) {
 }
 
 /**
- * 都道府県道を 1 本だけ選ぶ。もう一度呼べば解く。国道側と同じ約束である。
- *
- * 解除はここでもできるが、唯一の口ではない——詳細パネルを閉じても地図の左上に
- * 残る ✕ (clearSelection)が同じことをする。
- *
- * `doc` を受けるのは、国道の選択を空にするぶん一覧のチェックも外れなければ
- * ならないからである。setSelection が二つの系統の行をまとめて合わせる。
+ * 都道府県道を 1 本だけ選ぶ。もう一度呼べば解く。国道側と同じ約束である。解除は
+ * 地図の左上の ✕(clearSelection)でもできる。`doc` を受けるのは、国道の選択を
+ * 空にするぶん一覧のチェックも外すためである。
  */
 export function togglePrefOnly(doc, state, key, applyFilters) {
   if (isOnly(state.prefSelected, state.selected, key)) {
@@ -269,7 +229,7 @@ export function togglePrefOnly(doc, state, key, applyFilters) {
 /** 画面が狭いと見なす幅。style.css の @media と同じ値である。 */
 export const NARROW_QUERY = '(max-width: 860px)';
 
-/** 面の一覧・絞り込みと、表示のトグルを state へ配線する。 */
+/** ポップオーバーの一覧・絞り込みと、表示のトグルを state へ配線する。 */
 export function wireControls(doc, state, applyFilters) {
   const $ = (sel) => doc.querySelector(sel);
   const list = $('#route-list');
@@ -331,16 +291,15 @@ export function wireControls(doc, state, applyFilters) {
 
 /**
  * 共有ダイアログの配線。dialog.showModal() は happy-dom に無いので、
- * test/wiring.test.mjs はここを直接は検査しない——対象は #route-list 側の
- * 4 例(検査する例)であり、この関数の切り出しは app.js を import 不要にする
- * ためのものである。
+ * test/wiring.test.mjs はここを検査しない。切り出したのは app.js を import
+ * せずに済ませるためである。
  */
 export function wireShare(doc, state) {
   const $ = (sel) => doc.querySelector(sel);
   const dialog = $('#share-dialog');
 
-  // index.html が持つラベル文言をそのまま読む。ここで書き直すと、
-  // 表示側を直したときにこちらが暗黙のうちに古くなる。
+  // index.html が持つラベル文言をそのまま読む。ここで書き直すと、表示側を
+  // 直したときにこちらが暗黙のうちに古くなる。
   const shareState = () => {
     const toggles = [
       ...doc.querySelectorAll('#display-popover .checks label'),

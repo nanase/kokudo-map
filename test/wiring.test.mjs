@@ -32,13 +32,9 @@ const ROUTES = [
 
 /**
  * app.js の boot() を模す最小限のセットアップ。buildUI() が #route-list を
- * innerHTML で丸ごと置き換えるので、ここでも routeListHTML() の出力を先に
- * 流し込んでから配線する。
- *
- * applyFilters は本物の app.js のそれではなく、配線が呼び出す先として
- * 「選択が変われば #sel-none の disabled を更新する」という一点だけを担う
- * 最小限のスタブ。地図・データ取得を必要とする本物の applyFilters は
- * この検査の対象外(範囲外)である。
+ * innerHTML で置き換えるので、routeListHTML() の出力を先に流し込んでから
+ * 配線する。applyFilters は本物ではなく、「選択が変われば #sel-none の hidden
+ * を更新する」だけのスタブである。
  */
 function setup(routes = ROUTES) {
   const window = new Window({ url: 'https://example.invalid/' });
@@ -49,7 +45,8 @@ function setup(routes = ROUTES) {
   const state = {
     selected: new Set(),
     prefSelected: new Set(),
-    // 県 → 番号。本物は pref/index.json を開いた物で、面を開いたときに届く。
+    // 県 → 番号。本物は pref/index.json を開いた物で、ポップオーバーを
+    // 開いたときに届く。
     prefIndex: new Map([
       ['nagano', [18, 63, 180]],
       ['tokyo', [7, 18, 181]],
@@ -76,7 +73,7 @@ function setup(routes = ROUTES) {
   const applyFilters = () => {
     applyCalls.push(new Set(state.selected));
     const clear = document.querySelector('#sel-none');
-    // 本物の updateStats と同じ数え方。両系統の合計が 0 のあいだ ✕ は居ない。
+    // 本物の updateStats と同じ数え方。両系統の合計が 0 のあいだ ✕ は出ない。
     clear.hidden = state.selected.size + state.prefSelected.size === 0;
   };
 
@@ -215,8 +212,8 @@ describe('この路線だけ表示', () => {
   });
 
   /* 「だけ」は系統をまたいで文字どおりの意味である。国道63号と長野県道63号を
-     選んでいる画面は 2 本を描いているので、そこでボタンは「解除」ではなく、
-     押せばもう一方の系統の選択も空になります。 */
+   * 選んでいる画面は 2 本を描いているので、そこでボタンは「解除」ではなく、
+   * 押せばもう一方の系統の選択も空になる。 */
   test('もう一方の系統に残っていた選択も空にする', () => {
     const { document, state, applyFilters } = setup();
     document.querySelector('#route-list input[value="7"]').click();
@@ -240,9 +237,9 @@ describe('この路線だけ表示', () => {
     expect(cb.checked).toBe(false);
   });
 
-  /* 二つの系統に 1 本ずつ選んでいるあいだは「だけ」になっていません。ここで
-     ボタンが「解除」と名乗ると、押した人は国道が丸ごと消える画面を受け取り
-     ます(mapspec.mjs の shownSystems)。 */
+  /* 二つの系統に 1 本ずつ選んでいるあいだは「だけ」になっていない。ここで
+   * ボタンが「解除」と名乗ると、押した人は国道が丸ごと消える画面を受け取る
+   * (mapspec.mjs の shownSystems)。 */
   test('他系統に選択が残っていれば、押されていない扱いにする', () => {
     const { state } = setup();
     state.selected = new Set([63]);
@@ -252,8 +249,8 @@ describe('この路線だけ表示', () => {
     expect(isOnly(state.prefSelected, state.selected, 'nagano-63')).toBe(false);
   });
 
-  /* 手で消した系統を、選択解除が点け直すことはありません。系統トグルは
-     選択とは別の物です。 */
+  /* 手で消した系統を、選択解除が点け直すことはない。系統トグルは選択とは別の
+   * 物である。 */
   test('選択解除は系統トグルに触らない', () => {
     const { document, state } = setup();
     state.pref = false;
@@ -300,7 +297,7 @@ describe('wireControls — 絞り込み', () => {
     }
   });
 
-  /* 打つまで都道府県道は出しません。13,234 組を並べても選べません。 */
+  /* 打つまで都道府県道は出さない。13,234 組を並べても選べない。 */
   test('打つまで都道府県道は出ない', () => {
     const { document } = setup();
     expect(prefRows(document)).toEqual([]);
@@ -331,8 +328,8 @@ describe('wireControls — 絞り込み', () => {
     );
   });
 
-  /* 索引は面を開いたときに取りに行きます。開いてすぐ打った人には間に合わない
-     ことがあり、空を出すと「無い」に読めます。 */
+  /* 索引はポップオーバーを開いたときに取りに行く。開いてすぐ打った人には間に
+   * 合わないことがあり、空を出すと「無い」に読める。 */
   test('索引が届く前は、待っていると言う', () => {
     const { document, window, state } = setup();
     state.prefIndex = null;
@@ -343,7 +340,7 @@ describe('wireControls — 絞り込み', () => {
     );
   });
 
-  /* 落ちたときに待っている表示のまま止めると、いつまでも読み込み中に見えます。 */
+  /* 落ちたときに待っている表示のまま止めると、いつまでも読み込み中に見える。 */
   test('索引が取れなかったときは、取れなかったと言う', () => {
     const { document, window, state } = setup();
     state.prefIndex = null;
@@ -380,8 +377,8 @@ describe('wireControls — 絞り込み', () => {
   });
 });
 
-/* 一覧に出す系統は三状態しかありません。どちらも外れると一覧が空になり、
- * 押した人が頼んでいないことが起きます。 */
+/* 一覧に出す系統は三状態しかない。どちらも外れると一覧が空になり、押した人が
+ * 頼んでいないことが起きる。 */
 describe('wireControls — 一覧に出す系統', () => {
   const pressed = (document, sel) =>
     document.querySelector(sel).getAttribute('aria-pressed');
@@ -414,8 +411,8 @@ describe('wireControls — 一覧に出す系統', () => {
     expect(pressed(document, '#sys-national')).toBe('true');
   });
 
-  /* 一覧から消えた系統の選択はそのまま残ります。ここは探す先を絞る欄で
-     あって、選んだものを捨てる場所ではありません。 */
+  /* 一覧から消えた系統の選択はそのまま残る。ここは探す先を絞る欄で、
+   * 選んだものを捨てる場所ではない。 */
   test('一覧から消しても、選択は捨てない', () => {
     const { document, window, state } = setup();
     const input = document.querySelector('#route-filter');
@@ -513,8 +510,9 @@ describe('clearSelection — 両系統の選択解除', () => {
   });
 });
 
-/* 地図の上のボタンから出る面。押すまで開かないので、最初は三つとも hidden で
- * ある。開け閉ては app.js が持つので、ここが見るのは骨格だけである。 */
+/* 地図の上のボタンから出るポップオーバー。押すまで開かないので、最初は三つとも
+ * hidden である。開け閉ては app.js が持つので、ここが見るのは
+ * 骨格だけである。 */
 describe('地図の上の面', () => {
   const load = (width) => {
     const window = new Window({
@@ -539,9 +537,9 @@ describe('地図の上の面', () => {
     }
   });
 
-  /* 面は自分のボタンと同じ台の中に居る。位置合わせの計算をどこにも持たない
-   * ための約束で、app.js の registerPane が台を「面の持ち物」として使う。
-   * 「道路を選択」だけは例外である——次のテストが理由とあわせて見る。 */
+  /* ポップオーバーは自分のボタンと同じグループの中にある。位置合わせの計算を
+   * 持たないための約束で、app.js の registerPane がグループを「持ち物」として
+   * 使う。「道路を選択」だけは例外で、次のテストが理由とあわせて見る。 */
   test('面はボタンと同じ台の中にある', () => {
     const document = load(1280);
     for (const [btn, pane] of [
@@ -553,10 +551,10 @@ describe('地図の上の面', () => {
     }
   });
 
-  /* 「道路を選択」の面だけは #select-btn の台ではなく #ranking-btn の台に
-   * 居る。#select-btn は選んだ本数の札(#sel-count)ぶん幅が変わり、その台を
-   * 基準にすると路線を選ぶたびに面が横へズレ動く。#ranking-btn の台に札は
-   * 無く幅が変わらないので、位置の基準として借りる(#128)。開け閉ては
+  /* 「道路を選択」のポップオーバーだけは #select-btn ではなく #ranking-btn の
+   * グループにある。#select-btn は選んだ本数のバッジ(#sel-count)ぶん幅が
+   * 変わり、そのグループを基準にすると路線を選ぶたびに横へずれる。#ranking-btn
+   * のグループは幅が変わらないので、位置の基準として借りる(#128)。開け閉ては
    * 変わらず #select-btn が持つ。 */
   test('「道路を選択」の面は #ranking-btn の台を位置の基準にする', () => {
     const document = load(1280);
@@ -568,8 +566,8 @@ describe('地図の上の面', () => {
     ).toBe(true);
   });
 
-  /* 絞り込み欄と一覧は面の中、選択解除は面の外。選択は地図に効いており、
-   * 面を開かずに戻したいことがある。 */
+  /* 絞り込み欄と一覧はポップオーバーの中、選択解除は外。選択は地図に
+   * 効いており、ポップオーバーを開かずに戻したいことがある。 */
   test('絞り込みと一覧は面の中、選択解除は面の外にある', () => {
     const document = load(1280);
     const pane = document.querySelector('#select-popover');
@@ -592,12 +590,11 @@ describe('地図の上の面', () => {
   });
 });
 
-/* 選択が変わる口はパネルのボタンだけではありません。一覧のチェックからも、
- * 地図の左上の ✕ からも変わります。開いたままのパネルがそれを知らないと、
- * 解除した後もボタンだけが押されたまま残ります。
- *
- * 本物のパネル(detail.mjs)を流し込んで検査します。押した状態の名乗りを組む
- * のはあちらなので、写しを置くとその写しを検査することになります。 */
+/* 選択が変わる経路はパネルのボタンだけではない。一覧のチェックからも、地図の
+ * 左上の ✕ からも変わる。開いたままのパネルがそれを知らないと、解除した後も
+ * ボタンだけが押されたまま残る。本物のパネル(detail.mjs)を流し込んで検査する。
+ * 押した状態のラベルを組むのはあちらなので、写しを置くとその写しを
+ * 検査することになる。 */
 describe('syncDetailOnly — 開いているパネルの名乗り', () => {
   const only = (doc) => doc.querySelector('#detail-body .detail-only');
   const shown = (doc) => ({
@@ -636,8 +633,8 @@ describe('syncDetailOnly — 開いているパネルの名乗り', () => {
     });
   });
 
-  /* 利用者が最初に見つけた不具合はこちらです。都道府県道は解除できるのに、
-     パネルの側が押された姿のまま残っていました。 */
+  /* 利用者が最初に見つけた不具合はこちらである。都道府県道は解除できるのに、
+   * パネルの側が押された姿のまま残っていた。 */
   test('✕ で解いたら、都道府県道のパネルも戻る', () => {
     const { document, state, applyFilters } = setup();
     togglePrefOnly(document, state, 'nagano-63', applyFilters);
@@ -667,8 +664,8 @@ describe('syncDetailOnly — 開いているパネルの名乗り', () => {
     });
   });
 
-  /* 押した直後のボタンには焦点が載っています。要素ごと入れ替えると、
-     キーボードで押した人はその場で居場所を失います。 */
+  /* 押した直後のボタンには焦点が載っている。要素ごと入れ替えると、キーボードで
+   * 押した人はその場で居場所を失う。 */
   test('ボタンそのものは入れ替えない', () => {
     const { document, state, applyFilters } = setup();
     openNational(document, 8, false);

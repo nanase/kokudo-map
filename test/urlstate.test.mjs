@@ -139,7 +139,7 @@ describe('encodeState', () => {
     );
   });
 
-  /* 国道の鍵の形は変えない。いま共有されているリンクが開けなくなる。 */
+  /* 国道のキーの形は変えない。いま共有されているリンクが開けなくなる。 */
   test('国道と都道府県道は別々の鍵に出る', () => {
     const p = new URLSearchParams(
       encodeState({
