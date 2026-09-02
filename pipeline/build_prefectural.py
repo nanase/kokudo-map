@@ -232,6 +232,13 @@ def check_keys(region: str, refs: list[int]) -> None:
 
 # ------------------------------------------------------------------ main ---
 def build(region: str) -> dict:
+    """1 県ぶんの判定を回す。読むのは build/survey の候補である。
+
+    返すのは `arcs`(書き出すアーク)、`routes`(路線ごとの集計)、`meta`(数え上げ)、
+    そして `arc_km`・`designated_km` である。後ろの二つを丸める前の値で返すのは、
+    全国の合計をここから足すためである——`meta` の側は小数第 1 位に丸めてあり、
+    47 県ぶんを足すと丸めの誤差が積み上がる。
+    """
     path = SURVEY / f"{region}.json"
     if not path.exists():
         raise SystemExit(f"{path} is missing; run `mise run survey-pref` first")
