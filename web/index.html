@@ -7,11 +7,9 @@
 <meta name="description" content="日本の一般国道 459 路線を全国 1 枚で表示する地図。重用区間では重なるすべての番号を出し、縮尺を引いても番号を省略しない。出典は OpenStreetMap。">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
-<!-- ホーム画面に追加したときの表示。manifest が名前・アイコン・単独起動
-     (display: standalone)を述べる。theme-color はアイコンの地の色と同じ
-     標識の青で、ステータスバーや最近使ったアプリの帯に出る。
-     apple-touch-icon は iOS 側の同義語——Safari は manifest の icons を
-     ほぼ見ないので、これが無いと角の透けた不格好なアイコンになる。 -->
+<!-- ホーム画面に追加したときの表示。theme-color はアイコンの地と同じ標識の青で、
+     ステータスバーに出る。apple-touch-icon は iOS 側の同義語で、Safari は manifest
+     の icons をほぼ見ないので、無いと角の透けたアイコンになる。 -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#00449E">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -20,7 +18,7 @@
 <meta name="apple-mobile-web-app-title" content="国道マップ">
 
 <!-- 共有されたときに出るカード。%SITE_URL% は配信時に Actions が実際の URL に
-     差し替える。GitHub Pages の URL を述べるのはそこだけである。 -->
+     差し替える。GitHub Pages の URL を書くのはそこだけである。 -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="国道マップ">
 <meta property="og:description" content="重用区間で番号を丸めない。縮尺で番号を省略しない。全国 47 都道府県・一般国道 459 路線。">
@@ -29,21 +27,15 @@
 <meta property="og:locale" content="ja_JP">
 <meta name="twitter:card" content="summary_large_image">
 
-<!-- 配色は app.js が決めるが、その JS は文書を読み終えるまで走らない。端末が
-     暗く、この地図では明るいほうを選んでいる人には、その間だけ暗い面が出る
-     ——「地図を読み込んでいます」が暗く出て、明るくなって、地図が出る、と
-     地図に着くまでに色が二度変わっていた。
+<!-- 配色は app.js が決めるが、その JS は文書を読み終えるまで走らない。端末が暗く、
+     この地図では明るいほうを選んでいる人には、その間だけ暗い面が出て、地図に着く
+     までに色が二度変わっていた。ここで選択を先に置き、最初の描画からその側で出す。
+     'auto' のときは何も置かない。選択を書くのも 'auto' を解くのも app.js で、ここは
+     app.js が書いた物を置き直すだけである。
 
-     ここで選択を先に置き、最初の描画からその側で出す。'auto' のときは何も
-     置かない——端末の設定がそのまま効き、あとで app.js が置き直す値も同じに
-     なるので、そちらは元から変わらない。
-
-     選択を書くのも、'auto' を解くのも app.js の仕事である。ここがするのは、
-     app.js が前に書いた物をそのまま置き直すことだけである。
-
-     凡例を畳んでいるかどうかも同じ理由でここに置く。凡例は vendor/*.js を
-     待たずに出せるよう静的な HTML にしてあるので(下の #legend-bar)、畳んだ人の
-     画面には、ここが無いと凡例が一度出てから消える。 -->
+     凡例を畳んでいるかどうかも同じ理由で置く。凡例は vendor/*.js を待たずに出せる
+     静的な HTML なので(下の #legend-bar)、ここが無いと畳んだ人の画面に凡例が一度
+     出てから消える。 -->
 <script>
   try {
     const t = localStorage.getItem('theme');
@@ -60,20 +52,18 @@
      待つと HTML→style.css→woff2 の依存の連なりが 1 段伸びる。 -->
 <link rel="preload" href="vendor/roboto-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
-<!-- 操作面の書体 (LINE Seed JP)。日本語 1 書体は 7000 字あり 1 ファイルには
-     ならないので、Fontsource が分けた約 120 片の @font-face を並べた表になって
-     いる。どれを取るかは unicode-range を見てブラウザが決めるので、実際に降りて
-     くるのは画面に出ている字を含む片だけである。
-     scripts/vendor_web.mjs が node_modules から作る。 -->
+<!-- 操作面の書体(LINE Seed JP)。日本語 1 書体は 7000 字あるので、Fontsource が
+     unicode-range で分けた約 120 片の @font-face の表になっている。降りてくるのは
+     画面に出ている字を含む片だけである。scripts/vendor_web.mjs が node_modules
+     から作る。 -->
 <link rel="stylesheet" href="vendor/line-seed-jp.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<!-- 二度以上出てくる絵は、ここで一度だけ描いて <use> で呼ぶ。共有のリンクアイコンは
-     地図の左上の見出しと共有ダイアログの「文章で共有」に出る。同じ形を
-     二箇所に写すと、片方だけ直したときに暗黙のうちに食い違う。
-     寸法は呼ぶ側の svg が持つので、ここは形だけを述べる。 -->
+<!-- 二度以上出てくる絵は、ここで一度だけ描いて <use> で呼ぶ。共有のアイコンは
+     左上の見出しと共有ダイアログの「文章で共有」に出る。寸法は呼ぶ側の svg が
+     持つ。 -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="icon-share" viewBox="0 0 24 24">
     <path d="M10 13a5 5 0 0 0 7.54.54l2.12-2.12a5 5 0 0 0-7.07-7.07l-1.72 1.71"
@@ -89,17 +79,12 @@
   <main id="map-wrap">
     <div id="map"></div>
 
-    <!-- 地図の左上に居座る列。かつてここには 340px のサイドパネルがあり、
-         その中に見出しと三つの節が畳まれていた。パネルは畳めたが、畳むと
-         中身への口ごと消えた——選択解除も、都道府県道を戻す口もその中に
-         あったので、閉じた人は地図に効いている絞り込みを戻せなくなる。
-
-         いまは見出しの板が一枚と、面を開く台が三つ。台は MapLibre 自身の
-         ボタンと同じ言葉(maplibregl-ctrl-group)で書いてあるので、右上の
-         拡大・表示・地図の種類と同じ寸法・同じ角丸・同じ影になる。畳む口は
-         持たない——畳むほどの大きさが無いためである。
-
-         列そのものは地図を掴む手を通す。板と台だけが受け取る。 -->
+    <!-- 地図の左上の列。見出しのバーが一枚と、ポップオーバーを開くグループが三つ。
+         かつては 340px のサイドパネルがあり、畳むと選択解除や都道府県道を戻す操作
+         ごと消えた。グループは MapLibre 自身のボタンと同じクラス
+         (maplibregl-ctrl-group)で書くので、右上のボタンと同じ寸法・角丸・影になる。
+         畳むほどの大きさが無いので畳む操作は持たない。列そのものは地図を掴む操作を
+         通し、バーとグループだけが受け取る。 -->
     <div id="map-ui">
       <div id="brand">
         <img src="favicon.svg" alt="" class="brand-icon" width="495" height="475">
@@ -119,18 +104,12 @@
         </button>
       </div>
 
-      <!-- 一つの台に「開く」と「消す」が並ぶ。選択は地図に効いており、面を
-           開かずに戻したいことがあるので、解除は面の中ではなく外に居なければ
-           ならない。数の札は選んでいる本数で、国道と都道府県道を合わせて数える。
-
-           「国道を選択」を「道路を選択」と改めたのは、この台が両方の系統を
-           引き受けるためである。二つのどちらかが上位ということはない。
-
-           ✕ は選んでいるあいだだけ出る。取り消す物が無いボタンは、押せない姿で
-           居座るより、居ないほうがよい。
-
-           文言は updateStats() が title と aria-label に入れる。
-           「N 路線を選択解除」は数で変わるので、ここには書かない。 -->
+      <!-- 一つのグループに「開く」と「消す」が並ぶ。選択は地図に効いており、
+           ポップオーバーを開かずに戻したいことがあるので、解除は外に置く。数の
+           バッジは選んでいる本数で、国道と都道府県道を合わせて数える。
+           「道路を選択」と名付けたのは、このグループが両方の系統を引き受ける
+           ためである。✕ は選んでいるあいだだけ出る。文言は updateStats() が title
+           と aria-label に入れる。 -->
       <div class="maplibregl-ctrl maplibregl-ctrl-group ui-ctrl ui-ctrl-row">
         <button type="button" id="select-btn" class="ui-btn ui-btn-wide"
                 aria-expanded="false" aria-controls="select-popover"
@@ -166,18 +145,14 @@
                   stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
-        <!-- 「道路を選択」の面はこの台を位置の基準にする(#select-btn ではなく)。
-             #select-btn は選んだ本数の札(#sel-count)ぶん幅が変わり、そちらを
-             基準にすると路線を選ぶたびに面が横へズレ動く。この台に札は無く
-             幅が変わらないので、ここを基準にすればズレない。面を開け閉てする
-             のは変わらず #select-btn で、aria-controls もそちらが持つ
-             (app.js の registerPane)。 -->
+        <!-- 「道路を選択」のポップオーバーはこのグループを位置の基準にする。
+             #select-btn は選んだ本数のバッジ(#sel-count)ぶん幅が変わり、そちらを
+             基準にすると路線を選ぶたびに横へずれる。開け閉ては変わらず #select-btn
+             で、aria-controls もそちらが持つ(app.js の registerPane)。 -->
         <div id="select-popover" class="map-popover to-right" hidden>
           <section>
             <h2>道路を選択</h2>
-            <!-- 絞り込み欄。虫眼鏡は欄の中に置く——ラベルを書き足さずに、
-                 この欄が探す所であることを述べる。番号は国道と都道府県道の
-                 どちらにも当てる。 -->
+            <!-- 絞り込み欄。番号は国道と都道府県道のどちらにも当てる。 -->
             <div class="filter-row">
               <svg class="filter-icon" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="10.5" cy="10.5" r="6.4" fill="none" stroke="currentColor" stroke-width="2.2"/>
@@ -186,12 +161,10 @@
               </svg>
               <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 18）" autocomplete="off">
             </div>
-            <!-- 一覧に出す系統。状態は三つだけで、どちらも外れることはない
-                 ——最後の一枚は押しても外れず、押した先に空の一覧が残らない。
-                 二枚が一枚の板に見えるので、二つで一組であることを形が言う。
-
-                 これは一覧の絞り込みであって、地図の絞り込みではない。地図に
-                 どの系統を描くかは表示の面の「国道」「都道府県道」が持つ。 -->
+            <!-- 一覧に出す系統。状態は三つだけで、最後の一枚は押しても外れず、空の
+                 一覧が残らない。これは一覧の絞り込みであって、地図の絞り込みでは
+                 ない。地図にどの系統を描くかは表示のポップオーバーの「国道」
+                 「都道府県道」が持つ。 -->
             <div class="sys-seg" role="group" aria-label="一覧に出す系統">
               <button type="button" id="sys-national" class="sys" aria-pressed="true">国道</button>
               <button type="button" id="sys-pref" class="sys" aria-pressed="true">都道府県道</button>
@@ -206,10 +179,9 @@
                 </div>
                 <p class="rl-note" id="rl-national-note" hidden>一致する国道はありません。</p>
               </div>
-              <!-- 都道府県道は打つまで出さない。13,234 組は眺めて選ぶ数ではなく、
-                   全部並べれば DOM も、打つたびに走る絞り込みも持たない。番号は
-                   pref/index.json が持ち、この面を初めて開いたときに 1 度だけ
-                   取る(14.4 kB)——県別 meta 47 本 3.45 MB を読ませないためである。 -->
+              <!-- 都道府県道は打つまで出さない。13,234 組は眺めて選ぶ数ではない。
+                   番号は pref/index.json が持ち、初めて開いたときに 1 度だけ取る
+                   (14.4 kB)。県別 meta 47 本 3.45 MB を読ませないためである。 -->
               <div class="rl-group" id="rl-pref">
                 <div class="rl-head" id="rl-pref-head">都道府県道</div>
                 <div class="rl-rows" id="rl-pref-rows"></div>
@@ -252,27 +224,20 @@
       </div>
     </div>
 
-    <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。
-         地図の左下に浮く——上を占めているのは見出しと台の列である。 -->
+    <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。地図の
+         左下に浮く。 -->
     <aside id="detail" hidden aria-labelledby="detail-title">
       <button type="button" id="detail-close" class="dialog-close" aria-label="閉じる">×</button>
       <div id="detail-body"></div>
     </aside>
 
-    <!-- 凡例。線の色と形が何を述べているかは、その線を見ながらでなければ
-         確かめようがない。同じ画面の、地図の上に置く。
-
-         中身は panel.mjs の legendNHTML() / legendKindHTML() / legendPrefHTML()
-         の出力そのもの。static にしてあるのは vendor/*.js の読み込みを待たずに
-         最初の描画から出したいため——test/panel.test.mjs がここと関数の一致を
-         検査する。
-
-         出ていない系統の行は、app.js が起動後に hidden を付けて隠す。地図に
-         描かれていない色を凡例だけが説明する状態を避けるためである。
-
-         畳んでいるかどうかは、この帯ではなく <html> の data-legend が持つ。
-         配色と同じ理由である——上の <head> の数行が前回の選択を最初の描画の前に
-         置くので、畳んでいる人の画面に凡例が一度出てから消えることがない。 -->
+    <!-- 凡例。線の色と形が何を表すかは、その線を見ながらでなければ確かめようが
+         ないので、地図の上に置く。中身は panel.mjs の legendNHTML() /
+         legendKindHTML() / legendPrefHTML() の出力そのもの。static にしてあるのは
+         vendor/*.js を待たずに最初の描画から出すためで、test/panel.test.mjs が
+         関数との一致を検査する。出ていない系統の行は app.js が起動後に hidden で
+         隠す。畳んでいるかどうかは <html> の data-legend が持ち、上の <head> が
+         前回の選択を最初の描画の前に置く。 -->
     <div id="legend-bar">
       <div id="legend-box" class="legend-box">
         <div class="legend-rows">
@@ -280,8 +245,8 @@
           <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
           <div id="legend-pref" class="legend"><span class="lead">都道府県道</span><span class="item"><span class="swatch" style="border-top-color:#2BBB5E"></span>主要地方道</span><span class="item"><span class="swatch" style="border-top-color:#F2EB1F"></span>一般都道府県道</span><span class="item" title="工事中・事業中／未開通／徒歩道・階段／航路"><span class="swatch duo"><span style="color:#2BBB5E"></span><span style="color:#F2EB1F"></span></span>工事中・事業中など</span></div>
         </div>
-        <!-- 浮いているパネルは自分で閉じられる、を凡例にも通す。開き直す口は
-             同じ角に残る #legend-open である。 -->
+        <!-- 浮いているパネルは自分で閉じられる。開き直すのは同じ角に残る
+             #legend-open である。 -->
         <button type="button" id="legend-close" title="凡例を閉じる" aria-label="凡例を閉じる">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor"
@@ -289,10 +254,9 @@
           </svg>
         </button>
       </div>
-      <!-- 凡例を畳んでいるあいだだけ、同じ角に出る。台は右上の拡大ボタンと
-           同じ maplibregl-ctrl-group で、寸法も角丸も影もそちらから借りる
-           ——地図の上のボタンはどれも同じ言葉で書く。名乗りは title と
-           aria-label が持つ。凡例が出ているあいだ、このボタンは居ない。 -->
+      <!-- 凡例を畳んでいるあいだだけ、同じ角に出る。右上の拡大ボタンと同じ
+           maplibregl-ctrl-group で、寸法も角丸も影もそちらから借りる。名前は title
+           と aria-label が持つ。 -->
       <button type="button" id="legend-open" aria-controls="legend-box" aria-expanded="true"
               class="maplibregl-ctrl maplibregl-ctrl-group"
               title="凡例を表示" aria-label="凡例を表示">
@@ -302,13 +266,10 @@
         </svg>
       </button>
     </div>
-    <!-- 地図の上のボタンから出る面。「何が地図に描かれるか」を決めるものは残らず
-         ここに集める——切り替えた結果は地図にしか現れないので、地図の側に置く。
-         節を分けて一つの面に収めてあるのは、どれも同じ問いの答えだからである。
-         ボタンを分けると、どちらを押すか毎回考えることになる。
-
-         位置は app.js がボタンの台へ移してから CSS が決める。中身をここに置いて
-         あるのは、データが届く前から state と結べるようにするためである。 -->
+    <!-- 地図の上のボタンから出るポップオーバー。「何が地図に描かれるか」を決める
+         ものはすべてここに集める。位置は app.js がボタンのグループへ移してから
+         CSS が決める。中身をここに置くのは、データが届く前から state と結べる
+         ようにするためである。 -->
     <div id="display-popover" class="map-popover" hidden>
       <section>
         <h2>路線の系統</h2>
@@ -369,11 +330,9 @@
 </dialog>
 
 
-<!-- この地図について。データがいつのものか、どこで作られているかは、地図を
-     読むあいだは不要である。必要になるのは知りたくなったときだけなので、地図の
-     上に常時置かず、ここへ寄せる。
-
-     出典はここに書かない。地図の上の表示が一度だけ述べている。 -->
+<!-- この地図について。データがいつのものか、どこで作られているかは知りたく
+     なったときだけ必要なので、地図の上に常時置かずここへ寄せる。出典はここに
+     書かない。地図の上の表示が一度だけ示す。 -->
 <dialog id="about-dialog" class="sheet">
   <form method="dialog">
     <header>
@@ -389,11 +348,10 @@
       <dl id="stats" class="stats"></dl>
       <dl id="freshness" class="freshness"></dl>
     </section>
-    <!-- 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではない。
-         考え方の但し書きはここに置く——詳細パネルは 1 路線の数を述べる場所で、
-         考え方そのものを述べる場所ではない。中身は panel.mjs の
-         prefConcurrencyHTML() が入れる。三つは <details> で畳んであり、
-         開閉の状態は残さない(panel.mjs のコメントに理由がある)。 -->
+    <!-- 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではない。考え方の
+         但し書きはここに置く。詳細パネルは 1 路線の数を出す場所である。中身は
+         panel.mjs の prefConcurrencyHTML() が入れる。三つは <details> で畳み、
+         開閉の状態は残さない(理由は panel.mjs)。 -->
     <section>
       <h3>都道府県道の重用の考え方</h3>
       <div id="pref-concurrency" class="notes"></div>
@@ -415,9 +373,8 @@
           </svg>
           GitHub リポジトリ
         </a>
-        <!-- X の印は使わず、外へ出るリンクの印で述べる。どこへ飛ぶかは
-             宛先そのものが答える。名乗るのは人であって、アカウントの
-             置き場所ではない。 -->
+        <!-- X のアイコンは使わず、外へ出るリンクのアイコンにする。どこへ飛ぶかは
+             宛先が答える。 -->
         <a href="https://x.com/nanase_coder" target="_blank" rel="noopener"
            class="mini about-link">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -434,7 +391,7 @@
   </form>
 </dialog>
 
-<!-- 同一オリジンから配る。版は package.json が一度だけ述べ、
+<!-- 同一オリジンから配る。版は package.json が一度だけ持ち、
      scripts/vendor_web.mjs が node_modules から複製する。 -->
 <script src="vendor/maplibre-gl.js"></script>
 <script src="vendor/pmtiles.js"></script>
