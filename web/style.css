@@ -651,10 +651,11 @@ input[type="search"]::placeholder { font-size: .82em; }
 :root[data-theme="dark"] .maplibregl-ctrl-icon {
   filter: invert(1) hue-rotate(180deg);
 }
-/* 出典の地は二つのクラスで指定されている(.maplibregl-ctrl.
-   maplibregl-ctrl-attrib)。片方だけで書くと詳細度で負け、字だけが変わって地が
-   白いまま残る。地は透かす。出典は常に出ているもので、白い帯を敷くとその
-   幅ぶんの地図が隠れる。読めるかどうかは字の周りの淡い縁が引き受ける。 */
+/* 出典の地は二つのクラスで指定されている
+   (.maplibregl-ctrl.maplibregl-ctrl-attrib)。片方だけで書くと詳細度で負け、
+   字だけが変わって地が白いまま残る。地は透かす。出典は常に出ているもので、
+   白い帯を敷くとその幅ぶんの地図が隠れる。読めるかどうかは字の周りの淡い縁が
+   引き受ける。 */
 .maplibregl-ctrl.maplibregl-ctrl-attrib { background-color: transparent; }
 .maplibregl-ctrl-attrib {
   color: var(--ink-2);

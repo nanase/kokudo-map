@@ -22,12 +22,16 @@
  * 純粋ではないが、document・state・applyFilters しか必要とせず地図が
  * 不要なので、wiring.mjs に置いて happy-dom の index.html で検査する。
  *
- * dataurl.mjs 配信データの URL の基点 mapspec.mjs スタイル、層、絞り込み式
- * aggregate.mjs 画面が出す数を組み合わせ表から読む panel.mjs ポップオーバーの
- * 一覧・集計と、凡例の markup popup.mjs 押したアークのポップアップ detail.mjs
- * 一つの路線の詳細パネル termini.mjs 起点・終点を GeoJSON にする shield.mjs
- * 国道番号標識 html.mjs エスケープ。OSM の文字は信用できない wiring.mjs index.
- * html の要素と state の対応づけ
+ *   dataurl.mjs    配信データの URL の基点
+ *   mapspec.mjs    スタイル、層、絞り込み式
+ *   aggregate.mjs  画面が出す数を組み合わせ表から読む
+ *   panel.mjs      ポップオーバーの一覧・集計と、凡例の markup
+ *   popup.mjs      押したアークのポップアップ
+ *   detail.mjs     一つの路線の詳細パネル
+ *   termini.mjs    起点・終点を GeoJSON にする
+ *   shield.mjs     国道番号標識
+ *   html.mjs       エスケープ。OSM の文字は信用できない
+ *   wiring.mjs     index.html の要素と state の対応づけ
  */
 
 import {

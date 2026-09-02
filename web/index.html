@@ -238,9 +238,10 @@
          確かめようがないので、地図の上に置く。中身は panel.mjs の legendNHTML()
          / legendKindHTML() / legendPrefHTML() の出力そのもの。static
          にしてあるのは vendor/*.js を待たずに最初の描画から出すためで、
-         test/panel.test.mjs が関数との一致を検査する。出ていない系統の行は app.
-         js が起動後に hidden で隠す。畳んでいるかどうかは <html> の data-legend
-         が持ち、上の <head> が前回の選択を最初の描画の前に置く。 -->
+         test/panel.test.mjs が関数との一致を検査する。出ていない系統の行は
+         app.js が起動後に hidden で隠す。畳んでいるかどうかは <html> の
+         data-legend が持ち、上の <head> が前回の選択を最初の描画の前に
+         置く。 -->
     <div id="legend-bar">
       <div id="legend-box" class="legend-box">
         <div class="legend-rows">
