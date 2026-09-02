@@ -420,8 +420,8 @@ function attachStateTip(container) {
  *
  * `order` が二値なら切り替えなので、`active` と `aria-pressed` を付ける。三値は
  * 付けない。`tip` は既定で `label` と同じで、「次に押すと何が起きるか」と「いま
- * 何になったか」で言い方を変えるのは国道を隠すボタンだけである
- * (`hideStateTip`)。
+ * 何になったか」で言い方を変えるボタンだけが別に渡す(`pitchStateTip`、
+ * `hideStateTip`)。
  *
  * `onExternalChange` を渡すと `render` を手渡す。押していないところで状態が
  * 動くボタン(視点は Ctrl+ドラッグでも変わる)が描き直すために使う。`isPressed`
@@ -1385,10 +1385,11 @@ document.addEventListener('click', (ev) => {
 /* ---------------------------------------------------------- ポップアップ --- */
 /**
  * 開いているポップアップは多くても 1 つで、地図の上の影はその
- * ポップアップのものである。MapLibre の `closeOnClick` は、このファイルより後に
- * 登録された click の handler から前のポップアップを閉じる。古いほうの
- * 後始末が、新しいポップアップが影を受け取った後に届いて影を奪う。ここで持って
- * 明示的に閉じれば、閉じ方によらず歩調が揃う。
+ * ポップアップのものである。MapLibre の `closeOnClick` は使わない(showPopup が
+ * false を渡す)。それはこのファイルより後に登録された click の handler から前の
+ * ポップアップを閉じるので、古いほうの後始末が、新しいポップアップが影を
+ * 受け取った後に届いて影を奪う。代わりに wirePopups の click の handler が、
+ * 開く前に closePopup() を呼ぶ。閉じ方によらず歩調が揃う。
  */
 let popup = null;
 
