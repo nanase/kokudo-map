@@ -1213,12 +1213,13 @@ if (ferryArc) {
   console.log('\n海上国道: no ferry arc built — the toggle is not exercised');
 }
 
-// --- 旧道(#84)。bun test が辿らない、meta から DOM への唯一の経路 former_km は
-// 組み合わせの各行に kinds と並んで載り、formerKmFor()(aggregate.mjs)が
-// kindsFor() と同じやり方で足す。bun test が detailHTML() に渡すのは直値の
-// former_km だけで、欄を名前で読まない。pack_web.mjs での改名(#64・#65 と
-// 同じ形。欄は在るがコードが読む名前と違う)が起きると、formerKmFor() は永遠に
-// 0 を返し、行はパネルから消える。例外もコンソールの出力も無く、bun test は
+// --- 旧道(#84) -----------------------------------------------------------
+// bun test が辿らない、meta から DOM への唯一の経路。former_km は組み合わせの
+// 各行に kinds と並んで載り、formerKmFor()(aggregate.mjs)が kindsFor() と
+// 同じやり方で足す。bun test が detailHTML() に渡すのは直値の former_km
+// だけで、欄を名前で読まない。pack_web.mjs での改名(#64・#65 と同じ形。欄は
+// 在るがコードが読む名前と違う)が起きると、formerKmFor() は永遠に 0 を返し、
+// 行はパネルから消える。例外もコンソールの出力も無く、bun test は
 // 緑のままである。
 //
 // 国道 10 号は旧道を 30.8 km 持ち、国道 4 号は持たない。指の落ちた先ではなく
