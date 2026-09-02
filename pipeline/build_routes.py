@@ -241,6 +241,8 @@ UNOPENED_TAGS = {"proposed", "planned"}
 # 両方を持つ候補が 6,321 本、別の接頭辞(C3、A1 など)で motorway の物が 6,619 本
 # ある。高速道路番号を持ちながら motorway でない 199 本はすべて
 # `construction=motorway` で、上の `construction` の区分が引き取っている。
+# `ref` の書式で照合すると C・A で始まる道を取りこぼし、OSM がこの区分のために
+# 付けている格で照合するのに比べて得る物が無い。
 
 
 def classify(tags: dict[str, str]) -> str:

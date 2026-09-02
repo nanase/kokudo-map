@@ -343,11 +343,11 @@ def is_national_relation(tags: dict[str, str]) -> bool:
     ふつうの証拠は `network=JP:national` だが、全国で測ると 国道N号 という名前の
     route=road のリレーションのうち 582 がそれを持ち、43 は `network` を
     持たない。43 の大半は他のリレーションが保証する路線の旧道・バイパス・
-    支線だが、国道478号(京都縦貫自動車道)はタグの無いリレーションが唯一で、
-    路線が丸ごと京都府から欠けていた。だから名前でも認める。RULES.md 問 1 規則 b
-    が way について認めるのと同じ証拠である。読むのは `name` と `name:ja`
-    だけで、三重県の番号を山梨県へ持ち込んだ `official_name` は読まない(CASES.md
-    2)。
+    支線だが、二つの路線番号には他に証拠が無い。国道478号(京都縦貫自動車道)は
+    タグの無いリレーションが唯一で、路線が丸ごと京都府から欠けていた。だから
+    名前でも認める。RULES.md 問 1 規則 b が way について認めるのと同じ証拠で
+    ある。読むのは `name` と `name:ja` だけで、三重県の番号を山梨県へ持ち込んだ
+    `official_name` は読まない(CASES.md 2)。
     """
     net = tags.get("network") or ""
     if net.startswith(NATIONAL):
