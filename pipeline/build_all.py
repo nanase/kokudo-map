@@ -146,10 +146,9 @@ def prefectural(judge: bool) -> None:
         stage("都道府県道 — build/survey から判定する",
               ["uv", "run", str(HERE / "build_prefectural.py")])
     # 国道の 151,004 本に対して 290,529 本ある。低ズームでは属性を減らすものの、
-    # lowMaxZoom が 1 段深いぶん山になる z0-7 の索引が大きく、国道の倍を積む。
-    # 実測では 1,280 MB で通り、1,024 MB で落ちる。
+    # アークが 1.9 倍あるぶんは埋まらない。実測では 1,024 MB で通り、896 MB で落ちる。
     stage("配信データ — 都道府県道のタイルを切る",
-          ["node", "--max-old-space-size=1536", str(HERE / "pack_web_pref.mjs")])
+          ["node", "--max-old-space-size=1280", str(HERE / "pack_web_pref.mjs")])
 
 
 def positive_jobs(value: str | None) -> int:

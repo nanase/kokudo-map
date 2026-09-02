@@ -126,8 +126,9 @@ export function writeTiles(o) {
    *
    * 全部を配列に溜めてから Buffer.concat で 1 本にしていた。国道の tiles.bin は
    * 98.8 MB なので、繋ぐ瞬間だけ同じ物が 2 つ、約 200 MB 生きる。47 県ぶんの
-   * GeoJSON と結合済みの弧も同時に載っているところで、これが
-   * `node --max-old-space-size=6144` を要求している一因だった。
+   * GeoJSON と結合済みの弧も同時に載っているところで、これがヒープの上限を
+   * 押し上げていた一因だった。今どれだけ渡しているかは docs/results.md
+   * 「タイル化に必要なメモリ」にある。
    *
    * 索引は書いた順・書いた位置をそのまま並べるので、溜めてから数えるのと
    * 同じ物になる。つまり出来上がる 2 ファイルは 1 バイトも変わらない。
@@ -158,26 +159,82 @@ export function writeTiles(o) {
     bytes += buf.length;
   }
 
-  /* ズーム 0 から split-1 までは、全体を 1 つの索引から作る。タイルの数が少なく、
-   * どれも十分に簡略化されているので、全部抱えても何ということはない。
+  /* ズーム 0 から split-1 までは、全体を 1 つの索引から作る。
    *
    * この索引の maxZoom がそのまま簡略化の効き方を決める。geojson-vt は
    * `z === options.maxZoom` のズームを閾値 0 で書き出すので、既定の `split - 1`
    * は、いちばん深い低ズームを素のまま出すということである(docs/architecture.md
-   * 「索引の一番深いズームは簡略化されない」)。 */
-  const low = geojsonvt(fc(features, lowProperties), {
+   * 「索引の一番深いズームは簡略化されない」)。
+   *
+   * 索引は 1 段ずつ作らせ、書き終えた段から捨てる。indexMaxZoom を maxZoom と
+   * 揃えると、getTile を呼ぶ前に z0 から split-1 までが全部できあがる。しかも
+   * getTile が返したタイルは、transform が geometry をその場で入れ子配列へ
+   * 膨らませ、捨てないかぎり居座る。国道でも都道府県道でも、ヒープの山はこの
+   * 1 か所だった。
+   *
+   * indexMaxZoom を 0 にすると、最初にできるのは z0 だけになり、以降は getTile
+   * が必ず 1 段ずつ掘る。だから 1 段書き終えるたび、その 1 段上を落としてよい
+   * ——次に掘る先の親は、いま書き終えたばかりの段だからである。
+   *
+   * 「emit した直後にそのタイルを落とす」ではいけない。splitTile は
+   * `z === indexMaxZoom || tile.numPoints <= indexMaxPoints` で止まり、
+   * indexMaxPoints の既定は 100,000 である。まばらな場所では indexMaxZoom に
+   * 届く前に止まり、そのタイルが source を抱えたまま残る。深いタイルは後から
+   * そこを掘って作るので、親を先に消すと getTile が null を返し、エラーも
+   * 出さずにタイルが減る(実測で国道の z0-7 が 53 枚から 38 枚になった)。
+   *
+   * これは geojson-vt 4.0.3 の中身に依っている。package.json の指定は `^4.0.3`
+   * である。src/tile.js の createTile は簡略化の閾値を `options.maxZoom` だけ
+   * から決めるので、indexMaxZoom を変えてもタイルの中身は変わらない。tiles は
+   * ソースが "part of the public API" と述べているが、鍵を作る toID は内部で、
+   * 下に写しを持つ。 */
+  let low = geojsonvt(fc(features, lowProperties), {
     maxZoom: lowMaxZoom,
-    indexMaxZoom: lowMaxZoom,
+    indexMaxZoom: 0,
     tolerance,
     extent: EXTENT,
     buffer: 64,
   });
+
+  /** 索引がタイルの鍵に使う id。geojson-vt の src/index.js と同じ式である。 */
+  const toID = (z, x, y) => ((1 << z) * y + x) * 32 + z;
+
+  let prev = [];
+  let gone = new Set();
   for (let z = 0; z < split; z++) {
     const r = tileRange(bbox, z);
+    const ids = [];
+    const absent = new Set();
     for (let x = r.x0; x <= r.x1; x++) {
-      for (let y = r.y0; y <= r.y1; y++) emit(z, x, y, low.getTile(z, x, y));
+      for (let y = r.y0; y <= r.y1; y++) {
+        emit(z, x, y, low.getTile(z, x, y));
+        const id = toID(z, x, y);
+        if (low.tiles[id]) {
+          ids.push(id);
+          continue;
+        }
+        /* 索引に無いタイルがある。親に弧が 1 本も無ければ、その下に作る物も
+         * 無いので、これは正しい。親ごと無いのも、その親が同じ理由で無かった
+         * ——`gone` に居る——なら正しい。それ以外、つまり親が弧を持って生きて
+         * いるか、理由なく親が消えているなら、掘る前に親を消している。枚数の
+         * 足りないアーカイブを配るくらいなら、ここで落ちるほうがよい。 */
+        if (z > 0) {
+          const up = toID(z - 1, x >> 1, y >> 1);
+          const parent = low.tiles[up];
+          if (!gone.has(up) && (!parent || parent.numFeatures)) {
+            throw new Error(`low index: z${z}/${x}/${y} lost its parent`);
+          }
+        }
+        absent.add(id);
+      }
     }
+    for (const id of prev) delete low.tiles[id];
+    prev = ids;
+    gone = absent;
   }
+  /* 最後の段は、索引ごと落とす。この後は深いセルを 1 つずつ切るだけで、
+   * 低ズーム側はもう読まない。 */
+  low = null;
   console.log(`  z0-${split - 1}: ${total} tiles`);
 
   /* それより下は、split のタイルごとに 1 つのピラミッドを作る。特徴量は bbox で
