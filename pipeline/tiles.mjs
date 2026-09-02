@@ -1,11 +1,11 @@
 /* 特徴量の並びを、タイルの blob と索引にする。
  *
  * 国道(pack_web.mjs)と都道府県道(pack_web_pref.mjs)が同じ切り方を使う。切り方は
- * 属性でも集計でもなく、経緯度とズームだけで決まる仕事なので、二つの入口の
- * どちらにも属さない。書き写した複製を二つ持つと、片方が暗黙のうちに古くなる。
+ * 属性でも集計でもなく経緯度とズームだけで決まるので、二つの入口のどちらにも
+ * 属さない。複製を二つ持つと片方が暗黙のうちに古くなる。
  *
- * 出す物は 1 つの blob と 1 つの索引である。ばらばらの .pbf を 10 万個作るより、
- * Windows では速い——pack_pmtiles.py はその 2 つを受け取る。
+ * 出す物は 1 つの blob と 1 つの索引である。ばらばらの .pbf を 10 万個作るより
+ * Windows では速い。pack_pmtiles.py がその 2 つを受け取る。
  */
 import {
   closeSync,
@@ -88,7 +88,8 @@ const fc = (feats, project) => ({
 });
 
 /* writeSync は部分書き込みを返しうる。返り値を捨てると、その 1 タイルだけが
- * 短いまま索引には全長が載り、archive が静かに壊れる。書き切るまで回す。 */
+ * 短いまま索引には全長が載り、アーカイブが暗黙のうちに壊れる。書き切るまで
+ * 回す。 */
 function writeAll(fd, buf) {
   let at = 0;
   while (at < buf.length) at += writeSync(fd, buf, at, buf.length - at);
@@ -108,6 +109,7 @@ function writeAll(fd, buf) {
  * @param {number} [o.lowMaxZoom]  低ズーム側の索引の maxZoom。既定は `split - 1`
  * @param {Function} [o.lowProperties]  低ズームで載せる属性を選ぶ写像
  * @returns {{total: number, bytes: number}}
+ * number, bytes: number}}
  */
 export function writeTiles(o) {
   const {
@@ -124,20 +126,18 @@ export function writeTiles(o) {
 
   /* タイルは切ったそばから書き出す。
    *
-   * 全部を配列に溜めてから Buffer.concat で 1 本にしていた。国道の tiles.bin は
-   * 98.8 MB なので、繋ぐ瞬間だけ同じ物が 2 つ、約 200 MB 生きる。47 県ぶんの
-   * GeoJSON と結合済みの弧も同時に載っているところで、これがヒープの上限を
-   * 押し上げていた一因だった。今どれだけ渡しているかは docs/results.md
-   * 「タイル化に必要なメモリ」にある。
+   * かつては全部を配列に溜めてから Buffer.concat で 1 本にしていた。国道の
+   * tiles.bin は 98.8 MB なので、繋ぐ瞬間だけ同じ物が 2 つ、約 200 MB 生きる。
+   * 47 県ぶんの GeoJSON と結合済みの弧も同時に載っている所で、これがヒープの
+   * 上限を押し上げていた。今渡している量は docs/results.md「タイル化に必要な
+   * メモリ」にある。索引は書いた順・書いた位置をそのまま並べるので、出来上がる
+   * 2 ファイルは溜めてから数えた物と 1 バイトも変わらない。
    *
-   * 索引は書いた順・書いた位置をそのまま並べるので、溜めてから数えるのと
-   * 同じ物になる。つまり出来上がる 2 ファイルは 1 バイトも変わらない。
-   *
-   * 書く先は仮の名前にする。tiles.bin と tiles.json は対でなければ意味が無い
-   * ——pack_pmtiles.py は索引の言う位置で blob を切るだけなので、短い bin と
-   * 前回の json が残ると、範囲外の切り出しが空を返し、静かに壊れた PMTiles が
-   * できる。本物を頭で truncate してしまうと、途中で落ちた回にその状態が残る。
-   * 仮に書いておけば、落ちた回は前回の対がそのまま残る。 */
+   * 書く先は仮の名前にする。tiles.bin と tiles.json は対でなければ意味が無い。
+   * pack_pmtiles.py は索引の言う位置で blob を切るだけなので、短い bin と前回の
+   * json が残ると範囲外の切り出しが空を返し、暗黙のうちに壊れた PMTiles
+   * ができる。本物を頭で truncate すると、途中で落ちた回にその状態が残る。仮に
+   * 書いておけば落ちた回は前回の対がそのまま残る。 */
   mkdirSync(dir, { recursive: true });
   const BIN = join(dir, 'tiles.bin');
   const IDX = join(dir, 'tiles.json');
@@ -163,31 +163,29 @@ export function writeTiles(o) {
    *
    * この索引の maxZoom がそのまま簡略化の効き方を決める。geojson-vt は
    * `z === options.maxZoom` のズームを閾値 0 で書き出すので、既定の `split - 1`
-   * は、いちばん深い低ズームを素のまま出すということである(docs/architecture.md
-   * 「索引の一番深いズームは簡略化されない」)。
+   * は、いちばん深い低ズームを素のまま出すということである
+   * (docs/architecture.md「索引の一番深いズームは簡略化されない」)。
    *
    * 索引は 1 段ずつ作らせ、書き終えた段から捨てる。indexMaxZoom を maxZoom と
    * 揃えると、getTile を呼ぶ前に z0 から split-1 までが全部できあがる。しかも
-   * getTile が返したタイルは、transform が geometry をその場で入れ子配列へ
-   * 膨らませ、捨てないかぎり居座る。国道でも都道府県道でも、ヒープの山はこの
-   * 1 か所だった。
-   *
-   * indexMaxZoom を 0 にすると、最初にできるのは z0 だけになり、以降は getTile
-   * が必ず 1 段ずつ掘る。だから 1 段書き終えるたび、その 1 段上を落としてよい
-   * ——次に掘る先の親は、いま書き終えたばかりの段だからである。
+   * getTile が返したタイルは transform が geometry を入れ子配列へ膨らませ、
+   * 捨てないかぎり居座る。国道でも都道府県道でも、ヒープの山はここだった。
+   * indexMaxZoom を 0 にすると最初にできるのは z0 だけで、以降は getTile が必ず
+   * 1 段ずつ掘る。だから 1 段書き終えるたび、その 1 段上を落としてよい。次に
+   * 掘る先の親は、いま書き終えた段だからである。
    *
    * 「emit した直後にそのタイルを落とす」ではいけない。splitTile は
-   * `z === indexMaxZoom || tile.numPoints <= indexMaxPoints` で止まり、
-   * indexMaxPoints の既定は 100,000 である。まばらな場所では indexMaxZoom に
-   * 届く前に止まり、そのタイルが source を抱えたまま残る。深いタイルは後から
-   * そこを掘って作るので、親を先に消すと getTile が null を返し、エラーも
-   * 出さずにタイルが減る(実測で国道の z0-7 が 53 枚から 38 枚になった)。
+   * `z === indexMaxZoom || tile.numPoints <= indexMaxPoints`(既定 100,000)で
+   * 止まるので、まばらな場所では indexMaxZoom に届く前に止まり、そのタイルが
+   * source を抱えたまま残る。深いタイルは後からそこを掘って作るので、親を先に
+   * 消すと getTile が null を返し、エラーも出さずにタイルが減る(実測で国道の
+   * z0-7 が 53 枚から 38 枚になった)。
    *
-   * これは geojson-vt 4.0.3 の中身に依っている。package.json の指定は `^4.0.3`
-   * である。src/tile.js の createTile は簡略化の閾値を `options.maxZoom` だけ
-   * から決めるので、indexMaxZoom を変えてもタイルの中身は変わらない。tiles は
-   * ソースが "part of the public API" と述べているが、鍵を作る toID は内部で、
-   * 下に写しを持つ。 */
+   * これは geojson-vt 4.0.3(package.json では `^4.0.3`)の中身に依る。
+   * src/tile.js の createTile は簡略化の閾値を `options.maxZoom` だけから
+   * 決めるので、indexMaxZoom を変えてもタイルの中身は変わらない。tiles は
+   * ソースが "part of the public API" と述べているが、キーを作る toID は
+   * 内部で、下に写しを持つ。 */
   let low = geojsonvt(fc(features, lowProperties), {
     maxZoom: lowMaxZoom,
     indexMaxZoom: 0,
@@ -196,7 +194,8 @@ export function writeTiles(o) {
     buffer: 64,
   });
 
-  /** 索引がタイルの鍵に使う id。geojson-vt の src/index.js と同じ式である。 */
+  /** 索引がタイルのキーに使う id。geojson-vt の src/index.js と
+   * 同じ式である。 */
   const toID = (z, x, y) => ((1 << z) * y + x) * 32 + z;
 
   let prev = [];
@@ -216,16 +215,12 @@ export function writeTiles(o) {
         /* 索引に無いタイルがある。
          *
          * splitTile は親を割るとき 4 枚とも作るので、弧が 1 本も届かない空の
-         * タイルもふつうは索引に居る——それを数から外すのは emit の役目である。
-         * 作られないのは、親の features が空で splitTile が割らずに戻ったとき
-         * だけである。だから、欠けてよいのは次の 2 つに限られる。
-         *
-         *   - 親が居て、その親に弧が 1 本も無い
-         *   - 親も同じ理由で作られていない(`gone` に居る)
-         *
-         * それ以外、つまり親が弧を持って生きているか、理由なく親が消えている
-         * なら、掘る前に親を消している。枚数の足りないアーカイブを配るくらい
-         * なら、ここで落ちるほうがよい。 */
+         * タイルもふつうは索引に居る(数から外すのは emit の役目)。
+         * 作られないのは親の features が空で splitTile が割らずに
+         * 戻ったときだけである。だから欠けてよいのは、親が居て弧が 1 本も
+         * 無いか、親も同じ理由で作られていない(`gone` に居る)かに限る。それ
+         * 以外なら掘る前に親を消している。枚数の足りないアーカイブを
+         * 配るくらいなら、ここで落ちるほうがよい。 */
         if (z > 0) {
           const up = toID(z - 1, x >> 1, y >> 1);
           const parent = low.tiles[up];
@@ -263,15 +258,14 @@ export function writeTiles(o) {
 
   /* どのセルにどの弧が必要かを、先に一度だけ振り分ける。
    *
-   * セルごとに features を端から見ていた。日本は z8 で 16×20 の 320 セルに
-   * 収まり、うち弧があるのは 70 だけである。つまり 130,000 件の走査を 320 回、
-   * 4,160 万回の判定をして、その 8 割は 1 件も拾わないセルのために回っていた。
-   *
-   * 弧の側から見れば、1 本が跨ぐセルは普通 1 つ、多くて数個である。弧の
-   * bbox を余白ぶん広げて z8 の索引に落とせば、当たりうるセルはその周りだけに
-   * 絞れる。絞ったうえで、判定そのものは元と同じ overlaps を使う——低い側の
-   * 端がちょうどセルの境に乗る場合まで含めて同じ答えにするため、候補は
-   * 1 セルぶん広く取ってから本当の判定にかける。 */
+   * かつてはセルごとに features を端から見ていた。日本は z8 で 16×20 の
+   * 320 セルに収まり、弧があるのは 70 だけなので、130,000 件の走査を 320 回、
+   * 4,160 万回の判定の 8 割が 1 件も拾わないセルのために回っていた。弧の側から
+   * 見れば、1 本が跨ぐセルは普通 1 つ、多くて数個である。弧の bbox を余白ぶん
+   * 広げて z8 の索引に落とせば、当たりうるセルはその周りだけに絞れる。
+   * 判定そのものは元と同じ overlaps を使い、低い側の端がちょうどセルの境に
+   * 乗る場合まで同じ答えにするため、候補は 1 セルぶん広く取ってから本当の
+   * 判定にかける。 */
   const bucket = new Map();
   const cellSpan = 360 / 2 ** split;
   const margin = cellSpan * 0.05;
@@ -323,10 +317,10 @@ export function writeTiles(o) {
   }
   process.stdout.write('\n');
 
-  /* 古い索引を先に落としてから、blob を本物の名前へ移し、最後に索引を書く。
-   * この順なら、どこで落ちても残るのは「前回の対」か「索引の無い blob」の
-   * どちらかで、食い違う対にはならない。索引が無ければ pack_pmtiles.py は
-   * 読めずに落ちる——静かに壊れた PMTiles よりそちらがよい。 */
+  /* 古い索引を先に落としてから blob を本物の名前へ移し、最後に索引を書く。この
+   * 順なら、どこで落ちても残るのは「前回の対」か「索引の無い blob」で、
+   * 食い違う対にはならない。索引が無ければ pack_pmtiles.py は読めずに落ちる。
+   * 暗黙のうちに壊れた PMTiles よりそちらがよい。 */
   closeSync(binFd);
   rmSync(IDX, { force: true });
   renameSync(BIN_PART, BIN);
