@@ -15,7 +15,7 @@
 | `web/data/pref/{region}.meta.json` | 県ごとの集計。47 個 |
 | `web/data/pref/index.json` | 全国の県と番号だけの索引。「道路を選択」が番号で絞り込むために読む |
 
-どれも git では追跡しません。理由は二つあります。道路データは ODbL 1.0 で、MIT のコードと同じ木に置くと配布条件の違う二つを一度に配ることになります。それにタイルは既に gzip されていて圧縮も差分も効かないので、作り直すたびに同じ大きさの塊が履歴へ丸ごと積まれます。
+どれも git では追跡しません。道路データは ODbL 1.0 で、MIT のコードと同じ木に置くと配布条件の違う二つを一度に配ることになります。タイルは gzip 済みで圧縮も差分も効かず、作り直すたびに丸ごと履歴へ積まれます。
 
 clone した直後は次で作れます。
 
@@ -23,7 +23,7 @@ clone した直後は次で作れます。
 mise run pack
 ```
 
-タイルは geojson-vt で切ります。MapLibre が GeoJSON ソースに使うのと同じ実装なので、描かれる形の求め方は以前と変わりません。tippecanoe には Windows 版が無く、これには不要です。
+タイルは geojson-vt で切ります。MapLibre が GeoJSON ソースに使うのと同じ実装なので、描かれる形は変わりません。tippecanoe は Windows 版が無く、不要です。
 
 切り方は `pipeline/tiles.mjs`、集計は `pipeline/rollup.mjs` が持ちます。国道と都道府県道はどちらも同じ物を呼びます。数え方は路線の格に依らないので、二つの入口のどちらにも置きません。
 
@@ -51,7 +51,7 @@ geojson-vt の性質です。`z === options.maxZoom` に当たるズームだけ
 
 都道府県道は `maxZoom: 8` で作り、z0-7 のすべてを簡略化させます。
 
-国道側は動かしていません。値を変えると z7 の線が変わるので、国道だけを見ている読み手にとって見え方が変わります。国道のアーカイブを作り直さないのは #100 で決めたことです。
+国道側は動かしません。値を変えると z7 の線が変わり、国道だけを見ている読み手の見え方が変わります(#100)。
 
 ## 国道と都道府県道でアーカイブを分ける理由
 
@@ -65,7 +65,7 @@ geojson-vt の性質です。`z === options.maxZoom` に当たるズームだけ
 
 ズーム下限は置きません。都道府県道も国道と同じく、縮尺で番号を省略しません。代わりに、低ズームでは載せる属性を減らします。
 
-### 低ズームでは描画に要る属性だけを載せる
+### 低ズームでは描画に必要な属性だけを載せる
 
 z0-7 のタイルが持つのは次の七つです。`pipeline/pack_web_pref.mjs` の `LOW_ZOOM_FIELDS` がそれを述べます。
 
@@ -78,7 +78,7 @@ z0-7 のタイルが持つのは次の七つです。`pipeline/pack_web_pref.mjs
 | `rank` | 主要地方道か一般都道府県道か |
 | `former`・`revoked` | 旧道の表示切り替え |
 
-落とすのは `id`・`label`・`name`・`km`・`src` です。番号の札は z8 から出るので(`route-labels` の `minzoom` が 8)、`label` はそもそも読まれません。残る四つを読むのはポップアップだけです。
+落とすのは `id`・`label`・`name`・`km`・`src` です。番号のラベルは z8 から出るので(`route-labels` の `minzoom` が 8)、`label` は読まれません。残る四つを読むのはポップアップだけです。
 
 線の形は変えません。簡略化の閾値は国道と同じ 3 のままです。それでも z0-7 の最大タイルは 2,322 kB から 1,258 kB になります。国道の低ズーム最大 2,232 kB に対して 56% です。実測は [結果](results.md#配信物) にあります。
 
@@ -94,9 +94,9 @@ z0-7 のタイルが持つのは次の七つです。`pipeline/pack_web_pref.mjs
 
 ## コードとデータを分けて置く理由
 
-コードは GitHub Pages に、配信データは Cloudflare R2(`data.nanase.cc`)に置きます。分けているのは選択ではなく回避です。GitHub Pages の裏側にいる Fastly は、ファイルの先頭(バイト 0)から始まらない Range 要求に対して、要求したファイルと無関係なバイト列を返す不具合を抱えています。PMTiles はほぼ全ての読み取りがそのような Range 要求なので、Pages 経由では地図が描けませんでした。同じ Cloudflare ゾーンの内側にある R2 には、この不具合がありません。
+コードは GitHub Pages に、配信データは Cloudflare R2(`data.nanase.cc`)に置きます。分けているのは選択ではなく回避です。GitHub Pages の裏側の Fastly は、ファイルの先頭から始まらない Range 要求に対して無関係なバイト列を返す不具合を抱えています。PMTiles の読み取りはほぼ全てそのような Range 要求なので、Pages 経由では地図が描けませんでした。同じ Cloudflare ゾーンの R2 にはこの不具合がありません。
 
-コード側(`web/vendor/`・`web/*.mjs`・`web/*.js`・`index.html`)はバンドラを通さず、`web/` の中身をそのまま配ります。読むパスは元々すべて相対で、`user.github.io/<repo>/` の下でもそのまま動きます。配信データだけは例外で、`web/mapspec.mjs` と `web/app.js` は `web/dataurl.mjs` が持つ `dataURL()` を通して配信データの URL を組みます。基点(`data/` という相対パス)を持つのは `dataurl.mjs` の 1 行だけで、配る直前に Actions がそこを `https://data.nanase.cc/` へ書き換えます(手元で `mise run serve` する分には相対パスのまま、`build/regions/` から作った `web/data/` を読みます)。配信データのファイルが増えても、書き換える行は増えません。
+コード側(`web/vendor/`・`web/*.mjs`・`web/*.js`・`index.html`)はバンドラを通さず、`web/` をそのまま配ります。読むパスはすべて相対で、`user.github.io/<repo>/` の下でも動きます。配信データだけは例外で、`web/mapspec.mjs` と `web/app.js` は `web/dataurl.mjs` の `dataURL()` で URL を組みます。基点(相対パス `data/`)を持つのは `dataurl.mjs` の 1 行だけで、配る直前に Actions がそこを `https://data.nanase.cc/` へ書き換えます。手元の `mise run serve` では相対パスのまま、`build/regions/` から作った `web/data/` を読みます。配信データのファイルが増えても、書き換える行は増えません。
 
 ```sh
 mise run publish-data   # web/data/ を R2(data.nanase.cc)に上げる
