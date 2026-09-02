@@ -1,5 +1,5 @@
 /* 国道番号標識を一度だけ描き、地図が路線を名指しするところすべてで使う。
- * 操作面の一覧、ポップアップの見出し、このサイト自身のアイコンである。
+ * 操作パネルの一覧、ポップアップの見出し、このサイト自身のアイコンである。
  *
  * 輪郭は実物の標識の比率を写した(Japanese_National_Route_Sign_Blank.svg、
  * Wikimedia Commons、パブリックドメイン)。数字は含めない。字を写すと元の書体の
@@ -28,13 +28,13 @@ export const SHIELD_PATH =
  * 縁の太さ。単位は `SHIELD_PATH` と同じで、favicon を除くすべての標識(下の
  * `shield()` と、scripts/make_brand.mjs が og.png へ描く共有カード)が使う。
  * make_brand.mjs は `paint-order="stroke"` で描くので面は縮まない。`shield()`
- * はそうせず、縁が操作面やポップアップの地に溶けることを狙う(`.shield` の CSS
- * を参照)。
+ * はそうせず、縁が操作パネルやポップアップの地に溶けることを狙う(`.shield`
+ * の CSS を参照)。
  */
 export const SHIELD_STROKE_WIDTH = 15.94;
 
 /**
- * favicon と、操作面の見出しアイコンが使う縁の太さ。どちらも
+ * favicon と、操作パネルの見出しアイコンが使う縁の太さ。どちらも
  * scripts/make_brand.mjs が描く `web/favicon.svg` を共有する。番号を
  * 持たないので、太い縁が押し潰す文字が無く、favicon の大きさでも読める
  * 太さにできる。`SHIELD_VIEWBOX` の余白では足りないので、make_brand.mjs は
@@ -49,11 +49,11 @@ export const SHIELD_ICON_PAD = 20;
 
 /**
  * 番号を中に入れた標識(「おにぎり」)。配色は実物に合わせる(青地に白い番号、その
- * 外に白い縁)。操作面の地色に青い文字を置くと、後ろの地図と見た目を競う。番号は
- * `textLength` を付けた SVG の text にする。3 桁の番号はこの高さでは標識より
- * 広くなり、以前は後ろの操作面へ食み出していた。位置、桁数ごとの幅、style.css
- * の `.shield text` の `font-size` は `SHIELD_VIEWBOX` に対して目で三つまとめて
- * 合わせてある。viewBox を変えるなら三つとも合わせ直す。
+ * 外に白い縁)。操作パネルの地色に青い文字を置くと、後ろの地図と見た目を競う。
+ * 番号は `textLength` を付けた SVG の text にする。3 桁の番号はこの高さでは
+ * 標識より広くなり、以前は後ろの操作パネルへ食み出していた。位置、桁数ごとの
+ * 幅、style.css の `.shield text` の `font-size` は `SHIELD_VIEWBOX` に対して
+ * 目で三つまとめて合わせてある。viewBox を変えるなら三つとも合わせ直す。
  */
 export function shield(ref, small) {
   const digits = String(ref).length;
@@ -116,8 +116,8 @@ export const HEX_STROKE_WIDTH = 11.96;
 export const prefRouteName = (prefLabel, ref) => `${prefLabel}道${ref}号`;
 
 /**
- * 番号を中に入れたヘキサ。実物は上に「県道」、下に県名を載せるが、ここは
- * 番号だけにする。操作面での実寸は高さ 30 px で、上下の段の字は形にならない。
+ * 番号を中に入れたヘキサ。実物は上に「県道」、下に県名を載せるが、ここは番号
+ * だけにする。操作パネルでの実寸は高さ 30 px で、上下の段の字は形にならない。
  * どの県かは標識を出す側が文字で示し、`prefLabel` は読み上げの名前になる。
  *
  * 番号はおにぎりより大きい。ヘキサは胴が広く上下の段を載せないので、style.css

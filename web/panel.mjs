@@ -308,7 +308,7 @@ export const PREF_CONCURRENCY_NOTES = [
  * 上の三つをダイアログに組む。見出しは index.html の <h3> が持つ。項目は
  * `<details>` で畳み、開閉の状態は残さない。凡例の開閉(#115)は localStorage に
  * 残すが、あちらは地図の上の帯の見え方である。この三つはダイアログを
- * 開いたときだけ現れる但し書きで、操作面の他の `.fold` と同じく状態を
+ * 開いたときだけ現れる但し書きで、操作パネルの他の `.fold` と同じく状態を
  * 持たせない。
  */
 export const prefConcurrencyHTML = () =>

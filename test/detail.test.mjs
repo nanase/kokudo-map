@@ -557,7 +557,7 @@ describe('prefDetailHTML', () => {
     expect(full()).toContain(`href="${prefWikipediaURL('長野県', 60)}"`);
   });
 
-  /* 操作面に都道府県道の節は無いので、選んでいることを示す場所も解除する
+  /* 操作パネルに都道府県道の節は無いので、選んでいることを示す場所も解除する
    * 操作も、このボタンのほかにありません(#109)。 */
   test('「だけを表示」は県を伴う鍵を持つ', () => {
     expect(full({ region: 'nagano' })).toContain(
