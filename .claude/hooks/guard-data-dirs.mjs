@@ -1,9 +1,9 @@
 /* build/ と web/data/ を木ごと消す命令を、実行の手前で止める。
  *
- * どちらも .gitignore にあり、消えても git では戻らない。中身は pbf 2.5 GB、
- * 国土数値情報 N03 約 530 MB、47 都道府県ぶんのキャッシュとタイルで、取り直しと
- * 再生成に何時間もかかる。2026-08-27、build/ に書いた 168 kB の共有カードを
- * 片づけるつもりの `rm -rf build` で、同じ木にあった全部が消えた。
+ * どちらも .gitignore にあり、消えても git では戻らない。取り直しと再生成に
+ * 何時間もかかる(中身と大きさは CLAUDE.md の「変えてはいけない判断」)。
+ * 2026-08-27、build/ に書いた 168 kB の共有カードを片づけるつもりの
+ * `rm -rf build` で、同じ木にあった全部が消えた。
  *
  * 止めるのは木ごと消す形だけである。中の 1 ファイル(`rm build/social.png`)も
  * 保護対象でない下位ディレクトリ(`rm -rf build/brand`)も通す。後始末まで塞ぐと
@@ -356,8 +356,10 @@ function expandBraces(word, depth = 0) {
 /* --------------------------------------------------------- 消す形を読む --- */
 
 /* cmd のオプション `/s` `/q` は落とさない。Git Bash の drive のルート `/f` と
- * 見分けが付かず、落とすと F: に clone したときだけ穴が開く。消す先として読んでも
- * `s:/` は木の外として無視され、再帰は PS_RECURSIVE が別に見るので害は無い。 */
+ * 見分けが付かず、落とすと F: に clone したときだけ穴が開く。消す先として
+ * 読むと `s:/` `q:/` になり、リポジトリが S: や Q: に無いかぎり木の外として
+ * 無視される。そこに clone すると `rd /s /q` が誤って止まる。再帰かどうかは
+ * PS_RECURSIVE が別に見る。 */
 const isFlag = (w) => w.startsWith('-');
 const RM_RECURSIVE = (w) =>
   /^-[a-zA-Z]*[rR][a-zA-Z]*$/.test(w) || w === '--recursive';
@@ -384,13 +386,13 @@ const nameOf = (w) =>
  * オプションの中の x は数えない。 */
 const CLEAN_IGNORED = (w) => /^-[a-zA-Z]*[xX][a-zA-Z]*$/.test(w);
 const DRY_RUN = (w) => /^-[a-zA-Z]*n[a-zA-Z]*$/.test(w) || w === '--dry-run';
-/* 除外の値がルートに解けたとき、その語が本当に全部へ当たるか。`*` と `**` だけの
- * 要素でできた語は gitignore の型として全部に当たる。`.` や `..` はルートに解けても
- * 何も外さない。要素が空(先頭・末尾の `/`)なのは構わないが、値が空なら除外に
- * ならない。
+/* 除外の値がルートに解けたとき、その語が本当に全部へ当たるか。`*` と `**`
+ * だけの要素でできた語は gitignore の型として全部に当たる。`.` や `..` は
+ * ルートに解けても何も外さない。要素が空(先頭・末尾の `/`)なのは構わないが、
+ * 値が空なら除外にならない。
  *
- * バックスラッシュはスラッシュに読み替えない。この値は場所ではなく gitignore の型
- * で、バックスラッシュは次の 1 文字を逃がす。読み替えると `-e '\*'`(git には
+ * バックスラッシュはスラッシュに読み替えない。この値は場所ではなく gitignore の
+ * 型で、バックスラッシュは次の 1 文字を逃がす。読み替えると `-e '\*'`(git には
  * 「`*` という名前のファイル」)が `/*` に見えて、何も外れていないのに通す。 */
 const EXCLUDES_EVERYTHING = (token) => {
   const segs = token.split('/');
@@ -414,8 +416,9 @@ const SELECTS = (w) =>
 /* PowerShell の下見。git clean の -n にあたる。 */
 const WHAT_IF = (w) => /^-wh(a(t(i(f)?)?)?)?$/i.test(w);
 
-/* 引数を走らせず、字として並べるだけの命令。ここに挟まった `rm` は書き留められた
- * 字である(`echo rm -rf build >> notes.md`、`grep -rn rm -rf build .`)。 */
+/* 引数を走らせず、字として並べるだけの命令。ここに挟まった `rm` は
+ * 書き留められた字である(`echo rm -rf build >> notes.md`、
+ * `grep -rn rm -rf build .`)。 */
 const PRINTS =
   /^(echo|printf|grep|egrep|fgrep|rg|ag|ack|cat|sed|awk|diff|comm|curl|wget|write-output|write-host)$/i;
 
@@ -478,14 +481,15 @@ function expandVars(word, seen = new Set()) {
  */
 /* pipe から渡る物の置き場所。場所は書かれていない。 */
 const PLACEHOLDER = (w) => /^(\{\}|%|\$_(\..+)?)$/.test(w);
-/* 値を取るが、値が場所ではないオプション。`-ErrorAction SilentlyContinue` の値を
- * 消す先と数えると、pipe の手前を見に行かなくなる。`-Force` や `-WhatIf` のような
- * スイッチは入れない。入れると `Remove-Item -Recurse -Force build` の build が落ちる。 */
+/* 値を取るが、値が場所ではないオプション。`-ErrorAction SilentlyContinue` の
+ * 値を消す先と数えると、pipe の手前を見に行かなくなる。`-Force` や `-WhatIf`
+ * のようなスイッチは入れない。入れると `Remove-Item -Recurse -Force build` の
+ * build が落ちる。 */
 const NOT_A_PATH =
   /^-(erroraction|warningaction|informationaction|outbuffer|outvariable|errorvariable|warningvariable|informationvariable|pipelinevariable|depth|stream|encoding)$/i;
 
-/* PowerShell は `-Path:build` とも書ける。オプションとして落とすと値ごと検査から
- * 外れる。 */
+/* PowerShell は `-Path:build` とも書ける。オプションとして落とすと値ごと
+ * 検査から外れる。 */
 const flagValue = (w) => (/^-[A-Za-z]+:(.+)$/.exec(w) ?? [])[1];
 
 function report(candidates, cwd) {
@@ -507,10 +511,11 @@ function report(candidates, cwd) {
 }
 
 /**
- * pipe の手前が並べている場所。分からなければ null を返し、消す先と決めつけない。
- * `find build -type d | sort | xargs rm -rf` の sort のような段は並べている場所を
- * 変えないので、読める段に当たるまで手前へ辿る。絞る段(Where-Object など)が
- * 挟まっても手前を見る。何が残るか読めないのは find の -regex と同じである。
+ * pipe の手前が並べている場所。分からなければ null を返し、消す先と
+ * 決めつけない。`find build -type d | sort | xargs rm -rf` の sort のような段は
+ * 並べている場所を変えないので、読める段に当たるまで手前へ辿る。絞る段
+ * (Where-Object など)が挟まっても手前を見る。何が残るか読めないのは find の
+ * -regex と同じである。
  */
 function pipedTargets(chain) {
   for (let i = chain.length - 1; i >= 0; i--) {
@@ -608,9 +613,9 @@ function grouping(text, carried, posix) {
   return { opens, closes, subst };
 }
 
-/* posix に既定値は置かない。どちらの規則で読むかは命令ごとに decide() が決める。
- * 以前の既定値は module scope の POSIX_START を指しており、判定と入出力が混ざって
- * いた名残だった。 */
+/* posix に既定値は置かない。どちらの規則で読むかは命令ごとに decide() が
+ * 決める。以前の既定値は module scope の POSIX_START を指しており、判定と
+ * 入出力が混ざっていた名残だった。 */
 function scan(text, startCwd, depth, posix) {
   let cwd = startCwd;
   /* pushd が積んだ場所。popd で戻る。cd しか見ていなかったころ
@@ -650,13 +655,13 @@ function scan(text, startCwd, depth, posix) {
     let words = tokenize(
       segment.text
         .replace(/(^|\s)\(/g, '$1 ( ')
-        /* 組みの `{` は後ろに空白が続く。`{a,b}` の `{` は語の一部なので離さない。
-         * 離すと展開する前に割れる。 */
+        /* 組みの `{` は後ろに空白が続く。`{a,b}` の `{` は語の一部なので
+         * 離さない。離すと展開する前に割れる。 */
         .replace(/(^|\s)\{(?=\s)/g, '$1 { '),
       posix,
     ).filter((w) => !/^[({)}]+$/.test(w));
-    /* `for d in build web/data; do …` と `foreach ($d in 'build','web/data')` の
-     * 値を覚える。for と in は KEYWORDS にあるので、剥がす前に読む。 */
+    /* `for d in build web/data; do …` と `foreach ($d in 'build','web/data')`
+     * の値を覚える。for と in は KEYWORDS にあるので、剥がす前に読む。 */
     if (/^(for|foreach)$/i.test(words[0] ?? '') && words[2] === 'in') {
       const key = (words[1] ?? '').replace(/^\$\{?|\}?$/g, '');
       if (key) {
@@ -711,10 +716,10 @@ function scan(text, startCwd, depth, posix) {
       continue;
     }
 
-    /* `bash -c "…"` や `cmd /c "…"` の中身も命令である。オプションの後ろを全部
-     * 渡す(`cmd /c rmdir /s /q build` は語が分かれて来る)。規則は呼ばれた側に
-     * 切り替える。`powershell -Command "…"` の中身ではバックスラッシュが文字を
-     * 逃がさない。 */
+    /* `bash -c "…"` や `cmd /c "…"` の中身も命令である。オプションの後ろを
+     * 全部渡す(`cmd /c rmdir /s /q build` は語が分かれて来る)。規則は呼ばれた
+     * 側に切り替える。`powershell -Command "…"` の中身ではバックスラッシュが
+     * 文字を逃がさない。 */
     if (SHELLS.test(nameOf(verb))) {
       const i = rest.findIndex(PAYLOAD_FLAG);
       if (i !== -1 && rest.length > i + 1) {
@@ -748,8 +753,9 @@ function scan(text, startCwd, depth, posix) {
       /* 引数の無い pushd は積んだ場所と入れ替えるが、そこまでは追わない。 */
       const to = rest.find((w) => !isFlag(w));
       /* 行き先が読めないとき(引数が無い、`cd -`、`cd ~`)は動かさない。通すと
-       * 木の中に居るかもしれない命令を見逃す。行き先が無いときも cd は失敗して
-       * その場に留まるので、`cd nope; rm -rf build` はルートで build/ を消す。 */
+       * 木の中に居るかもしれない命令を見逃す。行き先が無いときも cd は
+       * 失敗してその場に留まるので、`cd nope; rm -rf build` はルートで build/
+       * を消す。 */
       if (!to || to === '-' || to.startsWith('~')) continue;
       /* 行き先も変数で受けられる。消す側だけ展開していたころ
        * `d=build; cd $d; rm -rf pbf` が通っていた。 */
@@ -774,9 +780,9 @@ function scan(text, startCwd, depth, posix) {
     }
 
     if (nameOf(verb) === 'git' && rest.includes('clean')) {
-      /* git 自身のオプションを読み飛ばして clean を探す。オプションの値(`-c k=v`
-       * の k=v、`--git-dir .git` の .git)で打ち切らない。手前に `-C <dir>` が
-       * あれば走る場所を移す。 */
+      /* git 自身のオプションを読み飛ばして clean を探す。オプションの値
+       * (`-c k=v` の k=v、`--git-dir .git` の .git)で打ち切らない。手前に
+       * `-C <dir>` があれば走る場所を移す。 */
       const i = rest.indexOf('clean');
       let at = cwd;
       for (let j = 0; j < i; j++) {
@@ -786,9 +792,9 @@ function scan(text, startCwd, depth, posix) {
       }
       const after = rest.slice(i + 1);
       const flags = after.filter((w) => w !== '--' && isFlag(w));
-      /* `-e <pattern>` と `--exclude <pattern>` は値を取る。その値を pathspec と
-       * 読むと範囲を絞った扱いになって通ってしまう。短いオプションは束ねられる
-       * ので `-xdfe node_modules` の e も同じである。 */
+      /* `-e <pattern>` と `--exclude <pattern>` は値を取る。その値を pathspec
+       * と読むと範囲を絞った扱いになって通ってしまう。短いオプションは
+       * 束ねられるので `-xdfe node_modules` の e も同じである。 */
       const values = new Set();
       after.forEach((w, k) => {
         const takesValue = /^-[a-zA-Z]*e$/.test(w) || w === '--exclude';
@@ -817,13 +823,13 @@ function scan(text, startCwd, depth, posix) {
         });
         risk = risk.filter((protectedPath) => inScope.includes(protectedPath));
       }
-      /* 外してあるものは消えない。理由文が名指しを勧めるのに、名指しして外しても
-       * 止まるのでは通り道が無い。
+      /* 外してあるものは消えない。理由文が名指しを勧めるのに、名指しして
+       * 外しても止まるのでは通り道が無い。
        *
-       * ルートに解ける除外は、その語が本当に全部へ当たるときだけ「全部外した」と
-       * 数える(EXCLUDES_EVERYTHING)。prefix === '' を無条件に全部外した扱いに
-       * すると `-e .` が保護対象を通し、無条件に何も外していない扱いにすると無害な
-       * `-e '*'` まで止める。 */
+       * ルートに解ける除外は、その語が本当に全部へ当たるときだけ「全部外した」
+       * と数える(EXCLUDES_EVERYTHING)。prefix === '' を無条件に全部外した
+       * 扱いにすると `-e .` が保護対象を通し、無条件に何も外していない
+       * 扱いにすると無害な `-e '*'` まで止める。 */
       risk = risk.filter(
         (protectedPath) =>
           !excludes.some((e) => {
@@ -851,8 +857,8 @@ function scan(text, startCwd, depth, posix) {
     }
 
     /* 消す命令は先頭とは限らない。`sudo -u me rm -rf build` の -u の値も
-     * `env FOO=1 rm …` の代入も、オプションとして落とし切れない。語の並びの中から
-     * 探すほうが、包みの種類を数え上げるより確かである。 */
+     * `env FOO=1 rm …` の代入も、オプションとして落とし切れない。語の並びの
+     * 中から探すほうが、包みの種類を数え上げるより確かである。 */
     const at = PRINTS.test(nameOf(verb))
       ? -1
       : words.findIndex((w) => REMOVE.test(nameOf(w)));
@@ -880,9 +886,9 @@ function scan(text, startCwd, depth, posix) {
        * のは当たったファイルだけで、探す場所そのものは残る。 */
       if (at < 1 || !words.slice(at + 1).some(RM_RECURSIVE)) continue;
 
-      /* 再帰的な rm は当たった物を木ごと消す。名前の絞りが保護対象を外すと言える
-       * ときだけ通す。`-path` や `-regex` は探す場所の直下の build にも当たり、
-       * `-mtime` は名前を絞らない。 */
+      /* 再帰的な rm は当たった物を木ごと消す。名前の絞りが保護対象を外すと
+       * 言えるときだけ通す。`-path` や `-regex` は探す場所の直下の build にも
+       * 当たり、`-mtime` は名前を絞らない。 */
       const named = rest
         .map((w, k) => (NAMES(w) ? rest[k + 1] : null))
         .filter((w) => w !== undefined && w !== null);
@@ -919,9 +925,10 @@ function scan(text, startCwd, depth, posix) {
       continue;
 
     /* この段が自分で名指ししている消す先。オプションの値と pipe の置き場所を
-     * 数えると手前の段を見に行かなくなる。`-Path build,web/data` は 1 語で来る。
-     * 名指しが無ければ消す先は pipe で渡っている(`gci build | Remove-Item
-     * -Recurse`)ので、手前の段が並べている場所を読む。読めなければ何もしない。 */
+     * 数えると手前の段を見に行かなくなる。`-Path build,web/data` は 1 語で
+     * 来る。名指しが無ければ消す先は pipe で渡っている
+     * (`gci build | Remove-Item -Recurse`)ので、手前の段が並べている場所を
+     * 読む。読めなければ何もしない。 */
     const named = args.filter(
       (w, i) =>
         !isFlag(w) &&
@@ -959,16 +966,16 @@ export function decide({ command, toolName, root }) {
   ROOT_PARTS = ROOT.toLowerCase().split('/');
   /* 前の命令が覚えた変数を持ち越さない。 */
   vars.clear();
-  /* フックは Bash と PowerShell の両方を見る(.claude/settings.json の matcher)。
-   * 二重引用符の中でバックスラッシュが文字を逃がすのは bash だけなので、呼んだ
-   * 道具の名前で規則を決める。 */
+  /* フックは Bash と PowerShell の両方を見る(.claude/settings.json の
+   * matcher)。二重引用符の中でバックスラッシュが文字を逃がすのは bash
+   * だけなので、呼んだ道具の名前で規則を決める。 */
   const posix = !/^powershell$/i.test(toolName);
   try {
     scan(command, ROOT.split('/'), 0, posix);
   } catch (err) {
     if (err instanceof Denied) return err.reason;
-    /* フック自身の不具合は握りつぶさない。何も言わずに通すのは、命令が読めなかった
-     * ときだけである(main を参照)。 */
+    /* フック自身の不具合は握りつぶさない。何も言わずに通すのは、命令が
+     * 読めなかったときだけである(main を参照)。 */
     throw err;
   }
   return null;
