@@ -1,26 +1,20 @@
-/* 生成物を守るフック (.claude/hooks/guard-data-dirs.mjs) の判定。
+/* 生成物を守るフック(.claude/hooks/guard-data-dirs.mjs)の判定を検査する。
  *
- * フックは shell の命令文字列を読んで、build/ や web/data/ を木ごと消す形だけを
- * 止める。命令を正しく解釈するには shell を実装することになるので、実際には
- * 「消す形か」「消す先か」を近似して見ている。近似は、通しすぎても止めすぎても
- * 役に立たない——通せば取り直しに何時間もかかる物が消え、止めれば迂回される。
+ * フックは shell の命令文字列から、build/ や web/data/ を木ごと消す形だけを
+ * 近似で見分ける。通しすぎれば取り直しに何時間もかかる物が消え、止めすぎれば
+ * 迂回されるので、検査するのは境目である。
  *
- * だからここで検査するのは境目である。フックの判定そのもの——decide()——を
- * import して呼ぶ。判定の写しを検査しても検証にはならないので、呼ぶのは
- * .claude/settings.json が起動するのと同じ関数である。
+ * 呼ぶのはフックの判定そのもの decide() である。判定の写しを検査しても検証には
+ * ならない。境目は 250 例を超え、以前は 1 例ごとに node を子プロセスとして
+ * 起こして 1 回 85 ms、このファイルだけでテスト全体の 21 秒を使っていた。
  *
- * 境目は 250 例を超える。以前はその 1 例ごとに node を子プロセスとして
- * 起こしていて、1 回 85 ms、このファイルだけでテスト全体の 21 秒を使って
- * いた。決めているのは文字列の読み方なので、プロセスを跨ぐ必要は無い。
+ * プロセスを跨がないと検査できないもの(stdin の読み方、deny の JSON の形、
+ * settings.json が使う node で同じ答えが返ること)だけを、下の「取り決め」で
+ * 子プロセスのまま残す。
  *
- * 跨ぐ必要があるものだけは、下の「取り決め」で子プロセスのまま残す——
- * stdin の読み方、deny の JSON の形、そして .claude/settings.json が使う
- * node で同じ答えが返ること。bun test は bun で走るので、そこだけは
- * 処理系そのものが検査の対象になる。
- *
- * フックに渡すリポジトリは、この repo 自身ではなく仮の木にする。フックは
- * `cd` の行き先が実在するかを見るので、この repo を渡すと判定が手元の
- * build/ の有無に左右される。build/ は .gitignore にあり、CI には無い。
+ * フックに渡すリポジトリは、この repo 自身ではなく仮の木にする。フックは `cd` の
+ * 行き先が実在するかを見るので、この repo を渡すと判定が手元の build/ の有無に
+ * 左右される。build/ は .gitignore にあり、CI には無い。
  */
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
@@ -35,9 +29,8 @@ import { decide } from '../.claude/hooks/guard-data-dirs.mjs';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const HOOK = join(ROOT, '.claude', 'hooks', 'guard-data-dirs.mjs');
 
-/* .claude/settings.json はフックを node で起動する。bun test の
- * process.execPath は bun なので、それで検査すると本番と違う処理系を
- * 見ることになる。下の「取り決め」だけがこれを使う。 */
+/* .claude/settings.json はフックを node で起動する。bun test の process.execPath
+ * は bun なので、本番と同じ処理系を名指しする。「取り決め」だけが使う。 */
 const NODE = 'node';
 
 /* 仮の木。守る場所と同じ形だけを作る。 */
@@ -57,8 +50,8 @@ const REPO_BACKSLASH = REPO.replace(/\//g, '\\');
 /* この木の外。隣に同じ名前の物があってもフックの持ち場ではない。 */
 const OUTSIDE = `${REPO}-other`;
 /* 実在する、この木の外の場所。行き先が無ければ cd は失敗する扱いなので、
- * 「外へ移ってから消す」を試すには実在する場所が必要である。仮の木の隣に作る
- * ——上に置くと祖先になり、そこを消せば当然巻き込む。 */
+ * 「外へ移ってから消す」を試すには実在する場所が必要である。仮の木の隣に作る。
+ * 上に置くと祖先になり、そこを消せば巻き込む。 */
 const AWAY = mkdtempSync(join(tmpdir(), 'away-')).replace(/\\/g, '/');
 /* リポジトリを含む上のディレクトリ。ここを消せば当然巻き込む。 */
 const PARENT = dirname(REPO).replace(/\\/g, '/');
@@ -74,8 +67,8 @@ const ask = (command, toolName = 'Bash') =>
 /** PowerShell を呼んだ体でフックに命令を渡す。 */
 const askPowerShell = (command) => ask(command, 'PowerShell');
 
-/** 同じ問いを、settings.json と同じ道——node の子プロセス、stdin、標準出力
- *  ——で通す。下の「取り決め」だけが使う。 */
+/** 同じ問いを settings.json と同じ道(node の子プロセス、stdin、標準出力)で
+ *  通す。「取り決め」だけが使う。 */
 function askViaProcess(command, { toolName = 'Bash', root = REPO } = {}) {
   const out = execFileSync(NODE, [HOOK], {
     input: JSON.stringify({ tool_name: toolName, tool_input: { command } }),
@@ -93,8 +86,8 @@ const NL = String.fromCharCode(10);
 /* 円記号。素の文字列に書くと、続く字と組んで別の字になる。 */
 const BS = String.fromCharCode(92);
 
-/* 止まったことだけを見る。理由文を要求すると、同じ deny でも文面の違う
- * git clean の側で落ちる——ask() が既に permissionDecision を検めている。 */
+/* 止まったことだけを見る。理由文を要求すると、文面の違う git clean の側で
+ * 落ちる。 */
 const denies = (command) => expect(ask(command)).not.toBeNull();
 const allows = (command) => expect(ask(command)).toBeNull();
 
@@ -109,8 +102,7 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf .'],
   ])('%s', denies);
 
-  // 行を続ける書き方。改行を区切りと数えると、消す先だけが命令の無い段に
-  // 落ちる。
+  // 行を続ける書き方。改行を区切りと数えると、消す先だけが命令の無い段に落ちる。
   test.each([
     [['rm -rf \\', 'build']],
     [['rm -rf \\', 'build/pbf \\', 'build/cache']],
@@ -122,8 +114,8 @@ describe('木ごと消す形を止める', () => {
   test.each([
     ['rm -rf build/{pbf,cache}'],
     ['rm -rf {build,web/data}'],
-    // 保護対象が後ろに来る組み。語の頭の `{` を組みの括弧として離すと、
-    // 展開する前に割れて素通りしていた。
+    // 保護対象が後ろに来る組み。語の頭の `{` を組みの括弧として離すと、展開する
+    // 前に割れて通っていた。
     ['rm -rf {node_modules,build}'],
     ['rm -rf ./{node_modules,build}'],
     ['rm -rf build/pbf build/cache'],
@@ -156,8 +148,8 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf /'],
   ])('%s', denies);
 
-  // 末尾の glob は「その中身ぜんぶ」で、親を消すのと同じ結果になる。
-  // `*` だけを剥がしていたので、globstar の形が素通りしていた。
+  // 末尾の glob は「その中身ぜんぶ」で、親を消すのと同じ結果になる。`*` だけを
+  // 剥がしていたので、globstar の形が通っていた。
   test.each([
     ['rm -rf build/*'],
     ['rm -rf build/**'],
@@ -165,8 +157,8 @@ describe('木ごと消す形を止める', () => {
     ['rm -rf build/.'],
   ])('%s', denies);
 
-  // 今いる場所ごと、あるいはその上ごと。どこで打たれたかはフックには分からない
-  // ので、巻き込みうる形として扱う。`rm -rf *` は事故と同じ結果になる。
+  // 今いる場所ごと、あるいはその上ごと。どこで打たれたかはフックに分からないので、
+  // 巻き込みうる形として扱う。
   test.each([
     ['rm -rf *'],
     ['rm -rf ./*'],
@@ -182,8 +174,8 @@ describe('木ごと消す形を止める', () => {
     [`rm -rf "${REPO_BACKSLASH}\\build"`],
   ])('%s', denies);
 
-  // リポジトリごと、あるいはその上ごと。相対で書けば止まるのに絶対で書けば
-  // 通る、という食い違いがあった。書き方が違うだけの同じ命令である。
+  // リポジトリごと、あるいはその上ごと。相対で書けば止まるのに絶対で書けば通る
+  // 食い違いがあった。
   test.each([
     [`rm -rf ${REPO}`],
     [`rm -rf ${PARENT}`],
@@ -191,7 +183,7 @@ describe('木ごと消す形を止める', () => {
   ])('%s', denies);
 
   // 前方一致の glob。リポジトリのルートで `build*` は build に展開される。
-  // ルートの段に当たる glob も同じ——リポジトリごと持っていく。
+  // ルートの段に当たる glob はリポジトリごと持っていく。
   test.each([
     ['rm -rf build*'],
     ['rm -rf b*'],
@@ -204,9 +196,8 @@ describe('木ごと消す形を止める', () => {
     [`rm -rf ${PARENT}/${NAME}*`],
   ])('%s', denies);
 
-  // 前に付いた命令や組みに隠れる。verb を段の先頭語だけで見ると素通りする。
-  // 部分 shell は、作業ディレクトリを持ち帰らせないための自然な書き方なので
-  // 当たりやすい。
+  // 前に付いた命令や組みに隠れる。verb を段の先頭語だけで見ると通る。部分 shell
+  // は作業ディレクトリを持ち帰らせない自然な書き方なので当たりやすい。
   test.each([
     ['sudo rm -rf build'],
     ['xargs rm -rf build'],
@@ -222,8 +213,8 @@ describe('木ごと消す形を止める', () => {
     ['sudo -u me rm -rf build'],
     ['env FOO=1 rm -rf build'],
     ['FOO=1 rm -rf build'],
-    // 命令の綴りは名前だけとは限らない。git も同じで、rm 側だけ名前で
-    // 見ていたので `/usr/bin/git clean -xdf` が素通りしていた。
+    // 命令はパス付きでも来る。rm 側だけ名前で見ていたので
+    // `/usr/bin/git clean -xdf` が通っていた。
     ['/usr/bin/rm -rf build'],
     ['/bin/rm -rf build'],
     ['rm.exe -rf build'],
@@ -240,8 +231,7 @@ describe('木ごと消す形を止める', () => {
     // 場所を書かない find は、今いる場所から探す。
     ['cd build; find -delete'],
     ['cd build && find -type d -exec rm -rf {} +'],
-    // pipe の先の rm も同じ。手前が絞らずに並べているなら、消えるのは木で
-    // ある。書き方だけで答えを変えない。
+    // pipe の先の rm も同じ。手前が絞らずに並べているなら、消えるのは木である。
     ['find build -type d | xargs rm -rf'],
     ['find build -type d -print0 | xargs -0 rm -rf'],
     ['find web/data | xargs rm -rf'],
@@ -278,15 +268,12 @@ describe('木ごと消す形を止める', () => {
     ['x=$(rm -rf build)'],
     ['echo `rm -rf build`'],
     ['powershell -Command "Remove-Item -Recurse build"'],
-    // 引用符の中の `\"` を引用符の閉じと数えると、閉じたことにされた先の
-    // `&& rm -rf build` が地の命令として読まれてしまう。sed は PRINTS に
-    // 入っているので、`\"` を正しく読めば全体が 1 引数のままで済む。
+    // 引用符の中の `\"` を閉じと数えると、その先の `&& rm -rf build` が外の命令
+    // として読まれる。sed は PRINTS にあるので、正しく読めば全体が 1 引数で済む。
     [`sed -i "s/${BS}"/'/g" f.txt && rm -rf build`],
-    // バックスラッシュの連なりは左から対で読む。直前に偶数個
-    // 並ぶと、それらは互いに対になって消え、直後の引用符は普通に閉じる
-    // ——`"a\\"` は bash では普通に閉じる二重引用符である。1 字先だけを
-    // 見て `\"` かどうかを判定すると、この偶奇を数え違えて閉じたはずの
-    // 引用符が開いたままになり、後ろの `&& rm -rf build` を呑み込む。
+    // バックスラッシュの連なりは左から対で読む。直前に偶数個並べば互いに対に
+    // なって消え、直後の引用符は普通に閉じる(`"a\\"`)。1 字先だけ見ると偶奇を
+    // 数え違え、後ろの `&& rm -rf build` が引用符の中身になる。
     [`echo "a${BS}${BS}" && rm -rf build`],
   ])('%s', denies);
 
@@ -312,14 +299,13 @@ describe('木ごと消す形を止める', () => {
     ['gci . | ri -r -Force'],
   ])('%s', denies);
 
-  // 木ごと消す形が、文章の後ろに続いていても読む。閉じない `<<EOF` で
-  // 後ろを捨てていた。
+  // 文章の後ろに続く木ごと消す形も読む。閉じない `<<EOF` で後ろを捨てていた。
   test('閉じない <<EOF の後ろも読む', () => {
     denies(['echo "docs mention <<EOF style"', 'rm -rf build'].join('\n'));
   });
 
-  // 命令の中で場所が変わる。作業ディレクトリを追わないと、build/ の中から
-  // 打たれた相対パスが素通りする。場所を変えるのは cd だけではない。
+  // 命令の中で場所が変わる。作業ディレクトリを追わないと、build/ の中から打たれた
+  // 相対パスが通る。場所を変えるのは cd だけではない。
   test.each([
     ['cd build && rm -rf pbf'],
     ['pushd build && rm -rf pbf'],
@@ -338,16 +324,16 @@ describe('木ごと消す形を止める', () => {
     [`(cd ${AWAY} && ls); rm -rf build`],
     // 入れ子の部分 shell。`))` は 2 つである。
     ['(cd build && (ls)); rm -rf build'],
-    // `$(…)` と `arr=(…)` の括弧は組みではない。数えると後の部分 shell が
-    // 一段早く閉じたことになる。
+    // `$(…)` と `arr=(…)` の括弧は組みではない。数えると後の部分 shell が一段
+    // 早く閉じる。
     ['echo $(date) ; (cd build && rm -rf pbf)'],
     ['arr=(a b); (cd build && rm -rf pbf)'],
-    // 命令置換は段をまたぐ。数えかけを持ち越さないと、部分 shell が
-    // 一段早く閉じたことになる。
+    // 命令置換は段をまたぐ。数えかけを持ち越さないと、部分 shell が一段早く
+    // 閉じる。
     ['(cd build; echo $(ls | head -1); rm -rf pbf)'],
     ['(cd build && echo $(ls | head -1) && rm -rf pbf)'],
     ['cd build && rm -rf ../build/pbf'],
-    // 行き先は同じ命令の中で作られる。無いからと数えないと素通りする。
+    // 行き先は同じ命令の中で作られる。無いからと数えないと通る。
     ['mkdir -p tmpwork && cd tmpwork && rm -rf ../build'],
     // 行き先も変数で受けられる。消す側だけ展開していた。
     ['d=build; cd $d; rm -rf pbf'],
@@ -397,7 +383,7 @@ describe('木ごと消す形を止める', () => {
   ])('%s', denies);
 
   // 名指ししていなくても、無視されているファイルを消せば build/ が対象に入る。
-  // git 自身のオプションの先にある clean も読む。`-C` は走る場所を変える。
+  // git 自身のオプションの先にある clean も読む。`-C` は走る場所を変え、
   // オプションの値(`-c k=v` の k=v)で読み取りを打ち切らない。
   test.each([
     ['git clean -xdf'],
@@ -426,10 +412,9 @@ describe('木ごと消す形を止める', () => {
     // `-e` が取るのは gitignore の型で、`.` は何も外さない。
     ['git clean -xdf -e .'],
     ['git clean -xdf -e ..'],
-    // `\*` は git 自身には「`*` という名前のファイル」としか読めず、
-    // build/ も web/data/ も外れない。バックスラッシュをスラッシュに読み替え、
-    // パスとして先に解くと `*` だけの除外と区別が付かなくなり、実際には何も
-    // 外れていないのに通してしまう。
+    // `\*` は git には「`*` という名前のファイル」で、build/ も web/data/ も
+    // 外れない。バックスラッシュをスラッシュに読み替えてパスとして解くと `*` だけの
+    // 除外と区別が付かず、通してしまう。
     [String.raw`git clean -xdf -e '\*'`],
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
@@ -457,31 +442,27 @@ describe('後始末は通す', () => {
     ['git clean -ndx'],
     ['git clean --dry-run -x'],
     ['git clean --exclude=foo.txt -fd'],
-    // 範囲を絞ってあり、そこに保護対象が入らない。理由文が「名指しして
-    // ください」と言うのだから、名指しした先は通らなければならない。
+    // 範囲を絞ってあり、そこに保護対象が入らない。理由文が名指しを勧めるの
+    // だから、名指しした先は通す。
     ['git clean -xdf web/vendor'],
     ['git clean -xdf -- docs'],
-    // 保護対象を名指しで外してある。理由文が名指しを勧めるのだから、
-    // 名指しした先は通らなければならない。
+    // 保護対象を名指しで外してある。同じ理由で通す。
     ['git clean -xdf -e build -e web/data'],
     ['git clean -xdf --exclude=build --exclude=web/data'],
-    // `*` や `**` だけの除外は、パスとしては根に解けるが `.`・`..` とは
-    // 違う——gitignore の型としては本当に全部へ当たるので、無害である。
-    // 根に解けたことだけを見て「何も外していない」と決めると、この安全な
-    // 指定まで止めてしまう。
+    // `*` や `**` だけの除外はパスとしては根に解けるが、gitignore の型として
+    // 本当に全部へ当たるので無害である。根に解けたことだけで「何も外していない」
+    // と決めると止めてしまう。
     ["git clean -xdf -e '*'"],
     ["git clean -xdf -e '**'"],
-    // git clean が歩くのは走った場所から下だけ。docs/ からは build/ に
-    // 届かない。
+    // git clean が歩くのは走った場所から下だけ。docs/ からは build/ に届かない。
     ['cd docs && git clean -xdf'],
     // 部分 shell の中で docs へ移っている。消えるのは docs/build である。
     ['echo $(date) ; (cd docs && rm -rf build)'],
     ['git -C docs clean -xdf'],
   ])('%s', allows);
 
-  // pipe の手前は、rm にとっては探す場所であって消す先ではない。名前で
-  // 絞ってあれば、消えるのは当たったファイルだけで木は残る。-delete でも
-  // 答えは同じでなければならない。
+  // pipe の手前は rm にとって探す場所であって消す先ではない。名前で絞ってあれば
+  // 消えるのは当たったファイルだけで、木は残る。-delete でも同じ。
   test.each([
     ["find . -name '*.tmp' | xargs rm -rf"],
     ["find build -name '*.log' -print0 | xargs -0 rm -rf"],
@@ -534,22 +515,21 @@ describe('後始末は通す', () => {
     ['echo ok  # cd build && rm -rf pbf'],
     ['echo "後始末: ; rm -rf build" >> notes.md'],
     ["git commit -m 'rm -rf build をやめた'"],
-    // 引用符の中の `\"` を引用符の閉じと数えると、二重引用符の中身が
-    // 空白で複数語に割れて `rm` が地の語として現れる。node は PRINTS に
-    // 無いが、正しく読めば全体が 1 引数のままで割れない。
+    // 引用符の中の `\"` を閉じと数えると、中身が空白で割れて `rm` が外の語に
+    // なる。node は PRINTS に無いが、正しく読めば 1 引数のままである。
     [`node -e "console.log(${BS}"rm -rf build${BS}")"`],
-    // バックスラッシュが奇数個並んで引用符をただの文字として読ませると、
-    // そこから先は閉じていない引用符の中身になる。bash では文が終わるまで
-    // 閉じない引用符は構文エラーで、命令が走らない。
+    // バックスラッシュが奇数個並ぶと引用符はただの文字になり、そこから先は
+    // 閉じていない引用符の中身である。bash では閉じない引用符は構文エラーで、
+    // 命令が走らない。
     [`echo "a${BS}${BS}${BS}" rm -rf build`],
   ])('%s', allows);
 
-  // ヒアドキュメントの中身も書き込む文章であって命令ではない。改行で段に
-  // 割ると、中の一行が命令に見える。向き先は札の前にも後にも書ける。
+  // ヒアドキュメントの中身も書き込む文章であって命令ではない。向き先は区切り語
+  // の前にも後にも書ける。
   test.each([
     [["cat > notes.md <<'EOF'", '後始末は rm -rf build ではない', 'EOF']],
     [["cat <<'EOF' > notes.md", '後始末は rm -rf build ではない', 'EOF']],
-    // 札が二つ。閉じた行を数え違えると、二つめの中身が命令として戻る。
+    // 区切り語が二つ。閉じた行を数え違えると、二つめの中身が命令として戻る。
     [
       [
         "cat > a.md <<'EOF'",
@@ -568,12 +548,12 @@ describe('後始末は通す', () => {
     [`rm -rf ${OUTSIDE}/build`],
     ['rm -rf /tmp/claude/scratch'],
     [`cd ${AWAY} && rm -rf build`],
-    // 括弧を付けても答えは変わらない。書き方が違うだけの同じ命令である。
+    // 括弧を付けても答えは変わらない。
     [`(cd ${AWAY} && rm -rf build)`],
     [`cd ${AWAY} && git clean -xdf`],
     [`rm -rf ${PARENT}/other*`],
-    // 隣に置いた worktree の後始末。木の上へ出て別の枝へ降りるので、
-    // `..` に潰して全部に当てると、事実でない理由で止めることになる。
+    // 隣に置いた worktree の後始末。木の上へ出て別の枝へ降りるので、`..` に
+    // 潰して全部に当てると誤って止める。
     [`rm -rf ../${NAME}-worktree`],
     [`rm -rf ${PARENT}/${NAME}-worktree`],
   ])('%s', allows);
@@ -605,8 +585,8 @@ describe('木の名前に括弧があっても効く', () => {
 });
 
 describe('PowerShell の二重引用符でバックスラッシュはエスケープにならない', () => {
-  // フックは Bash と PowerShell の両方を見る。bash の綴りをそのまま当てると、
-  // 閉じたはずの引用符が開いたままになり、後ろに続く生きた命令を呑み込む。
+  // bash の規則をそのまま当てると、閉じたはずの引用符が開いたままになり、後ろの
+  // 命令が引用符の中身になる。
   test('PowerShell を名指しした呼び出しではバックスラッシュが引用符を閉じさせる', () => {
     expect(
       askPowerShell(
@@ -615,18 +595,17 @@ describe('PowerShell の二重引用符でバックスラッシュはエスケ�
     ).not.toBeNull();
   });
 
-  // バックスラッシュの綴りが変わっても、木ごと消す形はそのまま止まる。
+  // 規則が変わっても、木ごと消す形はそのまま止まる。
   test('PowerShell の普通の再帰削除は変わらず止まる', () => {
     expect(askPowerShell('Remove-Item -Recurse -Force build')).not.toBeNull();
   });
 
-  // バックスラッシュを引用符の閉じと数えなくても、安全な命令まで止めてはいけない。
+  // 安全な命令まで止めない。
   test('末尾がバックスラッシュのパスだけなら通す', () => {
     expect(askPowerShell(`Get-ChildItem "C:${BS}temp${BS}"`)).toBeNull();
   });
 
-  // 呼ばれた側の shell の綴りへ切り替える。Bash から PowerShell を呼んだ
-  // 命令の中身は PowerShell の綴りで読む。
+  // Bash から PowerShell を呼んだ命令の中身は、PowerShell の規則で読む。
   test('Bash から呼んだ powershell -Command の中身は PowerShell の綴りで読む', () => {
     expect(
       ask(
@@ -637,10 +616,9 @@ describe('PowerShell の二重引用符でバックスラッシュはエスケ�
 });
 
 /* ------------------------------------------------------------- 取り決め --- */
-/* ここから下だけが子プロセスを起こす。上の 250 例が見ているのは判定であって、
- * 判定の運ばれ方ではない。運ばれ方——stdin の読み方、deny の JSON の形、
- * settings.json が使う node で同じ答えが返ること——はプロセスを跨がないと
- * 検査できないので、その 3 つだけをここに置く。 */
+/* ここから下だけが子プロセスを起こす。判定の運ばれ方(stdin の読み方、deny の
+ * JSON の形、settings.json が使う node で同じ答えが返ること)はプロセスを跨がない
+ * と検査できない。 */
 
 describe('読めない入力で作業を止めない', () => {
   // フックが落ちて命令まで通らなくなるのは行き過ぎである。通して構わない。
@@ -668,10 +646,9 @@ describe('deny は PreToolUse の取り決めどおりに返る', () => {
 });
 
 describe('node で起動しても同じ答えを返す', () => {
-  /* 上の 250 例は bun の中で decide() を呼ぶ。本番は node が起動する。
-   * 判定は文字列と正規表現しか使わないので処理系で変わらないはずだが、
-   * 「はず」を検査に変えておく。境目の代表を両方の道で通し、答えが一致する
-   * ことだけを見る。 */
+  /* 上の 250 例は bun の中で decide() を呼ぶが、本番は node が起動する。判定は
+   * 文字列と正規表現しか使わないので処理系で変わらないはずだが、その「はず」を
+   * 検査にする。代表を両方の道で通し、答えが一致することだけを見る。 */
   test.each([
     ['rm -rf build'],
     ['rm -rf web/data'],
