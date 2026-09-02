@@ -11,6 +11,7 @@
  * test/wiring.test.mjs の検査対象にしていない。
  */
 
+import { onlyButtonHTML } from './detail.mjs';
 import {
   PREF_LIST_ROWS,
   prefGroupLabel,
@@ -110,6 +111,47 @@ export function applyRouteFilter(doc, state) {
 }
 
 /**
+ * 開いている詳細パネルの「この路線だけ表示」を、いまの選択に合わせ直す。
+ *
+ * 選択が変わる口はボタンだけではない。一覧のチェック、地図の左上の ✕、
+ * ボタン自身——どこから変わっても地図は applyFilters が描き直すので、ボタンの
+ * 名乗りもそこで一緒に直す(app.js)。ここを通さないと、✕ で選択を解いた後も
+ * パネルのボタンだけが押されたまま残る。
+ *
+ * パネルの中身は組み直さない。開いたまま読まれている場所なので、組み直せば
+ * 読んでいた位置まで先頭に戻る。都道府県道なら県別 meta を取りに行く経路にも
+ * 戻ってしまう。
+ *
+ * ボタンそのものも置き換えず、属性だけを移す。押した直後のボタンには焦点が
+ * 載っていて、要素ごと入れ替えるとその焦点が body へ落ちる——キーボードで
+ * 押した人は、押した瞬間に居場所を失う。
+ *
+ * 名乗りを組むのはあくまで detail.mjs である(onlyButtonHTML)。同じ文言を
+ * ここでも組むと、片方が暗黙のうちに古くなる。
+ */
+export function syncDetailOnly(doc, state) {
+  const btn = doc.querySelector('#detail-body .detail-only');
+  if (!btn) return;
+  const key = btn.dataset.pref;
+  const html = key
+    ? onlyButtonHTML({
+        prefKey: key,
+        prefLabel: state.prefLabels.get(prefRegionOf(key)) ?? '',
+        selected: isOnly(state.prefSelected, key),
+      })
+    : onlyButtonHTML({
+        ref: Number(btn.dataset.ref),
+        selected: isOnly(state.selected, Number(btn.dataset.ref)),
+      });
+  const box = doc.createElement('div');
+  box.innerHTML = html;
+  // 出す属性は onlyButtonHTML が毎回すべて書くので、移すだけで足りる。
+  for (const { name, value } of box.firstElementChild.attributes) {
+    btn.setAttribute(name, value);
+  }
+}
+
+/**
  * 一覧に出す系統を切り替える。
  *
  * 状態は三つだけである——どちらも、国道だけ、都道府県道だけ。最後の一枚は
@@ -159,7 +201,18 @@ export function clearSelection(doc, state, applyFilters) {
 }
 
 /**
- * 「この路線だけ表示」——国道を 1 本だけ選ぶ。
+ * いまこの 1 本だけに絞っているか。
+ *
+ * 「この路線だけ表示」が押された状態かどうかは、この問いの答えそのものである。
+ * 一覧から 2 本選んでいるあいだは押されていない——そこで押せば「だけ」に
+ * なるのであって、解除にはならないからである。詳細パネルの描画(app.js)と、
+ * 下の二つのトグルが同じ関数に聞く。
+ */
+export const isOnly = (selected, key) =>
+  selected.size === 1 && selected.has(key);
+
+/**
+ * 「この路線だけ表示」——国道を 1 本だけ選ぶ。もう一度呼べば解く。
  *
  * 選択そのもの以外は何もしない。「だけ」を成り立たせているのは絞り込みの側で
  * ある(app.js の showsNational / showsPref)——どちらかの系統で 1 本でも選べば、
@@ -169,24 +222,34 @@ export function clearSelection(doc, state, applyFilters) {
  * 選択が、一覧のチェックボックスから入ったか、このボタンから入ったかで違う絵に
  * なる形だった——控えの出し入れも、`pref=0` が URL に乗るのも、そのために
  * 要っていた仕掛けである。絞り込みの側を直したので、どちらも要らない。
+ *
+ * 解けるのは都道府県道側(togglePrefOnly)と揃えるためである。押して 1 本に
+ * したボタンが、同じ場所で押しても戻せないのは、押した人にとって同じボタンが
+ * 途中から効かなくなったのと変わらない。
  */
-export function showRouteOnly(doc, state, ref, applyFilters) {
-  setSelection(doc, state, [ref], applyFilters);
+export function toggleRouteOnly(doc, state, ref, applyFilters) {
+  setSelection(
+    doc,
+    state,
+    isOnly(state.selected, ref) ? [] : [ref],
+    applyFilters,
+  );
 }
 
 /**
  * 都道府県道を 1 本だけ選ぶ。もう一度呼べば解く。
  *
- * 国道側(showRouteOnly)と違い、こちらは押した状態を持つ。都道府県道の一覧は
- * どこにも出さない(#109)ので、いま 1 本に絞っていることをこのボタン自身が
- * 述べる必要がある。解除はここでもできるが、唯一の口ではない——詳細パネルを
- * 閉じても地図の左上に残る ✕ (clearSelection)が同じことをする。
+ * 都道府県道の一覧はどこにも出さない(#109)ので、いま 1 本に絞っていることを
+ * このボタン自身が述べる必要がある。解除はここでもできるが、唯一の口では
+ * ない——詳細パネルを閉じても地図の左上に残る ✕ (clearSelection)が同じことを
+ * する。
  *
  * 都道府県道の一覧は画面に無いので、この関数だけは `doc` を要らない。
  */
 export function togglePrefOnly(state, key, applyFilters) {
-  const on = state.prefSelected.size === 1 && state.prefSelected.has(key);
-  state.prefSelected = on ? new Set() : new Set([key]);
+  state.prefSelected = isOnly(state.prefSelected, key)
+    ? new Set()
+    : new Set([key]);
   applyFilters();
 }
 

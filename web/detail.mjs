@@ -175,6 +175,46 @@ const ONLY_ICON =
   '<path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z" fill="none" stroke="currentColor" ' +
   'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 
+/**
+ * 「この路線だけ表示」のボタン。国道と都道府県道が同じ物を使う。
+ *
+ * 押した状態を持つのは両方である。地図を 1 本に絞っているあいだ、それを述べる
+ * 場所も、解くための口も、このボタンのほかに無い場面がある——都道府県道には
+ * 一覧が無く(#109)、国道の一覧も面を開かなければ見えない。押せるのに解けない
+ * ボタンにしないため、二つの系統で同じ振る舞いにしてある。
+ *
+ * 押した後に何が起きるかをそのまま名乗る。押している間の名乗りは「解除」で
+ * あって「表示」ではない——同じ文言のまま状態だけ変わると、押した結果が
+ * 読み上げからも title からも分からなくなる。
+ *
+ * 見た目は `active`、読み上げは `aria-pressed` が持つ。二つに分けるのは
+ * app.js の地図の上のボタン(cycleButton)と同じ作法である。
+ *
+ * 鍵は `ref`(国道)か `prefKey` + `prefLabel`(都道府県道)のどちらかを渡す。
+ * 都道府県道の番号だけでは 47 本のどれか決まらないので、県を伴う鍵で名指す。
+ *
+ * パネルを組み立てるときだけでなく、選択が他所で変わったときにも呼ぶ
+ * (app.js の syncDetailOnly)。押した状態を述べる文字列を 2 箇所で組むと、
+ * 片方が暗黙のうちに古くなる。
+ */
+export function onlyButtonHTML({
+  ref = null,
+  prefKey = null,
+  prefLabel = '',
+  selected = false,
+}) {
+  const name = prefKey
+    ? prefRouteName(prefLabel, prefRefOf(prefKey))
+    : `国道${ref}号`;
+  const attr = prefKey ? `data-pref="${esc(prefKey)}"` : `data-ref="${ref}"`;
+  const text = selected ? `${name}だけの表示を解除` : `${name}だけを表示`;
+  return (
+    `<button type="button" class="icon-btn detail-only${selected ? ' active' : ''}" ` +
+    `${attr} aria-pressed="${selected}" ` +
+    `title="${esc(text)}" aria-label="${esc(text)}">${ONLY_ICON}</button>`
+  );
+}
+
 /* 起点と終点を 1 行で。
  *
  * 左端に起点、右端に終点、あいだを矢印が結ぶ——線形の路線を、そのまま線形に
@@ -301,6 +341,7 @@ export function detailHTML({
   termini = [],
   related = [],
   formerKm = 0,
+  selected = false,
 }) {
   const { ref } = route;
   const name = `国道${ref}号`;
@@ -312,9 +353,7 @@ export function detailHTML({
     `target="_blank" rel="noopener" title="Wikipedia「${name}」" ` +
     `aria-label="Wikipedia「${name}」を新しいタブで開く">` +
     `${WIKIPEDIA_ICON}</a>` +
-    `<button type="button" class="icon-btn detail-only" data-ref="${ref}" ` +
-    `title="${name}だけを表示" aria-label="${name}だけを表示">` +
-    `${ONLY_ICON}</button>` +
+    onlyButtonHTML({ ref, selected }) +
     '</div></header>' +
     '<div class="detail-scroll">' +
     terminiHTML(ref, termini) +
@@ -338,17 +377,15 @@ export function detailHTML({
  * 1 路線ぶんの詳細、都道府県道の側。
  *
  * 国道のパネル(detailHTML)と同じ形にしてある。読む人にとってこれは同じ地図の
- * 同じ場所であって、系統ごとに別の作法を覚え直す場所ではない。違うのは四つ
+ * 同じ場所であって、系統ごとに別の作法を覚え直す場所ではない。違うのは二つ
  * だけである。
  *
  *   標識      ヘキサになり、路線名を見出しに出す
  *   起終点    出ない。都道府県道には全国 1 枚の起終点の台帳が無い
- *   絞り込み  押した状態が残る。ここが選択を述べる唯一の場所である(#109)
  *
- * 「この路線だけ表示」は国道と同じ絵・同じ場所に置くが、押した後の振る舞いだけ
- * が違う。国道のボタンは押すたびにその 1 路線へ置き換えるのに対し、こちらは
- * 押した状態を持ち、もう一度押すと解除する。操作面に都道府県道の節が無い以上、
- * 選んでいることを述べる場所も、解除する口も、このボタンのほかに無い(#109)。
+ * 「この路線だけ表示」は国道と同じ物である(onlyButtonHTML)。押した状態を持ち、
+ * もう一度押せば解ける。操作面に都道府県道の節が無い以上、選んでいることを
+ * 述べる場所も、解除する口も、このボタンのほかに無い(#109)。
  *
  * 重用の但し書きはここに置かない。「国道マップについて」が持つ
  * (panel.mjs の prefConcurrencyHTML)。パネルは 1 路線の数を述べる場所で、
@@ -392,16 +429,9 @@ export function prefDetailHTML({
       relatedHTML(related, prefRelShieldHTML(prefLabel))
     : wait;
 
-  // 押した後に何が起きるかをそのまま名乗る。押している間の名乗りは「解除」で
-  // あって「表示」ではない——同じ文言のまま状態だけ変わると、押した結果が
-  // 読み上げからも title からも分からなくなる。
-  const onlyText = selected ? `${name}だけの表示を解除` : `${name}だけを表示`;
-  // 見た目は `active`、読み上げは `aria-pressed` が持つ。二つに分けるのは
-  // app.js の地図の上のボタン(cycleButton)と同じ作法である。
+  // 国道のパネルと同じボタンである(onlyButtonHTML)。県を伴う鍵で名指す。
   const only = region
-    ? `<button type="button" class="icon-btn detail-only${selected ? ' active' : ''}" ` +
-      `data-pref="${esc(prefKeyOf(region, ref))}" aria-pressed="${selected}" ` +
-      `title="${esc(onlyText)}" aria-label="${esc(onlyText)}">${ONLY_ICON}</button>`
+    ? onlyButtonHTML({ prefKey: prefKeyOf(region, ref), prefLabel, selected })
     : '';
 
   return (

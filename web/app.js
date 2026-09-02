@@ -111,10 +111,12 @@ import {
 } from './urlstate.mjs';
 import {
   applyRouteFilter,
+  isOnly,
   NARROW_QUERY,
-  showRouteOnly,
+  syncDetailOnly,
   syncRouteList,
   togglePrefOnly,
+  toggleRouteOnly,
   wireControls,
   wireShare,
 } from './wiring.mjs';
@@ -1318,6 +1320,8 @@ function applyFilters() {
   syncLegend();
   // 系統を消したなら、その線の上に置いたままの指も押せなくなっている。
   syncCursor();
+  // 開いているパネルのボタンも、選択が変わればここで名乗り直す(wiring.mjs)。
+  syncDetailOnly(document, state);
   updateStats();
   renderRanking();
   syncURL();
@@ -1654,6 +1658,9 @@ function openDetail(ref) {
     termini: decreeTerminiOf(state.meta, ref),
     related: relatedRoutesOf(state.meta, ref),
     formerKm: formerKmFor(state.meta.combinations, sel),
+    // 押した状態は state から読む。都道府県道の側(openPrefDetail)と同じで、
+    // ボタンが自分の見た目を覚えるのではなく、選択そのものを毎回描き直す。
+    selected: isOnly(state.selected, ref),
   });
   showDetail();
 }
@@ -1677,7 +1684,7 @@ async function openPrefDetail(key) {
 
   // 押した状態は state から読む。ボタンが自分の見た目を覚えるのではなく、
   // 選択そのものが一つあって、それを毎回描き直す形にする。
-  const selected = state.prefSelected.has(key);
+  const selected = isOnly(state.prefSelected, key);
   closePopup();
   detailBody.innerHTML = prefDetailHTML({ region, prefLabel, ref, selected });
   showDetail();
@@ -1871,13 +1878,13 @@ document.addEventListener('click', (ev) => {
   // サイドパネルのチェックも系統のトグルもそちらが合わせる。
   const only = ev.target.closest('.detail-only');
   if (only) {
+    // 押した状態の描き直しはここでしない。選択が変われば applyFilters が
+    // syncDetailOnly を通るので、一覧のチェックや ✕ から変わったときと
+    // 同じ経路で入れ替わる。
     if (only.dataset.pref) {
       togglePrefOnly(state, only.dataset.pref, applyFilters);
-      // 押した状態はこのボタン自身が述べる。開き直して aria-pressed と
-      // 名乗りを入れ替える——県別 meta は取得済みなので、待ちは挟まらない。
-      openPrefDetail(only.dataset.pref);
     } else {
-      showRouteOnly(document, state, Number(only.dataset.ref), applyFilters);
+      toggleRouteOnly(document, state, Number(only.dataset.ref), applyFilters);
     }
     return;
   }
