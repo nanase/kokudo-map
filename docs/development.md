@@ -50,7 +50,7 @@ mise run serve        # http://localhost:8000/
 | `mise run build-all` | 全地域を作り直し、配信データまで通す |
 | `mise run build <地域>` | 1 地域を Overpass から取得して作り直す |
 | `mise run rebuild <地域>` | 1 地域だけ作り直す |
-| `mise run pack` | `build/regions/` から `web/data/` を作り直す |
+| `mise run pack` | `build/regions/` と `build/prefectural/` から `web/data/` を作り直す |
 | `mise run publish-data` | 配信データを R2(data.nanase.cc)に上げる |
 | `mise run decree` | 政令の別表から起点・終点を取り込み、座標を当てる |
 | `mise run audit <地域>` | 途切れている路線を機械的に探す |
@@ -86,7 +86,7 @@ mise run pack-n13
 
 消した JSON は作り直せます。元は `build/n13/<メッシュ>/` の shapefile で、そちらは消しません。古いコードに戻したときも、`mise run apply-n13` や `mise run compare-n13` が無いメッシュの JSON をその場で作り直します。取り直しは不要です。海しかないメッシュだけ、配布物が無いことの確認に KSJ へ 1 度ずつ問い合わせます。
 
-形を変えた理由は `pipeline/compare_n13.py` の `Mesh` にあります。座標 1 点を Python の tuple で持つと生の 16 バイトが 20 倍に膨らむこと、配列にして mmap で開けば常駐に乗らないこと、読み取り専用なので並列に走る県が同じ物理ページを共有することです。
+形を変えた理由は `pipeline/compare_n13.py` の `Mesh` にあります。座標 1 点を Python の tuple で持つと生の 16 バイトが 20 倍に膨らむこと、配列にして mmap で開けば常駐をほとんど増やさないこと、読み取り専用なので並列に走る県が同じ物理ページを共有することです。
 
 `serve` は `python -m http.server` ではありません。PMTiles は Range 要求で読むので、それに答えられるサーバが必要です。
 
@@ -129,7 +129,7 @@ uvx ruff check pipeline      # Python の静的検査
 | `web/wiring.mjs` | index.html の要素と state の対応づけ。地図を作らずに import できる |
 | `web/urlstate.mjs` | 絞り込みと表示状態を URL のクエリ文字列に載せる |
 | `web/aggregate.mjs` | 画面が出す数を組み合わせ表から読む |
-| `web/panel.mjs` | 地図の上のポップオーバーとダイアログの一覧・集計と、凡例の組み立て |
+| `web/panel.mjs` | 地図の上のポップオーバーの一覧・集計、共有と「国道マップについて」のダイアログの中身、凡例の組み立て |
 | `web/popup.mjs` | 押したアークが自分について述べること |
 | `web/detail.mjs` | 一つの路線について述べること。標識を押すと出るパネル |
 | `web/prefroute.mjs` | 都道府県道の路線を名指すキー。番号は県の中でしか一意でない |
