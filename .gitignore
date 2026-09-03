@@ -19,6 +19,10 @@ node_modules/
 __pycache__/
 .venv/
 
+# この機械だけの mise の設定。Cloudflare のトークンなど、共有しない環境変数を
+# ここに置く(docs/architecture.md の「初回セットアップ」を参照)。
+mise.local.toml
+
 # この機械だけの Claude Code の設定。共有しない。
 .claude/settings.local.json
 

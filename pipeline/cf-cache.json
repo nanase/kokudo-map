@@ -1,0 +1,46 @@
+{
+  "cache_rules": [
+    {
+      "action": "set_cache_settings",
+      "action_parameters": {
+        "cache": true
+      },
+      "description": "kokudo-map の .mjs をキャッシュする",
+      "enabled": true,
+      "expression": "(http.host eq \"nanase.cc\" and starts_with(http.request.uri.path, \"/kokudo-map/\") and ends_with(http.request.uri.path, \".mjs\"))\n"
+    },
+    {
+      "action": "set_cache_settings",
+      "action_parameters": {
+        "browser_ttl": {
+          "mode": "respect_origin"
+        },
+        "cache": true
+      },
+      "description": "kokudo-map: ブラウザ保持期限を origin に従わせる",
+      "enabled": true,
+      "expression": "(http.host eq \"nanase.cc\"\n and starts_with(http.request.uri.path, \"/kokudo-map/\")\n and not starts_with(http.request.uri.path, \"/kokudo-map/glyphs/\"))\n"
+    },
+    {
+      "action": "set_cache_settings",
+      "action_parameters": {
+        "browser_ttl": {
+          "mode": "respect_origin"
+        },
+        "cache": true,
+        "edge_ttl": {
+          "mode": "bypass_by_default"
+        }
+      },
+      "description": "kokudo-map: グリフをエッジキャッシュに載せる",
+      "enabled": true,
+      "expression": "(http.host eq \"nanase.cc\"\n and starts_with(http.request.uri.path, \"/kokudo-map/glyphs/\"))\n"
+    }
+  ],
+  "zone_settings": {
+    "browser_cache_ttl": 172800,
+    "cache_level": "aggressive",
+    "development_mode": "off",
+    "sort_query_string_for_cache": "off"
+  }
+}

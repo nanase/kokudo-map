@@ -188,3 +188,14 @@ Edge TTL は「キャッシュ制御ヘッダーが存在する場合は使用�
 5. `bun x wrangler r2 bucket cors set kokudo-map-data --file pipeline/r2-cors.json` で CORS を許可する
    - `nanase.cc`(Pages)から `data.nanase.cc`(R2)への `fetch` は別オリジン越しになるので、許可が無いとブラウザが読み取りを止める
 6. `mise run publish-data` を実行する
+7. Cache Rules の Edit と Zone Settings の Edit 権限を、`nanase.cc` ゾーンだけに絞ったトークンを作る
+8. リポジトリ直下に `mise.local.toml` を作り、`[env]` にトークンとゾーン ID を書く。git の管理外である(`.gitignore`)
+
+   ```toml
+   [env]
+   CLOUDFLARE_CACHE_CONFIG_TOKEN = "..."
+   CLOUDFLARE_ZONE_ID = "..."
+   ```
+
+   mise は設定ファイルを祖先方向へ辿るので、`.claude/worktrees/<name>/` の深さで `mise run` / `mise exec` を通して実行しても読める。素の shell から直接読むには mise の有効化(`mise activate`)が要る。
+9. `mise run cf-cache` で取得できることを確かめる
