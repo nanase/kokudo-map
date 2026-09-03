@@ -8,7 +8,7 @@
 メッシュを、いつ、どの順で用意するか」だけである。
 
 **県ごとの段を並列にする前に、ここを直列で通す。**並列に入ってから取りに行くと、
-同じ 1 次メッシュを何本ものプロセスが同時に KSJ へ要求しうる——1 次メッシュは
+同じ 1 次メッシュを何本ものプロセスが同時に KSJ へ要求しうる。1 次メッシュは
 県境をまたぐので、隣り合う県が同じ符号を欲しがるのは例外ではなく普通である。
 build_all.py がそのためにこれを先に呼ぶ。単独でも呼べる(`mise run pack-n13`)。
 
@@ -50,9 +50,9 @@ def main() -> None:
     args = sys.argv[1:]
     keep_legacy = "--keep-legacy" in args
     refresh = "--refresh" in args
-    # 綴り違いを黙って捨てない。`--keeplegacy` のつもりで打った物が素通りすると、
-    # 残すつもりだった 6.5 GB の JSON がそのまま消える。compare_n13_pref.py が
-    # 知らない引数で止まるのと同じ扱いである。
+    # 綴り違いを暗黙のうちに捨てない。`--keeplegacy` のつもりで打った物が
+    # 素通りすると、残すつもりだった 6.5 GB の JSON がそのまま消える。
+    # compare_n13_pref.py が知らない引数で止まるのと同じ扱いである。
     unknown = [a for a in args
                if a.startswith("--") and a not in ("--keep-legacy", "--refresh")]
     if unknown:

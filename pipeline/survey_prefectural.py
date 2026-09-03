@@ -4,15 +4,15 @@
 # ///
 """都道府県道になりうる way を全国から一度だけ測り、県ごとに書き出す。
 
-これは判定(issue #98)ではない。判定より先に立てる検証の土台である。判定が
+これは判定(issue #98)ではなく、判定より先に立てた検証の土台である。判定が
 終わってから検証を作ると、判定に合わせた検証になる。だからここは、判定が何を
 選ぶかを知らないまま、OSM が持っている物をそのまま測る。
 
 `build/cache` では足りない。あちらが運ぶ way は国道のリレーションのメンバーと
-国道の候補で、都道府県道の候補(primary・secondary で数字の `ref`)は入っていない
-——それを入れるのは #98 の仕事である。都道府県道のリレーションについても、
+国道の候補で、都道府県道の候補(primary・secondary で数字の `ref`)は入って
+いない。それを入れるのは #98 の仕事である。都道府県道のリレーションについても、
 `competing_relations` が持つのはメンバーの id だけで、形は持たない。長さを測る
-には形が要る。
+には形が必要である。
 
 だから pbf をもう一度読む。読むのは一度きりで、結果は `build/survey/` に残る。
 突き合わせ(compare_annual_report_pref.py と compare_n13_pref.py)はそちらを読む
@@ -23,8 +23,8 @@
   1. `highway` が primary・secondary(と、その _link・construction)で、数字だけの
      `ref` を持つ way。#98 が候補にする集合を含む
   2. `network=JP:prefectural` のルートリレーションが抱える way。国道と重用する
-     区間は、way 自身のタグには何も残らない——OSM は `highway=trunk`・
-     `ref=国道番号` で描く——ので、リレーションだけが根拠である
+     区間は way 自身のタグに何も残らない(OSM は `highway=trunk`・`ref=国道番号`
+     で描く)ので、リレーションだけが根拠である
 
 1 と 2 の和を残す。1 だけでは重用が測れず、2 だけではリレーションの無い路線が
 丸ごと落ちる。
@@ -34,14 +34,13 @@
 
 長さは geo.py が測る。区分(road・construction・ferry など)と旧道の判定は
 build_routes.py の物をそのまま読む。道の状態についての問いは、国道でも都道府県道
-でも同じ問いだからである。way の形を持つ器は extract_pbf.Ways をそのまま使う。
+でも同じだからである。way の形を持つ入れ物は extract_pbf.Ways をそのまま使う。
 全国ぶんの座標をノードごとの Python オブジェクトにせず持つ、という同じ問いに
 二度答えないためである。
 
-番号の読み方だけは書き下ろす。`build_routes.tokens()` は使えない。あれは一般国道の
-459 番だけを通す。都道府県道の番号はその外にも実在する(北海道道759号、兵庫県道
-432号)ので、ここは数字だけを見る。上限も置かない。置けば、置いた値そのものが
-判定になってしまう。
+番号の読み方だけは書き下ろす。`build_routes.tokens()` は一般国道の 459 番だけを
+通す。都道府県道の番号はその外にも実在する(北海道道759号、兵庫県道432号)ので、
+ここは数字だけを見る。上限も置かない。置けば、置いた値そのものが判定になる。
 
 使い方:  uv run pipeline/survey_prefectural.py
          uv run pipeline/survey_prefectural.py --pbf path/to/japan-latest.osm.pbf
@@ -83,7 +82,7 @@ def numbers(ref: str | None) -> list[int]:
 
     `ref=18;30` は二つの指定であって 1 つの文字列ではない。値の全体で照合すると
     重用区間が消える。build_routes.tokens() と同じ理由で同じ形にするが、通す番号
-    の集合は違う——あちらは一般国道の 459 番だけを通す。
+    の集合は違う。あちらは一般国道の 459 番だけを通す。
     """
     out = []
     for tok in (ref or "").split(";"):
@@ -121,8 +120,8 @@ def relation_numbers(rels: dict[int, dict], prefectural: list[int]) -> dict[int,
     own = {rid: numbers(rels[rid]["tags"].get("ref")) for rid in prefectural}
     members = {rid: [m["ref"] for m in rels[rid]["members"] if m["type"] == "relation"]
                for rid in prefectural}
-    # 親から子へ配る。実測では 2 周で落ち着く。落ち着かないまま打ち切ると、番号を
-    # 継承しそこねた子が黙って残るので、その場合は報告する。
+    # 親から子へ配る。実測では 2 周で落ち着く。落ち着かないまま打ち切ると、
+    # 番号を継承しそこねた子が暗黙のうちに残るので、その場合は報告する。
     rounds = 8
     for _ in range(rounds):
         changed = False
@@ -143,9 +142,9 @@ def relation_numbers(rels: dict[int, dict], prefectural: list[int]) -> dict[int,
 def points(ways: Ways, wid: int) -> list[tuple[float, float]]:
     """way の形を (緯度, 経度) の列で返す。
 
-    Ways.geometry は `{"lat": …, "lon": …}` の列を返す。あちらの形は Overpass の
-    応答に合わせてあり、キャッシュへそのまま書けるためにそうなっている。ここで
-    要るのは geo.line_length と prefectures.Prefectures が読む形なので、辞書を
+    Ways.geometry は `{"lat": …, "lon": …}` の列を返す。あちらの形は Overpass
+    の応答に合わせてあり、キャッシュへそのまま書けるためにそうなっている。ここで
+    必要なのは geo.line_length と prefectures.Prefectures が読む形なので、辞書を
     28 万本ぶん組み立てずに済むよう、平らな配列から直に取る。
     """
     i, n = ways.start[wid], ways.count[wid]
@@ -235,8 +234,9 @@ def main() -> None:
     order = list(ways.start)
     print(f"  ways kept: {len(order):,}  coordinates: {len(ways.lat):,}")
 
-    # 所属都道府県。ノードの位置の索引を手放した後に読む。全国のノード位置は数 GB
-    # を占め、行政区域の面はさらに 0.7 GB 要る。二つを同時に持つ必要は無い。
+    # 所属都道府県。ノードの位置の索引を手放した後に読む。全国のノード位置は
+    # 数 GB を占め、行政区域の面はさらに 0.7 GB 必要である。二つを同時に持つ
+    # 必要は無い。
     print("\nreading N03 municipal boundaries", flush=True)
     prefs = Prefectures()
     print(f"  {prefs.polygon_count:,} polygons", flush=True)

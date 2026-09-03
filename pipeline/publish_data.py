@@ -9,14 +9,15 @@
 タイルは既に gzip 済みの 156 MB で、差分も圧縮も効かず、作り直すたびに丸ごと
 履歴へ積まれることである。
 
-GitHub Pages も経由しない。Pages の裏側(Fastly)は、バイト 0 から始まらない
-Range 要求に対して、要求したファイルとは無関係なバイト列を返す不具合を持つ。
-試したどのファイルでも、迂回しようと試したどの経路でも(Cloudflare のキャッシュ
-規則、圧縮規則、配信のやり直し)同じだった。PMTiles の読み取りはほぼ全てそういう
+GitHub Pages も経由しない。Pages の裏側(Fastly)は、バイト 0 から始まらない Range
+要求に対して、要求したファイルとは無関係なバイト列を返す不具合を持つ。試したどの
+ファイルでも、迂回しようと試したどの経路でも(Cloudflare のキャッシュ規則、
+圧縮規則、配信のやり直し)同じだった。PMTiles の読み取りはほぼ全てそういう
 要求なので、地図は一度も描けなかった。R2 は同じ Cloudflare ゾーンの内側にあり、
-この不具合を持たない。だからデータはそちら——data.nanase.cc——に置き、
-.github/workflows/pages.yml が web/dataurl.mjs の基点をそこへ向け直す。書き換える
-のはその 1 行だけなので、配信データのファイルが増えてもここは変わらない。
+この不具合を持たない。だからデータはそちら(data.nanase.cc)に
+置き、.github/workflows/pages.yml が web/dataurl.mjs の基点をそこへ向け直す。
+書き換えるのはその 1 行だけなので、配信データのファイルが増えてもここは
+変わらない。
 
 使い方:
     uv run pipeline/publish_data.py
@@ -35,10 +36,10 @@ BUCKET = "kokudo-map-data"
 # 閲覧側が取る物ちょうど。index.html や app.js はリポジトリと一緒に運ばれる。
 # 生成されるのはこれだけである。
 #
-# 国道と都道府県道でアーカイブが分かれているのは #100 の判断である。分けてあると、
-# 県道を直したときに上げ直すのは 100 MB の側だけで済む——国道の 55.9 MB は動かない。
-# 県ごとの meta が 47 個あるのも同じ理由で、画面が最初に読む JSON を増やさずに、
-# 県を選んだときにその県のぶんだけを取らせるためである。
+# 国道と都道府県道でアーカイブが分かれているのは #100 の判断である。
+# 分けてあると、県道を直したときに上げ直すのは 100 MB の側だけで済み、国道の
+# 55.9 MB は動かない。県ごとの meta が 47 個あるのも同じ理由で、画面が最初に読む
+# JSON を増やさずに、県を選んだときにその県のぶんだけを取らせるためである。
 FILES = [
     "national-routes.pmtiles",
     "national.meta.json",
@@ -58,12 +59,12 @@ def pref_metas() -> list[str]:
 
 def wrangler(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     """wrangler を bun x 経由で走らせ、出力をロケールによらず UTF-8 で読む。"""
-    # `bunx` 自体は mise がシムを作らないことがあります。`bun x` は bun 本体の
-    # サブコマンドなので、mise.toml が述べる bun さえ入っていれば必ず通ります。
-    # encoding を省くと日本語 Windows では cp932 に落ち、wrangler が出す UTF-8 の
-    # 飾り罫を読み取りスレッドが読めず、成功時も含め毎回そこで落ちます。実行自体は
-    # そのまま進むので実害は薄いのですが、wrangler が本当に失敗したときだけ、
-    # 下の sys.exit が見せるはずの理由が読めなくなります。
+    # `bunx` 自体は mise がシムを作らないことがある。`bun x` は bun 本体の
+    # サブコマンドなので、mise.toml が指定する bun さえ入っていれば必ず通る。
+    # encoding を省くと日本語 Windows では cp932 に落ち、wrangler が出す UTF-8
+    # の飾り罫を読み取りスレッドが読めず、成功時も含め毎回そこで落ちる。
+    # 実行自体はそのまま進むので実害は薄いが、wrangler が本当に
+    # 失敗したときだけ、下の sys.exit が見せるはずの理由が読めなくなる。
     r = subprocess.run(
         ["bun", "x", "wrangler", *args], text=True, capture_output=True,
         encoding="utf-8", errors="replace",
@@ -105,7 +106,7 @@ def preflight() -> None:
 
 def main() -> None:
     """配信データを wrangler で BUCKET へ上げる。"""
-    # Windows の端末は標準出力の既定が cp932 である——build_all.main() を参照。
+    # Windows の端末は標準出力の既定が cp932 である(build_all.main())。
     sys.stdout.reconfigure(errors="replace")
     preflight()
 

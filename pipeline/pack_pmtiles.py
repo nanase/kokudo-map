@@ -13,9 +13,9 @@ vt-pbf は JavaScript、PMTiles を書く側は Python である。受け渡し�
 ではなく blob と索引なのは、Windows では 10 万個の小さなファイルを作るほうが、
 タイルを切るより時間がかかるからである。
 
-アーカイブは国道と都道府県道で分かれている。理由は #100 にある——国道の 55.9 MB を
-県道を直すたびに上げ直さずに済むこと、タイル化のメモリが 2 回に分かれること、
-県道側が壊れても国道の地図は出ること。
+アーカイブは国道と都道府県道で分かれている。理由は #100 にある。国道の 55.9 MB
+を県道を直すたびに上げ直さずに済み、タイル化のメモリが 2 回に分かれ、県道側が
+壊れても国道の地図は出る。
 
 使い方:  uv run pipeline/pack_pmtiles.py [national|prefectural ...]
          (既定: 生成物が在るアーカイブすべて)
@@ -31,8 +31,8 @@ from pmtiles.writer import Writer
 
 from _paths import DATA, ROOT
 
-# 国道のタイルが持つ属性。閲覧側がそれぞれをどう使うかも述べる。PMTiles の
-# アーカイブは自分の層を自分で述べることになっているので、ここで述べる。
+# 国道のタイルが持つ属性。閲覧側がそれぞれをどう使うかも書く。PMTiles の
+# アーカイブは自分の層を自分で定義するので、ここに置く。
 NATIONAL_FIELDS = {
     "id": "Number",     # OSM way id — identity, and the link out to osm.org
     "refs": "String",   # ",18,117," — every filter tests membership in this
@@ -146,7 +146,7 @@ def pack(key: str) -> None:
 def main() -> None:
     # Windows の端末は標準出力の既定が cp932 で、下の「wrote … — N tiles」の
     # ダッシュを持たない。mise.toml が PYTHONIOENCODING=":replace" を渡すので
-    # `mise run build-all` では出なかったが、build_all.py や このスクリプトを直に
+    # `mise run build-all` では出なかったが、build_all.py やこのスクリプトを直に
     # 叩くと UnicodeEncodeError で落ちていた(issue #103)。他のスクリプトと同じ
     # 手当てをここにも置く。
     sys.stdout.reconfigure(errors="replace")

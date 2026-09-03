@@ -4,9 +4,9 @@
 # ///
 """生成物を、既に真だと分かっていることに照らして確かめる。
 
-走った生成物が、正しい生成物とは限らない。ここでの断定は、実現可能性の報告に
-あった「二重化」の安いほうの半分である。誤った地図を何も言わずに作ってしまう
-壊れ方を捕まえる。
+走った生成物が正しい生成物とは限らない。ここでの断定は、実現可能性の報告に
+あった「二重化」の安いほうの半分である。誤った地図を暗黙のうちに作る壊れ方を
+捕まえる。
 """
 from __future__ import annotations
 
@@ -56,13 +56,14 @@ sorted_ok = all(f["properties"]["refs_list"] == sorted(f["properties"]["refs_lis
 check(sorted_ok, "refs_list is sorted ascending")
 
 # --- 所属都道府県 -----------------------------------------------------------
-# 生成物には所属県が出てこない。国道の番号は全国で一意なので、地図はそれを要らない。
-# 要るのは都道府県道である。番号は県の中でしか一意でなく、県道18号は 47 本ある。
-# 判定がそれを読むより先に、切り出しが正しく書けているかをここで見る。
+# 生成物には所属県が出てこない。国道の番号は全国で一意なので、地図には
+# 不要である。必要なのは都道府県道である。番号は県の中でしか一意でなく、
+# 県道18号は 47 本ある。判定がそれを読むより先に、切り出しが正しく書けているか
+# をここで見る。
 #
-# 「(県, 番号)の組が県内で妥当か」には、ここでは答えられない。その組を作る判定が
-# まだ無いためである(issue #98)。答えるのは compare_annual_report_pref.py で、
-# 県ごとに見つかった番号の数を年報の路線数と突き合わせる。
+# 「(県, 番号)の組が県内で妥当か」には、ここでは答えられない。国道の生成物はその
+# 組を持たない。答えるのは compare_annual_report_pref.py で、県ごとに見つかった
+# 番号の数を年報の路線数と突き合わせる。
 raw = json.loads((CACHE / f"{region}.raw.json").read_text(encoding="utf-8"))
 cache_ways = [o for o in (*raw["core"], *raw["candidates"]) if o["type"] == "way"]
 
@@ -75,7 +76,8 @@ unknown_pref = sorted({w["pref"] for w in cache_ways
 check(not unknown_pref, f"every prefecture is a known region name ({unknown_pref})")
 
 # `prefs` を持つのは県境を跨いだ way だけで、その先頭は `pref` と同じである
-# (prefectures.write_pref)。1 つしか持たない `prefs` は、同じことを二度述べている。
+# (prefectures.write_pref)。1 つしか持たない `prefs` は、同じことを
+# 二度述べている。
 bad_prefs = [w["id"] for w in cache_ways if "prefs" in w
              and (len(w["prefs"]) < 2 or w["prefs"][0] != w.get("pref")
                   or any(p not in REGION_BOXES for p in w["prefs"]))]
@@ -161,18 +163,18 @@ check(
 )
 
 # さらにその背後にある一般則。保証する集合は地域ぶんである。一般国道の番号は
-# 1〜58 と 101〜507 から、廃止された 6 つの番号を除いた 459 個である。全国でまとめて
-# 判定するとそのすべてがどこかで保証され、裏取りは何も濾さなくなり、長野県道372号が
-# ふたたび国道372号になる。つまり裏取りが裏取りでいられるのは、この集合が小さいあいだ
-# だけである。47 都道府県で測ると最大でも 459 の三分の一を大きく下回る。しきい値は
-# その計測から決めてあり、好みで決めた物ではない。
+# 1〜58 と 101〜507 から、廃止された 6 つの番号を除いた 459 個である。全国で
+# まとめて判定するとそのすべてがどこかで保証され、裏取りは何も濾さなくなり、
+# 長野県道372号がふたたび国道372号になる。裏取りが裏取りでいられるのは、この集合
+# が小さいあいだだけである。47 都道府県で測ると最大でも 459 の三分の一を大きく
+# 下回る。しきい値はその計測から決めてあり、好みで決めた物ではない。
 corroborated = set(meta["corroborated_refs"])
 check(len(corroborated) < 153,
       f"the corroborated set is regional, not national "
       f"({len(corroborated)} of 459 possible numbers)")
 
-# 裏取りがこの地域で実際に捨てた物。数字だけの `ref` は都道府県道も使う書式なので、
-# 実在するどの県でもここは空にならない。
+# 裏取りがこの地域で実際に捨てた物。数字だけの `ref` は都道府県道も
+# 使う書式なので、実在するどの県でもここは空にならない。
 rejected = meta.get("rejected_refs", {})
 print(f"NOTE  corroborated {len(corroborated)} numbers; rejected "
       f"{len(rejected)} uncorroborated ref tokens "
@@ -186,12 +188,12 @@ check(srcs.get("relation", 0) > 0, f"relations admitted arcs ({srcs.get('relatio
 print(f"NOTE  rule (c) recovered {srcs.get('tag', 0)} relation-less arcs, "
       f"names admitted {srcs.get('name', 0)}")
 
-# 旧道の区間は残す——地理院地図も指定解除まで国道として描く——が、見分けが付く
+# 旧道の区間は残す(地理院地図も指定解除まで国道として描く)が、見分けが付く
 # ようフラグを立てねばならない。1 本も持たない地域が在っても正当である。
 #
 # is_former() は `historic:highway` にも反応する(RULES.md 旧道)。出力の形は
 # そのタグを持たないので、名前が旧道のアークは `former` と一致するのではなく、
-# その部分集合でなければならない——way/152895667 が `historic:highway` だけで
+# その部分集合でなければならない。way/152895667 が `historic:highway` だけで
 # 通るようになった日に、一致を求める検査は破れた(CASES.md 21)。
 former = [f for f in feats if f["properties"].get("former")]
 former_ids = {f["properties"]["id"] for f in former}
@@ -201,7 +203,7 @@ check(not missing, f"every 旧道-named arc carries the former flag ({len(missin
 check(all(f["properties"]["refs_list"] for f in former),
       f"former arcs still carry their designation ({len(former)} arcs)")
 
-# revoked(issue #9)は former とは独立だが、former より広くなることは無い——
+# revoked(issue #9)は former とは独立だが、former より広くなることは無い。
 # apply_n13.py が revoked=1 を立てるのは、既に former のアークだけである。
 revoked_not_former = [
     f["properties"]["id"] for f in feats
@@ -255,7 +257,7 @@ check(not asym, f"per-route max_n covers every arc it appears on ({asym} violati
 
 n2 = sum(1 for f in feats if f["properties"]["n"] >= 2)
 check(n2 > 0, f"concurrent arcs found: {n2}")
-# 三重用が在ることは全国についての事実であって、県ごとの事実ではない——香川県と
+# 三重用が在ることは全国についての事実であって、県ごとの事実ではない。香川県と
 # 沖縄県に三重用が無くてよい。より深い重なりは、それが本当に分かる結合後のデータ
 # に対して verify_national.py が断定する。
 ranking = meta["concurrency_ranking"]

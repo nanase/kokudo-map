@@ -49,16 +49,17 @@ def main() -> None:
         ("判定 — build/regions/ を生成する",
          ["uv", "run", str(HERE / "build_routes.py"), region]),
     )
-    # 地域の索引は、その 1 県ではなく揃っている物すべての話なので、判定そのものは
-    # 書かない(build_routes.write_index を参照)。下のパックが読むので、ここで
-    # 書き直しておく。
+    # 地域の索引は、その 1 県ではなく揃っている物すべての話なので、
+    # 判定そのものは書かない(build_routes.write_index を参照)。下のパックが
+    # 読むので、ここで書き直しておく。
     stages.append(
         ("索引 — build/regions/regions.json を書く",
          ["uv", "run", str(HERE / "build_routes.py"), "--index-only"]),
     )
     if not skip_n13:
-        # N13(国土数値情報)への都度ネットワーク取得が必要 — オフライン反復時は
-        # --skip-n13 で飛ばす。ミラーは無く、単一の政府サイトのみを見る。
+        # N13(国土数値情報)をネットワークから取るので、オフラインで
+        # 繰り返すときは --skip-n13 で飛ばす。ミラーは無く、政府のサイト
+        # 1 つだけを見る。
         stages.append(
             ("指定解除確認 — N13 と照合し revoked を書き込む",
              ["uv", "run", str(HERE / "apply_n13.py"), region]),
