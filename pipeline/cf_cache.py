@@ -62,6 +62,7 @@ ZONE_SETTINGS = [
 
 
 def creds() -> tuple[str, str]:
+    """環境変数からトークンとゾーン ID を読む。無ければ理由を述べて落ちる。"""
     token = os.environ.get(TOKEN_ENV)
     zone_id = os.environ.get(ZONE_ID_ENV)
     missing = [n for n, v in ((TOKEN_ENV, token), (ZONE_ID_ENV, zone_id)) if not v]
@@ -71,6 +72,7 @@ def creds() -> tuple[str, str]:
 
 
 def get(path: str, token: str) -> dict:
+    """Cloudflare API を GET し、`result` を返す。"""
     r = requests.get(f"{API}{path}", headers={"Authorization": f"Bearer {token}"}, timeout=30)
     r.raise_for_status()
     body = r.json()
@@ -103,6 +105,7 @@ def fetch_cache_rules(zone_id: str, token: str) -> list[dict]:
 
 
 def fetch_zone_settings(zone_id: str, token: str) -> dict:
+    """`ZONE_SETTINGS` に挙げた項目だけを `{id: value}` で返す。"""
     result = get(f"/zones/{zone_id}/settings", token)
     by_id = {item["id"]: item["value"] for item in result}
     missing = [k for k in ZONE_SETTINGS if k not in by_id]
@@ -112,6 +115,7 @@ def fetch_zone_settings(zone_id: str, token: str) -> dict:
 
 
 def fetch() -> dict:
+    """Cache Rules とゾーン設定をまとめて取得する。"""
     token, zone_id = creds()
     return {
         "cache_rules": fetch_cache_rules(zone_id, token),
@@ -120,6 +124,7 @@ def fetch() -> dict:
 
 
 def render(doc: dict) -> str:
+    """書き出し用に整形する。key を並べ替えるのは差分を安定させるため。"""
     return json.dumps(doc, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
@@ -153,7 +158,12 @@ def diff() -> None:
 
 def main() -> None:
     sys.stdout.reconfigure(errors="replace")
-    if "--diff" in sys.argv[1:]:
+    argv = sys.argv[1:]
+    # 誤入力(例: --dif)を pull() に流すと、比較の基準である OUT を無言で
+    # 上書きしてしまう。無し・--diff の 2 通りだけを認める。
+    if argv not in ([], ["--diff"]):
+        sys.exit(f"知らない引数: {' '.join(argv)}。使えるのは無しか --diff だけである。")
+    if argv == ["--diff"]:
         diff()
     else:
         pull()

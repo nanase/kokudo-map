@@ -207,5 +207,5 @@ Edge TTL は「キャッシュ制御ヘッダーが存在する場合は使用�
    CLOUDFLARE_ZONE_ID = "..."
    ```
 
-   mise は設定ファイルを祖先方向へ辿るので、`.claude/worktrees/<name>/` の深さで `mise run` / `mise exec` を通して実行しても読める。素の shell から直接読むには mise の有効化(`mise activate`)が要る。
+   mise は設定ファイルを祖先方向へ辿るので、`.claude/worktrees/<name>/` の深さで `mise run` / `mise exec` を通して実行しても環境変数を読める。素の shell で環境変数を利用するには mise の有効化(`mise activate`)が要る。
 9. `mise run cf-cache` で取得できることを確かめる
