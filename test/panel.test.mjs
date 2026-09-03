@@ -235,7 +235,7 @@ describe('shareSummaryHTML', () => {
     });
     expect(html).toContain('都道府県道');
     expect(html).toContain('class="shield hex sm"');
-    // 番号だけでは 47 本のどれか決まらないので、読み上げには県が要る。
+    // 番号だけでは 47 本のどれか決まらないので、読み上げには県が必要になる。
     expect(html).toContain('aria-label="長野県道63号"');
   });
 
@@ -322,11 +322,11 @@ describe('凡例', () => {
     expect(html.match(/border-top-style:dashed/g)).toHaveLength(4);
   });
 
-  /* index.html はこの二つの凡例だけ、生成を待たずに static な HTML として
-   * 埋め込んである — vendor/*.js が読み終わるまで app.js 自体が動けず、遅い
-   * 回線では凡例だけ空のまま出てから遅れて現れて見えていた。static にした
-   * 代わり、legendNHTML()/legendKindHTML() と食い違えば古いままになりうる
-   * ので、ここで一致を検査する。 */
+  /* index.html は凡例だけ、生成を待たずに static な HTML として埋め込んである。
+   * vendor/*.js が読み終わるまで app.js が動けず、遅い回線では凡例だけ空のまま
+   * 出てから遅れて現れて見えていた。static にした代わり、
+   * legendNHTML()/legendKindHTML() と食い違えば古いままになりうるので、ここで
+   * 一致を検査する。 */
   const staticMarkup = (id) => {
     const m = indexHtml.match(
       new RegExp(`<div id="${id}" class="legend">([\\s\\S]*?)</div>`),
@@ -367,12 +367,11 @@ describe('凡例', () => {
     expect(PREF_SPECIAL_TIP).toContain('工事中・事業中');
   });
 
-  /* 「道路を選択」の系統ボタンも、押されている間は系統の色で沈みます。都道府県道
-     の側の緑は地図の主要地方道の札と同じ色で、CSS の写しがずれると、押した
-     ボタンと地図が別の緑で同じ系統を指します。
-
-     地図の線そのものの緑(PREF_MAJOR)ではありません。あちらは縁取りが輪郭を
-     持つ前提の明るい緑で、白い字を載せると 2.5:1 しか出ません。 */
+  /* 「道路を選択」の系統ボタンも、押されている間は系統の色で沈みます。
+   * 都道府県道の側の緑は地図の主要地方道のラベルと同じ色で、CSS の
+   * 写しがずれると、押したボタンと地図が別の緑で同じ系統を指します。地図の
+   * 線そのものの緑(PREF_MAJOR)ではありません。あちらは縁取りが輪郭を持つ前提の
+   * 明るい緑で、白い字を載せると 2.5:1 しか出ません。 */
   test('系統ボタンの緑は、地図の主要地方道の札と同じ色である', () => {
     expect(styleCss).toContain(`--pref-green: light-dark(${PREF_MAJOR_INK},`);
     expect(styleCss).not.toContain(`--pref-green: light-dark(${PREF_MAJOR},`);
@@ -403,8 +402,8 @@ describe('凡例', () => {
     expect(styleCss).toContain('.legend .swatch.duo > span');
   });
 
-  /* 畳んだ状態を持つ鍵の綴りが一つでもずれると、畳んだまま次に来た人の画面に
-   * 凡例が戻る。それがどこも壊さずに起きるので、三つを突き合わせる。 */
+  /* 畳んだ状態を持つキーの綴りが一つでもずれると、畳んだまま次に来た人の画面に
+   * 凡例が戻る。どこも壊さずに起きるので、三つを突き合わせる。 */
   test('凡例の畳み方は、三つのファイルが同じ綴りを使う', () => {
     expect(indexHtml).toContain("localStorage.getItem('legend-open')");
     expect(appJs).toContain("localStorage.setItem('legend-open'");
@@ -418,8 +417,8 @@ describe('凡例', () => {
     // 片方しか無いと、畳んだ人が戻れないか、そもそも畳めない。
     expect(indexHtml).toContain('id="legend-close"');
     expect(indexHtml).toContain('id="legend-open"');
-    // 開き直す口は自分の外にある物を出すので、何を出すのかを述べる。閉じる口は
-    // 閉じる対象の中にいるので述べない——#panel-close・#detail-close と同じ。
+    // 開き直すボタンは自分の外にある物を出すので、何を出すのかを示す。閉じる
+    // ボタンは閉じる対象の中にいるので示さない。#detail-close と同じ。
     expect(indexHtml).toContain(
       '<button type="button" id="legend-open" aria-controls="legend-box"',
     );
@@ -493,9 +492,9 @@ describe('freshnessHTML', () => {
 });
 
 /* ------------------------------------ 都道府県道の重用の考え方 --- */
-/* 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではありません。数だけ
- * を並べると、出ている数がその路線の重用のすべてだと読まれます。三つはその読みを
- * 止めるためにあるので、文言そのものが仕様です。 */
+/* 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではありません。
+ * 数だけを並べると、出ている数がその路線の重用のすべてだと読まれます。
+ * 三つはその読みを止めるためにあるので、文言そのものが仕様です。 */
 describe('PREF_CONCURRENCY_NOTES', () => {
   const text = PREF_CONCURRENCY_NOTES.map((n) => n.head + n.body).join('');
 
@@ -536,7 +535,7 @@ describe('prefConcurrencyHTML', () => {
   });
 });
 
-/* 都道府県道の行は県を述べなければ路線を名指したことになりません。県道 18 号は
+/* 都道府県道の行は県を示さなければ路線を名指したことになりません。県道 18 号は
  * 47 本あります。 */
 describe('prefRowsHTML', () => {
   const rows = [
@@ -575,7 +574,7 @@ describe('prefGroupLabel', () => {
   });
 
   test('切ったときは、切ったと言う', () => {
-    // 黙って落とすと「これで全部」と読まれます。
+    // 暗黙のうちに落とすと「これで全部」と読まれます。
     expect(prefGroupLabel(200, 5123)).toBe('都道府県道 ── 上位 200 / 5,123 件');
   });
 });

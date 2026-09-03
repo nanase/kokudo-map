@@ -1,11 +1,8 @@
-/* 一つの国道について述べるパネルの中身。
- *
- * ここで壊れやすいのは三つあります。区分別の距離(issue #58)・台帳の起終点
- * (issue #59)・旧道の距離(issue #84)は、どれも組み合わせ表と meta の欄が
- * 揃って初めて埋まるので、欄が無いときに出さないことと、来たときに出す
- * ことの両方を検査します。もう一つは、地名が OpenStreetMap ではなく政令
- * から来るとはいえ、文字列を innerHTML に流す点はポップアップと同じで
- * あることです。
+/* 一つの国道の詳細パネルの中身。壊れやすいのは、区分別の距離(#58)・台帳の起終点
+ * (#59)・旧道の距離(#84)が組み合わせ表と meta の欄が揃って初めて埋まることで、
+ * 欄が無いときに出さないことと来たときに出すことの両方を検査します。もう
+ * 一つは、地名が政令から来るとはいえ文字列を innerHTML に流す点はポップアップと
+ * 同じであることです。
  */
 import { describe, expect, test } from 'bun:test';
 
@@ -44,11 +41,10 @@ describe('wikipediaURL', () => {
 });
 
 describe('decreeTerminiOf', () => {
-  /* `pipeline/pack_web.mjs` が書く形をそのまま写しています。入れ物の名前
-   * (`decree.routes`)と、その中の `ref`・`start`・`end`・`how` までを含みます。
-   * ここを実物と違う形にしていたために、欄はあるのに詳細の起終点が空のまま
-   * でした。名前を思い込みで書くと、この検査は通ったまま画面だけが空になり
-   * ます。実データで出ることは `pipeline/render_check.mjs` が確かめます。 */
+  /* `pipeline/pack_web.mjs` が書く形(`decree.routes` と、その中の `ref`・
+   * `start`・`end`・`how`)をそのまま写しています。実物と違う形にしていた
+   * ために、欄はあるのに詳細の起終点が空のままでした。実データで出ることは
+   * `pipeline/render_check.mjs` が確かめます。 */
   const meta = {
     decree: {
       law_num: '昭和四十年政令第五十八号',
@@ -111,7 +107,8 @@ describe('decreeTerminiOf', () => {
 describe('detailHTML — 見出しとボタン', () => {
   test('標識を出し、路線名は読み上げにだけ残す', () => {
     // 標識が路線の名前そのものなので、隣に「国道18号」とは書きません。ただし
-    // パネルの aria-labelledby が指す先なので、名前は #detail-title に残します。
+    // パネルの aria-labelledby が指す先なので、名前は #detail-title に
+    // 残します。
     const html = detailHTML({ route: route() });
     expect(html).toContain('aria-label="国道18号"'); // shield() の svg
     expect(html).toContain(
@@ -137,12 +134,13 @@ describe('detailHTML — 見出しとボタン', () => {
   test('その路線だけを表示するボタンが番号を持つ', () => {
     const html = detailHTML({ route: route({ ref: 459 }) });
     expect(html).toContain('class="icon-btn detail-only" data-ref="459"');
-    // 字が消えてアイコンだけになったので、名乗りは aria-label が持ちます。
+    // 字が消えてアイコンだけになったので、ラベルは aria-label が持ちます。
     expect(html).toContain('aria-label="国道459号だけを表示"');
   });
 
-  /* 都道府県道のパネル(prefDetailHTML)と同じボタンです。押した状態を持たな
-     かったころ、国道は押して 1 本にできるのに、同じ場所で解除できませんでした。 */
+  /* 都道府県道のパネル(prefDetailHTML)と同じボタンです。押した状態を
+   * 持たなかったころ、国道は押して 1 本にできるのに、同じ場所で
+   * 解除できませんでした。 */
   test('押した状態は active と aria-pressed と名乗りに出る', () => {
     const off = detailHTML({ route: route({ ref: 459 }) });
     expect(off).toContain('class="icon-btn detail-only"');
@@ -199,7 +197,8 @@ describe('detailHTML — 区分別', () => {
   });
 
   test('対応表に無い区分はそのまま出す', () => {
-    // 生成側が新しい区分を足したとき、空欄になるより生の値が見えたほうがよいです。
+    // 生成側が新しい区分を足したとき、空欄になるより生の値が
+    // 見えたほうがよいです。
     const html = detailHTML({
       route: route(),
       kinds: [{ kind: 'newkind', km: 1 }],
@@ -207,9 +206,8 @@ describe('detailHTML — 区分別', () => {
     expect(html).toContain('newkind');
   });
 
-  // round1() が 0.1 km 未満を切り捨てるので、地図には描かれているのに丸めた
-  // 値がちょうど 0 になる区分がある(#88)。行ごと落とすと「階段が 0.0 km
-  // ある」より悪い——「階段がある」という事実そのものが消える。
+  // round1() が 0.1 km 未満を切り捨てるので、地図には描かれているのに丸めた値が
+  // 0 になる区分がある(#88)。行ごと落とすと「階段がある」事実そのものが消える。
   test('丸めて 0.0 km になる区分は行を落とさず「0.1 km 未満」と出す', () => {
     const html = detailHTML({
       route: route(),
@@ -225,10 +223,9 @@ describe('detailHTML — 区分別', () => {
 });
 
 describe('detailHTML — 旧道', () => {
-  // formerKmFor() が拾う「区分別とは別の軸」の距離(#84)。0.0 km と書くより
-  // 短いからではなく、旧道を持たない路線が多くあり、持たないことは述べるに
-  // 値しないため、行そのものを出さない。重用区間(上のテスト)が「なし」と
-  // 書くのとは扱いを変えている。
+  // formerKmFor() が拾う、区分別とは別の軸の距離(#84)。旧道を持たない路線が
+  // 多く、持たないことは書くに値しないので行そのものを出さない。重用区間が
+  // 「なし」と書くのとは扱いが違う。
   test('値が無ければ行ごと出さない(未指定・0)', () => {
     expect(detailHTML({ route: route() })).not.toContain('うち旧道');
     expect(detailHTML({ route: route(), formerKm: 0 })).not.toContain(
@@ -236,9 +233,8 @@ describe('detailHTML — 旧道', () => {
     );
   });
 
-  // fmtKm は小数第 1 位までに丸める。丸める前の値で判定すると、0.04 のような
-  // 値が「うち旧道 0.0 km」のまま出てしまう。表示する桁——出す判定も同じ
-  // 桁——で見る。
+  // fmtKm は小数第 1 位までに丸める。丸める前の値で判定すると 0.04 が「うち旧道
+  // 0.0 km」のまま出るので、表示する桁で見る。
   test('丸めて 0.0 km になる値でも出さない', () => {
     expect(detailHTML({ route: route(), formerKm: 0.04 })).not.toContain(
       'うち旧道',
@@ -252,10 +248,8 @@ describe('detailHTML — 旧道', () => {
 
   test('延長の行の直後に来る(区分別より前)', () => {
     // 区分別の合計は延長とほぼ一致する(国道 10 号なら 791.3 km と 791.4 km)。
-    // 区分別の下に同じ書体で旧道の行を続けると「四つめの区分」に読める
-    // (#26)。延長の直下に置けば、「うち」が指す先の真下に来る。文字列位置
-    // を引き算するのではなく、延長と旧道の行がそのまま連続することを直接
-    // 見る。
+    // 区分別の下に続けると「四つめの区分」に読める(#26)。延長と旧道の
+    // 行がそのまま連続することを直接見る。
     const html = detailHTML({
       route: route(),
       kinds: [{ kind: 'road', km: 300.2 }],
@@ -448,7 +442,8 @@ describe('detailHTML — 関わりのある国道', () => {
   });
 
   test('小さいほうの標識を使う', () => {
-    // 交差する路線は 35 まであります。見出しの 44px で並べるとパネルが埋まります。
+    // 交差する路線は 35 まであります。見出しの 44px で並べるとパネルが
+    // 埋まります。
     expect(detailHTML({ route: route(), related })).toContain(
       '<span class="shield sm">',
     );
@@ -485,8 +480,8 @@ describe('prefWikipediaURL', () => {
 });
 
 describe('relatedRoutesOf — 都道府県道', () => {
-  /* pack_web_pref.mjs が県ごとに書く二つの欄です。`shared_termini` はありません
-   * ——都道府県道には全国 1 枚の起終点の台帳がないためです。 */
+  /* pack_web_pref.mjs が県ごとに書く二つの欄です。`shared_termini`
+   * はありません。都道府県道には全国 1 枚の起終点の台帳がないためです。 */
   const meta = {
     combinations: [
       { refs: ['nagano-60'], n: 1, km: 20 },
@@ -562,8 +557,8 @@ describe('prefDetailHTML', () => {
     expect(full()).toContain(`href="${prefWikipediaURL('長野県', 60)}"`);
   });
 
-  /* 操作面に都道府県道の節は無いので、選んでいることを述べる場所も、解除する
-     口も、このボタンのほかにありません(#109)。 */
+  /* 操作パネルに都道府県道の節は無いので、選んでいることを示す場所も解除する
+   * 操作も、このボタンのほかにありません(#109)。 */
   test('「だけを表示」は県を伴う鍵を持つ', () => {
     expect(full({ region: 'nagano' })).toContain(
       'class="icon-btn detail-only" data-pref="nagano-60"',
@@ -584,8 +579,8 @@ describe('prefDetailHTML', () => {
     expect(on).toContain('長野県道60号だけの表示を解除');
   });
 
-  /* 県が分からなければ鍵を作れません。県を伴わない呼び出しでは、押しても
-     何も指せないボタンを出さないでおきます。 */
+  /* 県が分からなければキーを作れません。県を伴わない呼び出しでは、押しても何も
+   * 指せないボタンを出さないでおきます。 */
   test('県を渡さなければボタンごと出さない', () => {
     expect(full()).not.toContain('detail-only');
   });
