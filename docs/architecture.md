@@ -94,7 +94,31 @@ z0-7 のタイルが持つのは次の七つです。`pipeline/pack_web_pref.mjs
 
 ## コードとデータを分けて置く理由
 
-コードは GitHub Pages に、配信データは Cloudflare R2(`data.nanase.cc`)に置きます。分けているのは選択ではなく回避です。GitHub Pages の裏側の Fastly は、ファイルの先頭から始まらない Range 要求に対して無関係なバイト列を返す不具合を抱えています。PMTiles の読み取りはほぼ全てそのような Range 要求なので、Pages 経由では地図が描けませんでした。同じ Cloudflare ゾーンの R2 にはこの不具合がありません。
+コードは GitHub Pages に、配信データは Cloudflare R2(`data.nanase.cc`)に置きます。分けているのは選択ではなく回避です。
+
+### GitHub Pages 経由で Range 要求が壊れる
+
+`nanase.cc` 配下(Pages)へ実際に Range 要求を送ると、次のようになります。
+
+| 対象 | 200 の実長 | `Range: bytes=100-199` への応答 |
+| --- | --- | --- |
+| `style.css` | 63677 バイト | 206 は返るが、全体長が 19634(gzip 後の長さ)になり、`content-encoding` の無いまま本文だけ gzip の生バイトになる |
+| `glyphs/.../0-255.pbf` | 4835 バイト | 同様に全体長・中身とも不一致。Cloudflare が未キャッシュ(`cf-cache-status: DYNAMIC`)でも壊れる |
+| `og.png` | 156949 バイト | 全体長・中身とも一致し、正しく返る。Cloudflare はキャッシュ済み(`HIT`) |
+
+原因は origin 側、GitHub Pages の裏にある Fastly の圧縮です。Range を圧縮後の本体に適用し、`content-encoding: gzip` を名乗らずに返すため、読み手は狙った位置とは違うバイト列を受け取ります。
+
+png が壊れないのはすでに圧縮済みの形式で、Fastly が二重に圧縮しないためです。pbf は Cloudflare が未キャッシュでも壊れるので、原因は Cloudflare のキャッシュではなく origin にあります。
+
+PMTiles の読み取りはほぼ全てこの種の Range 要求なので、Pages 経由では地図が描けません。同じ Cloudflare ゾーンの R2 にはこの不具合が無く、配信データはそちらに置きます。
+
+### グリフはこの不具合に触れない
+
+`glyphs/{fontstack}/{range}.pbf`(`web/mapspec.mjs`)の `{range}` は Unicode のコードポイント範囲で、ファイル名の一部です。HTTP の Range 要求ではありません。MapLibre はこのファイルを毎回丸ごと GET します。
+
+vendor のライブラリを検査すると、`bytes=` を送るのは `pmtiles.js` だけでした。`maplibre-gl.js` に出てくる `Range` は `latRange`・`lngRange`・`setDefaultRange` など緯度経度の範囲で、HTTP ヘッダーとは無関係です。
+
+したがって、グリフは Pages 経由のままでも壊れません。現在 `.pbf` が `cf-cache-status: DYNAMIC` なのは、その拡張子が Cloudflare の既定の静的拡張子一覧に入っていないためで、意図した設定ではありません。
 
 コード側(`web/vendor/`・`web/*.mjs`・`web/*.js`・`index.html`)はバンドラを通さず、`web/` をそのまま配ります。読むパスはすべて相対で、`user.github.io/<repo>/` の下でも動きます。配信データだけは例外で、`web/mapspec.mjs` と `web/app.js` は `web/dataurl.mjs` の `dataURL()` で URL を組みます。基点(相対パス `data/`)を持つのは `dataurl.mjs` の 1 行だけで、配る直前に Actions がそこを `https://data.nanase.cc/` へ書き換えます。手元の `mise run serve` では相対パスのまま、`build/regions/` から作った `web/data/` を読みます。配信データのファイルが増えても、書き換える行は増えません。
 

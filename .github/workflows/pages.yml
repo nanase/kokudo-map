@@ -4,10 +4,11 @@
 # コードと同じ木に置かないため、また 55 MB の gzip 済みタイルを作り直すたびに
 # 履歴へ積まないためです(.gitignore)。
 #
-# データ自体は GitHub Pages を経由しません。GitHub Pages の裏側の Fastly が
-# ファイル先頭以外への Range 要求を壊す不具合を抱え、PMTiles を正しく配れません
-# でした。data.nanase.cc(Cloudflare R2)に直接置き、`mise run publish-data` が
-# そこへ上げます。ここではコードだけを配り、web/ の中の相対パス('data/…')を
+# データ自体は GitHub Pages を経由しません。GitHub Pages の裏側の Fastly は、
+# Range 要求を圧縮後の本体に適用し、`content-encoding` を名乗らずに返す不具合を
+# 抱え、PMTiles を正しく配れませんでした(機序の詳細は docs/architecture.md)。
+# data.nanase.cc(Cloudflare R2)に直接置き、`mise run publish-data` がそこへ
+# 上げます。ここではコードだけを配り、web/ の中の相対パス('data/…')を
 # data.nanase.cc の絶対 URL に書き換えます。
 name: Pages に配る
 
