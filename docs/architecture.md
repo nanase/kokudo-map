@@ -102,13 +102,13 @@ z0-7 のタイルが持つのは次の七つです。`pipeline/pack_web_pref.mjs
 
 | 対象 | 200 の実長 | `Range: bytes=100-199` への応答 |
 | --- | --- | --- |
-| `style.css` | 63677 バイト | 206 は返るが、`content-range` の全体長が 19634(gzip 後の長さ)になる。`content-encoding` が付かないのに、本文は gzip の生バイトのまま |
-| `glyphs/.../0-255.pbf` | 4835 バイト | 同様に全体長も中身も一致しない。Cloudflare が未キャッシュ(`cf-cache-status: DYNAMIC`)でも壊れる |
-| `og.png` | 156949 バイト | 全体長・中身の md5 とも一致し、正しく返る。Cloudflare はキャッシュ済み(`HIT`) |
+| `style.css` | 63677 バイト | 206 は返るが、全体長が 19634(gzip 後の長さ)になり、`content-encoding` の無いまま本文だけ gzip の生バイトになる |
+| `glyphs/.../0-255.pbf` | 4835 バイト | 同様に全体長・中身とも不一致。Cloudflare が未キャッシュ(`cf-cache-status: DYNAMIC`)でも壊れる |
+| `og.png` | 156949 バイト | 全体長・中身とも一致し、正しく返る。Cloudflare はキャッシュ済み(`HIT`) |
 
-原因は origin 側、つまり GitHub Pages の裏にある Fastly の圧縮です。Fastly は Range を圧縮後の本体に対して適用し、しかも `content-encoding: gzip` を名乗らずに返します。読み手は元のファイルの 100〜199 バイト目を読んだつもりでも、実際には gzip 済みの別の位置を読まされます。
+原因は origin 側、GitHub Pages の裏にある Fastly の圧縮です。Range を圧縮後の本体に適用し、`content-encoding: gzip` を名乗らずに返すため、読み手は狙った位置とは違うバイト列を受け取ります。
 
-Cloudflare のキャッシュはこの不具合と無関係です。キャッシュに載っていない pbf が壊れ、キャッシュに載っている png が壊れないことが対照になっています。png はすでに圧縮済みの形式なので、Fastly が二重に圧縮しません。圧縮されない形式なら Range は正しく返ります。
+png が壊れないのはすでに圧縮済みの形式で、Fastly が二重に圧縮しないためです。pbf は Cloudflare が未キャッシュでも壊れるので、原因は Cloudflare のキャッシュではなく origin にあります。
 
 PMTiles の読み取りはほぼ全てこの種の Range 要求なので、Pages 経由では地図が描けません。同じ Cloudflare ゾーンの R2 にはこの不具合が無く、配信データはそちらに置きます。
 
