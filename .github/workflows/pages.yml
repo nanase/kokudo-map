@@ -14,8 +14,30 @@ name: Pages に配る
 on:
   # コードを変えたときだけです。データの差し替えは Pages を経由しないので、
   # publish_data.py はもうこれを叩きません。
+  #
+  # paths-ignore にしたのは、許可一覧(paths)だと配信物の書き足し忘れが
+  # 「古いまま配られる」形でしか気付けないためです。除外一覧なら既定が
+  # 「配る」側に倒れるので、書き足し忘れは損なだけで壊れません。
+  #
+  # 除外の対象は docs/・pipeline/・.claude/・test/ とルート直下の *.md です。
+  # `**.md` にすると web/ 配下の Markdown も拾ってしまい、そこだけの変更が
+  # 配信されなくなるので避けています。ここに当たると配信一式と Cloudflare
+  # のパージ(URL 30 件ずつ・API 9 回)を素通りします。害はありませんが、
+  # 理由なくエッジキャッシュを捨てるので次の利用者を遅くする方に効きます。
+  #
+  # 代償: main の検査は check.yml をこの workflow が呼ぶ経路しかないため、
+  # push を素通りすると main への直 push だけが無検査になります。通常の
+  # コミットは PR 上で検査済みです。check.yml 側に補集合の条件を足して
+  # 塞ぐことはしません。除外一覧を 2 箇所で持つと、CLAUDE.md の「同じ問いに
+  # 二箇所で答えない」に反するためです。
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "pipeline/**"
+      - ".claude/**"
+      - "test/**"
+      - "*.md"
   workflow_dispatch:
 
 permissions:
