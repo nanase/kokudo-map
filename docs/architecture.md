@@ -147,17 +147,23 @@ mise run cf-cache-diff   # ファイルと実際の設定の差分を出す
 
 トークンは環境変数 `CLOUDFLARE_CACHE_CONFIG_TOKEN`、ゾーン ID は `CLOUDFLARE_ZONE_ID` から読む。`CLOUDFLARE_API_TOKEN` という名前は使わない。その名前があると wrangler が OAuth ログインより優先して読み、このトークンには R2 権限が無いため `mise run publish-data` が壊れる。
 
-現在、次の 2 本の Cache Rule を当てている。
+現在、次の 3 本の Cache Rule を当てている。
 
-### ルール 1 ── `/kokudo-map/` 配下(glyphs を除く)の Browser TTL を origin に従わせる
+### ルール 1 ── `/kokudo-map/` 配下の `.mjs` をキャッシュ対象にする
 
-ゾーンの Browser Cache TTL 設定が 48 時間をブラウザ向けに被せており、GitHub Pages が返す 600 秒(10 分)を上書きしていた。Cloudflare の既定のキャッシュ判定は拡張子で決まる。`.js` `.mjs` `.css` `.woff2` `.png` はエッジに乗り 48 時間が被さる一方、`.html` `.webmanifest` `.pbf` は乗らず、Pages の 600 秒がそのまま出ていた。
+`.mjs` は Cloudflare の既定の静的拡張子一覧に無い。既定のままでは `cf-cache-status: DYNAMIC`(キャッシュ対象外)になる。これを個別にキャッシュ対象へ加えているのがこのルールである。
 
-結果、配信の 10 分後には「新しい `index.html`」と「最大 48 時間古い `app.js`・`style.css`」が組み合わさり、ページが壊れた。単に古いのではなく、新旧が混ざるのが問題だった。
+いつ・誰が・なぜ足したかは、この文書を書いている時点で分かっていない。分かっているのは「`.mjs` は既定の一覧に無く、個別に有効化されている」という事実だけである。分からないことを推測で埋めるより、分からないと書く。
+
+### ルール 2 ── `/kokudo-map/` 配下(glyphs を除く)の Browser TTL を origin に従わせる
+
+ゾーンの Browser Cache TTL 設定が 48 時間をブラウザ向けに被せており、GitHub Pages が返す 600 秒(10 分)を上書きしていた。この被さりはキャッシュ対象の応答にしか効かない。`.js` `.css` `.woff2` `.png` は Cloudflare の既定でエッジに乗り 48 時間が被さる。`.mjs` はルール 1 によってエッジに乗るため、同じく被さる。`.html` `.webmanifest` `.pbf` はエッジに乗らず、Pages の 600 秒がそのまま出ていた。
+
+結果、配信の 10 分後には「新しい `index.html`」と「最大 48 時間古い `app.js`・`style.css`・`mapspec.mjs`」が組み合わさり、ページが壊れた。単に古いのではなく、新旧が混ざるのが問題だった。
 
 ゾーン設定を直接下げると `nanase.cc` の他も巻き込むため、Cache Rule で `/kokudo-map/` 配下だけに効かせている。式に `http.host eq "nanase.cc"` を入れているので、`data.nanase.cc`(R2)には当たらない。
 
-### ルール 2 ── `/kokudo-map/glyphs/` をエッジキャッシュ対象にする
+### ルール 3 ── `/kokudo-map/glyphs/` をエッジキャッシュ対象にする
 
 `.pbf` は Cloudflare の既定の静的拡張子一覧に無く、`cf-cache-status: DYNAMIC` のままだった。ラベルのグリフを引くたび、GitHub Pages まで往復していた。
 
@@ -173,7 +179,9 @@ Edge TTL は「キャッシュ制御ヘッダーが存在する場合は使用�
 
 ### 指定より広く効いた点
 
-ルール 1 は Browser TTL だけを触る設計だったが、実際には HTML と `manifest.webmanifest` もキャッシュ対象になった(`DYNAMIC` → `HIT`)。これは害ではない。Edge TTL が origin に従うので、エッジが HTML を抱えるのは最大 10 分である。デプロイ時のパージ対象にルート(`""`)と `index.html` が両方入っているため、配信直後に 0 分になる。静的サイトで出し分けも無いので、そのままにしている。
+ルール 2 は Browser TTL だけを触る設計だったが、実際には HTML と `manifest.webmanifest` もキャッシュ対象になった(`DYNAMIC` → `HIT`)。これは害ではない。Edge TTL が origin に従うので、エッジが HTML を抱えるのは最大 10 分である。デプロイ時のパージ対象にルート(`""`)と `index.html` が両方入っているため、配信直後に 0 分になる。静的サイトで出し分けも無いので、そのままにしている。
+
+ルール 2 自体がキャッシュ対象の判定にも効くのなら、ルール 1(`.mjs` を個別にキャッシュ対象にする)は今では冗長になっている可能性がある。確かめるには一時的に外し、`.mjs` が `DYNAMIC` に戻るかを見る必要があり、未検証である。このタスクは読み取りだけを扱うので、外すかどうかは書き込みを扱う後続タスクで判断する。
 
 ### 残る制約
 
