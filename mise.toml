@@ -1,6 +1,6 @@
-# mise が入れた道具を PATH の先頭に置きます。
-# 既定の false では末尾に足すので、システムに入っている node や python が
-# 先に見つかり、上の [tools] が実質何も決めていない状態になります。
+# mise が入れた道具を PATH の先頭に置きます。既定の false では末尾に足すので、
+# システムの node や python が先に見つかり、下の [tools] が実質何も決めていない
+# 状態になります。
 [settings]
 activate_aggressive = true
 
@@ -9,27 +9,28 @@ node = "26"
 python = "3.14"
 bun = "1.3"
 # ほぼ全てのタスクが `uv run` で始まるのに、道具として宣言されていませんでした。
-# 手元では別に入れた uv が拾われていたので気付きません。CI や他人の環境では
-# 最初のタスクで転びます。依存を解決するのは uv なので、その uv 自身をここが述べます。
+# 手元では別に入れた uv が拾われるので気付きませんが、CI や他人の環境では最初の
+# タスクで転びます。依存を解決する uv 自身をここで決めます。
 uv = "0.12"
 
 [env]
 # データ生成のコード一式。
 PIPELINE = "pipeline"
 # 生成系の入口は全部 `uv run` なので、どの Python で地図が作られるかは uv が
-# 決めていました。スクリプトの requires-python は >=3.12 としか言わないので、uv は
-# 手持ちの最も新しいものを選びます。__pycache__ には 3.13 と 3.14 の両方の跡が
-# 残っており、版は誰も選ばないまま二度入れ替わっています。上の [tools] に決めさせます。
+# 決めていました。スクリプトの requires-python は >=3.12 としか言わないので、
+# uv は手持ちの最も新しい物を選び、__pycache__ には 3.13 と 3.14 の両方の跡が
+# 残っていました。上の [tools] に決めさせます。
 UV_PYTHON = "3.14"
-# コンソールが表せない字で落ちないようにします。文字コードは変えず、扱いだけ変えます。
-# 日本語 Windows の cp932 は「尾駮バイパス」の駮も、区切りの — も表せません。
-# それで青森県の判定と PMTiles の書き出しが最後の 1 行で落ちました。
+# コンソールが表せない字で落ちないようにします。文字コードは変えず、扱いだけ
+# 変えます。日本語 Windows の cp932 は「尾駮バイパス」の駮も区切りの — も
+# 表せず、青森県の判定と PMTiles の書き出しが最後の 1 行で落ちました。
 PYTHONIOENCODING = ":replace"
 
 [tasks.fetch-pbf]
 description = "Geofabrik から japan-latest.osm.pbf を取得する(約 2.5 GB)"
-# 1 行で書きます。mise は Windows では cmd に渡すので、複数行の run は 1 行目しか
-# 実行されず、しかもエラーを出さずに成功します。--create-dirs が mkdir の代わりをします。
+# 1 行で書きます。mise は Windows では cmd に渡すので、複数行の run は 1 行目
+# しか実行されず、しかもエラーを出さずに成功します。--create-dirs が mkdir の
+# 代わりをします。
 run = "curl -L --retry 3 -C - --create-dirs -o build/pbf/japan-latest.osm.pbf https://download.geofabrik.de/asia/japan-latest.osm.pbf"
 
 [tasks.extract]
@@ -50,9 +51,9 @@ run = "uv run {{env.PIPELINE}}/pipeline.py {{arg(name='region', default='nagano'
 
 [tasks.pack]
 description = "build/regions/ から web/data/ を作り直す"
-# 段の順番は build_all.py が持っています。ここに書き写した複製は、複数行の
-# run が Windows で 1 行目しか実行されないせいで、タイルを切っただけで
-# エラーも出さずに終わっていました。PMTiles にも全国検証にも届いていませんでした。
+# 段の順番は build_all.py が持ちます。ここに書き写した複製は、複数行の run が
+# Windows で 1 行目しか実行されないせいで、タイルを切っただけでエラーも出さずに
+# 終わり、PMTiles にも全国検証にも届いていませんでした。
 run = "uv run {{env.PIPELINE}}/build_all.py --pack-only"
 
 [tasks.publish-data]
@@ -84,18 +85,19 @@ run = "uv run {{env.PIPELINE}}/apply_n13.py {{arg(name='region', default='nagano
 
 [tasks.pack-n13]
 description = "N13 のメッシュを packed の形へ用意し、古い JSON キャッシュを片づける"
-# build-all が県の並列に入る前に自分で呼びます。単独で先に回しておくのは、初回の
-# 移行(全国 285 メッシュ、約 20 分)を、ビルドとは別の時間に済ませたいときです。
+# build-all が県の並列に入る前に自分で呼びます。単独で先に回すのは、初回の
+# 移行(全国 285 メッシュ、約 20 分)をビルドとは別の時間に済ませたいときです。
 run = "uv run {{env.PIPELINE}}/pack_n13.py {{arg(name='flags', var=true, default='')}}"
 
 [tasks.compare-annual-report]
 description = "道路統計年報と延長を突き合わせ、差の内訳を出す"
-# 渡せるのは上下線分離を見る側方の距離だけです。既定の 40 m を疑うときに使います。
+# 渡せるのは上下線分離を見る側方の距離だけです。既定の 40 m を疑うときに
+# 使います。
 run = "uv run {{env.PIPELINE}}/compare_annual_report.py {{arg(name='flags', var=true, default='')}}"
 
 [tasks.survey-pref]
 description = "都道府県道になりうる way を全国から測り、build/survey に残す"
-# 判定(#98)ではなく、判定より先に立てる検証の土台です。pbf を一度だけ読みます。
+# 判定(#98)より先に立てた検証の土台です。pbf を一度だけ読みます。
 run = "uv run {{env.PIPELINE}}/survey_prefectural.py {{arg(name='flags', var=true, default='')}}"
 
 [tasks.build-pref]

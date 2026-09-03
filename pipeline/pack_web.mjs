@@ -6,13 +6,14 @@
  *   national-routes.pmtiles  ベクタタイル。画面に出ている物しか手元に載らない
  *   national.meta.json       画面が出す合計。代わりにここで計算する
  *
- * 2 つ目が 1 つ目を成り立たせている。app.js はかつて、路線の一覧も重用ランキング
- * も選択の合計も、特徴量を全部辿って求めていた。タイルでは全体が手元に無いので、
- * その合計は重複排除したアークに対してここで一度だけ計算し、データとして配る。
+ * 2 つ目が 1 つ目を成り立たせている。app.js はかつて、路線の一覧も重用
+ * ランキングも選択の合計も、特徴量を全部辿って求めていた。タイルでは全体が
+ * 手元に無いので、その合計は重複排除したアークに対してここで一度だけ計算し、
+ * データとして配る。
  *
  * 集計は rollup.mjs、タイルは tiles.mjs が持つ。どちらも都道府県道の側
- * (pack_web_pref.mjs)が同じ物を呼ぶ。ここに残るのは「一般国道に固有のこと」
- * ——地域の結合、政令の台帳、地域をまたぐ起終点——だけである。
+ * (pack_web_pref.mjs)が同じ物を呼ぶ。ここに残るのは一般国道に固有のこと(地域の
+ * 結合、政令の台帳、地域をまたぐ起終点)だけである。
  *
  * 使い方:  node pipeline/pack_web.mjs [--maxzoom 14]
  */
@@ -29,9 +30,9 @@ const arg = (name, dflt) => {
   const i = process.argv.indexOf(name);
   return i < 0 ? dflt : Number(process.argv[i + 1]);
 };
-// 切る最も深いズーム。これより深く(z がこれより大きく)寄ると MapLibre はこの
-// ズームの形を引き伸ばすので、詳しさが増えるのはここまでである。これを述べる
-// 場所は他に無い。アーカイブが持ち、スタイルはアーカイブに訊く。
+// 切る最も深いズーム。これより深く寄ると MapLibre はこのズームの形を
+// 引き伸ばすので、詳しさが増えるのはここまでである。アーカイブが持ち、
+// スタイルはアーカイブに訊くので、これを書く場所は他に無い。
 const MAXZOOM = arg('--maxzoom', 14);
 // このズームより深いぶんは、全国をタイルごとの独立したピラミッドに分けて切る。
 // geojson-vt が深いピラミッド全体を一度に抱えずに済む。
@@ -62,9 +63,9 @@ console.log(
   `${index.length} regions -> ${features.length.toLocaleString()} arcs after dedupe`,
 );
 
-/* タイルが持つ属性。`refs_list` は落とす。MVT に配列の型は無く、その一覧は
- * 絞り込みが既に使っている、区切り文字で囲んだ値から復元できる。`label` を
- * ここで作っておくのは、symbol の層が素の属性を必要とするためである。 */
+/* タイルが持つ属性。`refs_list` は落とす。MVT に配列の型は無く、区切り文字で
+ * 囲んだ値から復元できる。`label` をここで作るのは、symbol の層が素の属性を
+ * 必要とするためである。 */
 for (const f of features) {
   const p = f.properties;
   const list = p.refs_list;
@@ -77,9 +78,8 @@ for (const f of features) {
     src: p.src,
     former: p.former,
     // `revoked` が出来る前に生成した地域はこの欄を持たない(#51 で入った欄で、
-    // build/regions の大半はそれより古い)。0 は誰も確認していないという意味
-    // ——未確認であって現役ではない——なので、正直な代用であり、しかも MVT が
-    // 運べる唯一の値でもある。
+    // build/regions の大半はそれより古い)。0 は「未確認」であって「現役」では
+    // ないので正直な代用であり、MVT が運べる唯一の値でもある。
     revoked: p.revoked || 0,
     name: p.name || '',
     updated: p.updated,
@@ -90,10 +90,10 @@ for (const f of features) {
 }
 
 /* MVT に null は無い。欠けた属性を vt-pbf は「どの field も立っていない値」と
- * して書き、MapLibre は "unknown feature value" と答えてタイルを丸ごと捨てる
- * ——アーク 1 本の欄が 1 つ欠けるだけで、そのタイルの道が全部消える。しかも
- * それが起きるのはブラウザの中、ビルドが完了を告げたずっと後である。13 万件を
- * 一巡してでも、ここで言う値打ちがあるのはそのためである。 */
+ * して書き、MapLibre は "unknown feature value" と答えてタイルを丸ごと捨てる。
+ * アーク 1 本の欄が 1 つ欠けるだけでそのタイルの道が全部消え、それが起きるのは
+ * ブラウザの中、ビルドが完了を告げた後である。13 万件を一巡してでもここで言う
+ * 値打ちがある。 */
 for (const f of features) {
   for (const [k, v] of Object.entries(f.properties)) {
     if (v === null || v === undefined) {
@@ -112,7 +112,7 @@ const dataBbox = features.reduce(
 
 /* ---------------------------------------------------------------- 集計 --- */
 /** 地域をまたいで結合した起終点。重なりの内側にある点は二度報告されるので、
- *  位置を鍵にして、そこで出会う路線番号を合わせる。 */
+ *  位置をキーにして、そこで出会う路線番号を合わせる。 */
 function mergeTermini(ms) {
   const at = (t) => `${t.lat.toFixed(5)},${t.lon.toFixed(5)}`;
   const single = new Map();
@@ -136,10 +136,10 @@ function mergeTermini(ms) {
   };
 }
 
-/* 政令自身の起点・終点・重要な経過地。pipeline/decree.py がここへ置く。
- * これは端点の置き換えではなく、隣に並ぶ別の欄である。端点は路線のアークが
- * どこで終わるかを述べ、こちらは路線が法令上どこから始まるかを述べる。座標が
- * 当たらなかった路線は地名だけを持ち、その理由を述べる。 */
+/* 政令自身の起点・終点・重要な経過地。pipeline/decree.py が書く。端点の
+ * 置き換えではなく隣に並ぶ別の欄で、端点は路線のアークがどこで終わるかを、
+ * こちらは路線が法令上どこから始まるかを示す。座標が当たらなかった路線は
+ * 地名だけを持ち、その理由を示す。 */
 const decree = JSON.parse(readFileSync(join(DECREE, 'decree.json'), 'utf8'));
 if (decree.routes.length !== 459)
   throw new Error(
@@ -157,8 +157,8 @@ const combos = combinationsOf(features);
 const crossings = crossingsOf(features, (a, b) => a - b);
 const termini = mergeTermini(metas);
 const meta = {
-  // 新しさは最も悪い側で報告する。地図の新しさは最も古い地域の新しさでしかなく、
-  // それ以外の言い方はすべて過大である。
+  // 新しさは最も悪い側で報告する。地図の新しさは最も古い地域の
+  // 新しさでしかなく、それ以外の言い方はすべて過大である。
   osm_timestamp: min(metas.map((m) => m.osm_timestamp)),
   oldest_edit: min(metas.map((m) => m.oldest_edit)),
   newest_edit: max(metas.map((m) => m.newest_edit)),
@@ -199,13 +199,13 @@ console.log(
 );
 
 /* ----------------------------------------------------------------- tiles --- */
-/* 切り方は pipeline/tiles.mjs が持つ。都道府県道の側(pack_web_pref.mjs)と同じ
- * 仕事なので、ここには置かない。
+/* 切り方は pipeline/tiles.mjs が持つ。都道府県道の側(pack_web_pref.mjs)と
+ * 同じ仕事なので、ここには置かない。
  *
- * `lowMaxZoom` は既定の `SPLIT - 1` のままにする。そのとき z7 が簡略化されない
- * ことは分かっていて、それが今の 55.9 MB のアーカイブが描いている絵である。値を
- * 動かすと z7 の線が変わる。仕組みは docs/architecture.md「索引の一番深いズームは
- * 簡略化されない」にある。 */
+ * `lowMaxZoom` は既定の `SPLIT - 1` のままにする。そのとき z7 が
+ * 簡略化されないことは分かっていて、それが今の 55.9 MB のアーカイブの絵である。
+ * 値を動かすと z7 の線が変わる(docs/architecture.md「索引の一番深いズームは
+ * 簡略化されない」)。 */
 writeTiles({
   dir: TILEDIR,
   layer: 'routes',

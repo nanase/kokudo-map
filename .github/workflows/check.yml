@@ -1,7 +1,8 @@
 # push と pull request のたびに、データを持たない検査を回します。
 #
-# ここで走らせられるのは「コードについての問い」だけです。判定の正しさや実描画
-# は 2.5 GB の pbf と 47 地域ぶんの生成を要求するので、手元でしか答えられません。
+# ここで走らせられるのは「コードについての問い」だけです。判定の正しさや
+# 実描画は 2.5 GB の pbf と 47 地域ぶんの生成を要求するので、手元でしか
+# 答えられません。
 # 分かれ目は check_expressions.mjs の --spec-only にそのまま出ています。
 name: 検査
 
@@ -24,7 +25,8 @@ jobs:
       # 道具の版は mise.toml だけが述べます。
       - uses: jdx/mise-action@v2
 
-      # --frozen-lockfile なので、package.json と bun.lock が食い違えばここで落ちます。
+      # --frozen-lockfile なので、package.json と bun.lock が食い違えばここで
+      # 落ちます。
       - run: bun install --frozen-lockfile
 
       - name: 静的検査
@@ -39,12 +41,13 @@ jobs:
       - name: スタイルと絞り込み式
         run: bun run check --spec-only
 
-      # uv 越しに走らせます。この構成の Python は全部 uv が起動するので、
-      # 構文を見るついでに uv が入っていること自体を毎回確かめられます。
-      # 命令の一覧が mise.toml・package.json・docs/development.md で食い違わないことを確かめます。
+      # 命令の一覧が mise.toml・package.json・docs/development.md で食い違わない
+      # ことを確かめます。
       - name: 文書と定義の突き合わせ
         run: bun run check:docs
 
+      # uv 越しに走らせます。この構成の Python は全部 uv が起動するので、構文を
+      # 見るついでに uv が入っていること自体を毎回確かめられます。
       - name: Python の構文
         run: uv run python -m compileall -q pipeline
 
@@ -58,13 +61,14 @@ jobs:
           test -s web/vendor/maplibre-gl.js
           test -s web/vendor/pmtiles.js
 
-      # 配信の workflow は index.html の %SITE_URL% を実際の URL に差し替えます。
-      # 差し替える先が消えていれば、共有カードは壊れたまま気付かれずに公開されます。
+      # 配信の workflow は index.html の %SITE_URL% を実際の URL に差し替え
+      # ます。差し替える先が消えていれば、共有カードは壊れたまま気付かれずに
+      # 公開されます。
       - name: 埋める先が残っている
         run: grep -q '%SITE_URL%' web/index.html
 
-      # ラベルのグリフは追跡しています。字が足りなければ地図から番号が消えるので、
-      # ファイルが揃っていることだけは毎回見ます。
+      # ラベルのグリフは追跡しています。字が足りなければ地図から番号が消える
+      # ので、ファイルが揃っていることだけは毎回見ます。
       - name: グリフが揃っている
         run: |
           test -s web/glyphs/NotoSansJP-Regular/0-255.pbf
