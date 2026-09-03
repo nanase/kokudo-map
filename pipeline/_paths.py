@@ -55,5 +55,8 @@ def write_atomic(path: Path, text: str) -> None:
     ファイルを同時に書きに来た二人が互いの一時ファイルを潰さないためである。
     """
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(text, encoding="utf-8")
+    # newline="\n" を渡さないと Windows では書き込み時に \n が \r\n に化ける。
+    # cf_cache.py は書いた内容をそのまま読み直して比較するので、プラット
+    # フォームによって同じ内容が違う差分として出るのを避ける。
+    tmp.write_text(text, encoding="utf-8", newline="\n")
     os.replace(tmp, path)
