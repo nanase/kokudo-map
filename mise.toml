@@ -61,6 +61,14 @@ description = "web/data/ を R2(data.nanase.cc)に上げる"
 # データは git に入れません。R2 の資産として置き、サイトはそこから直接読みます。
 run = "uv run {{env.PIPELINE}}/publish_data.py"
 
+[tasks.cf-cache]
+description = "nanase.cc の Cloudflare キャッシュ設定を取得し、pipeline/cf-cache.json へ書き出す"
+run = "uv run {{env.PIPELINE}}/cf_cache.py"
+
+[tasks.cf-cache-diff]
+description = "pipeline/cf-cache.json と実際の Cloudflare キャッシュ設定の差分を出す"
+run = "uv run {{env.PIPELINE}}/cf_cache.py --diff"
+
 [tasks.decree]
 description = "政令の別表から起点・終点を取り込み、座標を当てる"
 # 政令は年に数回しか変わらないので取得はキャッシュします。90 日を過ぎると

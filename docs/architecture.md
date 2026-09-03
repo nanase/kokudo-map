@@ -136,6 +136,49 @@ mise run publish-data   # web/data/ を R2(data.nanase.cc)に上げる
 
 データの更新に Pages の再デプロイは不要です。`data.nanase.cc` は上げた直後から新しい内容を返します。コードを `main` に push したときは Pages だけが作り直ります。そのときデータには触りません。
 
+## キャッシュ設定
+
+`nanase.cc` ゾーンのキャッシュ関連設定を `pipeline/cf-cache.json` としてリポジトリに持つ。設定は今もダッシュボードで手で当てており、ここでは取得と記録だけを扱う。適用(書き込み)は別に用意する。
+
+```sh
+mise run cf-cache        # 取得して pipeline/cf-cache.json へ書き出す
+mise run cf-cache-diff   # ファイルと実際の設定の差分を出す
+```
+
+トークンは環境変数 `CLOUDFLARE_CACHE_CONFIG_TOKEN`、ゾーン ID は `CLOUDFLARE_ZONE_ID` から読む。`CLOUDFLARE_API_TOKEN` という名前は使わない。その名前があると wrangler が OAuth ログインより優先して読み、このトークンには R2 権限が無いため `mise run publish-data` が壊れる。
+
+現在、次の 2 本の Cache Rule を当てている。
+
+### ルール 1 ── `/kokudo-map/` 配下(glyphs を除く)の Browser TTL を origin に従わせる
+
+ゾーンの Browser Cache TTL 設定が 48 時間をブラウザ向けに被せており、GitHub Pages が返す 600 秒(10 分)を上書きしていた。Cloudflare の既定のキャッシュ判定は拡張子で決まる。`.js` `.mjs` `.css` `.woff2` `.png` はエッジに乗り 48 時間が被さる一方、`.html` `.webmanifest` `.pbf` は乗らず、Pages の 600 秒がそのまま出ていた。
+
+結果、配信の 10 分後には「新しい `index.html`」と「最大 48 時間古い `app.js`・`style.css`」が組み合わさり、ページが壊れた。単に古いのではなく、新旧が混ざるのが問題だった。
+
+ゾーン設定を直接下げると `nanase.cc` の他も巻き込むため、Cache Rule で `/kokudo-map/` 配下だけに効かせている。式に `http.host eq "nanase.cc"` を入れているので、`data.nanase.cc`(R2)には当たらない。
+
+### ルール 2 ── `/kokudo-map/glyphs/` をエッジキャッシュ対象にする
+
+`.pbf` は Cloudflare の既定の静的拡張子一覧に無く、`cf-cache-status: DYNAMIC` のままだった。ラベルのグリフを引くたび、GitHub Pages まで往復していた。
+
+Edge TTL は「キャッシュ制御ヘッダーが存在する場合は使用し、存在しない場合はキャッシュをバイパスします」を選んでいる。ヘッダーが消えたときに「キャッシュしない」側へ倒れ、古い物が配られる余地が無いからである。
+
+グリフに Range 要求は使われないので、Pages 経由の Range 破損には触れない(上の「グリフはこの不具合に触れない」を参照)。
+
+### 適用後の実測
+
+適用前は `app.js`・`style.css`・`mapspec.mjs`・`vendor/maplibre-gl.js`・`vendor/*.woff2` が `max-age=172800`、`/kokudo-map/`・`glyphs/*.pbf`・`manifest.webmanifest` が `max-age=600` で `cf-cache-status: DYNAMIC` だった。
+
+適用後は `/kokudo-map/` 配下がすべて `max-age=600` に揃い、2 回目の要求で `/kokudo-map/`・`mapspec.mjs`・`vendor/maplibre-gl.js`・`glyphs/*.pbf`・`manifest.webmanifest` がいずれも `cf-cache-status: HIT` になった。`data.nanase.cc` は `DYNAMIC` のままで、PMTiles の Range も `content-range: bytes 1000-1099/55918678` と実サイズに一致しており、影響が無いことを確かめてある。
+
+### 指定より広く効いた点
+
+ルール 1 は Browser TTL だけを触る設計だったが、実際には HTML と `manifest.webmanifest` もキャッシュ対象になった(`DYNAMIC` → `HIT`)。これは害ではない。Edge TTL が origin に従うので、エッジが HTML を抱えるのは最大 10 分である。デプロイ時のパージ対象にルート(`""`)と `index.html` が両方入っているため、配信直後に 0 分になる。静的サイトで出し分けも無いので、そのままにしている。
+
+### 残る制約
+
+ファイル名にハッシュを付けておらずキャッシュバスティングができないため、設定を変える前に配られた `max-age=172800` の応答は、最終アクセスから 48 時間経つまでブラウザに残る。この設定で 0 分にはできない。0 分にするには配信時にファイル名かクエリへコミット SHA を入れる必要があり、`import` 指定子と `web/vendor/line-seed-jp.css` の 248 件の `url()` まで書き換える作業になる。今は見送っている。
+
 ## 初回セットアップ
 
 1. リポジトリを作って push する
