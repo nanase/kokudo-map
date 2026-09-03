@@ -44,7 +44,7 @@
   - pbf 2.5 GB と 47 都道府県ぶんの生成物が入っており、取り直しと再生成に何時間もかかる
   - 中の 1 ファイルを消すのは構わない。木ごと消す形だけを `.claude/hooks/guard-data-dirs.mjs` が手前で止める
 - 配信データ(PMTiles・meta.json)は GitHub Pages を経由させない
-  - Pages の裏側(Fastly)は、ファイル先頭以外への Range 要求に対して要求と無関係なバイト列を返す不具合を持つ
+  - Pages の裏側(Fastly)は、Range 要求を圧縮後の本体に対して適用し、`content-encoding` を名乗らずに返す不具合を持つ
   - PMTiles の読み取りはほぼ全てそのような Range 要求なので、Pages 経由では地図が描けない
   - 同じ Cloudflare ゾーン内の R2(`data.nanase.cc`)には無く、そちらに置く
 
