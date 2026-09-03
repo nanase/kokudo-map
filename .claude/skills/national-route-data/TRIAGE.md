@@ -73,13 +73,14 @@ OSM だけを見ていても分かりません。参照データが必要です�
   - 指定解除の機械確認は `pipeline/apply_n13.py` がビルドの一段として自動で行う
     - 結果は `revoked` プロパティに書く(issue #9・RULES.md 旧道)
     - `compare_n13.py` はここでも読み取り専用。書き込みは `apply_n13.py` だけが行う
-- 道路統計年報 表 8(全国計のみ実装済み)
+- 道路統計年報 表 8(一般国道、全国計)
   - 一般国道の総延長・重用延長・未供用延長・実延長を都道府県別に持つ
   - `uv run pipeline/compare_annual_report.py` (`mise run compare-annual-report`) が全国計を突き合わせ、差の内訳を原因ごとに出す
   - 値は `pipeline/annual_report_2025.csv` に写してある
   - 結果は docs/results.md の検算の節にある
-  - 都道府県別は未実装
-    - 地域が矩形で隣県が食み込むので、県ごとに比べると bbox を測ることになる
+  - 都道府県別は未実装。地域が矩形で隣県が食み込むので、県ごとに比べると bbox を測ることになる
+- 道路統計年報 表11・表12・表13(都道府県道)
+  - `uv run pipeline/compare_annual_report_pref.py` (`mise run compare-annual-report-pref`) が県別に突き合わせ、重用の復元率も出す
 - 道路統計年報 表 26・27(未実装)
   - 路線別の実延長
   - 公式値と比べれば欠落量を路線ごとに定量化できる
