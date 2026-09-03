@@ -34,7 +34,7 @@ import sys
 
 import requests
 
-from _paths import ROOT
+from _paths import ROOT, write_atomic
 
 API = "https://api.cloudflare.com/client/v4"
 OUT = ROOT / "pipeline" / "cf-cache.json"
@@ -131,7 +131,7 @@ def render(doc: dict) -> str:
 def pull() -> None:
     """取得してファイルへ書き出し、書いた内容を表示する。"""
     text = render(fetch())
-    OUT.write_text(text, encoding="utf-8", newline="\n")
+    write_atomic(OUT, text)
     print(text, end="")
 
 
