@@ -126,8 +126,9 @@ def call(method: str, path: str, token: str, payload: dict | None = None) -> dic
     try:
         body = r.json()
     except ValueError:
-        r.raise_for_status()
-        sys.exit(f"Cloudflare API の応答が JSON でない({where}): {r.text[:200]}")
+        # `raise_for_status` は例外の文面に URL を丸ごと入れるので、伏せたはずの
+        # ゾーン ID がそこから出る。状態番号と本文の頭だけを自分で述べて落ちる。
+        sys.exit(f"Cloudflare API の応答が JSON でない({where} が {r.status_code}): {r.text[:200]}")
     if not body.get("success"):
         sys.exit(f"Cloudflare API が失敗した({where}): {body.get('errors')}")
     return body["result"]
@@ -402,16 +403,19 @@ def apply(allow_delete: bool) -> None:
         call("PATCH", f"/zones/{zone_id}/settings/{key}", token, {"value": saved_settings[key]})
         print(f"ゾーン設定 {key} を当てた。")
 
-    # 当てた結果を取り直し、ファイルと一致することをその場で確かめる。
-    after = {
-        "cache_rules": fetch_cache_rules(zone_id, token),
-        "zone_settings": fetch_zone_settings(zone_id, token),
-    }
-    if render(after) == OUT.read_text(encoding="utf-8"):
-        print("実際の設定はファイルと一致している。")
-        return
-    print("当てたが、実際の設定がファイルと一致しない。`--diff` で確かめる。")
-    sys.exit(1)
+    # 当てた結果を取り直し、ファイルと一致することをその場で確かめる。見るのは
+    # 当てた分だけである。当てない項目まで含めて比べると、誰かが調査のために
+    # development_mode を有効にしている最中は、書き込みが全部成功していても
+    # 「一致しない」と言って落ちる。それはこの除外がある理由そのものである。
+    after_rules = fetch_cache_rules(zone_id, token)
+    after_settings = fetch_zone_settings(zone_id, token)
+    off = [k for k in WRITABLE_ZONE_SETTINGS if after_settings[k] != saved_settings[k]]
+    if after_rules != saved_rules or off:
+        sys.exit("当てたが、実際の設定がファイルと一致しない。`--diff` で確かめる。")
+    print("当てた分は、実際の設定とファイルが一致している。")
+    drifted = [k for k in UNWRITABLE_ZONE_SETTINGS if after_settings[k] != saved_settings[k]]
+    if drifted:
+        print(f"当てない項目 {', '.join(drifted)} はファイルとずれたままである(`--diff` に出る)。")
 
 
 ARGV_FORMS = ([], ["--diff"], ["--apply"], ["--apply", "--allow-delete"])
