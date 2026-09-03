@@ -54,6 +54,7 @@ mise run serve        # http://localhost:8000/
 | `mise run publish-data` | 配信データを R2(data.nanase.cc)に上げる |
 | `mise run cf-cache` | Cloudflare のキャッシュ設定を取得し、`pipeline/cf-cache.json` へ書き出す |
 | `mise run cf-cache-diff` | `pipeline/cf-cache.json` と実際の Cloudflare の設定の差分を出す |
+| `mise run cf-cache-apply` | `pipeline/cf-cache.json` を実際の Cloudflare へ当てる(確認を挟む) |
 | `mise run decree` | 政令の別表から起点・終点を取り込み、座標を当てる |
 | `mise run audit <地域>` | 途切れている路線を機械的に探す |
 | `mise run compare <地域>` | Overpass 由来の基準と突き合わせる |
