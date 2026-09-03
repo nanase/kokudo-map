@@ -68,18 +68,24 @@ ZONE_SETTINGS = [
     "sort_query_string_for_cache",
 ]
 
-# 当てる対象。ZONE_SETTINGS が「記録する項目」、こちらが「当てる項目」で、
-# 両者は意図してずらしてある。外してあるのは development_mode である。
+# 記録はするが当てない項目と、その理由。ZONE_SETTINGS が「記録する項目」で、
+# そこからこれらを引いたものが「当てる項目」になる。両者は意図してずらしてある。
 #
-# development_mode は設定ではなく一時的な状態である。誰かが調査のために有効に
-# している最中に書き戻せば、断りなく無効化してしまう。逆に記録が古ければ、誰も
-# 望んでいないのに有効化してしまう。どちらもこちらが決めてよいことではない。
-# ずれていること自体は知りたいので、記録には残し、当てる対象からだけ外す。
-WRITABLE_ZONE_SETTINGS = [
-    "browser_cache_ttl",
-    "cache_level",
-    "sort_query_string_for_cache",
-]
+# ずれていること自体は知りたいので、記録からは外さない。差分には出しつつ、
+# 書き込みの対象からだけ外す。
+UNWRITABLE_ZONE_SETTINGS = {
+    # 設定ではなく一時的な状態である。誰かが調査のために有効にしている最中に
+    # 書き戻せば、断りなく無効化してしまう。逆に記録が古ければ、誰も望んで
+    # いないのに有効化してしまう。どちらもこちらが決めてよいことではない。
+    "development_mode": "一時的な状態であって設定ではないため",
+    # このゾーンの契約では読み取り専用で、PATCH が code 1015(Not allowed to
+    # edit zone setting)を返す。同じ値であっても拒まれる。試みると、そこまでの
+    # 書き込みだけが済んだ状態で落ちる。当てられない物は初めから当てない。
+    "sort_query_string_for_cache": "このゾーンの契約では API が編集を拒むため(code 1015)",
+}
+
+# 当てる対象。ZONE_SETTINGS の並び順をそのまま引き継ぐ。
+WRITABLE_ZONE_SETTINGS = [k for k in ZONE_SETTINGS if k not in UNWRITABLE_ZONE_SETTINGS]
 
 
 def creds() -> tuple[str, str]:
@@ -90,6 +96,16 @@ def creds() -> tuple[str, str]:
     if missing:
         sys.exit(f"環境変数 {', '.join(missing)} が無い。設定してから実行する。")
     return token, zone_id
+
+
+def hide_zone(path: str) -> str:
+    """人に見せる文字列からゾーン ID を伏せる。
+
+    API のパスにはゾーン ID が入る。失敗の内容は issue や PR に貼られる物なので、
+    mise.local.toml にしか無い値がそこへ混ざらないようにする。
+    """
+    zone_id = os.environ.get(ZONE_ID_ENV)
+    return path.replace(zone_id, "<zone>") if zone_id else path
 
 
 def call(method: str, path: str, token: str, payload: dict | None = None) -> dict:
@@ -106,13 +122,14 @@ def call(method: str, path: str, token: str, payload: dict | None = None) -> dic
         json=payload,
         timeout=30,
     )
+    where = f"{method} {hide_zone(path)}"
     try:
         body = r.json()
     except ValueError:
         r.raise_for_status()
-        sys.exit(f"Cloudflare API の応答が JSON でない({method} {path}): {r.text[:200]}")
+        sys.exit(f"Cloudflare API の応答が JSON でない({where}): {r.text[:200]}")
     if not body.get("success"):
-        sys.exit(f"Cloudflare API が失敗した({method} {path}): {body.get('errors')}")
+        sys.exit(f"Cloudflare API が失敗した({where}): {body.get('errors')}")
     return body["result"]
 
 
@@ -287,10 +304,8 @@ def render_plan(plan: dict, settings: list[tuple], live_settings: dict) -> str:
         out.append(f"  * {key}: {before} -> {after}")
     if not settings:
         out.append("  変更なし(同じ値を当て直す)")
-    out.append(
-        f"  development_mode は当てない(実際の値は {live_settings['development_mode']})。"
-        "一時的な状態であって設定ではないため。"
-    )
+    for key, why in UNWRITABLE_ZONE_SETTINGS.items():
+        out.append(f"  {key} は当てない(実際の値は {live_settings[key]})。{why}。")
     out.append("")
     return "\n".join(out)
 
