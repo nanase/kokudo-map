@@ -14,8 +14,37 @@ name: Pages に配る
 on:
   # コードを変えたときだけです。データの差し替えは Pages を経由しないので、
   # publish_data.py はもうこれを叩きません。
+  #
+  # paths-ignore にしたのは許可一覧(paths)にしないためです。配信物を決める
+  # 入力は web/・scripts/vendor_web.mjs・package.json・bun.lock・mise.toml と
+  # このファイル自身で、他はすべて配信に無関係です。許可一覧だと新しい配信物
+  # を書き足し忘れたとき「古いまま配られる」形で表に出ます。除外一覧なら
+  # 既定が「配る」側に倒れるので、書き足し忘れは損なだけで壊れません。
+  #
+  # 除外の対象は docs/・pipeline/・.claude/・test/ と拡張子 .md です。
+  # コメント整理や国道データの判定ロジックなど、配信物に触れないコミットが
+  # ここに当たり、配信一式の実行と Cloudflare のパージ(URL 30 件ずつ・API 9
+  # 回)を素通りします。実行しても害はありませんが、エッジのキャッシュを
+  # 理由なく捨てるので次の利用者が遅くなる方に効きます。
+  #
+  # 代償: check.yml は branches-ignore: [main] で、main の検査はこの
+  # workflow が uses: で呼ぶ経路しかありません。ここで push を素通りすると
+  # main への直 push は無検査になります。ただし通常のコミットは PR 経由で
+  # PR 上で検査済みのため、穴が開くのは PR を経ない直 push のときだけです。
+  # check.yml 側に補集合のパス条件を足して塞ぐことはしません。除外一覧を
+  # 2 箇所で持つ形になり、CLAUDE.md の「同じ問いに二箇所で答えない」に反する
+  # ためです。
+  #
+  # 迂回路として workflow_dispatch を残してあります。除外に当たったコミット
+  # で配信をやり直したいときはここから手動で起動してください。
   push:
     branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "pipeline/**"
+      - ".claude/**"
+      - "test/**"
+      - "**.md"
   workflow_dispatch:
 
 permissions:
