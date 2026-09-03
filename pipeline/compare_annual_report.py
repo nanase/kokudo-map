@@ -124,10 +124,12 @@ def load_region(region: str) -> list[dict]:
     """1 地域のアークと、台帳との突き合わせに必要な way のタグ。
 
     `oneway` と `highway` は地図に使い道が無いので GeoJSON に無く、
-    build_routes.py が読んだのと同じ生のキャッシュから取る。どちらのファイルも
-    1 つの .osm.pbf から書かれているので、way id はぴたりと揃う。
-    build_routes.TAGS_USED が `oneway` を持つ前に切ったキャッシュにはそのタグが
-    無い。一方通行の数が 0 になるようなら `mise run extract` をやり直す。
+    build_routes.py が読んだのと同じ生のキャッシュ(build/cache/<地域>.raw.json)
+    から取る。GeoJSON もそのキャッシュから書かれるので、way id はぴたりと揃う。
+    キャッシュを書くのは extract_pbf.py(pbf から)か fetch_osm.py(Overpass から)
+    である。build_routes.TAGS_USED が `oneway` を持つ前に切ったキャッシュには
+    そのタグが無い。一方通行の数が 0 になるようなら、そのキャッシュを書いた側を
+    やり直す(pbf なら `mise run extract`)。
 
     座標は、compare_n13.py が距離を測るのと同じやり方で、局所的な正距円筒の枠の
     中の m に直す。地域は数度に及ぶので、最も背の高い bbox の上端と下端では東西
