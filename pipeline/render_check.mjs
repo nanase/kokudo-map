@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
-import { DATA, REGIONS, ROOT } from './_paths.mjs';
+import { DATA, PREFECTURAL, REGIONS, ROOT } from './_paths.mjs';
 
 // 下地図の URL は書き写さず本物のスタイルから読む。写しは、検査するために書いた
 // 当の物を検査しなくなる(check_expressions.mjs が mapspec を import するのと
@@ -22,9 +22,8 @@ const { GSI_TILES } = await import(
 // 対する規則で、その写しをここに置けば、ページが走らせている規則を検査しなく
 // なる。detailHTML は、下の旧道の検査が期待する行を本物の整形規則(fmtKm と、
 // formerRowHTML の「0.0 なら行を出さない」)で組むために使う。
-const { relatedRoutesOf, detailHTML } = await import(
-  pathToFileURL(join(ROOT, 'web', 'detail.mjs')).href
-);
+const { relatedRoutesOf, detailHTML, continuationOf, continuationCountOf } =
+  await import(pathToFileURL(join(ROOT, 'web', 'detail.mjs')).href);
 // former_km の meta から DOM までの経路(#84)は、bun test が実際の欄名で辿らない
 // 詳細パネルの唯一の部分である(bun test は detailHTML() に直値を渡す)。欄を
 // 実際に読む formerKmFor() を import すれば、decree.routes や crossings の
@@ -1336,6 +1335,180 @@ for (const ref of [10, 4]) {
     `国道${ref}号's box shows うち旧道 the way the meta has it ` +
       `(want ${wantRow ?? 'no row'}, got ${shownRow ?? 'no row'})`,
   );
+}
+
+// --- 複数の都道府県にわたる路線の節 ----------------------------------------
+/* 節が読む `continuations` は pack_web_pref.mjs が書く。書く側と読む側が同じ
+ * 名前を指しているかは、実データを通してしか分からない。名前が食い違っても例外
+ * は出ず、節が出ないだけである(#64 の起終点がまさにそれで、欄はあるのに空の
+ * ままだった)。だから meta が持つ群と、画面に出た文字を直接突き合わせる。
+ *
+ * 見出しの数え方(「3県」「3都県」「2府」)も書き写さない。ページが呼ぶ
+ * continuationCountOf() をそのまま呼ぶ。写せば、検査するために書いた当の規則を
+ * 検査しなくなる。 */
+{
+  const prefLabels = new Map(index.map((r) => [r.region, r.label]));
+  const groups = [];
+  for (const r of index) {
+    const pm = read(join(DATA, 'pref', `${r.region}.meta.json`));
+    for (const c of pm.continuations ?? []) groups.push(c);
+  }
+  ok(
+    groups.length > 0,
+    `the prefectural metas carry the continuation table ` +
+      `(${groups.length} rows across ${index.length} prefectures)`,
+  );
+
+  /* 出す群はデータから決める。県を書き決めると、その県の群が消えた日に検査が
+   * 静かに止まる。いちばん多くの県にまたがり、路線名を持つ群を採る。並べ替えは
+   * 全順序にしておく。 */
+  const pick = groups
+    .filter((c) => c.name)
+    .sort(
+      (a, b) =>
+        b.refs.length - a.refs.length ||
+        b.km - a.km ||
+        (a.refs.join() < b.refs.join() ? -1 : 1),
+    )[0];
+  if (!pick) {
+    fails.push('FAIL  no named continuation group in the prefectural metas');
+  } else {
+    const key = pick.refs[0];
+    const region = key.slice(0, key.lastIndexOf('-'));
+    /* ページが群を引くのは continuationOf() である。表を上から数えた物と、
+     * あちらが引いた物が同じであることも見る。欄の名前を取り違えていれば、
+     * ここで何も返らない。 */
+    const found = continuationOf(
+      read(join(DATA, 'pref', `${region}.meta.json`)),
+      key,
+    );
+    ok(
+      found?.refs.join() === pick.refs.join(),
+      `continuationOf() finds ${key} in the group the table lists it in ` +
+        `(${found?.refs.join(' / ') ?? 'nothing'})`,
+    );
+    const count = continuationCountOf(
+      pick.refs.map((k) => prefLabels.get(k.slice(0, k.lastIndexOf('-')))),
+    );
+    console.log(
+      `\ncontinuation group: ${pick.refs.join(' / ')} — ${pick.name} ` +
+        `${pick.km} km (${count})`,
+    );
+
+    /* 押すアークは判定の生成物から探す。タイルから読み戻すと、そのアークが
+     * 載っていることを、載っているタイルで確かめることになる。 */
+    const arc = read(join(PREFECTURAL, `${region}.geojson`))
+      .features.filter((f) => f.properties.refs_list.includes(key))
+      .sort((a, b) => b.properties.km - a.properties.km)[0];
+    if (!arc) {
+      fails.push(`FAIL  no arc for ${key} in build/prefectural/${region}`);
+    } else {
+      const mid =
+        arc.geometry.coordinates[
+          Math.floor(arc.geometry.coordinates.length / 2)
+        ];
+      await page.evaluate(
+        (c) => window.map.jumpTo({ center: c, zoom: 14 }),
+        mid,
+      );
+      await settle();
+      const hit = await page.evaluate((want) => {
+        const m = window.map;
+        const r = m.getCanvas().getBoundingClientRect();
+        const pad = m.getPadding();
+        const cx = Math.round((r.width + pad.left - pad.right) / 2);
+        const cy = Math.round((r.height + pad.top - pad.bottom) / 2);
+        const ring = (d) => [
+          [d, 0],
+          [0, d],
+          [-d, 0],
+          [0, -d],
+          [d, d],
+          [-d, -d],
+          [d, -d],
+          [-d, d],
+        ];
+        for (let d = 0; d < 320; d += 4) {
+          for (const [dx, dy] of ring(d)) {
+            const f = m
+              .queryRenderedFeatures([cx + dx, cy + dy], {
+                layers: ['pref-roads'],
+              })
+              .find((x) => x.properties.refs.includes(`,${want},`));
+            if (f) return { x: cx + dx + r.x, y: cy + dy + r.y };
+          }
+        }
+        return null;
+      }, key);
+      if (!hit) {
+        fails.push(`FAIL  no rendered arc of ${key} to click`);
+      } else {
+        await page.mouse.click(hit.x, hit.y);
+        await settle();
+        await page.click(`.maplibregl-popup .shield-btn[data-pref="${key}"]`);
+        await settle();
+        const shown = await page.evaluate(() => {
+          const el = document.querySelector('.detail-cont');
+          if (!el) return null;
+          return {
+            head: el.querySelector('.detail-sub').textContent,
+            km: el.querySelector('.cont-km').textContent,
+            name: el.querySelector('.cont-name')?.textContent ?? null,
+            chips: [...el.querySelectorAll('.cont-chip')].map(
+              (b) => b.dataset.pref,
+            ),
+          };
+        });
+        ok(
+          shown !== null,
+          `the box for ${key} carries the continuation section ` +
+            `("${shown?.head ?? 'missing'}")`,
+        );
+        if (shown) {
+          ok(
+            shown.head === `${count}にわたる都道府県道`,
+            `and its heading counts the prefectures the group actually spans ` +
+              `("${shown.head}")`,
+          );
+          ok(
+            shown.km.includes(String(pick.km)),
+            `and states the summed length the meta gave it ("${shown.km}")`,
+          );
+          ok(
+            shown.name === pick.name,
+            `and names the route ("${shown.name ?? 'no name row'}")`,
+          );
+          const want = pick.refs.filter((k) => k !== key);
+          ok(
+            JSON.stringify(shown.chips) === JSON.stringify(want),
+            `and lists the rest of the group as cards ` +
+              `(${shown.chips.join(', ')})`,
+          );
+
+          /* カードは押せる。押せばその県の詳細に開き直る。群は相互なので、
+           * 開いた先の節には必ず元の路線が居る。 */
+          const other = want[0];
+          await page.click(`.cont-chip[data-pref="${other}"]`);
+          await settle();
+          const back = await page.evaluate(
+            (self) =>
+              document.querySelectorAll(
+                `.detail-cont .cont-chip[data-pref="${self}"]`,
+              ).length,
+            key,
+          );
+          ok(
+            back === 1,
+            `pressing a card opens that prefecture's box, and that box lists ` +
+              `the one we came from (${other} → ${key})`,
+          );
+          await page.screenshot({ path: shot('8-continuation') });
+        }
+        await page.click('#detail-close');
+        await settle();
+      }
+    }
+  }
 }
 
 // --- どの地域のデータも実際に地図に載っていること --------------------------

@@ -7,6 +7,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  continuationCountOf,
+  continuationOf,
   decreeTerminiOf,
   detailHTML,
   fmtKm,
@@ -658,5 +660,238 @@ describe('prefDetailHTML', () => {
     const html = prefDetailHTML({ prefLabel: '長野県', ref: 60, failed: true });
     expect(html).toContain('読み込めませんでした');
     expect(html).not.toContain('読み込んでいます');
+  });
+});
+
+/* 県境で番号が変わらずに続く路線の節(#155)。数え方は例外表を持たない規則なので、
+ * 都・道・府・県 の組み合わせを全部当てられます。538 群のうち 134 群は「県」
+ * だけでは言えないので、ここが崩れると 4 分の 1 の群が嘘の見出しを持ちます。 */
+describe('continuationCountOf', () => {
+  const SUFFIX = ['都', '道', '府', '県'];
+  const LABEL = { 都: '東京都', 道: '北海道', 府: '大阪府', 県: '長野県' };
+
+  test('群に入っている 都・道・府・県 だけを、都 → 道 → 府 → 県 の順に並べる', () => {
+    // 空でない部分集合 15 通りを全部当てます。順は並べ方であって、渡した順では
+    // ありません。
+    for (let bits = 1; bits < 16; bits++) {
+      const kinds = SUFFIX.filter((_, i) => bits & (1 << i));
+      const labels = kinds.map((k) => LABEL[k]);
+      const want = `${kinds.length}${kinds.join('')}`;
+      expect(continuationCountOf(labels)).toBe(want);
+      expect(continuationCountOf([...labels].reverse())).toBe(want);
+    }
+  });
+
+  test('実データの群を当てる', () => {
+    expect(continuationCountOf(['長野県', '愛知県', '静岡県'])).toBe('3県');
+    expect(continuationCountOf(['千葉県', '埼玉県', '東京都'])).toBe('3都県');
+    expect(continuationCountOf(['京都府', '大阪府'])).toBe('2府');
+    expect(continuationCountOf(['栃木県', '群馬県', '茨城県', '埼玉県'])).toBe(
+      '4県',
+    );
+  });
+
+  test('数は群の路線の数である。同じ字が続いても足し合わない', () => {
+    expect(continuationCountOf(['長野県', '愛知県'])).toBe('2県');
+    expect(continuationCountOf(['京都府', '大阪府', '兵庫県'])).toBe('3府県');
+  });
+});
+
+describe('continuationOf', () => {
+  const meta = {
+    continuations: [
+      {
+        refs: ['aichi-1', 'nagano-1', 'shizuoka-1'],
+        name: '飯田富山佐久間線',
+        km: 91.4,
+        src: 'both',
+      },
+      { refs: ['gunma-93', 'nagano-93'], name: '下仁田臼田線', km: 34.5 },
+    ],
+  };
+
+  test('自分が入っている群を返す', () => {
+    expect(continuationOf(meta, 'nagano-1')?.name).toBe('飯田富山佐久間線');
+    expect(continuationOf(meta, 'shizuoka-1')?.name).toBe('飯田富山佐久間線');
+    expect(continuationOf(meta, 'nagano-93')?.name).toBe('下仁田臼田線');
+  });
+
+  test('群に入らない路線には何も返さない', () => {
+    expect(continuationOf(meta, 'nagano-152')).toBeNull();
+  });
+
+  /* 欄は後から入りました。古い web/data を配ったままでも、節が出ないだけで
+   * 壊れてはいけません。`crossings` と同じ事情です。 */
+  test('欄を持たない meta でも落ちない', () => {
+    expect(continuationOf({}, 'nagano-1')).toBeNull();
+    expect(continuationOf(null, 'nagano-1')).toBeNull();
+  });
+});
+
+describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
+  const prefLabels = new Map([
+    ['nagano', '長野県'],
+    ['aichi', '愛知県'],
+    ['shizuoka', '静岡県'],
+    ['gifu', '岐阜県'],
+    ['chiba', '千葉県'],
+    ['saitama', '埼玉県'],
+    ['tokyo', '東京都'],
+    ['kyoto', '京都府'],
+    ['osaka', '大阪府'],
+    ['tochigi', '栃木県'],
+    ['gunma', '群馬県'],
+    ['ibaraki', '茨城県'],
+  ]);
+  const panel = (region, ref, continuation) =>
+    prefDetailHTML({
+      region,
+      prefLabel: prefLabels.get(region),
+      ref,
+      route: {
+        ref: `${region}-${ref}`,
+        km: 45,
+        arcs: 137,
+        conc_km: 3.4,
+        max_n: 2,
+      },
+      related: [
+        { key: 'conc', label: '重用する都道府県道', refs: [`${region}-83`] },
+      ],
+      continuation,
+      prefLabels,
+    });
+
+  const NAGANO1 = {
+    refs: ['aichi-1', 'nagano-1', 'shizuoka-1'],
+    name: '飯田富山佐久間線',
+    km: 91.4,
+    src: 'both',
+  };
+
+  test('見出しは群の中身どおりに数える', () => {
+    expect(panel('nagano', 1, NAGANO1)).toContain(
+      '>3県にわたる都道府県道</span>',
+    );
+    expect(
+      panel('chiba', 54, {
+        refs: ['chiba-54', 'saitama-54', 'tokyo-54'],
+        name: '松戸草加線',
+        km: 27.3,
+      }),
+    ).toContain('>3都県にわたる都道府県道</span>');
+    expect(
+      panel('kyoto', 6, {
+        refs: ['kyoto-6', 'osaka-6'],
+        name: '枚方亀岡線',
+        km: 33.5,
+      }),
+    ).toContain('>2府にわたる都道府県道</span>');
+    expect(
+      panel('tochigi', 9, {
+        refs: ['gunma-9', 'ibaraki-9', 'saitama-9', 'tochigi-9'],
+        name: '佐野古河線',
+        km: 20.3,
+      }),
+    ).toContain('>4県にわたる都道府県道</span>');
+  });
+
+  test('合算延長は節が持つ。統計の <dl> は県別の値のまま', () => {
+    const html = panel('nagano', 1, NAGANO1);
+    expect(html).toContain('あわせて 91.4 km');
+    // 県別の延長は 45.0 km です。両方が同じ画面に出ますが、置き場所が違います。
+    expect(html).toContain('<dt>延長</dt><dd>45.0 km</dd>');
+    expect(html).not.toContain('<dd>91.4 km</dd>');
+  });
+
+  test('路線名を出す', () => {
+    expect(panel('nagano', 1, NAGANO1)).toContain(
+      '<div class="cont-name">飯田富山佐久間線</div>',
+    );
+  });
+
+  /* 538 群のうち 27 群では名前が取れません。欄そのものが無い形で来るので、
+   * 行ごと出しません。名前が無いことを理由に群を落とすことはしません。 */
+  test('名前が取れない群では行ごと出さない', () => {
+    const html = panel('aichi', 193, {
+      refs: ['aichi-193', 'gifu-193'],
+      km: 19.2,
+      src: 'geometry',
+    });
+    expect(html).toContain('>2県にわたる都道府県道</span>');
+    expect(html).toContain('あわせて 19.2 km');
+    expect(html).not.toContain('cont-name');
+  });
+
+  test('相手のカードは県名を伴い、押せばその県の詳細に開き直る', () => {
+    const html = panel('nagano', 1, NAGANO1);
+    expect(html).toContain('data-pref="aichi-1"');
+    expect(html).toContain('data-pref="shizuoka-1"');
+    expect(html).toContain('<span class="pref">愛知県</span>');
+    expect(html).toContain('title="愛知県道1号の詳細"');
+    // 押した先を決めるのは app.js の委譲です。重用・交差の標識と同じ口を使う
+    // ので、新しい委譲は要りません。
+    expect(html).toContain('class="shield-btn cont-chip"');
+  });
+
+  /* カードに並ぶ鍵。`refs` には自分自身も入っているので、外して並べます。
+   * 自分の標識は見出しに出ています。 */
+  const chipsOf = (html) =>
+    [...html.matchAll(/cont-chip" data-pref="([^"]+)"/g)].map((m) => m[1]);
+
+  test('自分自身はカードに出さない。標識は見出しに出ている', () => {
+    const html = panel('nagano', 1, NAGANO1);
+    expect(chipsOf(html)).toEqual(['aichi-1', 'shizuoka-1']);
+    // 見出しの「だけを表示」は自分を名指します。カードと同じ属性を使うので、
+    // 「出ていない」はパネル全体ではなくカードの中で言います。
+    expect(html).toContain('class="icon-btn detail-only" data-pref="nagano-1"');
+  });
+
+  test('カードは meta の並び(番号順・県名順)のまま出す', () => {
+    expect(
+      chipsOf(
+        panel('tochigi', 9, {
+          refs: ['gunma-9', 'ibaraki-9', 'saitama-9', 'tochigi-9'],
+          name: '佐野古河線',
+          km: 20.3,
+        }),
+      ),
+    ).toEqual(['gunma-9', 'ibaraki-9', 'saitama-9']);
+  });
+
+  /* 県境の向こうまで同じ道であることは、一点で交わることより強い関わりです。
+   * 節の順もそう並べます。 */
+  test('関わりの節より前に来る', () => {
+    const html = panel('nagano', 1, NAGANO1);
+    expect(html.indexOf('detail-cont')).toBeGreaterThan(-1);
+    expect(html.indexOf('detail-cont')).toBeLessThan(
+      html.indexOf('重用する都道府県道'),
+    );
+  });
+
+  test('群に入らない路線では節そのものが出ない', () => {
+    const html = panel('nagano', 152, null);
+    expect(html).not.toContain('detail-cont');
+    expect(html).not.toContain('にわたる都道府県道');
+    // 見出しのボタンの数は変わりません。Wikipedia と漏斗の二つのままです。
+    expect(html.match(/class="icon-btn/g)?.length).toBe(2);
+  });
+
+  test('見出しのボタンは群があっても増えない', () => {
+    expect(panel('nagano', 1, NAGANO1).match(/class="icon-btn/g)?.length).toBe(
+      2,
+    );
+  });
+
+  test('数が届く前は節も出ない', () => {
+    const html = prefDetailHTML({
+      region: 'nagano',
+      prefLabel: '長野県',
+      ref: 1,
+      continuation: NAGANO1,
+      prefLabels,
+    });
+    expect(html).toContain('読み込んでいます');
+    expect(html).not.toContain('detail-cont');
   });
 });
