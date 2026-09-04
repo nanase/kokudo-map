@@ -115,15 +115,20 @@ def for_region(region: str) -> dict:
     return REGIONS[region]
 
 
-def named_regions(args: list[str]) -> list[str]:
-    """コマンドラインが名指しした地域。名指しが無ければ全地域。
+def real_args(args: list[str]) -> list[str]:
+    """コマンドラインが実際に渡した引数。mise の空プレースホルダを除く。
 
     省略された可変長引数を埋める task runner は、スクリプトに空のトークンを
     渡す。Windows では引用符が文字のまま届き、`mise run extract` は引数 1 つ
-    `''` として到着した。それは `''` という名の地域ではなく、地域を
-    名指ししていないという意味である。以前はそう報告していた。
+    `''` として到着した。それは `''` という名の地域や旗ではなく、何も
+    渡さなかったという意味である。以前はそう報告していた。
     """
-    named = [a for a in args if a.strip("'\"")]
+    return [a for a in args if a.strip(" \t\r\n'\"")]
+
+
+def named_regions(args: list[str]) -> list[str]:
+    """コマンドラインが名指しした地域。名指しが無ければ全地域。"""
+    named = real_args(args)
     for r in named:
         for_region(r)
     return named or list(REGIONS)

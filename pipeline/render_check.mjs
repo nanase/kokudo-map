@@ -516,23 +516,39 @@ ok(
 /* 一覧に出す系統は三状態しかない。どちらも外れると一覧が空になる。 */
 const seg = await page.evaluate(() => {
   const press = (sel) => document.querySelector(sel).click();
+  const shows = (sel) =>
+    getComputedStyle(document.querySelector(sel)).display !== 'none';
   press('#sys-pref');
   const one = {
     pref: document.querySelector('#rl-pref').hidden,
     national: document.querySelector('#rl-national').hidden,
+    // 残った一枚は錠、消えた側は空の箱。happy-dom は display を解かないので、
+    // 錠が本当に出ているかを見られるのはここだけである。
+    lock: shows('#sys-national .sys-lock'),
+    check: shows('#sys-national .sys-check'),
+    offLock: shows('#sys-pref .sys-lock'),
   };
   press('#sys-national'); // 最後の一枚は外れない
   const still = document
     .querySelector('#sys-national')
     .getAttribute('aria-pressed');
   press('#sys-pref'); // どちらもに戻す
-  return { one, still };
+  // 二枚とも見る。片方だけ見ていると、もう一方に錠が残ったままでも通る。
+  const both = ['#sys-national', '#sys-pref'].every(
+    (sel) => shows(`${sel} .sys-check`) && !shows(`${sel} .sys-lock`),
+  );
+  return { one, still, both };
 });
 ok(
   seg.one.pref && !seg.one.national,
   'pressing a system button drops just that system from the list',
 );
 ok(seg.still === 'true', 'the last one cannot be switched off');
+ok(
+  seg.one.lock && !seg.one.check && !seg.one.offLock,
+  'and it says so with a lock in place of its check mark',
+);
+ok(seg.both, 'both switched on again shows check marks, not locks');
 
 await page.click('#sel-none');
 await page.fill('#route-filter', '');

@@ -53,7 +53,7 @@ from collections import defaultdict
 
 import annual_report
 from _paths import CACHE, REGIONS as REGION_DIR
-from regions import REGIONS
+from regions import REGIONS, real_args
 
 # 1 本の道の二つの車道が、どれだけ離れていてもなお 1 本の道と見なせるか。
 # 日本の上下線分離は、市街地で 5〜20 m、車道が別々の切り通しやトンネルに入る所で
@@ -387,7 +387,7 @@ def row(label: str, ledger: float | None, map_km: float | None, width: int = 28)
 
 
 def main() -> None:
-    reach, args = take_distance(sys.argv[1:])
+    reach, args = take_distance(real_args(sys.argv[1:]))
     if args:
         raise SystemExit(f"unexpected argument: {args[0]}")
 

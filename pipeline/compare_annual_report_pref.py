@@ -67,7 +67,7 @@ from compare_annual_report import (
     row,
     take_distance,
 )
-from regions import REGIONS
+from regions import REGIONS, real_args
 
 # --------------------------------------------------------------------- 種別 ---
 # 分け方(rank_of)と呼び名は判定が持つ。同じ規則を書き直すと、書き写した複製を
@@ -333,7 +333,7 @@ def report_number_range(per_region: dict[str, Tally],
 
 
 def main() -> None:
-    args = sys.argv[1:]
+    args = real_args(sys.argv[1:])
     pairing = True
     if "--no-pairing" in args:
         pairing = False
