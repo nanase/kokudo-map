@@ -35,6 +35,7 @@ import {
   addEndpoints,
   borderPairs,
   combinationsOf,
+  crossBorderPairs,
   crossingsOf,
   groupsOf,
   pickName,
@@ -122,8 +123,10 @@ let summaryConc = 0;
  * その群は 2〜4 県の meta に載るからである。47 県ぶんを抱えたまま、ループの外で
  * 書く。合わせて 3.5 MB で、この段が既に抱えている全国のアークに比べれば小さい。 */
 const metas = [];
-/* アークの端点。県境で番号が続く路線を拾うのに読む。県ごとのループの中で貯める。 */
+/* アークの端点。県境で続く路線を拾うのに読む。県ごとのループの中で貯める。
+ * `busy` は 1 対 1 でない端点で、番号が違う組を濾すのに要る(rollup.mjs)。 */
 const endpoints = new Map();
+const busy = new Set();
 /* 路線ごとの延長と、way が名乗った名前。どちらも組み合わせ表から足す。群の
  * 合算延長と路線名がここから出る。 */
 const kmOf = new Map();
@@ -229,7 +232,7 @@ for (const region of regions) {
   };
   metas.push(meta);
 
-  addEndpoints(mine, endpoints);
+  addEndpoints(mine, endpoints, busy);
   for (const c of combos)
     for (const key of c.refs) {
       // 組み合わせはアークを重複なく分けるので、路線の延長はその路線を含む行の
@@ -257,21 +260,26 @@ console.log(
 );
 
 /* ------------------------------------------------------- 複数県にわたる路線 --- */
-/* 県境で番号が変わらずに続く路線を束ねる。長野県道1号・愛知県道1号・静岡県道1号
- * は 飯田富山佐久間線 として直接つながっているが、県ごとの meta はそれを述べない。
+/* 県境で続く路線を束ねる。長野県道1号・愛知県道1号・静岡県道1号は
+ * 飯田富山佐久間線 として直接つながっているが、県ごとの meta はそれを述べない。
  *
  * 束ねるだけで、同一性は変えない。路線は (県, 番号) のままで、タイルの属性も
  * 変わらない。関係する都道府県がそれぞれ認定した別々の路線であり、年報も県ごとに
  * 数えている。3 つの認定を 1 つに畳むのは、この地図が重用区間でしないと決めた
  * 「番号を丸める」操作そのものである(issue #155)。
  *
- * 信号は二つあり、互いを補うので両方を採る。リレーションが保証するのは
+ * 信号は三つあり、互いを補うので全部を採る。リレーションが保証するのは
  * (県, 番号) 13,234 組のうち半分ほどなので、リレーションだけでは無い路線が
  * 落ちる。県境で線が繋がっていない路線は幾何だけでは拾えない。実データでは
  * 373 と 519 で、350 が同じ顔ぶれを出す。
  *
+ * 三つ目は番号が変わる県境越えである(issue #162)。愛知県道156号は岐阜県道390号
+ * として続く。1 対 1 の端点だけを採るので、これを足しても群は膨らまない
+ * (最大 4 のまま、既存の群どうしを繋ぐ組は 0)。濾し方の理由は
+ * rollup.mjs の `crossBorderPairs` にある。
+ *
  * 和にしてあるので、片方が 1 本取りこぼしても、もう片方が繋いでいればその群は
- * 残る。どちらか一方だけを直せば済む形にはしない。 */
+ * 残る。どれか一つだけを直せば済む形にはしない。 */
 const relPath = join(SURVEY, 'relations.json');
 if (!existsSync(relPath))
   throw new Error(
@@ -279,9 +287,18 @@ if (!existsSync(relPath))
       '`mise run survey-pref` が書く。',
   );
 const relDoc = JSON.parse(readFileSync(relPath, 'utf8'));
-const edges = borderPairs(endpoints, (key) => [prefOf(key), num(key)]).map(
-  ([a, b]) => [a, b, 'geometry'],
-);
+const partsOf = (key) => [prefOf(key), num(key)];
+/* 群の番号が 1 つに揃っているか。リレーション名を当ててよいかがこれで決まり、
+ * 下の検査はその裏返しを見る。式を二箇所に書けば、片方だけ直した日に検査が
+ * 検査でなくなる。 */
+const oneNumber = (refs) => new Set(refs.map(num)).size === 1;
+const edges = borderPairs(endpoints, partsOf).map(([a, b]) => [
+  a,
+  b,
+  'geometry',
+]);
+for (const [a, b] of crossBorderPairs(endpoints, busy, partsOf))
+  edges.push([a, b, 'crossnumber']);
 for (const r of relDoc.relations) {
   const keys = r.regions.map((g) => `${g}-${r.ref}`);
   for (let i = 0; i < keys.length; i++)
@@ -311,10 +328,15 @@ for (const r of relDoc.relations) {
 }
 
 const continuations = groups.map((g, i) => {
-  const by = relNameOf.get(i);
+  /* リレーション名を採れるのは、群の番号が 1 つに揃っているときだけである。
+   * リレーションが保証するのは「その番号の路線はこの名前」であって、県境の
+   * 向こうの違う番号の路線の名前ではない。番号が違う組で繋がった群にそのまま
+   * 当てると、片側の名前が群の全体を名乗る。実データでは 4 群がこれに当たる
+   * (issue #162)。番号が揃わない群は way 名の一致だけを根拠にする。 */
+  const by = oneNumber(g.refs) ? relNameOf.get(i) : undefined;
   const relName = by ? pickName(by) : null;
-  // リレーション名を優先し、無ければ way 名に落とす。両方を持つ 296 群のうち
-  // 293 群で一致する。どちらも無い 27 群では欄そのものを出さない。名前が無い
+  // リレーション名を優先し、無ければ way 名に落とす。両方を持つ 294 群のうち
+  // 291 群で一致する。どちらも無い 41 群では欄そのものを出さない。名前が無い
   // ことを理由に群を落とすことはしない。
   const name = relName ?? sharedRouteName(g.refs, namesOf);
   return {
@@ -326,6 +348,33 @@ const continuations = groups.map((g, i) => {
     src: g.src,
   };
 });
+
+/* 群が満たすことを、meta へ書く前に確かめる。破れたときに黙って嘘を出させない
+ * ためである。
+ *
+ * 1. 2 県以上にまたがる。1 県で閉じた群は、節の見出し(`複数の都道府県にわたる
+ *    路線`)が言っていることと違う
+ * 2. 番号が揃わない群の名前は、群の全員が way 名として名乗っている。
+ *    リレーション名は片側の番号しか保証しない(issue #162)
+ *
+ * 「同じ県が 2 度入らない」は確かめない。番号が違う組が入って、実データに 3 群
+ * 現れた(秋田131・秋田210・山形210 など)。県境を 2 度またぐ路線がある以上、
+ * これは起こる。数えるのは県であって路線ではないので、画面の側を直した
+ * (web/detail.mjs の continuationCountOf)。 */
+for (const c of continuations) {
+  const prefs = new Set(c.refs.map(prefOf));
+  if (prefs.size < 2)
+    throw new Error(
+      `群 ${c.refs.join(' ')} が ${[...prefs]} だけで閉じている。` +
+        '県境をまたがない群は、節の見出しが言っていることと違う。',
+    );
+  if (!c.name || oneNumber(c.refs)) continue;
+  if (!c.refs.every((k) => namesOf.get(k)?.has(c.name)))
+    throw new Error(
+      `群 ${c.refs.join(' ')} の名前 ${c.name} を全員が名乗っていない。` +
+        '番号が揃わない群にリレーション名を当ててはいけない(issue #162)。',
+    );
+}
 
 const bySrc = new Map();
 for (const c of continuations) bySrc.set(c.src, (bySrc.get(c.src) ?? 0) + 1);
@@ -339,6 +388,7 @@ console.log(
       .join(', ')}`,
 );
 endpoints.clear();
+busy.clear();
 
 /* --------------------------------------------------------------- meta --- */
 /* 同じ群が 2〜4 県の meta に重複して載る。作るのがここ 1 箇所なので、片方が
