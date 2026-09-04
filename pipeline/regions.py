@@ -123,7 +123,7 @@ def real_args(args: list[str]) -> list[str]:
     `''` として到着した。それは `''` という名の地域や旗ではなく、何も
     渡さなかったという意味である。以前はそう報告していた。
     """
-    return [a for a in args if a.strip("'\"")]
+    return [a for a in args if a.strip(" \t\r\n'\"")]
 
 
 def named_regions(args: list[str]) -> list[str]:
