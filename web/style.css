@@ -1036,6 +1036,10 @@ input[type="search"]::placeholder { font-size: .82em; }
   background: var(--panel-2);
   border: 1px solid var(--line-2); border-radius: 4px;
 }
+/* まとめて表示しているあいだ。漏斗は 15px しかなく、地図の上でパネルは
+   0.62 倍に見えるのでそこでは 9px になる。効いていることを述べるのは面の
+   ほうである。 */
+.detail-cont.on { border-color: var(--sign-blue); }
 /* 見出しと合算延長を両端に振り分ける。合算延長は節が述べている 2〜4 本ぶんの
    数で、路線 1 本の数を並べる .detail-stats とは別の量である。だから統計の
    <dl> には足さず、この節の右上に置く。書体・色・右揃え・等幅数字は
@@ -1050,13 +1054,19 @@ input[type="search"]::placeholder { font-size: .82em; }
 .cont-name {
   font-size: .82rem; font-weight: 600; color: var(--ink); line-height: 1.4;
 }
-/* カードの行。C 回でこの行の右端に漏斗が付く(#155)ので、カードは初めから
-   行の中に入れておく。 */
+/* カードの行。右端に漏斗が付く。何を絞るのかは、隣に並んだカードが述べる。 */
 .cont-row { display: flex; align-items: flex-start; gap: 8px; }
 .cont-chips {
   display: flex; flex-wrap: wrap; gap: 5px;
   flex: 1 1 auto; min-width: 0; padding-top: 1px;
 }
+/* 節の漏斗。カードが増えても縮まない。地はカードと同じ --panel にして、節の
+   地(--panel-2)から立たせる。
+   押していないときだけ塗るのは、押した状態の色を .detail-only.active 一箇所に
+   残すためである。詳細度が同じで後ろに在るぶん、ここで無条件に塗ると青地を
+   打ち消し、白地に白い漏斗が乗って印が消える。 */
+.cont-row .icon-btn { flex: 0 0 auto; }
+.cont-row .icon-btn:not(.active) { background: var(--panel); }
 /* 相手のカード。.shield-btn の骨格を借りるので、line-height: 0 と
    display: block を打ち消してから中身を並べる。地は節の地(--panel-2)より
    明るくして、押せる物として立たせる。 */

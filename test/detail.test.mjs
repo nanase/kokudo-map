@@ -12,6 +12,7 @@ import {
   decreeTerminiOf,
   detailHTML,
   fmtKm,
+  onlyButtonHTML,
   prefDetailHTML,
   prefWikipediaURL,
   relatedRoutesOf,
@@ -869,18 +870,22 @@ describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
     );
   });
 
+  /* 見出しのボタンだけを数えます。節の中にも漏斗が居る(#155)ので、パネル全体を
+   * 数えると節が出たかどうかで答えが変わってしまいます。 */
+  const headButtons = (html) =>
+    html.slice(0, html.indexOf('</header>')).match(/class="icon-btn/g)
+      ?.length ?? 0;
+
   test('群に入らない路線では節そのものが出ない', () => {
     const html = panel('nagano', 152, null);
     expect(html).not.toContain('detail-cont');
     expect(html).not.toContain('にわたる都道府県道');
     // 見出しのボタンの数は変わりません。Wikipedia と漏斗の二つのままです。
-    expect(html.match(/class="icon-btn/g)?.length).toBe(2);
+    expect(headButtons(html)).toBe(2);
   });
 
   test('見出しのボタンは群があっても増えない', () => {
-    expect(panel('nagano', 1, NAGANO1).match(/class="icon-btn/g)?.length).toBe(
-      2,
-    );
+    expect(headButtons(panel('nagano', 1, NAGANO1))).toBe(2);
   });
 
   test('数が届く前は節も出ない', () => {
@@ -893,5 +898,48 @@ describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
     });
     expect(html).toContain('読み込んでいます');
     expect(html).not.toContain('detail-cont');
+  });
+});
+
+/* 節の漏斗(#155)。見出しの漏斗と同じ部品で、鍵が群になり名乗りが変わるだけ
+ * です。絵も押した状態の持ち方も同じにしてあります。 */
+describe('onlyButtonHTML — 群', () => {
+  const GROUP = ['aichi-1', 'nagano-1', 'shizuoka-1'];
+  const btn = (over) =>
+    onlyButtonHTML({ prefKeys: GROUP, count: '3県', ...over });
+
+  test('群の全員を data-prefs で名指す', () => {
+    expect(btn()).toContain('data-prefs="aichi-1,nagano-1,shizuoka-1"');
+    // 1 本を名指す属性は出しません。押した先を取り違えます。
+    expect(btn()).not.toContain('data-pref="');
+    expect(btn()).not.toContain('data-ref=');
+  });
+
+  test('名乗りは数え方から組む', () => {
+    expect(btn()).toContain('aria-label="3県まとめて表示"');
+    expect(btn()).toContain('title="3県まとめて表示"');
+  });
+
+  test('押している間は解除と名乗る', () => {
+    expect(btn({ selected: true })).toContain(
+      'aria-label="まとめての表示を解除"',
+    );
+  });
+
+  test('押した状態の持ち方は見出しの漏斗と同じである', () => {
+    expect(btn()).toContain('class="icon-btn detail-only"');
+    expect(btn()).toContain('aria-pressed="false"');
+    expect(btn({ selected: true })).toContain(
+      'class="icon-btn detail-only active"',
+    );
+    expect(btn({ selected: true })).toContain('aria-pressed="true"');
+  });
+
+  /* 絵は変えません。範囲は絵ではなく置き場所が述べます。見出しの漏斗の隣には
+   * 標識と路線名があり、節の漏斗の隣には相手のカードがあります。 */
+  test('絵は見出しの漏斗と同じである', () => {
+    const one = onlyButtonHTML({ ref: 18 });
+    const icon = one.slice(one.indexOf('<svg'), one.indexOf('</button>'));
+    expect(btn()).toContain(icon);
   });
 });

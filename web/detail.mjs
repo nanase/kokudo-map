@@ -206,8 +206,9 @@ const ONLY_ICON =
  * からも分からない。見た目は `active`、読み上げは `aria-pressed` が持つ(app.js
  * の cycleButton と同じ)。
  *
- * キーは `ref`(国道)か `prefKey` + `prefLabel`(都道府県道)を渡す。都道府県道の
- * 番号だけでは 47 本のどれか決まらない。
+ * キーは `ref`(国道)か `prefKey` + `prefLabel`(都道府県道)、または `prefKeys` +
+ * `count`(県境で続く路線の群)を渡す。都道府県道の番号だけでは 47 本のどれか
+ * 決まらない。
  *
  * パネルを組み立てるときだけでなく、選択が他所で変わったときにも呼ぶ(app.js の
  * syncDetailOnly)。押した状態の文字列を 2 箇所で組むと片方が暗黙のうちに
@@ -216,9 +217,27 @@ const ONLY_ICON =
 export function onlyButtonHTML({
   ref = null,
   prefKey = null,
+  prefKeys = null,
   prefLabel = '',
+  count = '',
   selected = false,
 }) {
+  /* 群を名指す形が三つめである(#155)。絵も押した状態の持ち方も 1 本のときと
+   * 同じで、違うのは鍵が複数になることと名乗りだけである。範囲は絵ではなく
+   * 置き場所が述べる。見出しの漏斗の隣には標識と路線名があり「長野県道1号だけ
+   * を表示」と読め、節の漏斗の隣には相手のカードがあり「この 3 本を表示」と
+   * 読める。同じ絵であるほうが、同じ操作だと分かる。
+   *
+   * `count` は continuationCountOf() が組んだ「3県」「3都県」「2府」である。
+   * 数え方をここで組み直さない。 */
+  if (prefKeys) {
+    const text = selected ? 'まとめての表示を解除' : `${count}まとめて表示`;
+    return (
+      `<button type="button" class="icon-btn detail-only${selected ? ' active' : ''}" ` +
+      `data-prefs="${esc(prefKeys.join(','))}" aria-pressed="${selected}" ` +
+      `title="${esc(text)}" aria-label="${esc(text)}">${ONLY_ICON}</button>`
+    );
+  }
   const name = prefKey
     ? prefRouteName(prefLabel, prefRefOf(prefKey))
     : `国道${ref}号`;
@@ -347,7 +366,7 @@ const contChipHTML = (prefLabels) => (key) => {
  * 路線名は取れないことがある(538 群のうち 27 群)。そのときは行ごと出さない。
  * 欄そのものが無い形で来るので、`name` の有無で分かる。
  */
-const continuationHTML = (key, cont, prefLabels) => {
+const continuationHTML = (key, cont, prefLabels, selected) => {
   // 県が分からなければ自分の鍵も作れない。外せない自分がカードに並ぶくらいなら
   // 節ごと出さない。「だけを表示」が region を要求するのと同じ事情である。
   if (!cont || !key) return '';
@@ -355,17 +374,20 @@ const continuationHTML = (key, cont, prefLabels) => {
   const count = continuationCountOf(cont.refs.map(labelOf));
   const others = cont.refs.filter((k) => k !== key);
   return (
-    '<div class="detail-cont">' +
+    `<div class="detail-cont${selected ? ' on' : ''}">` +
     '<div class="cont-head">' +
     `<span class="detail-sub">${count}にわたる都道府県道</span>` +
     // 数は見出しが言うので、ここでは言わない。同じ数を二箇所で言わない。
     `<span class="cont-km">あわせて ${fmtKm(cont.km)} km</span>` +
     '</div>' +
     (cont.name ? `<div class="cont-name">${esc(cont.name)}</div>` : '') +
-    // C 回はこの行の右端に漏斗を置く。そのときに行組みを作り直さずに済むよう、
-    // カードは初めから行の中に入れておく。
+    // 漏斗は行の右端に置く。何を絞るのかは、隣に並んだカードが述べる。押した
+    // 状態は枠の色も担う。漏斗は 15px しかなく、地図の上でパネルは 0.62 倍に
+    // 見えるので、そこでは 9px になる。効いていることを述べるのは面のほうで
+    // ある。
     '<div class="cont-row">' +
     `<div class="cont-chips">${others.map(contChipHTML(prefLabels)).join('')}</div>` +
+    onlyButtonHTML({ prefKeys: cont.refs, count, selected }) +
     '</div></div>'
   );
 };
@@ -448,6 +470,11 @@ export function detailHTML({
  * `continuation` は continuationOf() の結果、`prefLabels` は 県 → 県名 の
  * 対応表である。国道の番号は全国で一意なので、あちらに同じ節は要らない。
  *
+ * 押した状態は二つある。`selected` は見出しの漏斗(この 1 本だけ)、
+ * `groupSelected` は節の漏斗(群をまとめて)である。排他ではない。群を表示して
+ * いる間に見出しの漏斗を押せば 1 本に絞れる。狭いほうが後から勝ち、その結果は
+ * `state.prefSelected` 一つが持つ(wiring.mjs の isOnly と isOnlyGroup)。
+ *
  * `route` が null なら、県別 meta がまだ届いていない(app.js の prefMeta)。
  * そのあいだも見出しは出す。押した標識がどの路線かは、数が揃う前から分かる。
  */
@@ -464,6 +491,7 @@ export function prefDetailHTML({
   formerKm = 0,
   failed = false,
   selected = false,
+  groupSelected = false,
 }) {
   const name = prefRouteName(prefLabel, ref);
   const wait = failed
@@ -483,6 +511,7 @@ export function prefDetailHTML({
         region ? prefKeyOf(region, ref) : null,
         continuation,
         prefLabels,
+        groupSelected,
       ) +
       relatedHTML(related, prefRelShieldHTML(prefLabel))
     : wait;

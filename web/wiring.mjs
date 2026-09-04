@@ -7,7 +7,7 @@
  * していない。
  */
 
-import { onlyButtonHTML } from './detail.mjs';
+import { continuationCountOf, onlyButtonHTML } from './detail.mjs';
 import {
   PREF_LIST_ROWS,
   prefGroupLabel,
@@ -114,29 +114,51 @@ export function applyRouteFilter(doc, state) {
  * 片方が暗黙のうちに古くなる。
  */
 export function syncDetailOnly(doc, state) {
-  const btn = doc.querySelector('#detail-body .detail-only');
-  if (!btn) return;
-  const key = btn.dataset.pref;
-  const html = key
-    ? onlyButtonHTML({
-        prefKey: key,
-        prefLabel: state.prefLabels.get(prefRegionOf(key)) ?? '',
-        selected: isOnly(state.prefSelected, state.selected, key),
-      })
-    : onlyButtonHTML({
-        ref: Number(btn.dataset.ref),
-        selected: isOnly(
-          state.selected,
-          state.prefSelected,
-          Number(btn.dataset.ref),
-        ),
-      });
-  const box = doc.createElement('div');
-  box.innerHTML = html;
-  // 出す属性は onlyButtonHTML が毎回すべて書くので、移すだけで足りる。
-  for (const { name, value } of box.firstElementChild.attributes) {
-    btn.setAttribute(name, value);
+  // パネルには漏斗が二つ在ることがある。見出しの「この 1 本だけ」と、県境で
+  // 続く路線の節の「まとめて」である(#155)。どちらかだけを合わせると、
+  // 見出しの漏斗で 1 本に絞った後も節が押されたまま残る。
+  for (const btn of doc.querySelectorAll('#detail-body .detail-only')) {
+    const { selected, html } = onlyStateOf(btn, state);
+    const box = doc.createElement('div');
+    box.innerHTML = html;
+    // 出す属性は onlyButtonHTML が毎回すべて書くので、移すだけで足りる。
+    for (const { name, value } of box.firstElementChild.attributes) {
+      btn.setAttribute(name, value);
+    }
+    // 節の漏斗は面も一緒に染める。漏斗は 15px しかなく、地図の上でパネルは
+    // 0.62 倍に見えるので、そこでは 9px になる。
+    btn.closest('.detail-cont')?.classList.toggle('on', selected);
   }
+}
+
+/** その漏斗が名指している物と、いまの選択から見た押した状態。 */
+function onlyStateOf(btn, state) {
+  const labelOf = (key) => state.prefLabels.get(prefRegionOf(key)) ?? '';
+  const group = btn.dataset.prefs;
+  if (group) {
+    const keys = group.split(',');
+    const selected = isOnlyGroup(state.prefSelected, state.selected, keys);
+    return {
+      selected,
+      html: onlyButtonHTML({
+        prefKeys: keys,
+        // 数え方を組むのは detail.mjs の continuationCountOf 一箇所である。
+        count: continuationCountOf(keys.map(labelOf)),
+        selected,
+      }),
+    };
+  }
+  const key = btn.dataset.pref;
+  if (key) {
+    const selected = isOnly(state.prefSelected, state.selected, key);
+    return {
+      selected,
+      html: onlyButtonHTML({ prefKey: key, prefLabel: labelOf(key), selected }),
+    };
+  }
+  const ref = Number(btn.dataset.ref);
+  const selected = isOnly(state.selected, state.prefSelected, ref);
+  return { selected, html: onlyButtonHTML({ ref, selected }) };
 }
 
 /**
@@ -181,16 +203,34 @@ export function clearSelection(doc, state, applyFilters) {
 }
 
 /**
- * いまこの 1 本だけに絞っているか。「この路線だけ表示」が押された状態かどうかの
- * 答えである。一覧から 2 本選んでいるあいだは押されていない(そこで押せば
- * 「だけ」になり、解除にはならない)。詳細パネルの描画(app.js)と下の二つの
+ * いまこの群だけに絞っているか。詳細パネルの漏斗が押された状態かどうかの答え
+ * である。一覧から余分に選んでいるあいだは押されていない(そこで押せば
+ * 「だけ」になり、解除にはならない)。詳細パネルの描画(app.js)と下の三つの
  * トグルが同じ関数に聞く。
  *
  * 両系統ぶん数える。国道 63 号と長野県道 63 号を選んでいる画面は 2 本を
  * 描いており、そこで国道のボタンが「解除」と名乗ってはならない。
+ *
+ * 群を表示している間に見出しの漏斗を押せば、その 1 本に絞れる(#155)。狭いほうが
+ * 後から勝ち、そのとき群の側は自動的に「押していない」に戻る。二つの状態を
+ * `state.prefSelected` 一つが持ち、ここはそこに群が全部入っているかを見るだけ
+ * だからである。
+ *
+ * 空の群では答えない。何も選んでいない画面が「その空の群だけを表示している」に
+ * なってしまう。
+ */
+export const isOnlyGroup = (selected, other, keys) =>
+  keys.length > 0 &&
+  other.size === 0 &&
+  selected.size === keys.length &&
+  keys.every((k) => selected.has(k));
+
+/**
+ * いまこの 1 本だけに絞っているか。上の群の判定に 1 本だけを渡した形である。
+ * 「だけ」の意味を一箇所に置くために、同じ関数から出す。
  */
 export const isOnly = (selected, other, key) =>
-  selected.size === 1 && other.size === 0 && selected.has(key);
+  isOnlyGroup(selected, other, [key]);
 
 /**
  * 「この路線だけ表示」。その 1 本だけを選び、もう一度呼べば解く。「だけ」は
@@ -219,11 +259,23 @@ export function toggleRouteOnly(doc, state, ref, applyFilters) {
  * 空にするぶん一覧のチェックも外すためである。
  */
 export function togglePrefOnly(doc, state, key, applyFilters) {
-  if (isOnly(state.prefSelected, state.selected, key)) {
+  togglePrefGroup(doc, state, [key], applyFilters);
+}
+
+/**
+ * 県境で続く路線の群をまとめて選ぶ。もう一度呼べば解く(#155)。
+ *
+ * 中身は `togglePrefOnly` と同じで、鍵が 1 本か群かの違いしかない。だから
+ * 選択を入れ替える側は 1 つにして、名前だけを二つ残した。呼ぶ側が「1 本」と
+ * 「群」を取り違えないためである。選択そのものは `state.prefSelected` が持ち、
+ * URL の `proutes` も初めから複数を運ぶので、新しい状態は要らない。
+ */
+export function togglePrefGroup(doc, state, keys, applyFilters) {
+  if (isOnlyGroup(state.prefSelected, state.selected, keys)) {
     clearSelection(doc, state, applyFilters);
     return;
   }
-  state.prefSelected = new Set([key]);
+  state.prefSelected = new Set(keys);
   setSelection(doc, state, [], applyFilters);
 }
 

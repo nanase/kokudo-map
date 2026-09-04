@@ -1503,6 +1503,63 @@ for (const ref of [10, 4]) {
               `the one we came from (${other} → ${key})`,
           );
           await page.screenshot({ path: shot('8-continuation') });
+
+          /* 節の漏斗は群をまとめて地図に残す(#155)。「だけ」は文字どおりで、
+           * 押した後の地図に残るのは群の全員だけであり、国道は消える。押した
+           * 路線のパネルは開いたままで、解除する口もそこにある。 */
+          const drawn = () =>
+            page.evaluate(() => ({
+              pref: window.map
+                .queryRenderedFeatures({ layers: ['pref-roads'] })
+                .map((f) => f.properties.refs),
+              national: window.map.queryRenderedFeatures({ layers: ['roads'] })
+                .length,
+              url: location.search,
+              open: !document.querySelector('#detail').hidden,
+              on: !!document.querySelector('.detail-cont.on'),
+              pressed: document
+                .querySelector('.cont-row .detail-only')
+                ?.getAttribute('aria-pressed'),
+            }));
+          const before = await drawn();
+          await page.click('.cont-row .detail-only');
+          await settle();
+          const after = await drawn();
+          const stray = after.pref.filter(
+            (refs) => !pick.refs.some((k) => refs.includes(`,${k},`)),
+          );
+          ok(
+            after.pref.length > 0 && stray.length === 0,
+            `the section's funnel leaves the whole group on the map and ` +
+              `nothing else (${after.pref.length} arcs, ${stray.length} stray)`,
+          );
+          ok(
+            after.national === 0,
+            `and takes the national routes off, the way 「だけ」 does ` +
+              `(${after.national} arcs)`,
+          );
+          ok(
+            pick.refs.every((k) =>
+              decodeURIComponent(after.url).includes(k.replace('-', ':')),
+            ),
+            `and the whole group rides the shared link ("${decodeURIComponent(after.url)}")`,
+          );
+          ok(
+            after.open && after.on && after.pressed === 'true',
+            `and the box stays open saying so ` +
+              `(open ${after.open}, framed ${after.on}, pressed ${after.pressed})`,
+          );
+
+          await page.click('.cont-row .detail-only');
+          await settle();
+          const released = await drawn();
+          ok(
+            released.pref.length === before.pref.length &&
+              released.url === before.url &&
+              released.on === false,
+            `pressing it again releases the group ` +
+              `(${released.pref.length} arcs back, "${released.url}")`,
+          );
         }
         await page.click('#detail-close');
         await settle();
