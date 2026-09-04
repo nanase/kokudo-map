@@ -69,6 +69,13 @@ run = "uv run {{env.PIPELINE}}/cf_cache.py"
 description = "pipeline/cf-cache.json と実際の Cloudflare キャッシュ設定の差分を出す"
 run = "uv run {{env.PIPELINE}}/cf_cache.py --diff"
 
+[tasks.cf-cache-apply]
+description = "pipeline/cf-cache.json の内容を実際の Cloudflare へ当てる(確認を挟む)"
+# 本番ゾーンを書き換えます。何が変わるかを表示し、合言葉を打つまで書きません。
+# 消えるルールがあるときは `mise run cf-cache-apply -- --allow-delete` が要ります。
+# 引数のテンプレート(arg())を使わないので、`--` の後ろはそのまま後ろへ足されます。
+run = "uv run {{env.PIPELINE}}/cf_cache.py --apply"
+
 [tasks.decree]
 description = "政令の別表から起点・終点を取り込み、座標を当てる"
 # 政令は年に数回しか変わらないので取得はキャッシュします。90 日を過ぎると
