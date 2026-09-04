@@ -62,8 +62,8 @@
 <body>
 
 <!-- 二度以上出てくる絵は、ここで一度だけ描いて <use> で呼ぶ。共有のアイコンは
-     左上の見出しと共有ダイアログの「文章で共有」に出る。寸法は呼ぶ側の svg が
-     持つ。 -->
+     左上の見出しと共有ダイアログの「文章で共有」に、チェックと錠は「道路を
+     選択」の系統ボタン二枚に出る。寸法は呼ぶ側の svg が持つ。 -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="icon-share" viewBox="0 0 24 24">
     <path d="M10 13a5 5 0 0 0 7.54.54l2.12-2.12a5 5 0 0 0-7.07-7.07l-1.72 1.71"
@@ -72,6 +72,17 @@
     <path d="M14 11a5 5 0 0 0-7.54-.54l-2.12 2.12a5 5 0 0 0 7.07 7.07l1.71-1.71"
           fill="none" stroke="currentColor" stroke-width="2.2"
           stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <!-- 系統ボタンの箱の中身。チェックはその系統が一覧に出ていることを、錠は
+       それが最後の一枚で押しても外れないことを言う。 -->
+  <symbol id="icon-check" viewBox="0 0 12 12">
+    <path d="M2.5 6.3 4.9 8.7 9.6 3.5" fill="none" stroke="currentColor"
+          stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="icon-lock" viewBox="0 0 12 12">
+    <path d="M4 5.2V3.7a2 2 0 0 1 4 0v1.5" fill="none" stroke="currentColor"
+          stroke-width="1.4"/>
+    <rect x="2.5" y="5.2" width="7" height="5.1" rx="1.2" fill="currentColor"/>
   </symbol>
 </svg>
 
@@ -163,12 +174,25 @@
               <input type="search" id="route-filter" placeholder="番号で絞り込み（例: 18）" autocomplete="off">
             </div>
             <!-- 一覧に出す系統。状態は三つだけで、最後の一枚は押しても外れず、
-                 空の一覧が残らない。これは一覧の絞り込みであって、地図の
-                 絞り込みではない。地図にどの系統を描くかは表示の
-                 ポップオーバーの「国道」「都道府県道」が持つ。 -->
+                 空の一覧が残らない。それは錠と aria-disabled が、押す前に
+                 述べる。これは一覧の絞り込みであって、地図の絞り込みでは
+                 ない。地図にどの系統を描くかは表示のポップオーバーの
+                 「国道」「都道府県道」が持つ。 -->
             <div class="sys-seg" role="group" aria-label="一覧に出す系統">
-              <button type="button" id="sys-national" class="sys" aria-pressed="true">国道</button>
-              <button type="button" id="sys-pref" class="sys" aria-pressed="true">都道府県道</button>
+              <button type="button" id="sys-national" class="sys"
+                      aria-pressed="true" aria-disabled="false">
+                <span class="sys-box" aria-hidden="true">
+                  <svg class="sys-check" viewBox="0 0 12 12"><use href="#icon-check"/></svg>
+                  <svg class="sys-lock" viewBox="0 0 12 12"><use href="#icon-lock"/></svg>
+                </span><span>国道</span>
+              </button>
+              <button type="button" id="sys-pref" class="sys"
+                      aria-pressed="true" aria-disabled="false">
+                <span class="sys-box" aria-hidden="true">
+                  <svg class="sys-check" viewBox="0 0 12 12"><use href="#icon-check"/></svg>
+                  <svg class="sys-lock" viewBox="0 0 12 12"><use href="#icon-lock"/></svg>
+                </span><span>都道府県道</span>
+              </button>
             </div>
             <div id="route-list" class="route-list" role="group" aria-label="道路の選択">
               <div class="rl-group" id="rl-national">
