@@ -13,6 +13,10 @@ export const REGIONS = join(ROOT, 'build', 'regions');
  * 木を分ける理由は pipeline/_paths.py にある。 */
 export const PREFECTURAL = join(ROOT, 'build', 'prefectural');
 
+/* 都道府県道になりうる way を全国から測った結果。判定の入力である。JS から
+ * 読むのは、県をまたぐルートリレーションの表(relations.json)だけである。 */
+export const SURVEY = join(ROOT, 'build', 'survey');
+
 /* 政令の別表をデータにした物。pipeline/decree.py が書く。 */
 export const DECREE = join(ROOT, 'build', 'decree');
 export const DATA = join(ROOT, 'web', 'data');
