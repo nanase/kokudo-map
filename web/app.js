@@ -44,6 +44,7 @@ import {
 } from './aggregate.mjs';
 import { dataURL } from './dataurl.mjs';
 import {
+  continuationOf,
   decreeTerminiOf,
   detailHTML,
   prefDetailHTML,
@@ -1649,6 +1650,10 @@ async function openPrefDetail(key) {
       compare: comparePrefKeys,
       normalize: String,
     }),
+    // 県境で番号が変わらずに続く路線の群(#155)。相手は別の県なので、カードに
+    // 出す県名のために 47 県ぶんの対応表ごと渡す。
+    continuation: continuationOf(meta, key),
+    prefLabels: state.prefLabels,
     formerKm: formerKmFor(combos, sel),
   });
   showDetail();

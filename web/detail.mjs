@@ -11,7 +11,7 @@
 import { esc } from './html.mjs';
 import { PREF_RANK_LABELS } from './mapspec.mjs';
 import { KIND_LABELS, PREF_KIND_LABELS } from './popup.mjs';
-import { prefKeyOf, prefRefOf } from './prefroute.mjs';
+import { prefKeyOf, prefRefOf, prefRegionOf } from './prefroute.mjs';
 import { hexShield, prefRouteName, shield } from './shield.mjs';
 
 /** 路線の記事。日本語版 Wikipedia は「国道N号」で立項が揃っている。 */
@@ -121,6 +121,46 @@ export function relatedRoutesOf(
     { key: 'termini', label: `起終点を共有する${system}`, refs: sorted(ends) },
     { key: 'cross', label: `交差する${system}`, refs: sorted(cross) },
   ].filter((g) => g.refs.length);
+}
+
+/**
+ * いま見ている路線が属する群。県境で番号が変わらずに続く路線を束ねた物で、
+ * 県別 meta の `continuations` が持つ(pipeline/pack_web_pref.mjs、issue #155)。
+ *
+ * 路線は高々一つの群にしか入らない。群は「県境で端点を共有し番号も同じ」組の
+ * 連結成分なので、二つの群に同時に入れば、それは一つの群である。
+ *
+ * 群を持たない県の meta には欄そのものが無い。`crossings` と同じく後から入った
+ * 欄なので、古い web/data を配ったままでも節が出ないだけで壊れない。
+ */
+export function continuationOf(meta, key) {
+  return meta?.continuations?.find((c) => c.refs.includes(key)) ?? null;
+}
+
+/* 群がまたがる先を数える語。都 → 道 → 府 → 県 の順に並べる。 */
+const SPAN_ORDER = '都道府県';
+
+/**
+ * 群の大きさの言い方。「3県」「3都県」「2府」のように、群に実際に入っている
+ * 都・道・府・県 だけを並べて数を付ける。
+ *
+ * 「複数県にわたる」とは書けない。538 群のうち 134 群(24.9%)は「県」だけでは
+ * 言えず、京都府と大阪府だけで閉じる 14 群には県が 1 つも入らない(内訳は
+ * 県だけ 404・府と県 69・都と県 51・府だけ 14)。「複数の都道府県にわたる」は
+ * 正しいが 16 字あり、節の見出しの 1 行に収まらない。
+ *
+ * 渡すのは群の全員の県名(`web/data/regions.json` の `label`)である。数はその
+ * 本数で足りる。群の中で番号は一つに揃っており、同じ県に同じ番号の路線は 1 本
+ * しか無いので、路線の数と県の数は必ず一致する。
+ *
+ * 例外表を持たない。北海道は群に入らないので `道` は出ないが、規則としては
+ * 同じに扱う。C 回の漏斗の `title`(`3都県まとめて表示`)もここを読む。同じ
+ * 文言を二箇所で組むと片方が暗黙のうちに古くなる。
+ */
+export function continuationCountOf(labels) {
+  const tails = new Set(labels.map((l) => l.slice(-1)));
+  const kinds = [...SPAN_ORDER].filter((c) => tails.has(c)).join('');
+  return `${labels.length}${kinds}`;
 }
 
 /* 小数第 1 位まで。組み合わせ表の km がその桁で丸めてある。export して
@@ -272,6 +312,64 @@ const prefRelShieldHTML = (prefLabel) => (key) => {
   );
 };
 
+/* 群の相手のカード。重用・交差の節はヘキサだけを並べるが、あちらの相手は必ず
+ * 同じ県で、番号だけで名指せる。この節の相手は別の都道府県であり、538 群のうち
+ * 525 群は番号まで同じである。「1」の隣に「1」を並べても何も述べていないので、
+ * 県名を添えたカードにする。ここに並ぶのは多くて 3 枚(4 県の群が 1 件)で、
+ * 交差の 31 本とは事情が違う。
+ *
+ * 押した先は重用・交差の標識と同じである。`.shield-btn` と `data-pref` を持つ
+ * ので、app.js の委譲がそのまま拾う。新しい口は開けない。 */
+const contChipHTML = (prefLabels) => (key) => {
+  const label = prefLabels?.get(prefRegionOf(key)) ?? '';
+  const ref = prefRefOf(key);
+  const name = prefRouteName(label, ref);
+  return (
+    `<button type="button" class="shield-btn cont-chip" data-pref="${esc(key)}" ` +
+    `title="${esc(name)}の詳細">${hexShield(label, ref, true)}` +
+    `<span class="pref">${esc(label)}</span></button>`
+  );
+};
+
+/**
+ * 複数の都道府県にわたる路線の節。長野県道1号・愛知県道1号・静岡県道1号は
+ * 飯田富山佐久間線 として県境で直接つながっているが、県別の数だけでは
+ * それを述べられない(issue #155)。
+ *
+ * 関わりの節(重用・交差)より前に置く。県境の向こうまで同じ道であることは、
+ * 一点で交わることより強い関わりである。パネルの中でこの節だけが地の色を持つ
+ * のも同じ理由で、いちばん強い関わりであることが読まなくても分かる。
+ *
+ * `cont` は continuationOf() が返す行、`prefLabels` は 県 → 県名 の対応表
+ * (app.js の `state.prefLabels`)である。`refs` には自分自身も入っているので、
+ * カードからは外す。自分の標識は見出しに出ている。
+ *
+ * 路線名は取れないことがある(538 群のうち 27 群)。そのときは行ごと出さない。
+ * 欄そのものが無い形で来るので、`name` の有無で分かる。
+ */
+const continuationHTML = (key, cont, prefLabels) => {
+  // 県が分からなければ自分の鍵も作れない。外せない自分がカードに並ぶくらいなら
+  // 節ごと出さない。「だけを表示」が region を要求するのと同じ事情である。
+  if (!cont || !key) return '';
+  const labelOf = (k) => prefLabels?.get(prefRegionOf(k)) ?? '';
+  const count = continuationCountOf(cont.refs.map(labelOf));
+  const others = cont.refs.filter((k) => k !== key);
+  return (
+    '<div class="detail-cont">' +
+    '<div class="cont-head">' +
+    `<span class="detail-sub">${count}にわたる都道府県道</span>` +
+    // 数は見出しが言うので、ここでは言わない。同じ数を二箇所で言わない。
+    `<span class="cont-km">あわせて ${fmtKm(cont.km)} km</span>` +
+    '</div>' +
+    (cont.name ? `<div class="cont-name">${esc(cont.name)}</div>` : '') +
+    // C 回はこの行の右端に漏斗を置く。そのときに行組みを作り直さずに済むよう、
+    // カードは初めから行の中に入れておく。
+    '<div class="cont-row">' +
+    `<div class="cont-chips">${others.map(contChipHTML(prefLabels)).join('')}</div>` +
+    '</div></div>'
+  );
+};
+
 const relatedHTML = (groups, shieldOf = relShieldHTML) =>
   groups
     .map(
@@ -346,6 +444,10 @@ export function detailHTML({
  * 見出しに名前を出すのは、ヘキサが県を持たないためである。国道はおにぎりの
  * 番号がそのまま路線の名前だが、ヘキサの番号だけでは 47 本のどれか決まらない。
  *
+ * 国道に無い節が一つある。県境で番号が変わらずに続く路線を束ねた節で、
+ * `continuation` は continuationOf() の結果、`prefLabels` は 県 → 県名 の
+ * 対応表である。国道の番号は全国で一意なので、あちらに同じ節は要らない。
+ *
  * `route` が null なら、県別 meta がまだ届いていない(app.js の prefMeta)。
  * そのあいだも見出しは出す。押した標識がどの路線かは、数が揃う前から分かる。
  */
@@ -357,6 +459,8 @@ export function prefDetailHTML({
   rank = null,
   kinds = [],
   related = [],
+  continuation = null,
+  prefLabels = null,
   formerKm = 0,
   failed = false,
   selected = false,
@@ -375,6 +479,11 @@ export function prefDetailHTML({
       row('最大重用数', route.max_n > 1 ? `${route.max_n} 重用` : '単独指定') +
       '</dl>' +
       kindsHTML(kinds, PREF_KIND_LABELS) +
+      continuationHTML(
+        region ? prefKeyOf(region, ref) : null,
+        continuation,
+        prefLabels,
+      ) +
       relatedHTML(related, prefRelShieldHTML(prefLabel))
     : wait;
 

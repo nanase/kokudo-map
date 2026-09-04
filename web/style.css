@@ -1026,6 +1026,51 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* 数が届くまでのあいだ、と読めなかったとき。 */
 .detail-wait { margin: 0; font-size: .78rem; color: var(--ink-3); }
 
+/* 複数の都道府県にわたる路線の節 --------------------------------------------
+   パネルの中でこの節だけが地の色を持つ。県境の向こうまで同じ道であることは、
+   重用や交差より強い関わりで、それが読まなくても分かる。ほかの節(.detail-kinds
+   と .detail-rel)は見出しと中身を並べるだけで、器を持たない。 */
+.detail-cont {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 10px 11px 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2); border-radius: 4px;
+}
+/* 見出しと合算延長を両端に振り分ける。合算延長は節が述べている 2〜4 本ぶんの
+   数で、路線 1 本の数を並べる .detail-stats とは別の量である。だから統計の
+   <dl> には足さず、この節の右上に置く。書体・色・右揃え・等幅数字は
+   .detail-stats の dd と揃える。 */
+.cont-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cont-head .detail-sub { flex: 1 1 auto; }
+.cont-km {
+  font-size: .68rem; color: var(--ink-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* 路線名。取れない群では行ごと出ない(detail.mjs の continuationHTML)。 */
+.cont-name {
+  font-size: .82rem; font-weight: 600; color: var(--ink); line-height: 1.4;
+}
+/* カードの行。C 回でこの行の右端に漏斗が付く(#155)ので、カードは初めから
+   行の中に入れておく。 */
+.cont-row { display: flex; align-items: flex-start; gap: 8px; }
+.cont-chips {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  flex: 1 1 auto; min-width: 0; padding-top: 1px;
+}
+/* 相手のカード。.shield-btn の骨格を借りるので、line-height: 0 と
+   display: block を打ち消してから中身を並べる。地は節の地(--panel-2)より
+   明るくして、押せる物として立たせる。 */
+.cont-chip {
+  display: inline-flex; align-items: center; gap: 5px; line-height: 1.6;
+  padding: 2px 8px 2px 4px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 4px;
+}
+.cont-chip:hover { background: var(--line-2); }
+.cont-chip .shield { height: 20px; }
+.cont-chip .pref {
+  font-size: .7rem; color: var(--ink-2); white-space: nowrap;
+}
+
 /* ダイアログ --------------------------------------------------------------
    ネイティブの <dialog> を使う。showModal() が Esc とフォーカスの往復を
    面倒みるので、独自のフォーカストラップは書かない。共有と「この地図について」
