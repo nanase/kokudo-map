@@ -373,7 +373,8 @@ def apply(allow_delete: bool) -> None:
     live_raw = fetch_rules_raw(zone_id, token)
     live_settings = fetch_zone_settings(zone_id, token)
 
-    plan = plan_rules(saved_rules, [normalize_rule(rule) for rule in live_raw])
+    live_rules = [normalize_rule(rule) for rule in live_raw]
+    plan = plan_rules(saved_rules, live_rules)
     settings_plan = [
         (key, live_settings[key], saved_settings[key])
         for key in WRITABLE_ZONE_SETTINGS
@@ -393,15 +394,31 @@ def apply(allow_delete: bool) -> None:
     # 打ってしまう。
     confirm("delete" if plan["removed"] else "apply")
 
+    # 合言葉を待っている間も、ダッシュボードは開ける。そこで足されたルールは、
+    # 表示にも --allow-delete にも掛からないまま PUT で消える。見せた計画が
+    # まだ本当かを、書く直前にもう一度確かめる。違っていれば書かずに終える。
+    # ここで新しい計画を出して聞き直さないのは、断りの文面を読まずに同じ
+    # 合言葉を打ち直す形になりやすいからである。
+    now_raw = fetch_rules_raw(zone_id, token)
+    now_settings = fetch_zone_settings(zone_id, token)
+    if [normalize_rule(rule) for rule in now_raw] != live_rules or now_settings != live_settings:
+        sys.exit(
+            "待っている間に実際の設定が変わった。何も書いていない。\n"
+            "もう一度実行し、新しい計画を確かめる。"
+        )
+
     call(
         "PUT",
         f"/zones/{zone_id}{CACHE_RULES_PATH}",
         token,
-        {"rules": rules_payload(saved_rules, live_raw)},
+        {"rules": rules_payload(saved_rules, now_raw)},
     )
     print("Cache Rules を当てた。")
-    for key in WRITABLE_ZONE_SETTINGS:
-        call("PATCH", f"/zones/{zone_id}/settings/{key}", token, {"value": saved_settings[key]})
+    # 変わる項目だけを書く。ゾーン設定は項目ごとに別の呼び出しなので、要らない
+    # 1 本が失敗すると、そこまで書けた状態で落ちる。実際に
+    # sort_query_string_for_cache がそれで落ちた。
+    for key, _, value in settings_plan:
+        call("PATCH", f"/zones/{zone_id}/settings/{key}", token, {"value": value})
         print(f"ゾーン設定 {key} を当てた。")
 
     # 当てた結果を取り直し、ファイルと一致することをその場で確かめる。見るのは
