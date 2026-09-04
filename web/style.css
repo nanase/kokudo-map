@@ -42,13 +42,13 @@
      には混ぜない。 */
   --success: light-dark(#1E8E3E, #4ADE80);
 
-  /* 「道路を選択」の系統ボタンで、都道府県道の側が押されている間の地。明るい
-     側は地図の主要地方道のラベルと同じ濃い緑(mapspec.mjs の PREF_MAJOR_INK)で、
-     押されたボタンの色が地図と同じ意味を持つ。線の緑(PREF_MAJOR)ではない。
-     あちらは縁取りが輪郭を持つ前提の明るい緑で、白い字を載せると比が 2.5:1 しか
-     出ない。暗い側は --sign-blue と同じ扱いで、地と字を入れ替えられる明るさへ
-     寄せる。test/panel.test.mjs が明るい側の値を PREF_MAJOR_INK と
-     突き合わせる。 */
+  /* 「道路を選択」の系統ボタンで、都道府県道の側が出ている間のチェックの箱の
+     地。明るい側は地図の主要地方道のラベルと同じ濃い緑(mapspec.mjs の
+     PREF_MAJOR_INK)で、箱の色が地図と同じ意味を持つ。線の緑(PREF_MAJOR)では
+     ない。あちらは縁取りが輪郭を持つ前提の明るい緑で、白いチェックを載せると
+     比が 2.5:1 しか出ず、図形に要る 3:1 にも届かない。暗い側は --sign-blue と
+     同じ扱いで、地と印を入れ替えられる明るさへ寄せる。test/panel.test.mjs が
+     明るい側の値を PREF_MAJOR_INK と突き合わせる。 */
   --pref-green: light-dark(#1B7A3E, #7ED2A0);
 
   /* 凡例の都道府県道の見本だけが使う縁取り。地図の縁取りと同じ色(mapspec.mjs の
@@ -346,33 +346,60 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* 一覧に出す系統 ----------------------------------------------------------
    状態は三つだけで、どちらも外れることはない。二枚が一枚に見えるので、二つで
    一組であることを形が示す。地図の絞り込みではなく、この一覧の
-   絞り込みである。 */
+   絞り込みである。
+
+   出ているかどうかはチェックの箱が言い、系統の色はその箱が持つ。面の色に
+   持たせていたころは、色が「その系統である」と「選ばれている」を兼ねており、
+   既定(どちらも押されている)では色の面が二枚並んで、押して外せる物に
+   見えなかった。 */
 .sys-seg { display: flex; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
 .sys-seg .sys {
   flex: 1; font: inherit; font-size: .72rem; line-height: 1; padding: 6px 0;
   /* 高さは自分で決める。グループの 29px に揃えるためで、以前は maplibre-gl.css
      の `.maplibregl-ctrl-group button` から漏れて届いていた。 */
   min-height: 29px;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
   cursor: pointer; border: 0; background: var(--panel-2); color: var(--ink-2);
 }
 .sys-seg .sys + .sys { border-left: 1px solid var(--line); }
-/* 押されている側は、その系統の色で沈む。国道は標識の青、都道府県道は地図の
-   主要地方道の緑である。 */
-.sys-seg #sys-national[aria-pressed="true"] { --sys-on: var(--sign-blue); }
-.sys-seg #sys-pref[aria-pressed="true"] { --sys-on: var(--pref-green); }
+/* 系統の色は、出ているかどうかに関わらずその側のものである。国道は標識の青、
+   都道府県道は地図の主要地方道の緑である。 */
+.sys-seg #sys-national { --sys-on: var(--sign-blue); }
+.sys-seg #sys-pref { --sys-on: var(--pref-green); }
+/* 出ている側は面と同じ地まで起き上がり、字が濃くなる。沈んだままの側との差は
+   地・字の濃さ・太さ・箱の四つが同時に述べる。 */
 .sys-seg .sys[aria-pressed="true"] {
-  background-color: var(--sys-on); color: var(--panel); font-weight: 700;
+  background-color: var(--panel); color: var(--ink); font-weight: 700;
 }
+/* チェックの箱。すぐ下の路線一覧もチェックボックスなので、面の中で語彙が一つ
+   で済む。系統の色は字の地ではなくこの箱が持つ——字に要る 4.5:1 ではなく図形の
+   3:1 でよくなり、青(8.9:1)と緑(5.4:1)で字の読みやすさが揃う。 */
+.sys-seg .sys-box {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 14px; height: 14px; box-sizing: border-box;
+  border: 1.5px solid var(--ink-3); border-radius: 3px; color: var(--panel);
+}
+.sys-seg .sys[aria-pressed="true"] .sys-box {
+  background: var(--sys-on); border-color: var(--sys-on);
+}
+.sys-seg .sys-box svg { display: none; width: 12px; height: 12px; }
+.sys-seg .sys[aria-pressed="true"] .sys-check { display: block; }
+/* 最後の一枚は押しても外れない。チェックを錠に替えて、押す前にそう言う。
+   読み上げには wiring.mjs が置く aria-disabled が同じことを言う。 */
+.sys-seg .sys[aria-disabled="true"] { cursor: default; }
+.sys-seg .sys[aria-disabled="true"] .sys-check { display: none; }
+.sys-seg .sys[aria-disabled="true"] .sys-lock { display: block; width: 10px; height: 10px; }
 /* ホバーの地は選択子を四つ数えさせる。maplibre-gl.css の
    `.maplibregl-ctrl button:not(:disabled):hover` はクラス 3 つと要素 1 つで、
    このポップオーバーがグループの中にあるぶんここにも当たる。負けると地だけ
-   薄い灰色になり、白い字が白い地に消える。 */
-.sys-seg .sys[aria-pressed="true"]:hover {
-  background-color: var(--sys-on); filter: brightness(1.12);
-}
+   薄い灰色になり、出ている側と沈んでいる側の差が消える。 */
+.sys-seg .sys[aria-pressed="true"]:hover { background-color: var(--panel); }
+/* 沈んでいる側は、押せば何が起きるかをホバーが先に見せる——字が濃くなり、空の
+   箱の縁がその系統の色になる。 */
 .sys-seg .sys[aria-pressed="false"]:hover {
-  background-color: var(--panel); color: var(--sign-blue);
+  background-color: var(--line-2); color: var(--ink);
 }
+.sys-seg .sys[aria-pressed="false"]:hover .sys-box { border-color: var(--sys-on); }
 
 /* 路線のチェックボックスの並び --------------------------------------------
    一覧は「道路を選択」のポップオーバー(#select-popover)の中にあり、開け閉ては

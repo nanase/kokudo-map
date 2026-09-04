@@ -161,6 +161,31 @@ function onlyStateOf(btn, state) {
   return { selected, html: onlyButtonHTML({ ref, selected }) };
 }
 
+/** 一覧に出す系統のボタンと、それが持つ state のキー。 */
+const SYS_BUTTONS = [
+  ['listNational', '#sys-national'],
+  ['listPref', '#sys-pref'],
+];
+
+/**
+ * 二枚のボタンへ、いまの状態を書き戻す。
+ *
+ * 出ているかどうか(aria-pressed)だけでなく、押しても外れないかどうか
+ * (aria-disabled)も述べる。最後の一枚は押せる物に見えてはならず、それは
+ * style.css の錠が目に、aria-disabled が読み上げに伝える。押した側だけを
+ * 書き換えるのでは足りない——外れない一枚に変わるのは、押されなかった方だから
+ * である。
+ */
+function syncListSystems(doc, state) {
+  // 片方だけが出ている状態。そのとき出ている一枚が、外れない一枚になる。
+  const alone = state.listNational !== state.listPref;
+  for (const [key, sel] of SYS_BUTTONS) {
+    const btn = doc.querySelector(sel);
+    btn.setAttribute('aria-pressed', String(state[key]));
+    btn.setAttribute('aria-disabled', String(state[key] && alone));
+  }
+}
+
 /**
  * 一覧に出す系統を切り替える。状態は三つだけ(どちらも、国道だけ、
  * 都道府県道だけ)で、最後の一枚は押しても外れない。外れたら一覧が空になる。
@@ -171,9 +196,7 @@ function toggleListSystem(doc, state, key, applyFilters) {
   const other = key === 'listNational' ? 'listPref' : 'listNational';
   if (state[key] && !state[other]) return;
   state[key] = !state[key];
-  doc
-    .querySelector(key === 'listNational' ? '#sys-national' : '#sys-pref')
-    .setAttribute('aria-pressed', String(state[key]));
+  syncListSystems(doc, state);
   applyRouteFilter(doc, state);
   // 一覧から消えた系統の選択はそのまま残る。ここは探す先を絞る欄で、
   // 選んだものを捨てる場所ではない。
@@ -310,12 +333,11 @@ export function wireControls(doc, state, applyFilters) {
     applyRouteFilter(doc, state);
   });
 
-  $('#sys-national').addEventListener('click', () => {
-    toggleListSystem(doc, state, 'listNational', applyFilters);
-  });
-  $('#sys-pref').addEventListener('click', () => {
-    toggleListSystem(doc, state, 'listPref', applyFilters);
-  });
+  for (const [key, sel] of SYS_BUTTONS) {
+    $(sel).addEventListener('click', () => {
+      toggleListSystem(doc, state, key, applyFilters);
+    });
+  }
 
   for (const el of doc.querySelectorAll('input[name=conc]')) {
     el.addEventListener('change', () => {

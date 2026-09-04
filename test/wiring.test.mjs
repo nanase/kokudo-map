@@ -385,6 +385,10 @@ describe('wireControls — 絞り込み', () => {
 describe('wireControls — 一覧に出す系統', () => {
   const pressed = (document, sel) =>
     document.querySelector(sel).getAttribute('aria-pressed');
+  /* 押しても外れない一枚かどうか。錠を出す手掛かりであり、読み上げが
+   * 「操作できない」と言う根拠でもある。 */
+  const locked = (document, sel) =>
+    document.querySelector(sel).getAttribute('aria-disabled');
 
   test('既定はどちらも選ばれている', () => {
     const { document, state } = setup();
@@ -392,6 +396,9 @@ describe('wireControls — 一覧に出す系統', () => {
     expect(state.listPref).toBe(true);
     expect(pressed(document, '#sys-national')).toBe('true');
     expect(pressed(document, '#sys-pref')).toBe('true');
+    // どちらも外せる。錠はどちらにも出ない。
+    expect(locked(document, '#sys-national')).toBe('false');
+    expect(locked(document, '#sys-pref')).toBe('false');
   });
 
   test('片方を押すと、その系統だけが一覧から消える', () => {
@@ -412,6 +419,25 @@ describe('wireControls — 一覧に出す系統', () => {
     expect(state.listNational).toBe(true);
     expect(state.listPref).toBe(false);
     expect(pressed(document, '#sys-national')).toBe('true');
+  });
+
+  /* 外れない一枚に変わるのは、押されなかった方である。押した側だけを書き
+   * 換えていると、ここが 'false' のままになる。 */
+  test('残った一枚に、外れないことが出る', () => {
+    const { document } = setup();
+    document.querySelector('#sys-pref').click();
+
+    expect(locked(document, '#sys-national')).toBe('true');
+    expect(locked(document, '#sys-pref')).toBe('false');
+  });
+
+  test('どちらもに戻すと、外れないことは消える', () => {
+    const { document } = setup();
+    document.querySelector('#sys-pref').click();
+    document.querySelector('#sys-pref').click();
+
+    expect(locked(document, '#sys-national')).toBe('false');
+    expect(locked(document, '#sys-pref')).toBe('false');
   });
 
   /* 一覧から消えた系統の選択はそのまま残る。ここは探す先を絞る欄で、
