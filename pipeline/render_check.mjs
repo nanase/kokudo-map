@@ -533,8 +533,10 @@ const seg = await page.evaluate(() => {
     .querySelector('#sys-national')
     .getAttribute('aria-pressed');
   press('#sys-pref'); // どちらもに戻す
-  const both =
-    shows('#sys-national .sys-check') && !shows('#sys-national .sys-lock');
+  // 二枚とも見る。片方だけ見ていると、もう一方に錠が残ったままでも通る。
+  const both = ['#sys-national', '#sys-pref'].every(
+    (sel) => shows(`${sel} .sys-check`) && !shows(`${sel} .sys-lock`),
+  );
   return { one, still, both };
 });
 ok(
