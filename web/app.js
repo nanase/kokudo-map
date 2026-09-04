@@ -108,9 +108,11 @@ import {
 import {
   applyRouteFilter,
   isOnly,
+  isOnlyGroup,
   NARROW_QUERY,
   syncDetailOnly,
   syncRouteList,
+  togglePrefGroup,
   togglePrefOnly,
   toggleRouteOnly,
   wireControls,
@@ -1079,17 +1081,11 @@ async function boot() {
   syncControls();
   applyFilters();
 
-  /* 共有されたリンクが都道府県道を 1 本名指しているなら、その詳細を開く。
+  /* 共有されたリンクが都道府県道を名指しているなら、その詳細を開く。
    * 操作パネルに都道府県道の節は無いので(#109)、絞っていることを示す場所も
-   * 解除するボタンもこのパネルのほかに無い。開かずに出すと、県道が 1 本しか
-   * 出ていない理由が画面のどこにも無く、「壊れている」に見える。
-   *
-   * 2 本以上を名指した URL では開かない。パネルは 1 路線について述べる場所で、
-   * どれを代表にしても残りを落とすことになる。画面からその形は作れず、手で
-   * 書いた URL だけが持ちうる。 */
-  if (state.prefSelected.size === 1) {
-    openPrefDetail([...state.prefSelected][0]);
-  }
+   * 解除するボタンもこのパネルのほかに無い。開かずに出すと、県道が数本しか
+   * 出ていない理由が画面のどこにも無く、「壊れている」に見える。 */
+  openSharedPrefDetail();
 
   // 共有されたリンクの hash が優先する。無ければ `?region=` の地域を使う。表示
   // 位置の指定であって、データの切り替えではない。どちらも無ければ、作られた
@@ -1637,6 +1633,9 @@ async function openPrefDetail(key) {
     return;
   }
   const sel = new Set([key]);
+  // 県境で番号が変わらずに続く路線の群(#155)。相手は別の県なので、カードに
+  // 出す県名のために 47 県ぶんの対応表ごと渡す。
+  const cont = continuationOf(meta, key);
   detailBody.innerHTML = prefDetailHTML({
     region,
     prefLabel,
@@ -1650,13 +1649,58 @@ async function openPrefDetail(key) {
       compare: comparePrefKeys,
       normalize: String,
     }),
-    // 県境で番号が変わらずに続く路線の群(#155)。相手は別の県なので、カードに
-    // 出す県名のために 47 県ぶんの対応表ごと渡す。
-    continuation: continuationOf(meta, key),
+    continuation: cont,
     prefLabels: state.prefLabels,
+    // 節の漏斗の押した状態。見出しの漏斗と同じく、書き込む直前に毎回聞く。
+    // 県別 meta を待つあいだにも選択は変わりうる。
+    groupSelected: cont
+      ? isOnlyGroup(state.prefSelected, state.selected, cont.refs)
+      : false,
     formerKm: formerKmFor(combos, sel),
   });
   showDetail();
+}
+
+/**
+ * 共有されたリンクが名指した都道府県道の詳細を開く。最初の描画の後に一度だけ
+ * 呼ぶ。
+ *
+ * 1 本ならそれを開く。2 本以上のときは、それが県境で続く路線の群とちょうど
+ * 一致する場合だけ開く(#155)。節の漏斗が作れる形はそれだけで、押した人に
+ * とっては 1 つの選択だからである。開かないと、県道が 3 本だけ出ている理由も
+ * 解除する口も画面から消える。
+ *
+ * 開く先は群の先頭にする。URL は押した路線を運ばないので、どれを代表にしても
+ * 同じであり、並べ方が決まっていれば開き直すたびに同じ画面になる。
+ *
+ * 群でない 2 本以上では開かない。パネルは 1 路線について述べる場所で、どれを
+ * 代表にしても残りを落とすことになる。画面からその形は作れず、手で書いた URL
+ * だけが持ちうる。
+ */
+async function openSharedPrefDetail() {
+  const keys = [...state.prefSelected].sort(comparePrefKeys);
+  if (!keys.length) return;
+  if (keys.length === 1) {
+    openPrefDetail(keys[0]);
+    return;
+  }
+  /* 県別 meta を待つあいだにも、人はアークを押してパネルを開ける。届いた頃に
+   * 別の路線が開いていたら、共有リンクの側は引き下がる。openPrefDetail が
+   * 遅れて届いた中身を捨てるのと同じ約束である(detailSerial)。 */
+  const serial = detailSerial;
+  let meta;
+  try {
+    meta = await prefMeta(prefRegionOf(keys[0]));
+  } catch (err) {
+    // 数が読めなければ開かない。開いても述べることが無い。
+    console.error(err);
+    return;
+  }
+  if (serial !== detailSerial) return;
+  const cont = continuationOf(meta, keys[0]);
+  if (cont && isOnlyGroup(state.prefSelected, state.selected, cont.refs)) {
+    openPrefDetail(keys[0]);
+  }
 }
 
 /**
@@ -1786,7 +1830,16 @@ document.addEventListener('click', (ev) => {
     // 押した状態の描き直しはしない。選択が変われば applyFilters が
     // syncDetailOnly を通るので、一覧のチェックや ✕ から変わったときと
     // 同じ経路になる。
-    if (only.dataset.pref) {
+    // 節の漏斗は群を名指す(#155)。押した路線のパネルは開いたままにする。
+    // 解除する口はこの漏斗のほかに無い。
+    if (only.dataset.prefs) {
+      togglePrefGroup(
+        document,
+        state,
+        only.dataset.prefs.split(','),
+        applyFilters,
+      );
+    } else if (only.dataset.pref) {
       togglePrefOnly(document, state, only.dataset.pref, applyFilters);
     } else {
       toggleRouteOnly(document, state, Number(only.dataset.ref), applyFilters);

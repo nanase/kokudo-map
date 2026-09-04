@@ -8,13 +8,16 @@ import { Window } from 'happy-dom';
 
 import { detailHTML, prefDetailHTML } from '../web/detail.mjs';
 import { routeListHTML } from '../web/panel.mjs';
+import { decodeURLState, encodeState } from '../web/urlstate.mjs';
 import {
   applyRouteFilter,
   clearSelection,
   isOnly,
+  isOnlyGroup,
   NARROW_QUERY,
   setSelection,
   syncDetailOnly,
+  togglePrefGroup,
   togglePrefOnly,
   toggleRouteOnly,
   wireControls,
@@ -680,5 +683,191 @@ describe('syncDetailOnly — 開いているパネルの名乗り', () => {
   test('パネルが開いていなければ何もしない', () => {
     const { document, state } = setup();
     expect(() => syncDetailOnly(document, state)).not.toThrow();
+  });
+});
+
+/* 県境で続く路線の群をまとめて選ぶ(#155)。ここが捕まえるのは、二つの漏斗が
+ * 同じ `state.prefSelected` を奪い合う場面です。見出しの漏斗で 1 本に絞った
+ * 後も節が押されたまま残る、あるいはその逆が起きると、画面が地図と違うことを
+ * 言います。 */
+describe('まとめて表示 — 群の選択', () => {
+  // 長野県と東京都は setup() の prefLabels に居ます。末尾が 県 と 都 なので
+  // 数え方も「2都県」になり、県だけでは言えない群の形も一緒に通ります。
+  const GROUP = ['nagano-18', 'tokyo-18'];
+
+  test('押すと群の全員が選ばれる', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    expect([...state.prefSelected].sort()).toEqual([...GROUP].sort());
+    expect(state.selected.size).toBe(0);
+  });
+
+  test('もう一度押すと解ける', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    expect(state.prefSelected.size).toBe(0);
+  });
+
+  test('群だけを選んでいるときに押した状態になる', () => {
+    const { document, state, applyFilters } = setup();
+    expect(isOnlyGroup(state.prefSelected, state.selected, GROUP)).toBe(false);
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    expect(isOnlyGroup(state.prefSelected, state.selected, GROUP)).toBe(true);
+  });
+
+  test('群の外が 1 本でも混ざれば押した状態ではない', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefGroup(document, state, [...GROUP, 'nagano-63'], applyFilters);
+    expect(isOnlyGroup(state.prefSelected, state.selected, GROUP)).toBe(false);
+  });
+
+  /* 国道 18 号と長野県道18号を選んでいる画面は 3 本を描いています。そこで節が
+   * 「解除」と名乗ってはなりません。1 本のときの isOnly と同じ約束です。 */
+  test('もう一方の系統が残っていれば押した状態ではない', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    state.selected = new Set([18]);
+    expect(isOnlyGroup(state.prefSelected, state.selected, GROUP)).toBe(false);
+  });
+
+  test('空の群では押した状態にならない', () => {
+    const { state } = setup();
+    expect(isOnlyGroup(state.prefSelected, state.selected, [])).toBe(false);
+  });
+
+  /* 狭いほうが後から勝ちます。群を表示している間に見出しの漏斗を押せば、
+   * その 1 本に絞れます。 */
+  test('見出しの漏斗を押すと 1 本に絞れ、節は押した状態でなくなる', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    togglePrefOnly(document, state, 'nagano-18', applyFilters);
+    expect([...state.prefSelected]).toEqual(['nagano-18']);
+    expect(isOnly(state.prefSelected, state.selected, 'nagano-18')).toBe(true);
+    expect(isOnlyGroup(state.prefSelected, state.selected, GROUP)).toBe(false);
+  });
+
+  test('節の漏斗を押すと群へ広がる', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefOnly(document, state, 'nagano-18', applyFilters);
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    expect(isOnlyGroup(state.prefSelected, state.selected, GROUP)).toBe(true);
+  });
+
+  test('✕ で解ける。1 本のときと同じ口である', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    clearSelection(document, state, applyFilters);
+    expect(state.prefSelected.size).toBe(0);
+    expect(isOnlyGroup(state.prefSelected, state.selected, GROUP)).toBe(false);
+  });
+
+  /* 共有リンクは選択をそのまま運びます。`proutes` は初めから複数を運ぶので、
+   * 群のために新しい欄は要りません。 */
+  test('URL に乗り、開き直して同じ選択に戻る', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    const search = encodeState(state);
+    expect(search).toContain('proutes=');
+    const back = decodeURLState(`?${search}`);
+    expect([...back.prefSelected].sort()).toEqual([...GROUP].sort());
+  });
+});
+
+describe('syncDetailOnly — 節の漏斗', () => {
+  const GROUP = ['nagano-18', 'tokyo-18'];
+  const CONT = { refs: GROUP, name: '甲乙線', km: 12.3, src: 'both' };
+  const openWithGroup = (doc, { selected = false, groupSelected = false }) => {
+    doc.querySelector('#detail-body').innerHTML = prefDetailHTML({
+      region: 'nagano',
+      prefLabel: '長野県',
+      ref: 18,
+      route: { ref: 'nagano-18', km: 20, arcs: 1, max_n: 1 },
+      continuation: CONT,
+      prefLabels: new Map([
+        ['nagano', '長野県'],
+        ['tokyo', '東京都'],
+      ]),
+      selected,
+      groupSelected,
+    });
+  };
+  const contFunnel = (doc) => doc.querySelector('.cont-row .detail-only');
+  const headFunnel = (doc) => doc.querySelector('.detail-acts .detail-only');
+  const box = (doc) => doc.querySelector('.detail-cont');
+
+  test('節の漏斗は群を名指し、数え方から名乗る', () => {
+    const { document } = setup();
+    openWithGroup(document, {});
+    expect(contFunnel(document).dataset.prefs).toBe(GROUP.join(','));
+    expect(contFunnel(document).getAttribute('aria-label')).toBe(
+      '2都県まとめて表示',
+    );
+  });
+
+  test('押した状態は漏斗と節の枠の両方に出る', () => {
+    const { document } = setup();
+    openWithGroup(document, { groupSelected: true });
+    expect(contFunnel(document).classList.contains('active')).toBe(true);
+    expect(contFunnel(document).getAttribute('aria-pressed')).toBe('true');
+    expect(contFunnel(document).getAttribute('aria-label')).toBe(
+      'まとめての表示を解除',
+    );
+    expect(box(document).classList.contains('on')).toBe(true);
+  });
+
+  /* 選択が他所で変わったときも追随します。✕ で解いた後に節だけが押されたまま
+   * 残ると、地図と画面が違うことを言います。 */
+  test('✕ で解いたら節も戻る', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    openWithGroup(document, { groupSelected: true });
+
+    clearSelection(document, state, applyFilters);
+    syncDetailOnly(document, state);
+
+    expect(contFunnel(document).getAttribute('aria-pressed')).toBe('false');
+    expect(contFunnel(document).classList.contains('active')).toBe(false);
+    expect(box(document).classList.contains('on')).toBe(false);
+  });
+
+  test('一覧から群を選び直したら押した姿になる', () => {
+    const { document, state, applyFilters } = setup();
+    openWithGroup(document, {});
+
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    syncDetailOnly(document, state);
+
+    expect(contFunnel(document).getAttribute('aria-pressed')).toBe('true');
+    expect(box(document).classList.contains('on')).toBe(true);
+  });
+
+  /* 二つの漏斗は排他ではありません。どちらも同じ `state.prefSelected` を見る
+   * ので、狭いほうを押せば広いほうが自動的に「押していない」に戻ります。 */
+  test('見出しの漏斗で 1 本に絞ると、節だけが戻る', () => {
+    const { document, state, applyFilters } = setup();
+    togglePrefGroup(document, state, GROUP, applyFilters);
+    openWithGroup(document, { groupSelected: true });
+
+    togglePrefOnly(document, state, 'nagano-18', applyFilters);
+    syncDetailOnly(document, state);
+
+    expect(headFunnel(document).getAttribute('aria-pressed')).toBe('true');
+    expect(contFunnel(document).getAttribute('aria-pressed')).toBe('false');
+    expect(box(document).classList.contains('on')).toBe(false);
+  });
+
+  test('節を持たないパネルでも落ちない', () => {
+    const { document, state, applyFilters } = setup();
+    document.querySelector('#detail-body').innerHTML = prefDetailHTML({
+      region: 'nagano',
+      prefLabel: '長野県',
+      ref: 63,
+      route: { ref: 'nagano-63', km: 20, arcs: 1, max_n: 1 },
+    });
+    togglePrefOnly(document, state, 'nagano-63', applyFilters);
+    syncDetailOnly(document, state);
+    expect(contFunnel(document)).toBeNull();
+    expect(headFunnel(document).getAttribute('aria-pressed')).toBe('true');
   });
 });
