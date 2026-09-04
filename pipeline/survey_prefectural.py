@@ -70,7 +70,7 @@ from extract_pbf import (
 )
 from geo import line_length
 from prefectures import Prefectures, report
-from regions import REGIONS
+from regions import REGIONS, real_args
 
 # 都道府県道の候補になる道の格。#98 の候補は primary と secondary である。
 # _link と construction も残すのは、判定に加えるためではなく、年報との差の内訳で
@@ -246,7 +246,7 @@ def pass_ways(path: str, wanted: set[int], index: str) -> Ways:
 
 # ------------------------------------------------------------------- main ---
 def main() -> None:
-    args = sys.argv[1:]
+    args = real_args(sys.argv[1:])
     path = str(PBF / "japan-latest.osm.pbf")
     node_index = "flex_mem"
 

@@ -46,7 +46,7 @@ from compare_n13 import (
 )
 from geo import line_length
 from prefectures import Prefectures
-from regions import REGIONS
+from regions import REGIONS, real_args
 
 # N13 の道路分類種別コード。1 が国道、2 が都道府県道である。符号の出どころと
 # 確かめ方は compare_n13.RDCTG_LABELS にある。
@@ -107,7 +107,7 @@ def load_candidates() -> tuple[list[list[tuple[float, float]]], set[str],
 
 # ------------------------------------------------------------------- main ---
 def main() -> None:
-    args = sys.argv[1:]
+    args = real_args(sys.argv[1:])
     refresh = "--refresh" in args
     if refresh:
         args.remove("--refresh")
