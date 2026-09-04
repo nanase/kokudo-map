@@ -121,6 +121,7 @@ describe('encodeState', () => {
     former: true,
     national: true,
     pref: true,
+    prefSpecial: true,
   };
 
   test('すべて既定値なら空文字列', () => {
@@ -176,6 +177,11 @@ describe('encodeState', () => {
     expect(p.get('national')).toBe('0');
     expect(p.get('pref')).toBe('0');
   });
+
+  test('都道府県道の走れない区間をオフにすると prefSpecial=0 が出る', () => {
+    const p = new URLSearchParams(encodeState({ ...base, prefSpecial: false }));
+    expect(p.get('prefSpecial')).toBe('0');
+  });
 });
 
 describe('decodeURLState', () => {
@@ -212,6 +218,10 @@ describe('decodeURLState', () => {
     expect(decodeURLState('?former=0')).toEqual({ former: false });
   });
 
+  test('都道府県道の走れない区間も 0/それ以外 で真偽になる', () => {
+    expect(decodeURLState('?prefSpecial=0')).toEqual({ prefSpecial: false });
+  });
+
   test('国道・都道府県道の表示項目も 0/それ以外 で真偽になる', () => {
     expect(decodeURLState('?national=0&pref=1')).toEqual({
       national: false,
@@ -238,6 +248,7 @@ describe('decodeURLState', () => {
       former: true,
       national: true,
       pref: true,
+      prefSpecial: true,
       ...diff,
     };
     expect(decodeURLState(encodeState(full))).toEqual(diff);

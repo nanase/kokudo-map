@@ -3,6 +3,9 @@
  *   prefectural-routes.pmtiles   ベクタタイル。国道とは別のアーカイブ
  *   pref/{region}.meta.json      県ごとの集計。県を選んだときに 1 つだけ取る
  *   pref/index.json              全国の県と番号だけの索引。選択パネルが読む
+ *   pref/summary.json            全国の対象アーク・延長・重用アーク・路線数。
+ *                                 「この地図について」を開いたときに 1 度だけ
+ *                                 取る(web/app.js の loadPrefSummary)
  *
  * 国道(pack_web.mjs)と分ける理由は三つある。国道の 55.9 MB を県道を直すたびに
  * 上げ直さずに済み、タイル化のメモリが 2 回に分かれ、県道側が壊れても国道の
@@ -25,6 +28,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
+import { statsFor } from '../web/aggregate.mjs';
 import { encodeRoutes } from '../web/urlstate.mjs';
 import { DATA, PREFECTURAL, ROOT, SURVEY } from './_paths.mjs';
 import {
@@ -107,6 +111,13 @@ let dataBbox = [Infinity, Infinity, -Infinity, -Infinity];
 let totalArcs = 0;
 let totalCombos = 0;
 let totalCrossings = 0;
+/* pref/summary.json が配る全国集計。web/aggregate.mjs の statsFor と同じ数え方
+ * を都道府県道の県別 combos に当てる。web/panel.mjs の statsHTML(国道側)が
+ * 同じ関数を同じ形で読んでいるので、答え方を二箇所に分けない。県ごとの combos
+ * はその県のアークだけを持つので、県をまたぐ二重計上は起きない。 */
+let summaryArcs = 0;
+let summaryKm = 0;
+let summaryConc = 0;
 /* 県別 meta は県ごとのループの中では書けない。群は全県を見終わらないと決まらず、
  * その群は 2〜4 県の meta に載るからである。47 県ぶんを抱えたまま、ループの外で
  * 書く。合わせて 3.5 MB で、この段が既に抱えている全国のアークに比べれば小さい。 */
@@ -183,6 +194,13 @@ for (const region of regions) {
   const crossings = crossingsOf(mine, byRef);
   // その県に在る番号。組み合わせ表のキーから番号だけを取り、重複を落とす。
   index[region] = new Set(combos.flatMap((c) => c.refs.map(num)));
+
+  // pref/summary.json ぶんの積み上げ。選択が空の statsFor はその県の全アークの
+  // 和になる。
+  const stats = statsFor(combos, new Set());
+  summaryArcs += stats.arcs;
+  summaryKm += stats.km;
+  summaryConc += stats.conc;
   const bbox = mine.reduce(
     (a, f) => unionBbox(a, f.bbox),
     [Infinity, Infinity, -Infinity, -Infinity],
@@ -355,11 +373,27 @@ const indexText = JSON.stringify(
   ),
 );
 writeFileSync(join(METADIR, 'index.json'), indexText);
+const totalRoutes = Object.values(index).reduce((a, s) => a + s.size, 0);
 console.log(
-  `index: ${Object.values(index)
-    .reduce((a, s) => a + s.size, 0)
-    .toLocaleString()} ` +
+  `index: ${totalRoutes.toLocaleString()} ` +
     `routes in ${(Buffer.byteLength(indexText, 'utf8') / 1e3).toFixed(1)} kB`,
+);
+
+/* ----------------------------------------------------------------- 集計 --- */
+/* 「この地図について」が都道府県道側に出す全国集計。web/aggregate.mjs の
+ * statsFor と同じ形(arcs・km・conc)にし、路線数を添える。国道の
+ * national.meta.json 自体は積まない。閲覧側は起動時にこれを読まず、「この地図
+ * について」を開いたときに 1 度だけ取る(web/app.js の loadPrefSummary)。 */
+const summaryText = JSON.stringify({
+  routes: totalRoutes,
+  arcs: summaryArcs,
+  km: Math.round(summaryKm * 10) / 10,
+  conc: summaryConc,
+});
+writeFileSync(join(METADIR, 'summary.json'), summaryText);
+console.log(
+  `summary: arcs ${summaryArcs.toLocaleString()} | km ${summaryKm.toFixed(1)} | ` +
+    `conc ${summaryConc.toLocaleString()} | routes ${totalRoutes.toLocaleString()}`,
 );
 
 /* ----------------------------------------------------------------- tiles --- */

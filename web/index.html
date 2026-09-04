@@ -298,6 +298,7 @@
           <label><input type="checkbox" id="t-expressway" checked> 自動車専用道路（高速道路）</label>
           <label><input type="checkbox" id="t-special" checked> 点線国道・工事中・未開通</label>
           <label><input type="checkbox" id="t-ferry" checked> 海上国道</label>
+          <label><input type="checkbox" id="t-pref-special" checked> 走れない区間（都道府県道）</label>
         </div>
       </section>
       <!-- 配色も「どう見えるか」の話なので、同じ面に置く。既定は端末の設定に
@@ -349,7 +350,14 @@
     </p>
     <section>
       <h3>データ情報</h3>
+      <p class="stats-label">国道</p>
       <dl id="stats" class="stats"></dl>
+      <!-- 都道府県道の数は合算しない。国道と都道府県道の「重用アーク」は数え方が
+           違うので、足すと意味の違う数を足すことになる(issue #171)。取得は
+           「この地図について」を開いたときに遅延させ、起動時には読まない
+           (app.js の loadPrefSummary)。 -->
+      <p class="stats-label">都道府県道</p>
+      <dl id="pref-stats" class="stats"></dl>
       <dl id="freshness" class="freshness"></dl>
     </section>
     <!-- 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではない。

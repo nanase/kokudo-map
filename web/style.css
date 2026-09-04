@@ -619,6 +619,13 @@ input[type="search"]::placeholder { font-size: .82em; }
   display: grid; grid-template-columns: max-content 1fr;
   gap: 1px 10px; font-size: .68rem; line-height: 1.55;
 }
+/* 国道・都道府県道、二つの .stats を分ける小見出し。数を合算せず系統ごとに
+   出す(issue #171)ので、どちらの数かを示す必要がある。h3(節の見出し)より
+   一段小さく、凡例の .lead と同じ重さにしてある。 */
+.stats-label {
+  margin: 10px 0 2px; font-size: .68rem; line-height: 1.35; color: var(--ink-3);
+}
+.stats-label:first-of-type { margin-top: 0; }
 /* データ基準以下との区切りとわかる程度の余白。 */
 .freshness { margin: 8px 0 0; }
 .stats dt, .freshness dt { color: var(--ink-3); }

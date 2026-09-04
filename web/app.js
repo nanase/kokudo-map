@@ -69,6 +69,8 @@ import {
   PMTILES_URL,
   PREF_CASING_LAYER,
   PREF_CLICKABLE_LAYERS,
+  PREF_DEFAULT_FILTERS,
+  PREF_FILTERED_LAYERS,
   PREF_PICKED_LAYER,
   PREF_PMTILES_URL,
   PREF_POPUP_MINZOOM,
@@ -78,18 +80,19 @@ import {
   prefLabelLayer,
   prefLayers,
   prefLineLayers,
+  resolvedPrefFilter,
   routeLayers,
   routeSources,
   shownSystems,
   terminiFilter,
   withKind,
-  withPrefSelection,
 } from './mapspec.mjs';
 import {
   clearLabel,
   countLabel,
   freshnessHTML,
   prefConcurrencyHTML,
+  prefStatsHTML,
   RANKING_ROWS,
   rankingHTML,
   routeListHTML,
@@ -140,6 +143,12 @@ const state = {
   // 索引の取得に失敗したか。伝えないと「いつまでも読み込み中」になる。
   // 開き直せば取り直す。
   prefIndexFailed: false,
+  // 都道府県道の全国集計(対象アーク・延長・重用アーク・路線数)。
+  // 「この地図について」を初めて開いたときに 1 度だけ取る(pref/summary.json、
+  // loadPrefSummary)。県別 meta と同じく、初期表示では読まない。届くまでは
+  // null で、この間 #pref-stats は空のままにする。
+  prefSummary: null,
+  prefSummaryFailed: false,
   // 「道路を選択」の一覧に出す系統。地図に描く系統(national / pref)とは別で、
   // 探す先を絞るだけである。二つとも false にはならない。
   listNational: true,
@@ -159,6 +168,10 @@ const state = {
   former: true,
   national: true,
   pref: true,
+  // 都道府県道側の「走れない区間」。国道の special・ferry に当たるが、
+  // 都道府県道は pref-special 1 層にまとまっているので 1 つのトグルにする
+  // (mapspec.mjs の PREF_FILTERED_LAYERS)。
+  prefSpecial: true,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -1008,7 +1021,13 @@ function setPaddingKeepingView() {
  * が一度入れたきりなので、開くボタンを結ぶだけでよい。showModal() が Esc と
  * フォーカスの往復を面倒みる。
  */
-$('#about-btn').addEventListener('click', () => $('#about-dialog').showModal());
+$('#about-btn').addEventListener('click', () => {
+  $('#about-dialog').showModal();
+  // 都道府県道の全国集計は、県別 meta と同じく初期表示では読まない
+  // (loadPrefSummary)。読むきっかけがここしか無いので、開くたびに呼ぶ。
+  // 取得済みなら Promise を覚えているので取り直さない。
+  loadPrefSummary();
+});
 
 /**
  * backdrop を押したら閉じる。<dialog> にとって backdrop は自分の領域で、中身は
@@ -1144,6 +1163,7 @@ function syncControls() {
   $('#t-special').checked = state.special;
   $('#t-ferry').checked = state.ferry;
   $('#t-former').checked = state.former;
+  $('#t-pref-special').checked = state.prefSpecial;
 }
 
 /**
@@ -1177,20 +1197,6 @@ function fitInitialView(index) {
   const padding = map.cameraForBounds(bounds, { padding: clear }) ? clear : 24;
   map.fitBounds(bounds, { padding, duration: 0 });
 }
-
-/**
- * 都道府県道の各層が既定で持つ絞り込み。`national`/`pref` の切り替えを戻すとき
- * はこれに戻す。区分ごとの絞り込みを mapspec.mjs と二重に持たないよう、層の
- * 定義から読む。
- */
-const PREF_DEFAULT_FILTERS = new Map(
-  [...prefLineLayers(), prefLabelLayer()]
-    // 影の層は入れない。押されたアークが決めるものなので、系統の表示と一緒に
-    // 戻すと押した印が消える。国道の `picked` を FILTERED_LAYERS が持たないのと
-    // 同じである。
-    .filter((l) => l.id !== PREF_PICKED_LAYER)
-    .map((l) => [l.id, l.filter ?? true]),
-);
 
 /* -------------------------------------------------------------- 絞り込み --- */
 /**
@@ -1227,11 +1233,32 @@ function applyFilters() {
     national ? pickedFilter(base, state.picked) : NOTHING,
   );
 
-  // 都道府県道の選択。層が持つ区分の式へ重ねる(withPrefSelection)。空なら全部
-  // 出す。国道の buildFilter と同じ約束である。
-  const prefSel = [...state.prefSelected];
-  for (const [id, filter] of PREF_DEFAULT_FILTERS) {
-    const resolved = pref ? withPrefSelection(filter, prefSel) : NOTHING;
+  // 都道府県道の選択・重用・旧道。共有の buildFilter を都道府県道の選択で
+  // 呼び直し、層が持つ既定の区分の式へ重ねる(resolvedPrefFilter)。空選択は
+  // 全部出す、国道の buildFilter と同じ約束である。
+  const prefBase = buildFilter(
+    [...state.prefSelected],
+    state.conc,
+    state.former,
+  );
+  for (const {
+    id,
+    excludeKinds,
+    excludeToggle,
+    toggle,
+  } of PREF_FILTERED_LAYERS) {
+    const defaultFilter = PREF_DEFAULT_FILTERS.get(id);
+    // `toggle` は層ごと消す(pref-special・pref-labels)。`excludeToggle` は
+    // 層は残したまま区分だけ外す(pref-roads・pref-casing の自動車専用道路)。
+    // 後者を層ごと消すと、その層が持つ他の区分(road)まで道連れに消える。
+    const resolved =
+      !pref || (toggle && !state[toggle])
+        ? NOTHING
+        : resolvedPrefFilter(
+            defaultFilter,
+            prefBase,
+            excludeToggle && !state[excludeToggle] ? excludeKinds : null,
+          );
     map.setFilter(id, resolved);
     if (PREF_CLICKABLE_LAYERS.includes(id)) {
       map.setFilter(hitLayerId(id), resolved);
@@ -1240,9 +1267,7 @@ function applyFilters() {
 
   map.setFilter(
     PREF_PICKED_LAYER,
-    pref
-      ? pickedFilter(withPrefSelection(true, prefSel), state.prefPicked)
-      : NOTHING,
+    pref ? pickedFilter(prefBase, state.prefPicked) : NOTHING,
   );
 
   const tFilter =
@@ -1310,6 +1335,22 @@ function updateStats() {
   const sel = state.selected;
   const totals = statsFor(state.meta.combinations, sel);
   $('#stats').innerHTML = statsHTML(sel.size, state.routes.length, totals);
+
+  // 都道府県道は合算せず、独立した数を出す(issue #171)。summary は「この地図
+  // について」を開くまで届かない(loadPrefSummary)ので、届くまでは読み込み中
+  // か失敗かを一行だけ示す。loadPrefIndex が #rl-pref-rows にする案内と同じ
+  // 作法である。
+  $('#pref-stats').innerHTML = state.prefSummary
+    ? prefStatsHTML(
+        state.prefSelected.size,
+        state.prefSummary.routes,
+        state.prefSummary,
+      )
+    : `<dt>状態</dt><dd>${
+        state.prefSummaryFailed
+          ? '読み込めませんでした。開き直すと取り直します。'
+          : '読み込んでいます…'
+      }</dd>`;
 
   // 選んでいる本数は両系統の合計である。「道路を選択」が国道と都道府県道の
   // 両方を引き受けるので、数える側も消す側も系統を分けない。
@@ -1754,6 +1795,39 @@ function loadPrefIndex() {
       applyRouteFilter(document, state);
     });
   return prefIndexPending;
+}
+
+let prefSummaryPending = null;
+
+/**
+ * 都道府県道の全国集計(pref/summary.json)を 1 度だけ取る。loadPrefIndex と
+ * 同じ作法で、「この地図について」を開くたびに呼ばれるが、取得済み・取得中の
+ * 間は Promise を覚えていて取り直さない。
+ */
+function loadPrefSummary() {
+  if (prefSummaryPending) return prefSummaryPending;
+  state.prefSummaryFailed = false;
+  prefSummaryPending = fetch(dataURL('pref/summary.json'))
+    .then((r) => {
+      if (!r.ok) throw new Error(`pref/summary.json: ${r.status}`);
+      return r.json();
+    })
+    .then((summary) => {
+      state.prefSummary = summary;
+      // #about-btn は boot() を待たずに配線されるので、national.meta.json の
+      // 取得が終わる前にここへ来ることがありうる。state.meta が無い間は
+      // updateStats() が読む combinations も無く、boot() 側の最初の
+      // applyFilters() が後から描く。
+      if (state.meta) updateStats();
+    })
+    .catch((err) => {
+      console.error(err);
+      // 覚えたままにすると二度と取り直せない。prefMeta と同じ作法である。
+      prefSummaryPending = null;
+      state.prefSummaryFailed = true;
+      if (state.meta) updateStats();
+    });
+  return prefSummaryPending;
 }
 
 /**

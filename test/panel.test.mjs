@@ -23,6 +23,7 @@ import {
   prefConcurrencyHTML,
   prefGroupLabel,
   prefRowsHTML,
+  prefStatsHTML,
   rankingHTML,
   routeListHTML,
   sharedHTML,
@@ -93,6 +94,38 @@ describe('statsHTML', () => {
     expect(statsHTML(0, 459, { arcs: 1, km: 70290.47, conc: 0 })).toContain(
       '70,290 km',
     );
+  });
+});
+
+/* 都道府県道の数は国道と合算しない(issue #171)ので、statsHTML とほぼ同じ形の
+ * 別関数を持つ。違うのは「重用アーク」の呼び名だけである。 */
+describe('prefStatsHTML', () => {
+  const totals = { arcs: 290529, km: 137536, conc: 14096 };
+
+  test('選択が空なら全路線を分子にする', () => {
+    expect(prefStatsHTML(0, 13234, totals)).toContain(
+      '<dt>選択路線</dt><dd>13234 / 13234</dd>',
+    );
+  });
+
+  test('選択があればその数を出す', () => {
+    expect(prefStatsHTML(3, 13234, totals)).toContain(
+      '<dt>選択路線</dt><dd>3 / 13234</dd>',
+    );
+  });
+
+  /* 都道府県道どうしの本数であって、国道との重複を含まない。国道の statsHTML と
+   * 同じ「重用アーク」と書くと、同じ数え方だと誤って読める。 */
+  test('重用アークの見出しは都道府県道どうしと明示する', () => {
+    expect(prefStatsHTML(0, 13234, totals)).toContain(
+      '<dt>重用アーク（都道府県道どうし）</dt><dd>14,096</dd>',
+    );
+  });
+
+  test('大きな数は桁を区切る', () => {
+    const html = prefStatsHTML(0, 13234, totals);
+    expect(html).toContain('290,529');
+    expect(html).toContain('137,536 km');
   });
 });
 
