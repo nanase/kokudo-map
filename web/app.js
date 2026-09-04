@@ -168,7 +168,7 @@ const state = {
   former: true,
   national: true,
   pref: true,
-  // 都道府県道側の「走れない区間」。国道の special・ferry に当たるが、
+  // 都道府県道側の「走行不能区間」。国道の special・ferry に当たるが、
   // 都道府県道は pref-special 1 層にまとまっているので 1 つのトグルにする
   // (mapspec.mjs の PREF_FILTERED_LAYERS)。
   prefSpecial: true,

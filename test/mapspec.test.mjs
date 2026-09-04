@@ -248,7 +248,7 @@ describe('PREF_FILTERED_LAYERS', () => {
     expect(roads.toggle).toBeUndefined();
   });
 
-  test('走れない区間(pref-special)は国道の special・ferry とは別のトグルを持ち、層ごと消える', () => {
+  test('走行不能区間(pref-special)は国道の special・ferry とは別のトグルを持ち、層ごと消える', () => {
     const special = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-special');
     expect(special.toggle).toBe('prefSpecial');
     expect(special.excludeToggle).toBeUndefined();
