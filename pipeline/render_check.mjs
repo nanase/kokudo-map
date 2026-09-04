@@ -1349,9 +1349,28 @@ for (const ref of [10, 4]) {
 {
   const prefLabels = new Map(index.map((r) => [r.region, r.label]));
   const groups = [];
+  // 路線ごとの外接矩形も一緒に拾う。群の全員が描かれたことを見るには、その
+  // 全員が入る眺めへ寄らなければならない(下の「群の眺めへ寄る」を参照)。
+  const boxOf = new Map();
   for (const r of index) {
     const pm = read(join(DATA, 'pref', `${r.region}.meta.json`));
     for (const c of pm.continuations ?? []) groups.push(c);
+    for (const c of pm.combinations) {
+      for (const k of c.refs) {
+        const b = boxOf.get(k);
+        boxOf.set(
+          k,
+          b
+            ? [
+                Math.min(b[0], c.bbox[0]),
+                Math.min(b[1], c.bbox[1]),
+                Math.max(b[2], c.bbox[2]),
+                Math.max(b[3], c.bbox[3]),
+              ]
+            : [...c.bbox],
+        );
+      }
+    }
   }
   ok(
     groups.length > 0,
@@ -1521,17 +1540,54 @@ for (const ref of [10, 4]) {
                 .querySelector('.cont-row .detail-only')
                 ?.getAttribute('aria-pressed'),
             }));
-          const before = await drawn();
           await page.click('.cont-row .detail-only');
           await settle();
+
+          /* 群の眺めへ寄る。押した場所のままでは群の全員は見えない。押すのは
+           * 1 本のアークの上(z14)で、そこから遠い相手は視野の外に居る。実測では
+           * 佐野古河線の 4 県のうち茨城県ぶん(1.5 km)が 0 本になる:
+           *
+           *   z14 押したアークの上   gunma 5 / ibaraki 0 / saitama 3 / tochigi 4
+           *   群の外接矩形(z11.9)    gunma 3 / ibaraki 2 / saitama 11 / tochigi 43
+           *
+           * だから「全員が描かれた」は、全員が入る眺めでしか言えない。矩形は
+           * 県別 meta の組み合わせ表が持つ物を合わせて作る。 */
+          let box = [Infinity, Infinity, -Infinity, -Infinity];
+          for (const k of pick.refs) {
+            const b = boxOf.get(k);
+            if (!b) continue;
+            box = [
+              Math.min(box[0], b[0]),
+              Math.min(box[1], b[1]),
+              Math.max(box[2], b[2]),
+              Math.max(box[3], b[3]),
+            ];
+          }
+          await page.evaluate(
+            (b) =>
+              window.map.fitBounds(
+                [
+                  [b[0], b[1]],
+                  [b[2], b[3]],
+                ],
+                { padding: 40, duration: 0 },
+              ),
+            box,
+          );
+          await settle();
+
           const after = await drawn();
           const stray = after.pref.filter(
             (refs) => !pick.refs.some((k) => refs.includes(`,${k},`)),
           );
+          const missing = pick.refs.filter(
+            (k) => !after.pref.some((refs) => refs.includes(`,${k},`)),
+          );
           ok(
-            after.pref.length > 0 && stray.length === 0,
+            after.pref.length > 0 && stray.length === 0 && missing.length === 0,
             `the section's funnel leaves the whole group on the map and ` +
-              `nothing else (${after.pref.length} arcs, ${stray.length} stray)`,
+              `nothing else (${after.pref.length} arcs, ${stray.length} stray, ` +
+              `${missing.length ? `missing ${missing.join(', ')}` : 'none missing'})`,
           );
           ok(
             after.national === 0,
@@ -1550,15 +1606,18 @@ for (const ref of [10, 4]) {
               `(open ${after.open}, framed ${after.on}, pressed ${after.pressed})`,
           );
 
+          // 解くと、同じ眺めに他の県道が戻る。眺めを動かさずに数えるので、
+          // 増えたことがそのまま「群だけではなくなった」ことである。
           await page.click('.cont-row .detail-only');
           await settle();
           const released = await drawn();
           ok(
-            released.pref.length === before.pref.length &&
-              released.url === before.url &&
+            released.pref.length > after.pref.length &&
+              released.url === '' &&
               released.on === false,
             `pressing it again releases the group ` +
-              `(${released.pref.length} arcs back, "${released.url}")`,
+              `(${after.pref.length} → ${released.pref.length} arcs, ` +
+              `"${released.url}")`,
           );
         }
         await page.click('#detail-close');

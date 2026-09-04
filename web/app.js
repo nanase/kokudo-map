@@ -1684,6 +1684,10 @@ async function openSharedPrefDetail() {
     openPrefDetail(keys[0]);
     return;
   }
+  /* 県別 meta を待つあいだにも、人はアークを押してパネルを開ける。届いた頃に
+   * 別の路線が開いていたら、共有リンクの側は引き下がる。openPrefDetail が
+   * 遅れて届いた中身を捨てるのと同じ約束である(detailSerial)。 */
+  const serial = detailSerial;
   let meta;
   try {
     meta = await prefMeta(prefRegionOf(keys[0]));
@@ -1692,6 +1696,7 @@ async function openSharedPrefDetail() {
     console.error(err);
     return;
   }
+  if (serial !== detailSerial) return;
   const cont = continuationOf(meta, keys[0]);
   if (cont && isOnlyGroup(state.prefSelected, state.selected, cont.refs)) {
     openPrefDetail(keys[0]);
