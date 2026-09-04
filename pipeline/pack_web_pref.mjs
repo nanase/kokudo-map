@@ -270,6 +270,10 @@ if (!existsSync(relPath))
   );
 const relDoc = JSON.parse(readFileSync(relPath, 'utf8'));
 const partsOf = (key) => [prefOf(key), num(key)];
+/* 群の番号が 1 つに揃っているか。リレーション名を当ててよいかがこれで決まり、
+ * 下の検査はその裏返しを見る。式を二箇所に書けば、片方だけ直した日に検査が
+ * 検査でなくなる。 */
+const oneNumber = (refs) => new Set(refs.map(num)).size === 1;
 const edges = borderPairs(endpoints, partsOf).map(([a, b]) => [
   a,
   b,
@@ -311,8 +315,7 @@ const continuations = groups.map((g, i) => {
    * 向こうの違う番号の路線の名前ではない。番号が違う組で繋がった群にそのまま
    * 当てると、片側の名前が群の全体を名乗る。実データでは 4 群がこれに当たる
    * (issue #162)。番号が揃わない群は way 名の一致だけを根拠にする。 */
-  const single = new Set(g.refs.map(num)).size === 1;
-  const by = single ? relNameOf.get(i) : undefined;
+  const by = oneNumber(g.refs) ? relNameOf.get(i) : undefined;
   const relName = by ? pickName(by) : null;
   // リレーション名を優先し、無ければ way 名に落とす。両方を持つ 294 群のうち
   // 291 群で一致する。どちらも無い 41 群では欄そのものを出さない。名前が無い
@@ -347,7 +350,7 @@ for (const c of continuations) {
       `群 ${c.refs.join(' ')} が ${[...prefs]} だけで閉じている。` +
         '県境をまたがない群は、節の見出しが言っていることと違う。',
     );
-  if (!c.name || new Set(c.refs.map(num)).size === 1) continue;
+  if (!c.name || oneNumber(c.refs)) continue;
   if (!c.refs.every((k) => namesOf.get(k)?.has(c.name)))
     throw new Error(
       `群 ${c.refs.join(' ')} の名前 ${c.name} を全員が名乗っていない。` +
