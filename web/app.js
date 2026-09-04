@@ -76,6 +76,7 @@ import {
   prefCasingColor,
   prefClickableHitLayers,
   prefLabelLayer,
+  prefLayers,
   prefLineLayers,
   routeLayers,
   routeSources,
@@ -552,10 +553,11 @@ const PitchControl = buildCycleControl('pitch-ctrl', {
   },
 });
 
-/* ------------------------------------------------------------ 国道を隠す --- */
+/* ------------------------------------------------------------ 道路を隠す --- */
 /**
- * 下地図だけを一時的に見る。国道の下の地形を読むためのものである。表示・非表示
- * であって絞り込みではないので、`state` にも URL にも触れない。戻したときは
+ * 下地図だけを一時的に見る。道路の下の地形を読むためのものである。国道と
+ * 都道府県道の両方を隠し、片方だけ地形の上に残さない。表示・非表示であって
+ * 絞り込みではないので、`state` にも URL にも触れない。戻したときは
  * チェックボックスのとおりを出す。
  */
 const EYE_ICON =
@@ -582,14 +584,20 @@ let routesHidden = false;
 // label は次に押すと起きる動作(動詞)なので、押した直後の状態を示す state-tip
 // にはそのまま使えない。
 function hideStateTip(hidden) {
-  return hidden ? '国道: 非表示' : '国道: 表示';
+  return hidden ? '道路: 非表示' : '道路: 表示';
 }
 
 function setRoutesHidden(hidden) {
   routesHidden = hidden;
-  // 当たり判定の透明な層は routeLayers() に含まれない。一緒に隠さないと、隠した
-  // はずの国道がカーソルとクリックには残る。
-  for (const { id } of [...routeLayers(), ...clickableHitLayers()]) {
+  // 当たり判定の透明な層は routeLayers()/prefLayers() に含まれない。一緒に
+  // 隠さないと、隠したはずの道路がカーソルとクリックには残る。
+  const layers = [
+    ...routeLayers(),
+    ...clickableHitLayers(),
+    ...prefLayers(),
+    ...prefClickableHitLayers(),
+  ];
+  for (const { id } of layers) {
     map.setLayoutProperty(id, 'visibility', hidden ? 'none' : 'visible');
   }
 }
@@ -600,7 +608,7 @@ const HideRoutesControl = buildCycleControl('hide-routes-ctrl', {
   get: () => routesHidden,
   apply: setRoutesHidden,
   icon: (hidden) => (hidden ? EYE_OFF_ICON : EYE_ICON),
-  label: (hidden) => (hidden ? '国道の表示に戻す' : '国道を一時的に隠す'),
+  label: (hidden) => (hidden ? '道路の表示に戻す' : '道路を一時的に隠す'),
   tip: hideStateTip,
 });
 
@@ -782,7 +790,7 @@ function shadeIcon(level) {
 
 /**
  * 下地図の濃さ。薄い・通常・濃いをボタン 1 つで回す。表示の好みであって絞り込み
- * ではないので `state` にも URL にも触れないが、国道を隠すボタンと違って覚えて
+ * ではないので `state` にも URL にも触れないが、道路を隠すボタンと違って覚えて
  * おく値打ちがあるので localStorage に残す。
  */
 function applyGsiShade(level) {
