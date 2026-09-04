@@ -1,5 +1,5 @@
-/* 県境で番号が変わらずに続く路線を束ねる計算です。ここが捕まえるのは、群が
- * 膨らむ方向の間違いです。番号の違う隣接を辺にすると、埼玉と東京の 24・25・36・
+/* 県境で続く路線を束ねる計算です。ここが捕まえるのは、群が膨らむ方向の間違い
+ * です。番号の違う隣接を端点の形で濾さずに辺にすると、埼玉と東京の 24・25・36・
  * 234 号が 8 路線の塊になります。同じ県どうしを辺にすると、県内の交差点が全部
  * 群になります。どちらも「つながっている」と言えてしまうぶん、出来上がった数を
  * 見ただけでは間違いに見えません。
@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   addEndpoints,
   borderPairs,
+  crossBorderPairs,
   groupsOf,
   pickName,
   relationRouteName,
@@ -84,6 +85,57 @@ describe('addEndpoints', () => {
       ),
     ]);
     expect(Array.isArray(at.get('0,0'))).toBe(true);
+  });
+
+  test('アークが 3 本来た端点は busy に入る', () => {
+    const busy = new Set();
+    addEndpoints(
+      [
+        arc(
+          ['nagano-1'],
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        ),
+        arc(
+          ['aichi-2'],
+          [
+            [1, 1],
+            [2, 2],
+          ],
+        ),
+        arc(
+          ['aichi-3'],
+          [
+            [1, 1],
+            [3, 3],
+          ],
+        ),
+      ],
+      new Map(),
+      busy,
+    );
+    expect(busy.has('1,1')).toBe(true);
+    expect(busy.has('0,0')).toBe(false);
+  });
+
+  test('番号を重用しているアークの端点は busy に入る', () => {
+    const busy = new Set();
+    addEndpoints(
+      [
+        arc(
+          ['nagano-1', 'nagano-152'],
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        ),
+      ],
+      new Map(),
+      busy,
+    );
+    expect([...busy].sort()).toEqual(['0,0', '1,1']);
   });
 });
 
@@ -243,6 +295,196 @@ describe('borderPairs', () => {
         ),
       ]),
     ).toEqual([['aichi-1', 'nagano-1']]);
+  });
+});
+
+describe('crossBorderPairs', () => {
+  const pairsOf = (feats) => {
+    const busy = new Set();
+    const at = addEndpoints(feats, new Map(), busy);
+    return crossBorderPairs(at, busy, partsOf);
+  };
+
+  test('1 対 1 の端点で番号が変わる組は採る', () => {
+    expect(
+      pairsOf([
+        arc(
+          ['aichi-156'],
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        ),
+        arc(
+          ['gifu-390'],
+          [
+            [1, 1],
+            [2, 2],
+          ],
+        ),
+      ]),
+    ).toEqual([['aichi-156', 'gifu-390']]);
+  });
+
+  test('路線名が違っても採る。番号が変われば名前も変わるのが普通である', () => {
+    const pairs = pairsOf([
+      arc(
+        ['akita-131'],
+        [
+          [0, 0],
+          [1, 1],
+        ],
+      ),
+      arc(
+        ['yamagata-210'],
+        [
+          [1, 1],
+          [2, 2],
+        ],
+      ),
+    ]);
+    expect(pairs).toEqual([['akita-131', 'yamagata-210']]);
+  });
+
+  test('アークが 3 本来る端点は採らない。県境の交差点と区別できない', () => {
+    expect(
+      pairsOf([
+        arc(
+          ['saitama-195'],
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        ),
+        arc(
+          ['tokyo-28'],
+          [
+            [1, 1],
+            [2, 2],
+          ],
+        ),
+        arc(
+          ['tokyo-28'],
+          [
+            [1, 1],
+            [3, 3],
+          ],
+        ),
+      ]),
+    ).toEqual([]);
+  });
+
+  test('県境のアークが番号を重用している端点は採らない', () => {
+    expect(
+      pairsOf([
+        arc(
+          ['chiba-17', 'chiba-26'],
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        ),
+        arc(
+          ['ibaraki-17', 'ibaraki-26'],
+          [
+            [1, 1],
+            [2, 2],
+          ],
+        ),
+      ]),
+    ).toEqual([]);
+  });
+
+  test('番号が同じ組は採らない。borderPairs の仕事である', () => {
+    expect(
+      pairsOf([
+        arc(
+          ['nagano-1'],
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        ),
+        arc(
+          ['aichi-1'],
+          [
+            [1, 1],
+            [2, 2],
+          ],
+        ),
+      ]),
+    ).toEqual([]);
+  });
+
+  test('同じ県どうしは採らない', () => {
+    expect(
+      pairsOf([
+        arc(
+          ['nagano-1'],
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        ),
+        arc(
+          ['nagano-152'],
+          [
+            [1, 1],
+            [2, 2],
+          ],
+        ),
+      ]),
+    ).toEqual([]);
+  });
+
+  test('片方の途中の節点で触れているだけでは組にならない', () => {
+    expect(
+      pairsOf([
+        arc(
+          ['aichi-156'],
+          [
+            [0, 0],
+            [1, 1],
+            [2, 2],
+          ],
+        ),
+        arc(
+          ['gifu-390'],
+          [
+            [1, 1],
+            [3, 3],
+          ],
+        ),
+      ]),
+    ).toEqual([]);
+  });
+
+  test('同じ組が二つの端点で出ても 1 つに畳む', () => {
+    expect(
+      pairsOf([
+        arc(
+          ['aichi-156'],
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        ),
+        arc(
+          ['gifu-390'],
+          [
+            [1, 1],
+            [2, 2],
+          ],
+        ),
+        arc(
+          ['aichi-156'],
+          [
+            [2, 2],
+            [5, 5],
+          ],
+        ),
+      ]),
+    ).toEqual([['aichi-156', 'gifu-390']]);
   });
 });
 
