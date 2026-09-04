@@ -16,6 +16,11 @@ on:
 permissions:
   pull-requests: write
 
+# 同じ PR への push が重なっても、確認と投稿の間に別の実行を割り込ませません。
+concurrency:
+  group: publish-data-reminder-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   remind:
     runs-on: ubuntu-latest
@@ -27,10 +32,11 @@ jobs:
           script: |
             const marker = '<!-- publish-data-reminder -->';
             const body = `${marker}\nこの PR は配信データの形を変えます。マージ後に \`mise run publish-data\` を回してください。`;
-            const { data: comments } = await github.rest.issues.listComments({
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
+              per_page: 100,
             });
             if (comments.some((c) => c.body.includes(marker))) return;
             await github.rest.issues.createComment({
