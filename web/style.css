@@ -58,7 +58,7 @@
      操作パネルの地に載っているので追わない。 */
   --pref-casing: #85909F;
 
-  /* 国道を一時的に隠すボタンが、隠している間だけ使う。白い字を載せる地なので、
+  /* 道路を一時的に隠すボタンが、隠している間だけ使う。白い字を載せる地なので、
      配色が明るくても暗くてもこの赤のままでよい。 */
   --danger: #B3261E;
   --danger-hover: #8C1F19;
@@ -243,7 +243,7 @@ body {
 #select-btn:focus { border-radius: 4px 0 0 4px; }
 #sel-none:focus { border-radius: 0 4px 4px 0; }
 .ui-ctrl-row:has(> .ui-btn[hidden]) > #select-btn:focus { border-radius: 4px; }
-/* 選択解除は取り消す操作なので、ホバーで危険色の地に染める。国道を一時的に隠す
+/* 選択解除は取り消す操作なので、ホバーで危険色の地に染める。道路を一時的に隠す
    ボタンの `.active` と同じ組み合わせである。id を持つ選択子なので
    `.maplibregl-ctrl button:not(:disabled):hover` に詳細度で勝つ。 */
 #sel-none:hover { background: var(--danger); color: #fff; }
@@ -681,13 +681,13 @@ input[type="search"]::placeholder { font-size: .82em; }
 #loading.done { display: none; }
 
 /* 視点の傾きボタン ---------------------------------------------------------
-   国道を隠すボタンと同じグループに載せる。 */
+   道路を隠すボタンと同じグループに載せる。 */
 .pitch-ctrl button {
   display: grid; place-items: center; color: var(--ink-2);
 }
 .pitch-ctrl button svg { width: 17px; height: 17px; display: block; }
 
-/* 国道を隠すボタン -------------------------------------------------------
+/* 道路を隠すボタン -------------------------------------------------------
    MapLibre のズームボタンと同じグループの体裁に載せる。地が常に白いので、
    アイコンの色は MapLibre のズームアイコンに合わせた固定の濃い灰色にする。 */
 .hide-routes-ctrl button {
