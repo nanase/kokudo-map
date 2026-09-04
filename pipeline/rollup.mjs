@@ -12,6 +12,11 @@
  * 受け取るアークは `{properties: {refs, n, km, kind, former, name}, refs_list,
  * bbox, geometry}` の形である。`refs` は区切り文字で囲んだキー、`refs_list` は
  * その中身の並びである。
+ *
+ * 終わりの六つ(`addEndpoints` から `pickName` まで)を読むのは都道府県道
+ * だけである。県境で番号が変わらずに続く路線を束ねるための物で、国道の番号は
+ * 全国で一意なので県境で切れていない。ここに置くのは、これも路線どうしの関わり
+ * を数える仕事で、`crossingsOf` の隣にあるのが自然だからである。
  */
 
 const km2 = (v) => Math.round(v * 100) / 100;
@@ -157,4 +162,189 @@ export function crossingsOf(feats, compare) {
   return [...pairs.values()].sort(
     (a, b) => compare(a[0], b[0]) || compare(a[1], b[1]),
   );
+}
+
+/** アークの両端を索引に貯める。県ごとのループから何度でも呼べる。
+ *
+ * `crossingsOf` は節点を全部見るが、こちらは端だけを見る。探しているのが、道が
+ * 交わる所ではなく、道が終わって隣が始まる所だからである。県境で二本の県道が
+ * 出会うとき、双方の way はそこで必ず切れている。所属県が way の属性である以上、
+ * 一本の way が県境を跨いだまま両県に属することはない。
+ *
+ * 置き方は `crossingsOf` と同じで、最初の一本は `refs_list` をそのまま置き、
+ * 二本目が来て初めて Set に起こす。端点は全国で 29 万あり、大半は一本しか
+ * 踏まない。
+ */
+export function addEndpoints(feats, at = new Map()) {
+  for (const f of feats) {
+    const refs = f.refs_list;
+    const c = f.geometry.coordinates;
+    for (const pt of [c[0], c[c.length - 1]]) {
+      const k = `${pt[0]},${pt[1]}`;
+      const cur = at.get(k);
+      if (cur === undefined) at.set(k, refs);
+      else if (Array.isArray(cur)) {
+        const s = new Set(cur);
+        for (const r of refs) s.add(r);
+        at.set(k, s);
+      } else {
+        for (const r of refs) cur.add(r);
+      }
+    }
+  }
+  return at;
+}
+
+/** 端点を共有し、番号が同じで、所属県が違う路線の組。
+ *
+ * 番号が違う隣接は採らない。全国で 133 組あるが、県境の交差点で複数の路線が
+ * 出会うだけの組と、番号が変わって続く組を、幾何だけでは分けられない。混ぜると
+ * 連結成分が膨らみ、埼玉と東京の 24・25・36・234 号が 8 路線の塊になる。番号が
+ * 変わる県境越えは実在するので、これは採らないと決めたのであって、無いと言って
+ * いるのではない(issue #155)。
+ *
+ * `partsOf` は路線のキーを (所属県, 番号) に開く。キーの綴り方を知っているのは
+ * 判定(build_prefectural.py の refs_key)なので、ここでは知らないままにする。
+ */
+export function borderPairs(at, partsOf) {
+  const pairs = new Map();
+  for (const v of at.values()) {
+    if (Array.isArray(v) || v.size < 2) continue;
+    const rs = [...v];
+    for (let i = 0; i < rs.length; i++)
+      for (let j = i + 1; j < rs.length; j++) {
+        const [pa, na] = partsOf(rs[i]);
+        const [pb, nb] = partsOf(rs[j]);
+        if (pa === pb || na !== nb) continue;
+        const [a, b] = rs[i] < rs[j] ? [rs[i], rs[j]] : [rs[j], rs[i]];
+        pairs.set(`${a},${b}`, [a, b]);
+      }
+  }
+  return [...pairs.values()];
+}
+
+/** 組を連結成分に畳んだ群。
+ *
+ * 辺は `[路線, 路線, 出どころ]` の三つ組である。出どころを辺ごとに持たせるのは、
+ * 群がどの信号から出たのかを群になってから言うためで、二つの信号が同じ群を
+ * 出したのか、片方しか出さなかったのかは、畳んだ後では辺を見ないと分からない。
+ * 一つの群に二種類の辺が入れば `both` になる。
+ *
+ * 連結成分にするので、A-B と B-C は A-B-C の 1 群になる。実データでは 2 県が
+ * 525、3 県が 12、4 県が 1 で、塊にはならない。
+ */
+export function groupsOf(edges, compare) {
+  const adj = new Map();
+  for (const [a, b] of edges) {
+    if (!adj.has(a)) adj.set(a, []);
+    if (!adj.has(b)) adj.set(b, []);
+    adj.get(a).push(b);
+    adj.get(b).push(a);
+  }
+
+  const home = new Map();
+  const groups = [];
+  for (const start of adj.keys()) {
+    if (home.has(start)) continue;
+    const i = groups.length;
+    const stack = [start];
+    const g = [];
+    home.set(start, i);
+    while (stack.length) {
+      const k = stack.pop();
+      g.push(k);
+      for (const n of adj.get(k))
+        if (!home.has(n)) {
+          home.set(n, i);
+          stack.push(n);
+        }
+    }
+    groups.push(g.sort(compare));
+  }
+
+  const srcs = groups.map(() => new Set());
+  for (const [a, , src] of edges) srcs[home.get(a)].add(src);
+
+  return groups
+    .map((refs, i) => ({
+      refs,
+      src: srcs[i].size > 1 ? 'both' : [...srcs[i]][0],
+    }))
+    .sort((x, y) => {
+      const n = Math.min(x.refs.length, y.refs.length);
+      for (let i = 0; i < n; i++) {
+        const d = compare(x.refs[i], y.refs[i]);
+        if (d) return d;
+      }
+      return x.refs.length - y.refs.length;
+    });
+}
+
+/* ルートリレーションの `name` に付く前置き。`岐阜県道・三重県道23号　北方多度線`
+ * の `北方多度線` より前を食う。県の数は 1 つとはかぎらず、番号との間や番号の
+ * 後ろには全角の空白が入ることがある。 */
+const RELATION_PREFIX = /^(?:[^\s・]+道・)*[^\s・]+道\s*\d+\s*号\s*/;
+
+/* 種別の前置き。`主要地方道沼田檜枝岐線` の `主要地方道` を食う。種別は meta の
+ * `rank` が既に述べているので、路線名に重ねて持たない。県をまたぐ 378 本の中に
+ * 在るのは `主要地方道` の 2 本だけだが、`一般県道` も
+ * `一般県道中瀬牧西線`(群馬県道258号・埼玉県道258号)のように実在する。 */
+const RANK_PREFIX = /^(?:主要地方道|一般県道)/;
+
+/** ルートリレーションの `name` が述べる路線名。
+ *
+ * 書き方は揃っていない。県をまたぐ 378 本では、路線名だけが 73、`県道N号` を
+ * 含む物が 262、番号までで路線名の無い物が 40、`name` そのものが無い物が 3 で
+ * ある。前置きを外して `線` で終われば路線名として採り、残らなければ何も
+ * 返さない。
+ */
+export function relationRouteName(name) {
+  const s = (name ?? '')
+    .replace(RELATION_PREFIX, '')
+    .replace(RANK_PREFIX, '')
+    .trim();
+  return s.endsWith('線') ? s : null;
+}
+
+/** 群の全員が持つ路線名。way の名前から採る。
+ *
+ * `namesOf` は路線のキーごとの `名前 -> 何本の組み合わせが載せたか` である。
+ * `combinations[].names` を県ごとに足した物を渡す。
+ *
+ * way の `name` が路線名の根拠にならないのは「その (県, 番号) が何号か」を
+ * 決めるときの話である(PREFECTURAL.md)。ここでは番号は既に決まっており、県境の
+ * 向こうの路線まで同じ名前を持つことが裏取りになっている。`線` で終わり `号` を
+ * 含まない物だけを採るのは、`環状1号線` や `1条通` のような場所の呼び名を
+ * 路線名と取り違えないためである。
+ */
+export function sharedRouteName(keys, namesOf) {
+  const first = namesOf.get(keys[0]);
+  if (!first) return null;
+  const shared = new Map();
+  for (const n of first.keys()) {
+    if (!n.endsWith('線') || n.includes('号')) continue;
+    if (!keys.every((k) => namesOf.get(k)?.has(n))) continue;
+    shared.set(
+      n,
+      keys.reduce((s, k) => s + (namesOf.get(k)?.get(n) ?? 0), 0),
+    );
+  }
+  return pickName(shared);
+}
+
+/** 何通りか出た名前から 1 つ選ぶ。
+ *
+ * 多い方、同数なら短い方、それも同じなら綴り順である。**入力の並びで決めては
+ * ならない。** 群を覆うリレーションは 1 本とはかぎらず、県を読む順もファイル名
+ * 順でしかない。並びで決めると、県が 1 つ増えた日に無関係な群の名前が変わる。
+ *
+ * 何を数えた値かは呼ぶ側が決める。リレーション名なら「そう名乗ったリレーション
+ * の本数」、way 名なら「その名前を載せた組み合わせの数」である。
+ */
+export function pickName(counts) {
+  const sorted = [...counts.entries()].sort(
+    (a, b) =>
+      b[1] - a[1] || a[0].length - b[0].length || (a[0] < b[0] ? -1 : 1),
+  );
+  return sorted.length ? sorted[0][0] : null;
 }

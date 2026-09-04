@@ -29,6 +29,11 @@
 1 と 2 の和を残す。1 だけでは重用が測れず、2 だけではリレーションの無い路線が
 丸ごと落ちる。
 
+way とは別に、県をまたぐルートリレーションの表を `build/survey/relations.json`
+へ残す。県境で番号が変わらずに続く路線を束ねるのに要る(issue #155)。ここで出す
+のは、都道府県道のリレーションと N03 の県の割り当ての両方を同じ pass で持って
+いるのがここだけだからである。他所で作れば pbf をもう一度読むことになる。
+
 所属都道府県は prefectures.py が N03 の行政区域の面で決める。番号は県の中でしか
 一意でないので、(県, 番号)の組が路線の同一性である。
 
@@ -136,6 +141,59 @@ def relation_numbers(rels: dict[int, dict], prefectural: list[int]) -> dict[int,
         print(f"  WARNING: relation numbers did not settle in {rounds} rounds; "
               f"some child relations may be missing an inherited number", flush=True)
     return own
+
+
+def crossing_relations(
+    rels: dict[int, dict], prefectural: list[int], region_of: dict[int, str]
+) -> tuple[list[dict], int, int]:
+    """メンバーの way が 2 県以上に入るルートリレーション。
+
+    県境で番号が変わらずに続く路線は、多くの場合 1 本のリレーションが両県ぶんを
+    抱えている(`network=JP:prefectural:tokyo;JP:prefectural:saitama`)。その顔ぶれ
+    と路線名がここで取れる(issue #155)。
+
+    1 県で閉じるリレーションは出さない。県をまたぐ関わりを述べるための表なので、
+    またがない物は述べることが無い。数は下の summary が持つ。
+
+    番号はリレーション自身の `ref` だけを読む。継承した番号(relation_numbers)は
+    使わない。あちらは「その way が何号か」を決めるための物で、親から番号を
+    もらった支線が県をまたいで見えても、それは親の話である。数字でない `ref` は
+    落とす(全国で 3 本、いずれも `ref` そのものが無く、番号は `name` の中にしか
+    無い)。
+
+    子リレーションは辿らない。直接の `way` だけを見る。辿れば「子だけで組まれた
+    親」も拾えるが、それは今日のデータには居ない。都道府県道のルートリレーション
+    6,162 本のうち、メンバーに子リレーションを持つのは 4 本しかない。
+
+      2094892  ref なし  環七通り        way 306(tokyo)  子 2453363(tokyo)
+      8548743  ref 281   京都府道281号   way  25(kyoto)  子 8548742(kyoto)
+      18950091 ref 38    京都府道38号    way 130(kyoto)  子 18984307(kyoto)
+      20453974 ref 268   福井県道268号   way  29(fukui)  子 20453973(fukui)
+
+    4 本とも直接の `way` を大量に抱えており、子は親と同じ県にある。子を再帰的に
+    展開して県の顔ぶれが広がるリレーションは 6,162 本中 0 本、子リレーションだけ
+    で構成される物も 0 本である。0 件の経路のために再帰と循環対策を足せば、実
+    データで確かめようのないコードが増える。
+    """
+    rows: list[dict] = []
+    crossing = dropped = 0
+    for rid in prefectural:
+        regions = {region_of[m["ref"]] for m in rels[rid]["members"]
+                   if m["type"] == "way" and m["ref"] in region_of}
+        if len(regions) < 2:
+            continue
+        crossing += 1
+        ref = (rels[rid]["tags"].get("ref") or "").strip()
+        if not ref.isdigit():
+            dropped += 1
+            continue
+        rows.append({
+            "id": rid,
+            "ref": int(ref),
+            "name": rels[rid]["tags"].get("name"),
+            "regions": sorted(regions),
+        })
+    return sorted(rows, key=lambda r: r["id"]), crossing, dropped
 
 
 # ------------------------------------------------------------------- 通し読み ---
@@ -247,11 +305,14 @@ def main() -> None:
     surveyed = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     by_region: dict[str, list[dict]] = {r: [] for r in REGIONS}
     unassigned: list[int] = []
+    # way -> 県。下の crossing_relations が、リレーションの顔ぶれを引くのに読む。
+    region_of: dict[int, str] = {}
     for wid, a in zip(order, assigned, strict=True):
         tags = ways.tags[wid]
         if a.region is None:
             unassigned.append(wid)
             continue
+        region_of[wid] = a.region
         grade, link = grade_of(tags)
         tag_refs = numbers(tags.get("ref")) if grade is not None else []
         rel = sorted(claimed.get(wid, ()))
@@ -294,12 +355,31 @@ def main() -> None:
         print(f"  {region:12} {REGIONS[region]['label']:6} ways {len(docs):7,}  "
               f"{km:9,.1f} km  {out.stat().st_size / 1e6:6.1f} MB", flush=True)
 
+    # 県をまたぐリレーション。県ごとのファイルに入れず 1 枚にするのは、1 本の
+    # リレーションが 2〜4 県に同時に属するからである。県ごとに配ると同じ行が
+    # 県の数だけ複製され、「どの県にまたがるか」の答えが複数の場所に散る。読む側
+    # (pack_web_pref.mjs)も、県ごとのループを終える前に全部が要る。
+    crossing, crossing_count, crossing_dropped = crossing_relations(
+        rels, prefectural, region_of)
+    rel_out = SURVEY / "relations.json"
+    rel_out.write_text(json.dumps({
+        "timestamp_osm_base": base_ts,
+        "surveyed_at": surveyed,
+        "n03_vintage": prefs.vintage,
+        "relations": crossing,
+    }, ensure_ascii=False), encoding="utf-8")
+    print(f"\nrelations spanning 2+ prefectures: {crossing_count:,} "
+          f"({crossing_dropped:,} dropped: the `ref` tag is not a number)")
+    print(f"  wrote {rel_out.name} ({rel_out.stat().st_size / 1e3:.1f} kB)")
+
     summary = {
         "timestamp_osm_base": base_ts,
         "surveyed_at": surveyed,
         "n03_vintage": prefs.vintage,
         "prefectural_relations": len(prefectural),
         "relations_without_number": numberless,
+        "relations_across_prefectures": crossing_count,
+        "relations_across_prefectures_kept": len(crossing),
         "ways_claimed_by_relation": len(claimed),
         "ways_kept": len(order),
         "ways_without_prefecture": unassigned,

@@ -16,12 +16,27 @@
  *
  * 使い方:  node pipeline/pack_web_pref.mjs [--maxzoom 14]
  */
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import { encodeRoutes } from '../web/urlstate.mjs';
-import { DATA, PREFECTURAL, ROOT } from './_paths.mjs';
-import { combinationsOf, crossingsOf } from './rollup.mjs';
+import { DATA, PREFECTURAL, ROOT, SURVEY } from './_paths.mjs';
+import {
+  addEndpoints,
+  borderPairs,
+  combinationsOf,
+  crossingsOf,
+  groupsOf,
+  pickName,
+  relationRouteName,
+  sharedRouteName,
+} from './rollup.mjs';
 import { bboxOf, unionBbox, writeTiles } from './tiles.mjs';
 
 const TILEDIR = join(ROOT, 'build', 'tiles-prefectural');
@@ -71,6 +86,7 @@ const lowProperties = (p) => {
  *  並べるときに意味があるのは番号である。県が同じ物どうしを比べるので、県名は
  *  同点のときの区切りにしか効かない。 */
 const num = (key) => Number(key.slice(key.lastIndexOf('-') + 1));
+const prefOf = (key) => key.slice(0, key.lastIndexOf('-'));
 const byRef = (a, b) => num(a) - num(b) || (a < b ? -1 : a > b ? 1 : 0);
 
 /* ------------------------------------------------------------------ 県ごと --- */
@@ -91,9 +107,17 @@ let dataBbox = [Infinity, Infinity, -Infinity, -Infinity];
 let totalArcs = 0;
 let totalCombos = 0;
 let totalCrossings = 0;
-let metaBytes = 0;
-let biggest = { region: null, bytes: 0 };
-/* 全国の番号だけの索引。県別 meta は路線の集計が丸ごと入って 47 本で 3.29 MB
+/* 県別 meta は県ごとのループの中では書けない。群は全県を見終わらないと決まらず、
+ * その群は 2〜4 県の meta に載るからである。47 県ぶんを抱えたまま、ループの外で
+ * 書く。合わせて 3.5 MB で、この段が既に抱えている全国のアークに比べれば小さい。 */
+const metas = [];
+/* アークの端点。県境で番号が続く路線を拾うのに読む。県ごとのループの中で貯める。 */
+const endpoints = new Map();
+/* 路線ごとの延長と、way が名乗った名前。どちらも組み合わせ表から足す。群の
+ * 合算延長と路線名がここから出る。 */
+const kmOf = new Map();
+const namesOf = new Map();
+/* 全国の番号だけの索引。県別 meta は路線の集計が丸ごと入って 47 本で 3.54 MB
  * あり、「番号で絞り込む」ためだけに読ませる量ではない。ここが番号だけを抜いて
  * 1 枚にする。 */
 const index = {};
@@ -185,15 +209,25 @@ for (const region of regions) {
     // この集合に国道のアークが入っていないためである。
     crossings,
   };
-  const text = JSON.stringify(meta);
-  const bytes = Buffer.byteLength(text, 'utf8');
-  writeFileSync(join(METADIR, `${region}.meta.json`), text);
+  metas.push(meta);
+
+  addEndpoints(mine, endpoints);
+  for (const c of combos)
+    for (const key of c.refs) {
+      // 組み合わせはアークを重複なく分けるので、路線の延長はその路線を含む行の
+      // 単純な和である。web/aggregate.mjs の routesOf と同じ数え方である。
+      kmOf.set(key, (kmOf.get(key) ?? 0) + c.km);
+      let names = namesOf.get(key);
+      if (!names) {
+        names = new Map();
+        namesOf.set(key, names);
+      }
+      for (const n of c.names) names.set(n, (names.get(n) ?? 0) + 1);
+    }
 
   totalArcs += mine.length;
   totalCombos += combos.length;
   totalCrossings += crossings.length;
-  metaBytes += bytes;
-  if (bytes > biggest.bytes) biggest = { region, bytes };
   dataBbox = unionBbox(dataBbox, bbox);
   for (const f of mine) features.push(f);
 }
@@ -203,6 +237,109 @@ console.log(
     `combinations: ${totalCombos.toLocaleString()} | ` +
     `crossings: ${totalCrossings.toLocaleString()}`,
 );
+
+/* ------------------------------------------------------- 複数県にわたる路線 --- */
+/* 県境で番号が変わらずに続く路線を束ねる。長野県道1号・愛知県道1号・静岡県道1号
+ * は 飯田富山佐久間線 として直接つながっているが、県ごとの meta はそれを述べない。
+ *
+ * 束ねるだけで、同一性は変えない。路線は (県, 番号) のままで、タイルの属性も
+ * 変わらない。関係する都道府県がそれぞれ認定した別々の路線であり、年報も県ごとに
+ * 数えている。3 つの認定を 1 つに畳むのは、この地図が重用区間でしないと決めた
+ * 「番号を丸める」操作そのものである(issue #155)。
+ *
+ * 信号は二つあり、互いを補うので両方を採る。リレーションが保証するのは
+ * (県, 番号) 13,234 組のうち半分ほどなので、リレーションだけでは無い路線が
+ * 落ちる。県境で線が繋がっていない路線は幾何だけでは拾えない。実データでは
+ * 373 と 519 で、350 が同じ顔ぶれを出す。
+ *
+ * 和にしてあるので、片方が 1 本取りこぼしても、もう片方が繋いでいればその群は
+ * 残る。どちらか一方だけを直せば済む形にはしない。 */
+const relPath = join(SURVEY, 'relations.json');
+if (!existsSync(relPath))
+  throw new Error(
+    `${relPath} が無い。県をまたぐルートリレーションの表は ` +
+      '`mise run survey-pref` が書く。',
+  );
+const relDoc = JSON.parse(readFileSync(relPath, 'utf8'));
+const edges = borderPairs(endpoints, (key) => [prefOf(key), num(key)]).map(
+  ([a, b]) => [a, b, 'geometry'],
+);
+for (const r of relDoc.relations) {
+  const keys = r.regions.map((g) => `${g}-${r.ref}`);
+  for (let i = 0; i < keys.length; i++)
+    for (let j = i + 1; j < keys.length; j++)
+      edges.push([keys[i], keys[j], 'relation']);
+}
+const groups = groupsOf(edges, byRef);
+const byRoute = new Map();
+groups.forEach((g, i) => {
+  for (const key of g.refs) byRoute.set(key, i);
+});
+
+/* リレーション名を群ごとに集める。1 つの群を何本ものリレーションが別の名前で
+ * 覆うことがあるので、どれを採るかは pickName が順序に依らない規則で決める。 */
+const relNameOf = new Map();
+for (const r of relDoc.relations) {
+  const name = relationRouteName(r.name);
+  if (name === null) continue;
+  const i = byRoute.get(`${r.regions[0]}-${r.ref}`);
+  if (i === undefined) continue;
+  let by = relNameOf.get(i);
+  if (!by) {
+    by = new Map();
+    relNameOf.set(i, by);
+  }
+  by.set(name, (by.get(name) ?? 0) + 1);
+}
+
+const continuations = groups.map((g, i) => {
+  const by = relNameOf.get(i);
+  const relName = by ? pickName(by) : null;
+  // リレーション名を優先し、無ければ way 名に落とす。両方を持つ 296 群のうち
+  // 293 群で一致する。どちらも無い 27 群では欄そのものを出さない。名前が無い
+  // ことを理由に群を落とすことはしない。
+  const name = relName ?? sharedRouteName(g.refs, namesOf);
+  return {
+    refs: g.refs,
+    ...(name ? { name } : {}),
+    // 群の全員の和。県をまたぐ重複は無いので単純な和でよい。
+    km:
+      Math.round(g.refs.reduce((s, k) => s + (kmOf.get(k) ?? 0), 0) * 10) / 10,
+    src: g.src,
+  };
+});
+
+const bySrc = new Map();
+for (const c of continuations) bySrc.set(c.src, (bySrc.get(c.src) ?? 0) + 1);
+console.log(
+  `continuations: ${continuations.length} groups, ` +
+    `${continuations.reduce((a, c) => a + c.refs.length, 0)} routes, ` +
+    `${continuations.filter((c) => c.name).length} named | ` +
+    `${[...bySrc.entries()]
+      .sort()
+      .map(([k, v]) => `${k} ${v}`)
+      .join(', ')}`,
+);
+endpoints.clear();
+
+/* --------------------------------------------------------------- meta --- */
+/* 同じ群が 2〜4 県の meta に重複して載る。作るのがここ 1 箇所なので、片方が
+ * 暗黙のうちに古くなることはない。県別 meta は県を開いたときに 1 つだけ取る物
+ * なので、その県で要る群がその中に揃っている方が、読むときと取るときが一致する。 */
+let metaBytes = 0;
+let biggest = { region: null, bytes: 0 };
+for (const meta of metas) {
+  const mine = continuations.filter((c) =>
+    c.refs.some((k) => prefOf(k) === meta.region),
+  );
+  if (mine.length) meta.continuations = mine;
+  const text = JSON.stringify(meta);
+  const bytes = Buffer.byteLength(text, 'utf8');
+  writeFileSync(join(METADIR, `${meta.region}.meta.json`), text);
+  metaBytes += bytes;
+  if (bytes > biggest.bytes) biggest = { region: meta.region, bytes };
+}
+metas.length = 0;
 console.log(
   `meta: ${regions.length} files, ${(metaBytes / 1e6).toFixed(2)} MB total, ` +
     `biggest ${biggest.region} ${(biggest.bytes / 1e3).toFixed(0)} kB`,
