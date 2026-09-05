@@ -395,6 +395,16 @@
     <section>
       <h3>リンク</h3>
       <div class="about-links">
+        <!-- 同じサイトの中の 1 枚なので、外のリンクと違って同じタブで開く。
+             地図の状態は URL に載っており(urlstate.mjs)、戻れば同じ画面が出る。 -->
+        <a href="changelog.html" class="mini about-link">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
+            <path d="M12 7v5l3.5 2" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          更新履歴
+        </a>
         <a href="https://github.com/nanase/kokudo-map" target="_blank" rel="noopener"
            class="mini about-link">
           <svg viewBox="0 0 16 16" aria-hidden="true">
