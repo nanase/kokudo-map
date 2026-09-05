@@ -16,6 +16,7 @@ import {
   groupsOf,
   pickName,
   relationRouteName,
+  routeNameOf,
   sharedRouteName,
 } from '../pipeline/rollup.mjs';
 
@@ -565,6 +566,59 @@ describe('groupsOf', () => {
   });
 });
 
+describe('routeNameOf', () => {
+  test('番号の無い前置きも外す', () => {
+    expect(routeNameOf('県道一宮川島線')).toBe('一宮川島線');
+    expect(routeNameOf('道道忠別清水線')).toBe('忠別清水線');
+  });
+
+  test('県名の付いた前置きを外す', () => {
+    expect(routeNameOf('千葉県道8号船橋我孫子線')).toBe('船橋我孫子線');
+    expect(routeNameOf('北海道道519号滝之町伊達線')).toBe('滝之町伊達線');
+    expect(routeNameOf('神奈川県道139号真光寺長津田線')).toBe('真光寺長津田線');
+  });
+
+  test('全角の数字と全角の空白も読む', () => {
+    expect(routeNameOf('岐阜県道・三重県道23号　北方多度線')).toBe(
+      '北方多度線',
+    );
+    expect(routeNameOf('青森県道９号線')).toBe('線');
+  });
+
+  test('前置きと路線名の間の空白を落とす', () => {
+    expect(routeNameOf('県道 嬉野川棚線')).toBe('嬉野川棚線');
+  });
+
+  /* 県名を 4 字までに区切り、空白と括弧を跨がせている理由である。`[^\s・]+道`
+   * と書くと、名前の途中に在る県道を掴んで頭から食う。 */
+  test('名前の途中に在る県道は前置きではない', () => {
+    expect(routeNameOf('呉平谷線（広島県道３１号線）')).toBe(
+      '呉平谷線（広島県道３１号線）',
+    );
+    expect(
+      routeNameOf(
+        'しまなみ海道サイクリングロード;広島県道466号向島因島瀬戸田自転車道線',
+      ),
+    ).toBe(
+      'しまなみ海道サイクリングロード;広島県道466号向島因島瀬戸田自転車道線',
+    );
+    expect(routeNameOf('佐多岬ロードパーク;県道566号　佐多岬公園線')).toBe(
+      '佐多岬ロードパーク;県道566号　佐多岬公園線',
+    );
+  });
+
+  test('前置きが無ければそのまま返す', () => {
+    expect(routeNameOf('一宮川島線')).toBe('一宮川島線');
+    expect(routeNameOf('大網街道')).toBe('大網街道');
+    expect(routeNameOf('東海道本線')).toBe('東海道本線');
+  });
+
+  test('name が無ければ空を返す', () => {
+    expect(routeNameOf(null)).toBe('');
+    expect(routeNameOf(undefined)).toBe('');
+  });
+});
+
 describe('relationRouteName', () => {
   test('県道N号の前置きを外す', () => {
     expect(relationRouteName('岐阜県道・三重県道23号　北方多度線')).toBe(
@@ -593,6 +647,12 @@ describe('relationRouteName', () => {
 
   test('番号までしか無い名前からは採らない', () => {
     expect(relationRouteName('岩手県道・秋田県道1号')).toBeNull();
+  });
+
+  /* 前置きを外すと `線` しか残らない。通すと群が `線` と名乗る。 */
+  test('前置きに 線 が付いただけの名前からは採らない', () => {
+    expect(relationRouteName('東京都道11号線')).toBeNull();
+    expect(relationRouteName('青森県道９号線')).toBeNull();
   });
 
   test('name が無ければ採らない', () => {
@@ -716,6 +776,32 @@ describe('sharedRouteName', () => {
         ]),
       ),
     ).toBeNull();
+  });
+
+  /* 渡すのは routeNameOf を通した綴りである。前置きしか無い way 名はここで
+   * `線` になって届く。 */
+  test('線 の 1 字は採らない', () => {
+    expect(
+      sharedRouteName(
+        ['kanagawa-11', 'tokyo-11'],
+        namesOf([
+          ['kanagawa-11', [['線', 2]]],
+          ['tokyo-11', [['線', 3]]],
+        ]),
+      ),
+    ).toBeNull();
+  });
+
+  /* 前置きを外してから積むので、県境の両側で綴りが違っても同じ名前になる。
+   * `県道一宮川島線`(岐阜115)と `一宮川島線`(愛知150)が実例である。 */
+  test('前置きを外した綴りで突き合わせる', () => {
+    const names = namesOf([
+      ['gifu-115', [[routeNameOf('県道一宮川島線'), 1]]],
+      ['aichi-150', [[routeNameOf('一宮川島線'), 2]]],
+    ]);
+    expect(sharedRouteName(['aichi-150', 'gifu-115'], names)).toBe(
+      '一宮川島線',
+    );
   });
 
   test('候補が複数あれば、多い方を採る', () => {
