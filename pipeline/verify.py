@@ -17,7 +17,7 @@ from collections import Counter
 
 from _paths import CACHE, REGIONS
 from expectations import for_region
-from freshness import STALE_AFTER_DAYS, age_days
+from freshness import STALE_AFTER_DAYS, age_days, is_stale
 from regions import REGIONS as REGION_BOXES
 
 region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
@@ -222,7 +222,7 @@ check(
 )
 if meta.get("osm_timestamp"):
     age = age_days(meta["osm_timestamp"])
-    if age > STALE_AFTER_DAYS:
+    if is_stale(age):
         print(f"WARNING  OSM data is {age:.1f} days old (over {STALE_AFTER_DAYS})")
 
 # 名前を持ち、在って指定もされていなければならない道。長野南バイパスは、無いと

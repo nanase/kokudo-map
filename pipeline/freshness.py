@@ -18,3 +18,10 @@ def age_days(timestamp: str) -> float:
     """ISO8601(Z 終端)の時刻から、今までの経過日数。"""
     base = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
     return (datetime.now(timezone.utc) - base).total_seconds() / 86400
+
+
+def is_stale(age: float) -> bool:
+    """警告するほど古いか。呼び出し側で `> STALE_AFTER_DAYS` を書き直させない
+    ための判定そのものである。値だけを揃えても、不等号が呼び出し側ごとに
+    散っていれば、古さの基準はまだ一つに定まっていない。"""
+    return age > STALE_AFTER_DAYS

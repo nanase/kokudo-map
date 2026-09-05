@@ -42,7 +42,7 @@ from datetime import datetime, timezone
 import requests
 
 from _paths import CACHE
-from freshness import STALE_AFTER_DAYS, age_days
+from freshness import age_days, is_stale
 from prefectures import Prefectures, assign_docs, report
 from regions import for_region
 
@@ -100,7 +100,7 @@ def pick_endpoint() -> tuple[str, str]:
 
     ep, ts, age = best
     print(f"  -> using {ep.split('/')[2]} (data of {ts})")
-    if age > STALE_AFTER_DAYS:
+    if is_stale(age):
         print(f"  WARNING: freshest available data is {age:.1f} days old; "
               f"recent road openings will be missing.")
     return ep, ts

@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 import osmium
 
 from _paths import CACHE, PBF
-from freshness import STALE_AFTER_DAYS, age_days
+from freshness import STALE_AFTER_DAYS, age_days, is_stale
 from regions import REGIONS, named_regions
 
 # 生成が読む way のタグはこれだけである。残りを保つとメモリが三倍になる。正典は
@@ -418,7 +418,7 @@ def main() -> None:
     age = age_days(base_ts)
     print(f"pbf: {path}")
     print(f"data base: {base_ts}  age={age:.1f} days")
-    if age > STALE_AFTER_DAYS:
+    if is_stale(age):
         print(f"  WARNING: over {STALE_AFTER_DAYS} days old.")
 
     rels, _ = pass_relations(path)
