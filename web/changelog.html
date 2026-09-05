@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>更新履歴 - 国道マップ</title>
+<meta name="description" content="国道マップに入れた変更を、日付ごとに並べています。">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#00449E">
+
+<!-- 配色の選択は地図と同じ localStorage に入っており、同一オリジンのこの
+     ページからも読める。置かないと、端末が暗く地図では明るいほうを選んで
+     いる人に、このページだけ暗い面が出る。書くのは app.js だけで、ここは
+     置き直すだけである(index.html と同じ)。 -->
+<script>
+  try {
+    const t = localStorage.getItem('theme');
+    if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+  } catch {
+    /* private browsing: 保存が読めないので端末の設定のまま出す。 */
+  }
+</script>
+
+<!-- 色・書体・余白は地図と同じ style.css が持つ。このページのための規則も
+     その末尾にある。地図の部品は何も出ないので、maplibre-gl.css は読まない。 -->
+<link rel="stylesheet" href="vendor/line-seed-jp.css">
+<link rel="stylesheet" href="style.css">
+</head>
+
+<!-- 載せるのは、利用者から見て何かが変わった回だけである。配信データを上げ
+     直しただけの回や、コードの中だけを整えた回は出さない。文体と粒度は、
+     すでに並んでいる箇条書きに倣う。 -->
+<body class="changelog">
+<main class="log">
+  <header class="log-head">
+    <h1>更新履歴</h1>
+    <a class="mini log-back" href="index.html">地図へ戻る</a>
+  </header>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年9月5日</h2>
+    <ul class="log-items">
+      <li><b>修正</b>: 道路を一時的に隠すボタンの対象を都道府県道へ拡大<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/fd54205a2a1c27c311f5f9a5fe9a5b2f842b612f"
+          target="_blank" rel="noopener">fd54205</a></li>
+      <li><b>修正</b>: 道路の種類を選ぶボタンに、選んでいるかどうかがわかるチェックを追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/92819894ca3741bb08611cbefd9306c3228a527e"
+          target="_blank" rel="noopener">9281989</a></li>
+      <li><b>修正</b>: 県境で番号が変わっても続く都道府県道を、ひと続きの路線として統合<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/2db1c720c7e29c75460fa6e3747b942dfbe5eef1"
+          target="_blank" rel="noopener">2db1c72</a></li>
+      <li><b>修正</b>: 表示の切り替えと「データ情報」の数の対象を都道府県道へ拡大<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/cc914f86f9692b542b4f4a9d70ff36aee71b581f"
+          target="_blank" rel="noopener">cc914f8</a></li>
+      <li><b>修正</b>: 国道マップで使われる用語の洗い出しと一部表現の変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/549afe8da4ff85b89a96251532ad6fcda071f4fc"
+          target="_blank" rel="noopener">549afe8</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年9月4日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: 複数の都道府県にわたる路線を、詳細パネルの節ごとに表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/e46ece28a40975b766d3ae05fc342d997ea5842f"
+          target="_blank" rel="noopener">e46ece2</a></li>
+      <li><b>修正</b>: 県境で続く路線が地図に表示されていなかった<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/048e665c43533c63e00ae2bf4f5982605921f155"
+          target="_blank" rel="noopener">048e665</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年9月2日</h2>
+    <ul class="log-items">
+      <li><b>修正</b>: 都道府県道の配色を変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/690d5379d909562202582b0d5ce25d64315d98e6"
+          target="_blank" rel="noopener">690d537</a></li>
+      <li><b>修正</b>: 主要地方道の判定に5 都道県ぶんの例外を追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/2cc2e5795c1dffdfb1693c7d867c67a4c4625182"
+          target="_blank" rel="noopener">2cc2e57</a></li>
+      <li><b>修正</b>: 詳細パネルからの絞り込みを国道と都道府県道で動作を統一<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/1ee8e97ad4365a973190014ed1477c0ca95b3c5f"
+          target="_blank" rel="noopener">1ee8e97</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年9月1日</h2>
+    <ul class="log-items">
+      <li><b>修正</b>: 地図上の操作パネルから道路を番号で選べるよう変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/21698e84fdce66888be83fb4f07e4ab246095e3a"
+          target="_blank" rel="noopener">21698e8</a></li>
+      <li><b>修正</b>: 一般都道府県道の線を見やすい色に変更し、さらに道路の押せる範囲を拡大<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/023100f22fa2d2bde89fddd87e5a7b54f782d56e"
+          target="_blank" rel="noopener">023100f</a></li>
+      <li><b>修正</b>: 詳細パネルの高さを中身に合わせて縮小<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/331263369b168fa67c56829344a200c81366f081"
+          target="_blank" rel="noopener">3312633</a></li>
+      <li><b>修正</b>: 「道路を選択」パネルが路線を選ぶたびに横へずれていた<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/331263369b168fa67c56829344a200c81366f081"
+          target="_blank" rel="noopener">3312633</a></li>
+      <li><b>削除</b>: 「道路を選択」パネルの見出しにあった、選択中の本数の重複表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/331263369b168fa67c56829344a200c81366f081"
+          target="_blank" rel="noopener">3312633</a></li>
+      <li><b>修正</b>: 選択解除ボタンをホバーで赤色に変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/331263369b168fa67c56829344a200c81366f081"
+          target="_blank" rel="noopener">3312633</a></li>
+      <li><b>削除</b>: 「だけを表示」ボタンの文言の「（国道も消えます）」<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/331263369b168fa67c56829344a200c81366f081"
+          target="_blank" rel="noopener">3312633</a></li>
+      <li><b>修正</b>: 都道府県道の絞り込み前のメッセージを短縮<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/331263369b168fa67c56829344a200c81366f081"
+          target="_blank" rel="noopener">3312633</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月31日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: 都道府県道を表示できるように機能追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/a73639fc3b227cf76ebd172d6c620723c1b745bb"
+          target="_blank" rel="noopener">a73639f</a></li>
+      <li><b>追加</b>: 表示の切り替えに国道と都道府県道の選択を追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/65a3d1ffb89ed802900102b0286447c8e88508a2"
+          target="_blank" rel="noopener">65a3d1f</a></li>
+      <li><b>追加</b>: 都道府県道の詳細パネル表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/63de9c7634a31ac51910b7a6799187c8827e0cf3"
+          target="_blank" rel="noopener">63de9c7</a></li>
+      <li><b>追加</b>: 特定の都道府県道だけの絞り込み<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/6f63df11485a2c4df524c7bf690c68d59fc3abfa"
+          target="_blank" rel="noopener">6f63df1</a></li>
+      <li><b>追加</b>: 凡例への都道府県道の走行不能区間の追加と折りたたみ機能<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/9b505c7e1923be17ece26e674ce86ff8251a56f3"
+          target="_blank" rel="noopener">9b505c7</a></li>
+      <li><b>修正</b>: 都道府県道番号標識（ヘキサ）の外形を実物の標識に差し替え<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/35abd9f7f8d68cbe44719ac251b3b65bcf463d8d"
+          target="_blank" rel="noopener">35abd9f</a></li>
+      <li><b>修正</b>: 操作パネルの書体を <a class="log-link" href="https://seed.line.me/index_jp.html" target="_blank" rel="noopener">LINE Seed JP</a> に統一<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/7819c974ce07d0cc5b08aead9c173731b192bbb2"
+          target="_blank" rel="noopener">7819c97</a></li>
+      <li><b>修正</b>: 単独区間を表す起点・終点のマーカーを地図から除外<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/9aa5e0549b9769281a797124802e80b0c1c86dd4"
+          target="_blank" rel="noopener">9aa5e05</a></li>
+      <li><b>修正</b>: 起点・終点の共有マーカーを赤丸から白丸へ変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/d93457e94155cd96da7396956409800cc57abc46"
+          target="_blank" rel="noopener">d93457e</a></li>
+      <li><b>修正</b>: 表示状態のパネルを 2 段にし、重用の但し書きを折りたためるように<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/691fc12f001ea67015fb47292f57d0eed5625f27"
+          target="_blank" rel="noopener">691fc12</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月30日</h2>
+    <ul class="log-items">
+      <li><b>修正</b>: 操作パネルの書体を <a class="log-link" href="https://seed.line.me/index_jp.html" target="_blank" rel="noopener">LINE Seed JP</a> にし、見出しの高さ・配色・読みやすさを調整<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/b0f733a666890988ab4e62eb8f1c4269331b8e10"
+          target="_blank" rel="noopener">b0f733a</a></li>
+      <li><b>修正</b>: 詳細パネルの「区分別」にて四捨五入で 0.0 km になる行を「0.1 km 未満」と表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/d340d707c517722383f66cabc52645e2f59fe068"
+          target="_blank" rel="noopener">d340d70</a></li>
+      <li><b>修正</b>: 道路の所属する都道府県をバウンディングボックスではなく行政区域で判定<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/e9b811211c38a9e4ca4c9a1bdf8cfe61d7d93ccd"
+          target="_blank" rel="noopener">e9b8112</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月29日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: PWA化に対応<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/5b42c418ef6538f4a634f6e50d8666e4dce9c233"
+          target="_blank" rel="noopener">5b42c41</a></li>
+      <li><b>追加</b>: 詳細パネルに旧道の延長を表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/11f9591255a7e350a87d50e57dfed584115e4e86"
+          target="_blank" rel="noopener">11f9591</a></li>
+      <li><b>修正</b>: 操作パネルをフローティング表示変更し、表示の切り替えを地図側へ移動<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/dd996537ea6624c6527a1db501eb2e40db014f25"
+          target="_blank" rel="noopener">dd99653</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月28日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: 共有カード画像の寸法を調整<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/27c5f133d1e019a1d8b08e9f42e9c64dfcdfc82a"
+          target="_blank" rel="noopener">27c5f13</a></li>
+      <li><b>修正</b>: 更新の間隔を決めず、不定期更新である旨を明示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/aa31d55d253450f81e3e7c24557f230595cbc5e5"
+          target="_blank" rel="noopener">aa31d55</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月27日</h2>
+    <ul class="log-items">
+      <li><b>修正</b>: 共有カードの画像を地図の絵に変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/82339e1ed06fc1f88bb5edd91b38214f88442e9f"
+          target="_blank" rel="noopener">82339e1</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月26日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: 詳細パネルに関連する国道を標識で表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/a24f0a8688ea3c667b5573db3a282e976c5ecdd7"
+          target="_blank" rel="noopener">a24f0a8</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月25日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: 国道の詳細パネルを追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/f5d1cc17a017403dc3c8635ada81d2cf7b0f025a"
+          target="_blank" rel="noopener">f5d1cc1</a></li>
+      <li><b>追加</b>: 一般国道の起点・終点の情報を政令で発表された別表から取り込み<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/1659f4915e8035f2afa4cb833160f01f5ce255bf"
+          target="_blank" rel="noopener">1659f49</a></li>
+      <li><b>追加</b>: 地図の傾きを真上と 60 度で切り替えるボタン<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/fa4f81de5c052050f4ba43cbf0e9798f4ab837e7"
+          target="_blank" rel="noopener">fa4f81d</a></li>
+      <li><b>修正</b>: 「表示」の並びと余白を調整し、狭い画面では国道の一覧を折りたたみ<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/28c655d3346d6f4b769011b8d49a4b212b9e0ca1"
+          target="_blank" rel="noopener">28c655d</a></li>
+      <li><b>修正</b>: 詳細パネルが起点・終点として読む項目名を実際のデータに合わせて修正<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/6cdc2c522f3034116b66b19800dbc0f588555401"
+          target="_blank" rel="noopener">6cdc2c5</a></li>
+      <li><b>修正</b>: 詳細パネルとポップアップの操作感と見えかたを調整<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/467767943963ad230ed403609ecbf09de069499b"
+          target="_blank" rel="noopener">4677679</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月23日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: 拡大・縮小ボタンの長押しによる連続ズーム<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/4518f9ac8465eff78b575be61fd1d1232c99a9b1"
+          target="_blank" rel="noopener">4518f9a</a></li>
+      <li><b>追加</b>: 表示・濃さ・地図の種類のボタンに、押した直後の状態を示すツールチップ<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/cbd18c0e2b5b937d63cb5f61a666c8cbc7de6c09"
+          target="_blank" rel="noopener">cbd18c0</a></li>
+      <li><b>追加</b>: 旧道を薄い線で描き分け、個別に非表示にできるよう機能追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/bdaab0339c435a1285cacdaeea8b381bd5f5dfbf"
+          target="_blank" rel="noopener">bdaab03</a></li>
+      <li><b>修正</b>: サイドバーと共有ダイアログの見た目を調整<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/e6d4eeed0dea90ef1298bde3cc757e52c1dbb10f"
+          target="_blank" rel="noopener">e6d4eee</a></li>
+      <li><b>修正</b>: 地図の濃さボタンの水滴アイコンを変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/c638e30516b147ba7c5b8a6802f1777f45bc0c2c"
+          target="_blank" rel="noopener">c638e30</a></li>
+      <li><b>修正</b>: 共有ダイアログで、端末の共有機能が使えないときに 3 件の不具合が出ていた<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/4e8999c9c07ffc1930886ba56388193827a178ca"
+          target="_blank" rel="noopener">4e8999c</a></li>
+      <li><b>修正</b>: 重用ランキングと共有地点の行ボタンに、読み上げ用のラベルを追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/7a40490d5ce928c8b83d9505c8b99732447ba14b"
+          target="_blank" rel="noopener">7a40490</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月22日</h2>
+    <ul class="log-items">
+      <li><b>修正</b>: 国道番号標識（おにぎり）の外形を実物の標識に差し替え、数字の書体を Roboto に変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/f43b2deec8ee0a8c011f6d37d98081f59d1e80bd"
+          target="_blank" rel="noopener">f43b2de</a></li>
+      <li><b>修正</b>: サイドバーを畳んだまま読み込み直すと黒い帯が出ていた<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/6b2196b9c1b5ad3fbeae472f2bc7b20c1040002e"
+          target="_blank" rel="noopener">6b2196b</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月21日</h2>
+    <ul class="log-items">
+      <li><b>修正</b>: 凡例を静的な HTML にし、JavaScript の実行を待たずに表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/32389ce028f607c6c257201b7b3b3cc563632abd"
+          target="_blank" rel="noopener">32389ce</a></li>
+      <li><b>修正</b>: 国道の判定に誤りが 4 件あった<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/dd1335ca5c2d01874aa6892eac14872bbf7c1575"
+          target="_blank" rel="noopener">dd1335c</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月20日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: 絞り込みと表示の状態を URL に保存<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/457d8fc9d417afe9be5ff5e40937657d4700376b"
+          target="_blank" rel="noopener">457d8fc</a></li>
+      <li><b>追加</b>: 共有ボタンと共有ダイアログを追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/852794f49498b706b2db0b0035d58ee4b85ad8d3"
+          target="_blank" rel="noopener">852794f</a></li>
+      <li><b>追加</b>: 国道を一時的に隠すボタンを追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/fb00f8984b90d7abcf7e89c99a153cbe3641744f"
+          target="_blank" rel="noopener">fb00f89</a></li>
+      <li><b>追加</b>: 地理院地図の濃さを 3 段階で切り替え<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/410ba120a69724bad8169e3884e911ebef7f7060"
+          target="_blank" rel="noopener">410ba12</a></li>
+      <li><b>追加</b>: 地理院地図の種類を切り替え<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/f24ec3ea994f47bddfe01956197ebbf0884e40e3"
+          target="_blank" rel="noopener">f24ec3e</a></li>
+      <li><b>追加</b>: サイドバー下部に GitHub リポジトリへのリンクを追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/27ef2928d2785298379ccf804dff6fa5e4789cd6"
+          target="_blank" rel="noopener">27ef292</a></li>
+      <li><b>修正</b>: 地図上の国道番号ラベルを拡大<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/2f55e4bc5d3ddd055e05aeb6085a7d9b70d99d5d"
+          target="_blank" rel="noopener">2f55e4b</a></li>
+      <li><b>修正</b>: サイドバーの見出しに、favicon と同じ標識のアイコンを追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/d40d3964cc91a1425a8ffa9e257334b96bda4f98"
+          target="_blank" rel="noopener">d40d396</a></li>
+      <li><b>修正</b>: 路線セクションの見出しを削除し、絞り込みと解除のボタンを横並びに変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/6755adabaed940d206e15fd461517b557d42674e"
+          target="_blank" rel="noopener">6755ada</a></li>
+      <li><b>修正</b>: 重用区間の選択肢を横並びに変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/ecd3c29a9ae0e533d2a57f7d02c8bceca70c4bd2"
+          target="_blank" rel="noopener">ecd3c29</a></li>
+      <li><b>修正</b>: 「路線番号を常時表示」のラベルを「路線番号」に短縮<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/0b4da92c389e81f38c2ed998ffe66064fcb0d3a0"
+          target="_blank" rel="noopener">0b4da92</a></li>
+      <li><b>修正</b>: 画面幅が狭いときの開閉ボタンの矢印を上下向きに変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/e36aab18206d8aa09f0420b11ea7038bbc4d48e4"
+          target="_blank" rel="noopener">e36aab1</a></li>
+      <li><b>修正</b>: サイドバー下部のデータ情報を畳んだ状態で表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/ca3de961465b8cc5823a9949ba0ed9a9a30d4425"
+          target="_blank" rel="noopener">ca3de96</a></li>
+      <li><b>修正</b>: 選択中の路線の集計をデータ情報の折りたたみへ統合<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/19d789aa3015ba21875d4e2ca6b5f6883c1200bd"
+          target="_blank" rel="noopener">19d789a</a></li>
+      <li><b>修正</b>: 絞り込み一覧の高さを固定し、読み込み時に画面が跳ねるのを解消<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/3449d3a19e3cb6a3b468a10d88291ab783b31f36"
+          target="_blank" rel="noopener">3449d3a</a></li>
+      <li><b>修正</b>: 絞り込み一覧に読み込み中のスピナーを追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/22c288168df8a58e840fe1d9456bbbb91cf38a9f"
+          target="_blank" rel="noopener">22c2881</a></li>
+      <li><b>修正</b>: 地図の濃さの向きが逆だった<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/bbf65352416319c1681c379817ba4ebb6a121389"
+          target="_blank" rel="noopener">bbf6535</a></li>
+      <li><b>修正</b>: 濃さと地図の種類のボタンをアイコンにし、定型のヒント文言を削除<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/feb490ea2f45e068475377243228a2ca3efb08d4"
+          target="_blank" rel="noopener">feb490e</a></li>
+      <li><b>修正</b>: 凡例をデータの読み込みを待たずに表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/f48673dbc6bc81f1b7c6be95d8e7560d102b8b9e"
+          target="_blank" rel="noopener">f48673d</a></li>
+      <li><b>修正</b>: 濃さのアイコンを棒グラフ状から水滴に変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/d0a664d739d481a2d52bf485826de429e83812f4"
+          target="_blank" rel="noopener">d0a664d</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月18日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: 国道マップを Web に公開<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/4ab5a599cac0c5cfeccca578a523eb3afa0f2442"
+          target="_blank" rel="noopener">4ab5a59</a></li>
+      <li><b>追加</b>: 高速道路になっている国道を分け、表示を切り替えられるよう機能追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/b3b3c7369222271b0379daa40a506f3849a04c85"
+          target="_blank" rel="noopener">b3b3c73</a></li>
+      <li><b>追加</b>: サイドバーを折りたためるようボタン追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/805c87323dd76a16f4506c59abc451b9ec0427bc"
+          target="_blank" rel="noopener">805c873</a></li>
+      <li><b>追加</b>: 重用ランキングからその区間へ移動できるよう機能追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/a2121c689d3bfb24abab8187adfa77bae9c076c7"
+          target="_blank" rel="noopener">a2121c6</a></li>
+      <li><b>追加</b>: ポップアップの標識を押すと、その路線だけを選択<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/79a137102217830d6a7563f5a2ea41757662be49"
+          target="_blank" rel="noopener">79a1371</a></li>
+      <li><b>追加</b>: favicon と共有カードに国道番号標識を使用<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/ab00090373708c7115df4d4a1c148d6511acc0b5"
+          target="_blank" rel="noopener">ab00090</a></li>
+      <li><b>修正</b>: 未開通の区間を実線で描いていた<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/96783bd82877264815668791818b9805953533c4"
+          target="_blank" rel="noopener">96783bd</a></li>
+      <li><b>修正</b>: 読み込み直すとページ表示が止まることがあった<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/92ef6676c6c7680ff3c9bacc629ed96258934f3e"
+          target="_blank" rel="noopener">92ef667</a></li>
+      <li><b>修正</b>: スクロールバーを暗い配色に対応<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/ab9058934b6c336caf71c2125416d093b9ff74ff"
+          target="_blank" rel="noopener">ab90589</a></li>
+      <li><b>修正</b>: 国道番号標識（おにぎり）の角を実物に合わせて丸める<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/b6a20b46342393b98cafe7d6c4a443e0374cfb16"
+          target="_blank" rel="noopener">b6a20b4</a></li>
+      <li><b>修正</b>: サイドバーの注釈が古かった<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/da40c940a07338614f91e3023b68b6204c89b7dd"
+          target="_blank" rel="noopener">da40c94</a></li>
+      <li><b>修正</b>: ポップアップの「根拠」を「典拠」に変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/052021e39c02827ce239b820ca096b8071e6056d"
+          target="_blank" rel="noopener">052021e</a></li>
+      <li><b>修正</b>: ポップアップの「延長」を「区間長」に変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/4861c0c015dae19d12cd0b4e919b0c3bf6d4d8df"
+          target="_blank" rel="noopener">4861c0c</a></li>
+      <li><b>修正</b>: 路線一覧の文字の選択を無効化<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/bd8362cd83c55d1bdbf40a5f4b73f82e335ab8eb"
+          target="_blank" rel="noopener">bd8362c</a></li>
+      <li><b>追加</b>: クリックされた区間の強調表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/b587cbbbeb9f71353f2636f685fa931b1291f4ef"
+          target="_blank" rel="noopener">b587cbb</a></li>
+      <li><b>修正</b>: 選択中の路線数をボタンに表示<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/5579beb99f8f08e47bc70a769f59b0299af4664b"
+          target="_blank" rel="noopener">5579beb</a></li>
+    </ul>
+  </section>
+
+  <section class="log-day">
+    <h2 class="log-date">2026年8月17日</h2>
+    <ul class="log-items">
+      <li><b>追加</b>: 一般国道の地図を作成<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/4a95919c359b4f2dd0730023fe9fe4e6abc8c251"
+          target="_blank" rel="noopener">4a95919</a></li>
+      <li><b>追加</b>: 対象を全国 47 都道府県へ拡大<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/a846a550c253c99b27067e7bf423cbad0ec6eb2f"
+          target="_blank" rel="noopener">a846a55</a></li>
+      <li><b>追加</b>: 海上国道を破線で描き分け、表示を切り替えられるよう機能追加<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/7e32d64346b5598295d5ca897e3bc76dd4ddcdab"
+          target="_blank" rel="noopener">7e32d64</a></li>
+      <li><b>修正</b>: 重用区間を単独指定の区間より上に描画<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/0742ebca3949929956cbaafd3e1fab728fa6fb48"
+          target="_blank" rel="noopener">0742ebc</a></li>
+      <li><b>修正</b>: 都道府県の選択を廃止し、参照用の一覧を畳んだ状態に変更<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/ab9aef6d03ecd4edfe112b16c940cad4cd3dca5b"
+          target="_blank" rel="noopener">ab9aef6</a></li>
+      <li><b>修正</b>: 「全選択」と未選択時の注記を削除し、ポップアップの外部リンクを修正<a class="log-commit"
+          href="https://github.com/nanase/kokudo-map/commit/64edf2ad5bdc4f94e010abe8e947b020c3f9e5fa"
+          target="_blank" rel="noopener">64edf2a</a></li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

@@ -1230,3 +1230,65 @@ input[type="search"]::placeholder { font-size: .82em; }
      開いているあいだは凡例を隠す。 */
   #app.detail-open #legend-bar { display: none; }
 }
+
+/* 更新履歴のページ --------------------------------------------------------
+   web/changelog.html だけが使う。地図とは別の 1 枚だが、色も書体も余白も上と
+   同じ物を借りる。ここに要るのは読み物としての骨格だけである。
+
+   html, body の height: 100% は地図が画面いっぱいを占めるための指定で、縦に
+   伸びるこのページには合わない。ここだけ解く。 */
+body.changelog { height: auto; }
+.log { max-width: 720px; margin: 0 auto; padding: 26px 20px 64px; }
+.log-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+/* ダイアログの見出し(.sheet h2)と同じ大きさにする。地図から来た人に、同じ
+   ものの続きだと分かる。 */
+.log-head h1 { margin: 0; font-size: 1rem; font-weight: 800; }
+.mini.log-back {
+  text-decoration: none; font-size: .78rem; padding: 5px 10px; flex: 0 0 auto;
+}
+.mini.log-back:hover { border-color: var(--sign-blue); color: var(--sign-blue); }
+
+/* 1 日ぶんが 1 区画。狭い画面では日付を見出しにして、その下へ変更をぶら下げる。
+   広い画面では日付を左の欄へ出し、日付が縦一列に並ぶ形にする(下の @media)。
+   境目の 640px は、日付の欄 8rem を引いても本文が窮屈にならない幅である。 */
+.log-day { padding: 16px 0; border-top: 1px solid var(--line-2); }
+.log-day:first-of-type { border-top: 0; }
+.log-date {
+  margin: 0 0 8px; font-size: .78rem; font-weight: 400;
+  color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
+.log-items {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.log-items > li { color: var(--ink-2); }
+.log-items b { color: var(--ink); font-weight: 700; }
+/* 本文の中のリンク。いまは書体の名前(LINE Seed JP)だけが使う。下の
+   .log-commit と違い、地の文に混ざるので下線で示す。 */
+.log-link { color: var(--sign-blue); text-decoration-thickness: 1px; }
+.log-link:visited { color: var(--sign-blue); }
+.log-link:hover { color: var(--ink); }
+
+/* コミットの短い名前。共有ダイアログの URL 欄と同じ等幅にする。1 字ずつ突き
+   合わせる字だからである。 */
+.log-commit {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: .72em; color: var(--sign-blue); text-decoration: none;
+  border-bottom: 1px solid currentColor; margin-left: .4em;
+  white-space: nowrap;
+}
+.log-commit:visited { color: var(--sign-blue); }
+.log-commit:hover { color: var(--ink); }
+
+@media (min-width: 640px) {
+  .log-day {
+    display: grid; grid-template-columns: 8rem 1fr; gap: 0 20px;
+    align-items: start;
+  }
+  /* 左の欄に移るので、下の余白は要らない。 */
+  .log-date { margin: 0; padding-top: .1em; }
+}
