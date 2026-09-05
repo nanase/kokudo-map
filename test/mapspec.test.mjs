@@ -23,6 +23,7 @@ import {
   PREF_CASING_LAYER,
   PREF_CASING_PHOTO_MAJOR,
   PREF_CLICKABLE_LAYERS,
+  PREF_FILTERED_LAYERS,
   PREF_GENERAL,
   PREF_GENERAL_INK,
   PREF_KIND_DRIVEABLE,
@@ -37,13 +38,13 @@ import {
   prefLabelLayer,
   prefLayers,
   prefLineLayers,
+  resolvedPrefFilter,
   routeLayers,
   routeSources,
   SPECIAL_KINDS,
   shownSystems,
   terminiFilter,
   withKind,
-  withPrefSelection,
 } from '../web/mapspec.mjs';
 
 /** interpolate 式の各段が、元の式の同じ段より一定量だけ大きいことを
@@ -182,35 +183,80 @@ describe('withKind', () => {
   });
 });
 
-describe('withPrefSelection', () => {
-  test('選択が空なら、渡された式をそのまま返す', () => {
-    const base = kindTest(['road']);
-    expect(withPrefSelection(base, [])).toBe(base);
-    expect(withPrefSelection(true, [])).toBe(true);
-  });
-
-  /* キーは県を伴う文字列です。番号は県の中でしか一意でないので、`63` では
-   * 47 本のどれか決まりません(prefroute.mjs)。 */
-  test('選択は県を伴う鍵で any に並べる', () => {
-    expect(withPrefSelection(true, ['nagano-63'])).toEqual([
-      'any',
-      hasRef('nagano-63'),
-    ]);
-  });
-
-  test('層が持っている式には all で重ねる', () => {
-    const base = kindTest(['road']);
-    expect(withPrefSelection(base, ['nagano-63', 'tokyo-18'])).toEqual([
-      'all',
-      base,
-      ['any', hasRef('nagano-63'), hasRef('tokyo-18')],
-    ]);
-  });
-
-  /* 区切り文字で囲む防ぎは国道と同じ式が持ちます。`nagano-6` が
-     `nagano-63` に当たってはなりません。 */
-  test('鍵は区切り文字で囲まれる', () => {
+describe('resolvedPrefFilter', () => {
+  /* 区切り文字で囲む防ぎは国道と同じ式が持つ。`nagano-6` が `nagano-63` に
+   * 当たってはならない。 */
+  test('選択のキーは県を伴い、区切り文字で囲まれる', () => {
     expect(hasRef('nagano-6')).toEqual(['in', ',nagano-6,', ['get', 'refs']]);
+  });
+
+  test('prefBase が true(絞り込み無し)なら、既定の区分の式だけになる', () => {
+    const defaultFilter = kindTest(['road']);
+    expect(resolvedPrefFilter(defaultFilter, true)).toBe(defaultFilter);
+  });
+
+  test('既定の式が true(区分を選ばない層)なら、prefBase だけになる', () => {
+    const prefBase = buildFilter(['nagano-63'], 'off');
+    expect(resolvedPrefFilter(true, prefBase)).toBe(prefBase);
+  });
+
+  test('両方あれば all で重ねる', () => {
+    const defaultFilter = kindTest(['road', 'expressway']);
+    const prefBase = buildFilter(['nagano-63'], 'all', false);
+    expect(resolvedPrefFilter(defaultFilter, prefBase)).toEqual([
+      'all',
+      defaultFilter,
+      prefBase,
+    ]);
+  });
+
+  /* 自動車専用道路トグルが切のとき、既定の区分からさらに外す。国道の roads が
+   * EXCLUDE_FROM_ROADS_LAYER を負で外すのと同じ考えである。 */
+  test('excludeKinds は既定の区分からさらに外す', () => {
+    const defaultFilter = kindTest(['road', 'expressway']);
+    expect(resolvedPrefFilter(defaultFilter, true, ['expressway'])).toEqual([
+      'all',
+      defaultFilter,
+      ['!', kindTest(['expressway'])],
+    ]);
+  });
+});
+
+describe('PREF_FILTERED_LAYERS', () => {
+  const ids = new Set(prefLineLayers().map((l) => l.id));
+  ids.add(prefLabelLayer().id);
+
+  test('絞り込む対象は実在する都道府県道の層である', () => {
+    for (const { id } of PREF_FILTERED_LAYERS) expect(ids.has(id)).toBe(true);
+  });
+
+  test('縁取りと実線は同じ自動車専用道路のトグルに従う', () => {
+    const casing = PREF_FILTERED_LAYERS.find((l) => l.id === PREF_CASING_LAYER);
+    const roads = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-roads');
+    expect(casing.excludeToggle).toBe('expressway');
+    expect(casing.excludeToggle).toBe(roads.excludeToggle);
+    expect(casing.excludeKinds).toEqual(roads.excludeKinds);
+  });
+
+  /* road と expressway を両方描く 1 層なので、自動車専用道路を切っても層ごと
+   * 消してはならない。消すと road まで巻き添えで消え、県道が 1 本も出なくなる
+   * (issue #171 の実装で一度この形の不具合を作った)。 */
+  test('自動車専用道路トグルは pref-roads・pref-casing を層ごと消さない', () => {
+    const casing = PREF_FILTERED_LAYERS.find((l) => l.id === PREF_CASING_LAYER);
+    const roads = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-roads');
+    expect(casing.toggle).toBeUndefined();
+    expect(roads.toggle).toBeUndefined();
+  });
+
+  test('走行不能区間(pref-special)は国道の special・ferry とは別のトグルを持ち、層ごと消える', () => {
+    const special = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-special');
+    expect(special.toggle).toBe('prefSpecial');
+    expect(special.excludeToggle).toBeUndefined();
+  });
+
+  test('路線番号(pref-labels)は国道と同じ labels トグルに従う', () => {
+    const labels = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-labels');
+    expect(labels.toggle).toBe('labels');
   });
 });
 

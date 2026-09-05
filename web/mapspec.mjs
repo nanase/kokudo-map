@@ -171,16 +171,21 @@ export function withKind(base, kinds, negate) {
 }
 
 /**
- * 都道府県道の層が持つ絞り込みに、路線の選択を重ねる。国道の buildFilter に
- * 当たるが、国道が共有の式に区分を足すのに対し、都道府県道は層が区分の式を持つ
- * (prefLineLayers)ので、それを土台にして選択を足す。選択のキーは `nagano-63` の
- * 形で、タイルの `refs` も同じキーを並べるので、検査は hasRef で足りる。空の
- * 選択は「全部出す」で、buildFilter と同じ約束である。
+ * 都道府県道の層 1 つぶんの絞り込み式を、層の既定の区分の式(defaultFilter、
+ * prefLineLayers/prefLabelLayer が持つ `filter`)に、選択・重用・旧道を畳んだ
+ * `prefBase`(buildFilter(prefSelected, conc, former) の戻り値)を重ねて組む。
+ *
+ * 国道は共有の式(buildFilter)に区分を足す(withKind)が、都道府県道は層が区分の
+ * 式を先に持つので順序が逆になる。`excludeKinds` は自動車専用道路のように、
+ * 既定の区分からさらに外したい区分で、切り替えが切のときだけ渡す。
  */
-export function withPrefSelection(base, selected) {
-  if (!selected.length) return base;
-  const any = ['any', ...selected.map(hasRef)];
-  return base === true ? any : ['all', base, any];
+export function resolvedPrefFilter(defaultFilter, prefBase, excludeKinds) {
+  const kindFilter = excludeKinds
+    ? withKind(defaultFilter, excludeKinds, true)
+    : defaultFilter;
+  if (kindFilter === true) return prefBase;
+  if (prefBase === true) return kindFilter;
+  return ['all', kindFilter, prefBase];
 }
 
 /** 何にも当たらない式。層を消さずに隠すのに使う。 */
@@ -808,6 +813,51 @@ export const FILTERED_LAYERS = [
   { id: 'ferry', kinds: KIND_FERRY, negate: false, toggle: 'ferry' },
   { id: 'route-labels', kinds: null, negate: false, toggle: 'labels' },
 ];
+
+/**
+ * 都道府県道の層に、`resolvedPrefFilter` をどう当てるか。国道の
+ * FILTERED_LAYERS に当たるが、都道府県道は層が既定の区分の式を自分で持つので
+ * `kinds`/`negate` の代わりに `excludeKinds`(既定の区分からさらに外す区分)を
+ * 持つ。
+ *
+ * 二つのトグルは効き方が違う。`pref-roads`/`pref-casing` は `road` と
+ * `expressway` の両方を描く 1 層なので、自動車専用道路トグルが切のときは
+ * `excludeToggle` に従って `excludeKinds`(自動車専用道路)だけを外し、`road` は
+ * 残す。層ごと消すと 1 本も都道府県道が出なくなる。一方 `pref-special` は
+ * 走れない区分だけの層なので、`toggle` が切なら層ごと消してよい。走れない区分
+ * (工事中・未開通・徒歩道・階段・航路)は都道府県道側では `pref-special` 1 層に
+ * まとまっており、区分ごとの呼び名も無いので、国道の `special`/`ferry` とは
+ * 別の 1 つのトグル(`prefSpecial`)を持つ。
+ */
+export const PREF_FILTERED_LAYERS = [
+  {
+    id: PREF_CASING_LAYER,
+    excludeKinds: KIND_EXPRESSWAY,
+    excludeToggle: 'expressway',
+  },
+  {
+    id: 'pref-roads',
+    excludeKinds: KIND_EXPRESSWAY,
+    excludeToggle: 'expressway',
+  },
+  { id: 'pref-special', toggle: 'prefSpecial' },
+  { id: 'pref-labels', toggle: 'labels' },
+];
+
+/**
+ * 都道府県道の各層が既定で持つ絞り込み。`resolvedPrefFilter` の土台になる。
+ * app.js(表示に適用)と pipeline/check_expressions.mjs(検査)の両方がここを
+ * 読む。二箇所で組み直すと、`prefLineLayers` の `filter` が変わったときに
+ * 片方だけ古くなる。
+ */
+export const PREF_DEFAULT_FILTERS = new Map(
+  [...prefLineLayers(), prefLabelLayer()]
+    // 影の層は入れない。押されたアークが決めるものなので、系統の表示と一緒に
+    // 戻すと押した印が消える。国道の `picked` を FILTERED_LAYERS が持たないのと
+    // 同じである。
+    .filter((l) => l.id !== PREF_PICKED_LAYER)
+    .map((l) => [l.id, l.filter ?? true]),
+);
 
 export const CLICKABLE_LAYERS = [
   'roads',

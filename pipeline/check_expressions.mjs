@@ -28,10 +28,12 @@ const {
   prefLayers,
   buildFilter,
   withKind,
-  withPrefSelection,
+  resolvedPrefFilter,
   pickedFilter,
   hasRef,
   FILTERED_LAYERS,
+  PREF_DEFAULT_FILTERS,
+  PREF_FILTERED_LAYERS,
   PREF_PICKED_LAYER,
   SPECIAL_KINDS,
   CLICKABLE_LAYERS,
@@ -224,26 +226,39 @@ for (const [selected, conc, showFormer, label] of scenarios) {
   validate(styleWith(filters), `filters validate in the style — ${label}`);
 }
 
-/* 都道府県道の選択も妥当な式でなければならない。選択のキーは `nagano-63` の
- * 文字列で、国道の番号とは型が違う。重ねる先も違う。国道は共有の式に区分を足す
- * のに対し、都道府県道は層が持つ区分の式に選択を足す(mapspec.mjs の
- * withPrefSelection)。画面が組む形をそのまま組む。 */
+/* 都道府県道の選択・重用・旧道も妥当な式でなければならない。選択のキーは
+ * `nagano-63` の文字列で、国道の番号とは型が違う。重ねる先も違う。国道は共有の
+ * 式に区分を足すのに対し、都道府県道は層が持つ区分の式(PREF_DEFAULT_FILTERS)を
+ * 土台にし、選択・重用・旧道を畳んだ式(buildFilter)を重ねる(mapspec.mjs の
+ * resolvedPrefFilter)。画面が組む形(app.js の applyFilters)をそのまま組む。 */
 const prefScenarios = [
-  [[], 'no prefectural selection'],
-  [['nagano-63'], 'single prefectural route'],
-  [['nagano-63', 'tokyo-18'], 'prefectural routes across two prefectures'],
+  [[], 'off', true, true, 'no prefectural selection'],
+  [['nagano-63'], 'off', true, true, 'single prefectural route'],
+  [
+    ['nagano-63', 'tokyo-18'],
+    'all',
+    true,
+    true,
+    'prefectural routes across two prefectures + all concurrency',
+  ],
+  [[], 'off', false, true, 'former hidden, no prefectural selection'],
+  // 自動車専用道路トグルが切。層ごと消すのではなく、pref-roads/pref-casing
+  // から区分だけを外す(app.js の applyFilters)。
+  [[], 'off', true, false, 'expressway toggle off'],
 ];
 
-for (const [selected, label] of prefScenarios) {
-  const prefFilters = {};
-  for (const l of [...prefLineLayers(), prefLabelLayer()]) {
-    const resolved =
-      l.id === PREF_PICKED_LAYER
-        ? pickedFilter(withPrefSelection(true, selected), 1234567)
-        : withPrefSelection(l.filter ?? true, selected);
-    prefFilters[l.id] = resolved;
-    if (PREF_CLICKABLE_LAYERS.includes(l.id)) {
-      prefFilters[hitLayerId(l.id)] = resolved;
+for (const [selected, conc, showFormer, expressway, label] of prefScenarios) {
+  const prefBase = buildFilter(selected, conc, showFormer);
+  const prefFilters = { [PREF_PICKED_LAYER]: pickedFilter(prefBase, 1234567) };
+  for (const { id, excludeKinds, excludeToggle } of PREF_FILTERED_LAYERS) {
+    const resolved = resolvedPrefFilter(
+      PREF_DEFAULT_FILTERS.get(id),
+      prefBase,
+      excludeToggle && !expressway ? excludeKinds : null,
+    );
+    prefFilters[id] = resolved;
+    if (PREF_CLICKABLE_LAYERS.includes(id)) {
+      prefFilters[hitLayerId(id)] = resolved;
     }
   }
   validate(
