@@ -42,6 +42,7 @@ from datetime import datetime, timezone
 import requests
 
 from _paths import CACHE
+from freshness import age_days, is_stale
 from prefectures import Prefectures, assign_docs, report
 from regions import for_region
 
@@ -50,9 +51,6 @@ ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 ]
-
-# 届く範囲で最も新しいミラーがこれより古ければ警告する。
-STALE_AFTER_DAYS = 7
 
 # 一般国道が描かれうる道路の格。`primary` は意図して外す。この地域では、リレー
 # ションに属さない `primary` の way 3,305 本が数字だけの ref を持ち、そのうち
@@ -85,7 +83,6 @@ def probe(ep: str, tries: int = 3) -> tuple[str | None, str | None]:
 
 def pick_endpoint() -> tuple[str, str]:
     print("probing Overpass mirrors for data freshness")
-    now = datetime.now(timezone.utc)
     best: tuple[str, str, float] | None = None
     for ep in ENDPOINTS:
         ts, err = probe(ep)
@@ -93,8 +90,8 @@ def pick_endpoint() -> tuple[str, str]:
         if not ts:
             print(f"  {host:28} unreachable: {err}")
             continue
-        age = (now - datetime.fromisoformat(ts.replace("Z", "+00:00"))).total_seconds()
-        print(f"  {host:28} base={ts}  age={age/86400:.1f} days")
+        age = age_days(ts)
+        print(f"  {host:28} base={ts}  age={age:.1f} days")
         if best is None or age < best[2]:
             best = (ep, ts, age)
 
@@ -103,8 +100,8 @@ def pick_endpoint() -> tuple[str, str]:
 
     ep, ts, age = best
     print(f"  -> using {ep.split('/')[2]} (data of {ts})")
-    if age > STALE_AFTER_DAYS * 86400:
-        print(f"  WARNING: freshest available data is {age/86400:.1f} days old; "
+    if is_stale(age):
+        print(f"  WARNING: freshest available data is {age:.1f} days old; "
               f"recent road openings will be missing.")
     return ep, ts
 
