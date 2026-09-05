@@ -1278,7 +1278,7 @@ body.changelog { height: auto; }
 .log-commit {
   font-family: ui-monospace, Consolas, monospace;
   font-size: .72em; color: var(--sign-blue); text-decoration: none;
-  border-bottom: 1px solid currentColor; margin-left: .4em;
+  border-bottom: 1px solid currentcolor; margin-left: .4em;
   white-space: nowrap;
 }
 .log-commit:visited { color: var(--sign-blue); }
