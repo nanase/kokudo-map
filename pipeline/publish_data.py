@@ -34,26 +34,36 @@ from regions import REGIONS
 BUCKET = "kokudo-map-data"
 
 # 閲覧側が取る物ちょうど。index.html や app.js はリポジトリと一緒に運ばれる。
-# 生成されるのはこれだけである。
 #
 # 国道と都道府県道でアーカイブが分かれているのは #100 の判断である。
 # 分けてあると、県道を直したときに上げ直すのは 100 MB の側だけで済み、国道の
-# 55.9 MB は動かない。県ごとの meta が 47 個あるのも同じ理由で、画面が最初に読む
-# JSON を増やさずに、県を選んだときにその県のぶんだけを取らせるためである。
+# 55.9 MB は動かない。
+#
+# pref/ 配下は個別に名指ししない。pack_web_pref.mjs が県別 meta 47 本の他に
+# index.json・summary.json を書いており、あるファイルを一方にだけ足すと、
+# もう一方が暗黙のうちに古くなる(#171、summary.json が上がらず本番が 404 に
+# なった)。pref/ に置かれた JSON は全部が閲覧側の取る物なので、列挙せず
+# glob で拾う。
 FILES = [
     "national-routes.pmtiles",
     "national.meta.json",
     "regions.json",
     "prefectural-routes.pmtiles",
-    # 全国の県と番号だけの索引。選択パネルが番号で絞り込むために 1 度だけ読む。
-    # 県別 meta 47 本(3.29 MB)を読ませずに済ませるためのもので、pack_web_pref が
-    # 作る。glob は *.meta.json なので、これは名指しで挙げる。
-    "pref/index.json",
 ]
+
+# pack_web_pref.mjs が pref/ へ必ず書く、県別 meta 以外のファイル。glob だけでは
+# 「本当は書かれるはずが欠けている」を検出できないので、存在をここで名指しして
+# 確かめる。
+REQUIRED_PREF_FILES = ["index.json", "summary.json"]
+
+
+def pref_files() -> list[str]:
+    """web/data/pref/ に在る物すべて。R2 でも同じ `pref/` の下に置く。"""
+    return sorted(f"pref/{p.name}" for p in (DATA / "pref").glob("*.json"))
 
 
 def pref_metas() -> list[str]:
-    """web/data/pref/ に在る県ごとの meta。R2 でも同じ `pref/` の下に置く。"""
+    """web/data/pref/ に在る県ごとの meta。県の揃い数を数えるためだけに使う。"""
     return sorted(f"pref/{p.name}" for p in (DATA / "pref").glob("*.meta.json"))
 
 
@@ -79,7 +89,10 @@ def preflight() -> None:
     if shutil.which("bun") is None:
         sys.exit("bun が見つからない。mise install で入るはずである。")
 
-    missing = [f for f in FILES if not (DATA / f).is_file()]
+    missing = [
+        f for f in FILES + [f"pref/{name}" for name in REQUIRED_PREF_FILES]
+        if not (DATA / f).is_file()
+    ]
     if missing:
         sys.exit(
             f"web/data/ に {', '.join(missing)} が無い。先に `mise run pack` を実行する。"
@@ -110,7 +123,7 @@ def main() -> None:
     sys.stdout.reconfigure(errors="replace")
     preflight()
 
-    for name in FILES + pref_metas():
+    for name in FILES + pref_files():
         path = DATA / name
         size = path.stat().st_size
         print(f"  {name}  {size / 1e6:.1f} MB  を上げる")
