@@ -275,7 +275,7 @@ body {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
 }
-/* 節の見出しは、小さく・太く・字を離した帯である。等幅にしない。等幅を頼むと
+/* 区画の見出しは、小さく・太く・字を離した帯である。等幅にしない。等幅を頼むと
    日本語の字だけが端末の代替書体へ落ち、同じ 1 行の中で書体が二つになる。帯の
    見た目は字の大きさ・太さ・letter-spacing が作る。
 
@@ -305,7 +305,7 @@ body {
   flex: 1; min-width: 0; margin-bottom: 0; padding-left: 28px;
 }
 
-/* 畳んだ節 --------------------------------------------------------------
+/* 畳んだ区画 --------------------------------------------------------------
    「国道マップについて」の但し書きが使う。開く前から場所を取る理由が無く、
    畳んだままでも見出しが中身の見当を示す。 */
 .fold > summary {
@@ -416,7 +416,7 @@ input[type="search"]::placeholder { font-size: .82em; }
 }
 .rl-group { display: flex; flex-direction: column; gap: 4px; }
 .rl-group[hidden] { display: none; }
-/* 群の名前。節の見出し(.pane-hd h2)より一段小さく、同じ帯の言葉で書く。 */
+/* 群の名前。区画の見出し(.pane-hd h2)より一段小さく、同じ帯の言葉で書く。 */
 .rl-head {
   font-size: .6rem; font-weight: 700; letter-spacing: .1em; color: var(--ink-3);
   padding-left: 2px;
@@ -646,7 +646,7 @@ input[type="search"]::placeholder { font-size: .82em; }
   display: grid; grid-template-columns: max-content 1fr;
   gap: 1px 10px; font-size: .68rem; line-height: 1.55;
 }
-/* データ基準以下との区切りとわかる程度の余白。 */
+/* 更新日時以下との区切りとわかる程度の余白。 */
 .freshness { margin: 8px 0 0; }
 .stats dt, .freshness dt { color: var(--ink-3); }
 .stats dd, .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
@@ -781,13 +781,15 @@ input[type="search"]::placeholder { font-size: .82em; }
   right: auto; left: calc(100% + 8px);
   width: 300px; max-width: calc(100vw - 64px);
 }
-/* 節の中は見出しと中身が一組。節どうしの間はポップオーバーの gap が空ける。 */
+/* 区画の中は見出しと中身が一組。区画どうしの間はポップオーバーの gap が
+   空ける。 */
 .map-popover > section { display: flex; flex-direction: column; gap: 9px; }
-/* 幅に余裕がある窓では上段に短い三節、下段に「表示」だけを置く。「表示」は
+/* 幅に余裕がある窓では上段に短い三区画、下段に「表示」だけを置く。「表示」は
    項目が 6 つあり頭一つ抜けて長い。560px は中が崩れない実測の下限。
 
    ここは「表示」だけの話である。.map-popover 全体に書いていたころ、左上の
-   三つまで 3 列の格子にされ、節を一つしか持たないそれらが grid-template-areas
+   三つまで 3 列の格子にされ、区画を一つしか持たないそれらが
+   grid-template-areas
    の外へ落ちて崩れていた。 */
 @media (min-width: 560px) {
   #display-popover {
@@ -949,10 +951,10 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* Wikipedia の W。字体は自前で配る EB Garamond が持ち、後ろの三つは届くまでの
    繋ぎである。寸法は svg 側の viewBox・textLength と目で合わせてある(detail.mjs
    の WIKIPEDIA_ICON)。印だけ 17px にしてある。他の印は線で引いた図で 15px でも
-   形が残るが、これは字なので同じ 15px では小さく見え、隣の漏斗と
+   形が残るが、これは字なので同じ 15px では小さく見え、隣の絞り込みアイコンと
    釣り合わない。 */
-/* 「この路線だけ表示」が押されている状態。操作パネルに都道府県道の節が無いので
-   (#109)、絞っていることを示す場所がこのボタンのほかに無い。 */
+/* 「この路線だけ表示」が押されている状態。操作パネルに都道府県道の区画が
+   無いので(#109)、絞っていることを示す場所がこのボタンのほかに無い。 */
 .detail-only.active {
   background: var(--sign-blue); color: var(--panel); border-color: var(--sign-blue);
 }
@@ -1053,23 +1055,23 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* 数が届くまでのあいだ、と読めなかったとき。 */
 .detail-wait { margin: 0; font-size: .78rem; color: var(--ink-3); }
 
-/* 複数の都道府県にわたる路線の節 --------------------------------------------
-   パネルの中でこの節だけが地の色を持つ。県境の向こうまで同じ道であることは、
-   重用や交差より強い関わりで、それが読まなくても分かる。ほかの節(.detail-kinds
-   と .detail-rel)は見出しと中身を並べるだけで、器を持たない。 */
+/* 複数の都道府県にわたる路線の区画 --------------------------------------------
+   パネルの中でこの区画だけが地の色を持つ。県境の向こうまで同じ道であることは、
+   重用や交差より強い関わりで、それが読まなくても分かる。ほかの区画
+   (.detail-kinds と .detail-rel)は見出しと中身を並べるだけで、器を持たない。 */
 .detail-cont {
   display: flex; flex-direction: column; gap: 7px;
   padding: 10px 11px 11px;
   background: var(--panel-2);
   border: 1px solid var(--line-2); border-radius: 4px;
 }
-/* まとめて表示しているあいだ。漏斗は 15px しかなく、地図の上でパネルは
-   0.62 倍に見えるのでそこでは 9px になる。効いていることを述べるのは面の
-   ほうである。 */
+/* まとめて表示しているあいだ。絞り込みアイコンは 15px しかなく、地図の上で
+   パネルは 0.62 倍に見えるのでそこでは 9px になる。効いていることを述べるのは
+   面のほうである。 */
 .detail-cont.on { border-color: var(--sign-blue); }
-/* 見出しと合算延長を両端に振り分ける。合算延長は節が述べている 2〜4 本ぶんの
+/* 見出しと合算延長を両端に振り分ける。合算延長は区画が述べている 2〜4 本ぶんの
    数で、路線 1 本の数を並べる .detail-stats とは別の量である。だから統計の
-   <dl> には足さず、この節の右上に置く。書体・色・右揃え・等幅数字は
+   <dl> には足さず、この区画の右上に置く。書体・色・右揃え・等幅数字は
    .detail-stats の dd と揃える。 */
 .cont-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .cont-head .detail-sub { flex: 1 1 auto; }
@@ -1081,21 +1083,22 @@ input[type="search"]::placeholder { font-size: .82em; }
 .cont-name {
   font-size: .82rem; font-weight: 600; color: var(--ink); line-height: 1.4;
 }
-/* カードの行。右端に漏斗が付く。何を絞るのかは、隣に並んだカードが述べる。 */
+/* チップの行。右端に絞り込みアイコンが付く。何を絞るのかは、隣に並んだ
+   チップが述べる。 */
 .cont-row { display: flex; align-items: flex-start; gap: 8px; }
 .cont-chips {
   display: flex; flex-wrap: wrap; gap: 5px;
   flex: 1 1 auto; min-width: 0; padding-top: 1px;
 }
-/* 節の漏斗。カードが増えても縮まない。地はカードと同じ --panel にして、節の
-   地(--panel-2)から立たせる。
+/* 区画の絞り込みアイコン。チップが増えても縮まない。地はチップと同じ
+   --panel にして、区画の地(--panel-2)から立たせる。
    押していないときだけ塗るのは、押した状態の色を .detail-only.active 一箇所に
    残すためである。詳細度が同じで後ろに在るぶん、ここで無条件に塗ると青地を
-   打ち消し、白地に白い漏斗が乗って印が消える。 */
+   打ち消し、白地に白い絞り込みアイコンが乗って印が消える。 */
 .cont-row .icon-btn { flex: 0 0 auto; }
 .cont-row .icon-btn:not(.active) { background: var(--panel); }
-/* 相手のカード。.shield-btn の骨格を借りるので、line-height: 0 と
-   display: block を打ち消してから中身を並べる。地は節の地(--panel-2)より
+/* 相手のチップ。.shield-btn の骨格を借りるので、line-height: 0 と
+   display: block を打ち消してから中身を並べる。地は区画の地(--panel-2)より
    明るくして、押せる物として立たせる。 */
 .cont-chip {
   display: inline-flex; align-items: center; gap: 5px; line-height: 1.6;
@@ -1129,7 +1132,8 @@ input[type="search"]::placeholder { font-size: .82em; }
   display: flex; align-items: center; justify-content: space-between;
 }
 .sheet h2 { margin: 0; font-size: 1rem; font-weight: 800; }
-/* 節の見出し。操作パネルの h2 と同じ小さな大文字の帯で、同じものだと分かる。 */
+/* 区画の見出し。操作パネルの h2 と同じ小さな大文字の帯で、同じものだと
+   分かる。 */
 .sheet h3 {
   margin: 0 0 8px; font-size: .7rem; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase; color: var(--ink-3);
@@ -1140,7 +1144,7 @@ input[type="search"]::placeholder { font-size: .82em; }
    出典はここに無い。地図の上の表示が一度だけ示している。 */
 #about-dialog { width: min(480px, 92vw); }
 .about-lead { margin: 0; font-size: .82rem; color: var(--ink-2); }
-/* 考え方の但し書き。三つとも .fold で畳み、見出しだけを常に見せる。データ基準
+/* 考え方の但し書き。三つとも .fold で畳み、見出しだけを常に見せる。更新日時
    (.freshness)と同じ字の大きさにしてある。 */
 .notes { display: flex; flex-direction: column; gap: 8px; }
 .notes .fold > summary { min-height: 0; font-size: .78rem; font-weight: 600; color: var(--ink); }

@@ -334,7 +334,7 @@ const continuations = groups.map((g, i) => {
 /* 群が満たすことを、meta へ書く前に確かめる。破れたときに黙って嘘を出させない
  * ためである。
  *
- * 1. 2 県以上にまたがる。1 県で閉じた群は、節の見出し(`複数の都道府県にわたる
+ * 1. 2 県以上にまたがる。1 県で閉じた群は、区画の見出し(`複数の都道府県にわたる
  *    路線`)が言っていることと違う
  * 2. 番号が揃わない群の名前は、群の全員が way 名として名乗っている。
  *    リレーション名は片側の番号しか保証しない(issue #162)
@@ -348,7 +348,7 @@ for (const c of continuations) {
   if (prefs.size < 2)
     throw new Error(
       `群 ${c.refs.join(' ')} が ${[...prefs]} だけで閉じている。` +
-        '県境をまたがない群は、節の見出しが言っていることと違う。',
+        '県境をまたがない群は、区画の見出しが言っていることと違う。',
     );
   if (!c.name || oneNumber(c.refs)) continue;
   if (!c.refs.every((k) => namesOf.get(k)?.has(c.name)))

@@ -205,7 +205,7 @@ print(f"NOTE  decree termini located {located}/{len(sides)}, "
 # 確かめられるのは、これが交差の表であり続けることである。1 行に別々の実在する
 # 路線番号が二つ、同じ行は一度だけ、そしてアークを共有する組は決して入らない。
 # 最後の一つが、この表が引こうとしている区別そのものである。同じアークに載る組は
-# 重用であり、それは組み合わせ表が既に持ち、パネルも別の節で出している。両方に
+# 重用であり、それは組み合わせ表が既に持ち、パネルも別の区画で出している。両方に
 # 出る行は、同じ事実を、食い違いうる二箇所で二度述べることになる。
 crossings = meta.get("crossings", [])
 check(bool(crossings), f"the crossing table is present and not empty ({len(crossings)} pairs)")

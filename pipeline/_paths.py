@@ -28,7 +28,7 @@ DECREE = ROOT / "build" / "decree"
 # 参照。
 SURVEY = ROOT / "build" / "survey"
 
-# 地域ごとの GeoJSON と meta。中間成果であって配信物ではない。全国では
+# 地域ごとの GeoJSON と meta。中間成果であって配信データではない。全国では
 # 47 ファイル約 70 MB になり、閲覧側は代わりに詰めたタイルを読む。
 REGIONS = ROOT / "build" / "regions"
 

@@ -712,10 +712,10 @@ describe('syncDetailOnly — 開いているパネルの名乗り', () => {
   });
 });
 
-/* 県境で続く路線の群をまとめて選ぶ(#155)。ここが捕まえるのは、二つの漏斗が
- * 同じ `state.prefSelected` を奪い合う場面です。見出しの漏斗で 1 本に絞った
- * 後も節が押されたまま残る、あるいはその逆が起きると、画面が地図と違うことを
- * 言います。 */
+/* 県境で続く路線の群をまとめて選ぶ(#155)。ここが捕まえるのは、二つの絞り込み
+ * アイコンが同じ `state.prefSelected` を奪い合う場面です。見出しの絞り込み
+ * アイコンで 1 本に絞った後も区画が押されたまま残る、あるいはその逆が起きる
+ * と、画面が地図と違うことを言います。 */
 describe('まとめて表示 — 群の選択', () => {
   // 長野県と東京都は setup() の prefLabels に居ます。末尾が 県 と 都 なので
   // 数え方も「2都県」になり、県だけでは言えない群の形も一緒に通ります。
@@ -748,7 +748,7 @@ describe('まとめて表示 — 群の選択', () => {
     expect(isOnlyGroup(state.prefSelected, state.selected, GROUP)).toBe(false);
   });
 
-  /* 国道 18 号と長野県道18号を選んでいる画面は 3 本を描いています。そこで節が
+  /* 国道 18 号と長野県道18号を選んでいる画面は 3 本を描いています。そこで区画が
    * 「解除」と名乗ってはなりません。1 本のときの isOnly と同じ約束です。 */
   test('もう一方の系統が残っていれば押した状態ではない', () => {
     const { document, state, applyFilters } = setup();
@@ -762,9 +762,9 @@ describe('まとめて表示 — 群の選択', () => {
     expect(isOnlyGroup(state.prefSelected, state.selected, [])).toBe(false);
   });
 
-  /* 狭いほうが後から勝ちます。群を表示している間に見出しの漏斗を押せば、
-   * その 1 本に絞れます。 */
-  test('見出しの漏斗を押すと 1 本に絞れ、節は押した状態でなくなる', () => {
+  /* 狭いほうが後から勝ちます。群を表示している間に見出しの絞り込みアイコンを
+   * 押せば、その 1 本に絞れます。 */
+  test('見出しの絞り込みアイコンを押すと 1 本に絞れ、区画は押した状態でなくなる', () => {
     const { document, state, applyFilters } = setup();
     togglePrefGroup(document, state, GROUP, applyFilters);
     togglePrefOnly(document, state, 'nagano-18', applyFilters);
@@ -773,7 +773,7 @@ describe('まとめて表示 — 群の選択', () => {
     expect(isOnlyGroup(state.prefSelected, state.selected, GROUP)).toBe(false);
   });
 
-  test('節の漏斗を押すと群へ広がる', () => {
+  test('区画の絞り込みアイコンを押すと群へ広がる', () => {
     const { document, state, applyFilters } = setup();
     togglePrefOnly(document, state, 'nagano-18', applyFilters);
     togglePrefGroup(document, state, GROUP, applyFilters);
@@ -800,7 +800,7 @@ describe('まとめて表示 — 群の選択', () => {
   });
 });
 
-describe('syncDetailOnly — 節の漏斗', () => {
+describe('syncDetailOnly — 区画の絞り込みアイコン', () => {
   const GROUP = ['nagano-18', 'tokyo-18'];
   const CONT = { refs: GROUP, name: '甲乙線', km: 12.3, src: 'both' };
   const openWithGroup = (doc, { selected = false, groupSelected = false }) => {
@@ -822,7 +822,7 @@ describe('syncDetailOnly — 節の漏斗', () => {
   const headFunnel = (doc) => doc.querySelector('.detail-acts .detail-only');
   const box = (doc) => doc.querySelector('.detail-cont');
 
-  test('節の漏斗は群を名指し、数え方から名乗る', () => {
+  test('区画の絞り込みアイコンは群を名指し、数え方から名乗る', () => {
     const { document } = setup();
     openWithGroup(document, {});
     expect(contFunnel(document).dataset.prefs).toBe(GROUP.join(','));
@@ -831,7 +831,7 @@ describe('syncDetailOnly — 節の漏斗', () => {
     );
   });
 
-  test('押した状態は漏斗と節の枠の両方に出る', () => {
+  test('押した状態は絞り込みアイコンと区画の枠の両方に出る', () => {
     const { document } = setup();
     openWithGroup(document, { groupSelected: true });
     expect(contFunnel(document).classList.contains('active')).toBe(true);
@@ -842,9 +842,9 @@ describe('syncDetailOnly — 節の漏斗', () => {
     expect(box(document).classList.contains('on')).toBe(true);
   });
 
-  /* 選択が他所で変わったときも追随します。✕ で解いた後に節だけが押されたまま
+  /* 選択が他所で変わったときも追随します。✕ で解いた後に区画だけが押されたまま
    * 残ると、地図と画面が違うことを言います。 */
-  test('✕ で解いたら節も戻る', () => {
+  test('✕ で解いたら区画も戻る', () => {
     const { document, state, applyFilters } = setup();
     togglePrefGroup(document, state, GROUP, applyFilters);
     openWithGroup(document, { groupSelected: true });
@@ -868,9 +868,10 @@ describe('syncDetailOnly — 節の漏斗', () => {
     expect(box(document).classList.contains('on')).toBe(true);
   });
 
-  /* 二つの漏斗は排他ではありません。どちらも同じ `state.prefSelected` を見る
-   * ので、狭いほうを押せば広いほうが自動的に「押していない」に戻ります。 */
-  test('見出しの漏斗で 1 本に絞ると、節だけが戻る', () => {
+  /* 二つの絞り込みアイコンは排他ではありません。どちらも同じ
+   * `state.prefSelected` を見るので、狭いほうを押せば広いほうが自動的に
+   * 「押していない」に戻ります。 */
+  test('見出しの絞り込みアイコンで 1 本に絞ると、区画だけが戻る', () => {
     const { document, state, applyFilters } = setup();
     togglePrefGroup(document, state, GROUP, applyFilters);
     openWithGroup(document, { groupSelected: true });
@@ -883,7 +884,7 @@ describe('syncDetailOnly — 節の漏斗', () => {
     expect(box(document).classList.contains('on')).toBe(false);
   });
 
-  test('節を持たないパネルでも落ちない', () => {
+  test('区画を持たないパネルでも落ちない', () => {
     const { document, state, applyFilters } = setup();
     document.querySelector('#detail-body').innerHTML = prefDetailHTML({
       region: 'nagano',

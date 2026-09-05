@@ -18,7 +18,7 @@ import { DATA, PREFECTURAL, REGIONS, ROOT } from './_paths.mjs';
 const { GSI_TILES } = await import(
   pathToFileURL(join(ROOT, 'web', 'mapspec.mjs')).href
 );
-// 同じ理由で detail.mjs も import する。パネルの三つの節は meta の三つの欄に
+// 同じ理由で detail.mjs も import する。パネルの三つの区画は meta の三つの欄に
 // 対する規則で、その写しをここに置けば、ページが走らせている規則を検査しなく
 // なる。detailHTML は、下の旧道の検査が期待する行を本物の整形規則(fmtKm と、
 // formerRowHTML の「0.0 なら行を出さない」)で組むために使う。
@@ -902,8 +902,8 @@ if (!target) {
    * 画面が使う関数をそのまま呼ぶ。
    *
    * 交差の表(`crossings`)は pack_web.mjs が書く。古い web/data には無く、
-   * 無ければ交差の節が出ないのが正しいので、meta がその欄を持つこと自体もここで
-   * 言う。 */
+   * 無ければ交差の区画が出ないのが正しいので、meta がその欄を持つこと自体も
+   * ここで言う。 */
   ok(
     Array.isArray(meta.crossings) && meta.crossings.length > 0,
     `the meta carries the crossing table (${meta.crossings?.length ?? 0} pairs)`,
@@ -1353,10 +1353,10 @@ for (const ref of [10, 4]) {
   );
 }
 
-// --- 複数の都道府県にわたる路線の節 ----------------------------------------
-/* 節が読む `continuations` は pack_web_pref.mjs が書く。書く側と読む側が同じ
+// --- 複数の都道府県にわたる路線の区画 ----------------------------------------
+/* 区画が読む `continuations` は pack_web_pref.mjs が書く。書く側と読む側が同じ
  * 名前を指しているかは、実データを通してしか分からない。名前が食い違っても例外
- * は出ず、節が出ないだけである(#64 の起終点がまさにそれで、欄はあるのに空の
+ * は出ず、区画が出ないだけである(#64 の起終点がまさにそれで、欄はあるのに空の
  * ままだった)。だから meta が持つ群と、画面に出た文字を直接突き合わせる。
  *
  * 見出しの数え方(「3県」「3都県」「2府」)も書き写さない。ページが呼ぶ
@@ -1521,7 +1521,7 @@ for (const ref of [10, 4]) {
           );
 
           /* カードは押せる。押せばその県の詳細に開き直る。群は相互なので、
-           * 開いた先の節には必ず元の路線が居る。 */
+           * 開いた先の区画には必ず元の路線が居る。 */
           const other = want[0];
           await page.click(`.cont-chip[data-pref="${other}"]`);
           await settle();
@@ -1539,9 +1539,10 @@ for (const ref of [10, 4]) {
           );
           await page.screenshot({ path: shot('8-continuation') });
 
-          /* 節の漏斗は群をまとめて地図に残す(#155)。「だけ」は文字どおりで、
-           * 押した後の地図に残るのは群の全員だけであり、国道は消える。押した
-           * 路線のパネルは開いたままで、解除する口もそこにある。 */
+          /* 区画の絞り込みアイコンは群をまとめて地図に残す(#155)。「だけ」
+           * は文字どおりで、押した後の地図に残るのは群の全員だけであり、
+           * 国道は消える。押した路線のパネルは開いたままで、解除する口も
+           * そこにある。 */
           const drawn = () =>
             page.evaluate(() => ({
               pref: window.map

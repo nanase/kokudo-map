@@ -172,9 +172,9 @@ def build_region(region: str, skip_verify: bool) -> tuple[str, list[str]]:
 
     # revoked は検証ではなくデータそのものなので、--skip-verify でも飛ばさない。
     # この後のパックは --skip-verify の有無に関係なく走るので、ここを飛ばすと
-    # revoked が反映されないデータが配信物になる(CodeRabbit のレビュー)。N13 側
-    # の障害(ネットワーク・KSJ 側の不具合)はこの県だけの失敗として扱い、他県の
-    # 続行は止めない。build_routes.py の失敗とは別扱いである。
+    # revoked が反映されないデータが配信データになる(CodeRabbit のレビュー)。
+    # N13 側の障害(ネットワーク・KSJ 側の不具合)はこの県だけの失敗として
+    # 扱い、他県の続行は止めない。build_routes.py の失敗とは別扱いである。
     code, out = run(["uv", "run", str(HERE / "apply_n13.py"), region])
     bad = outcome("apply_n13.py", code, out)
 
@@ -265,9 +265,9 @@ def main() -> None:
     if no_pack:
         return
 
-    # 台帳の起点・終点は地域ごとの端点を読むので、判定の後・結合の前に置く。
+    # 政令上の起点・終点は地域ごとの端点を読むので、判定の後・結合の前に置く。
     # pack_web.mjs はこれが無いと meta を書けないので、失敗はここで止める。
-    stage("台帳 — 政令の別表から起点・終点を取り込む",
+    stage("政令の起終点 — 政令の別表から取り込む",
           ["uv", "run", str(HERE / "decree.py")])
     # 47 県ぶんの GeoJSON、結合した特徴量、タイルのピラミッド全体がここで同時に
     # 生きている。既定のヒープでは足りず、実測では 640 MB で通り、512 MB で
