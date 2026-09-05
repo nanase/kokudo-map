@@ -351,8 +351,10 @@ export function wireControls(doc, state, applyFilters) {
     $(id).addEventListener('change', (e) => {
       state[key] = e.target.checked;
       // 影の層は種別で絞っていない。押されているアークを地図から外す切り替え
-      // があると、そのままでは道の無い影だけが下地図の上に残る。
+      // があると、そのままでは道の無い影だけが下地図の上に残る。国道・都道府県道
+      // どちらに効くトグルも増えたので、両方の押した状態を戻す。
       state.picked = null;
+      state.prefPicked = null;
       applyFilters();
     });
   toggle('#t-national', 'national');
@@ -363,6 +365,7 @@ export function wireControls(doc, state, applyFilters) {
   toggle('#t-special', 'special');
   toggle('#t-ferry', 'ferry');
   toggle('#t-former', 'former');
+  toggle('#t-pref-special', 'prefSpecial');
 }
 
 /**

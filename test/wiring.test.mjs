@@ -62,6 +62,7 @@ function setup(routes = ROUTES) {
     listNational: true,
     listPref: true,
     picked: null,
+    prefPicked: null,
     conc: 'off',
     labels: true,
     termini: true,
@@ -71,6 +72,7 @@ function setup(routes = ROUTES) {
     former: true,
     national: true,
     pref: true,
+    prefSpecial: true,
   };
   const applyCalls = [];
   const applyFilters = () => {
@@ -467,9 +469,10 @@ describe('wireControls — 重用区間', () => {
 });
 
 describe('wireControls — 表示のトグル', () => {
-  test('表示のトグルが state を変え、state.picked を null に戻す', () => {
+  test('表示のトグルが state を変え、state.picked と state.prefPicked を null に戻す', () => {
     const { document, window, state } = setup();
     state.picked = 12345;
+    state.prefPicked = 67890;
 
     const t = document.querySelector('#t-labels');
     t.checked = false;
@@ -477,9 +480,12 @@ describe('wireControls — 表示のトグル', () => {
 
     expect(state.labels).toBe(false);
     expect(state.picked).toBeNull();
+    // labels は都道府県道の pref-labels にも効くので、県道側の影も戻す
+    // (issue #171)。
+    expect(state.prefPicked).toBeNull();
   });
 
-  test('8 つのトグルすべてが自分のキーだけを変える', () => {
+  test('9 つのトグルすべてが自分のキーだけを変える', () => {
     const { document, window, state } = setup();
     const cases = [
       ['#t-national', 'national'],
@@ -489,6 +495,7 @@ describe('wireControls — 表示のトグル', () => {
       ['#t-special', 'special'],
       ['#t-ferry', 'ferry'],
       ['#t-former', 'former'],
+      ['#t-pref-special', 'prefSpecial'],
     ];
     for (const [id, key] of cases) {
       const el = document.querySelector(id);

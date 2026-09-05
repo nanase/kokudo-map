@@ -379,7 +379,7 @@ describe('relatedRoutesOf', () => {
     expect(refsOfGroup('conc')).toContain(19);
     expect(refsOfGroup('termini')).not.toContain(19);
     expect(refsOfGroup('cross')).not.toContain(19);
-    // 292 は起終点を共有し、かつ交差もしています。
+    // 292 は起終点が重なり、かつ交差もしています。
     expect(refsOfGroup('cross')).not.toContain(292);
   });
 
@@ -394,7 +394,7 @@ describe('relatedRoutesOf', () => {
   });
 
   test('関わりの無い区画は出さない', () => {
-    // 248 は起終点を共有するだけで、重用も交差もしていません。
+    // 248 は起終点が重なるだけで、重用も交差もしていません。
     expect(relatedRoutesOf(meta, 248).map((g) => g.key)).toEqual(['termini']);
     expect(relatedRoutesOf(meta, 999)).toEqual([]);
   });

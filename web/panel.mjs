@@ -43,12 +43,36 @@ export const routeListHTML = (routes) =>
     .join('');
 
 /* ------------------------------------------------------------------ 集計 --- */
-/** 「国道マップについて」が出す四つの数。選択が空なら全部を意味する。 */
-export const statsHTML = (selectedCount, totalRoutes, { arcs, km, conc }) =>
+/**
+ * 「データ情報」が出す四つの数。選択が空なら全部を意味する。国道と都道府県道の
+ * 両方が使うが、都道府県道の重用は都道府県道どうしの本数で、国道との重複を
+ * 含まない(#pref-concurrency が同じことを述べている)ので、`concLabel` だけは
+ * 呼び出す側が分ける。国道と同じ「重用アーク」と書くと、同じ数え方だと誤って
+ * 読める。
+ */
+export const statsHTML = (
+  selectedCount,
+  totalRoutes,
+  { arcs, km, conc },
+  concLabel = '重用アーク',
+) =>
   `<dt>選択路線</dt><dd>${selectedCount || totalRoutes} / ${totalRoutes}</dd>` +
   `<dt>対象アーク</dt><dd>${arcs.toLocaleString()}</dd>` +
   `<dt>延長</dt><dd>${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</dd>` +
-  `<dt>重用アーク</dt><dd>${conc.toLocaleString()}</dd>`;
+  `<dt>${concLabel}</dt><dd>${conc.toLocaleString()}</dd>`;
+
+/**
+ * 都道府県道側の四つの数。国道の statsHTML の薄いラッパーで、`concLabel` だけを
+ * 差し替える。`{ arcs, km, conc }` は pref/summary.json の値で、pack_web_pref.mjs
+ * が web/aggregate.mjs の statsFor と同じ数え方で全県分を集計した物である。
+ */
+export const prefStatsHTML = (selectedCount, totalRoutes, totals) =>
+  statsHTML(
+    selectedCount,
+    totalRoutes,
+    totals,
+    '重用アーク（都道府県道どうし）',
+  );
 
 /**
  * 選択解除のボタンのラベル。どれだけ取り消すかを示すので、選択数を出す場所が
