@@ -14,10 +14,10 @@ import json
 import re
 import sys
 from collections import Counter
-from datetime import datetime, timezone
 
 from _paths import CACHE, REGIONS
 from expectations import for_region
+from freshness import STALE_AFTER_DAYS, age_days
 from regions import REGIONS as REGION_BOXES
 
 region = sys.argv[1] if len(sys.argv) > 1 else "nagano"
@@ -212,18 +212,18 @@ revoked_not_former = [
 check(not revoked_not_former,
       f"revoked arcs are a subset of former ({len(revoked_not_former)} counterexamples)")
 
-# 新しさは記録されていなければならず、データが気付かれないまま古びていても
-# ならない。
+# 新しさは記録されていなければならない。古さそのものはミラーの都合で珍しく
+# ないので、検証は落とさず警告にとどめる(issue #179)。NOTE ではなく WARNING に
+# するのは、fetch_osm.py・extract_pbf.py が同じ古さを既にその語で警告しており、
+# 揃えたほうが「気にすべき事実」だと伝わるからである。
 check(
     bool(meta.get("osm_timestamp")),
     f"OSM data timestamp is recorded ({meta.get('osm_timestamp')})",
 )
 if meta.get("osm_timestamp"):
-    age_days = (
-        datetime.now(timezone.utc)
-        - datetime.fromisoformat(meta["osm_timestamp"].replace("Z", "+00:00"))
-    ).days
-    check(age_days <= 7, f"OSM data is {age_days} days old (threshold 7)")
+    age = age_days(meta["osm_timestamp"])
+    if age > STALE_AFTER_DAYS:
+        print(f"WARNING  OSM data is {age:.1f} days old (over {STALE_AFTER_DAYS})")
 
 # 名前を持ち、在って指定もされていなければならない道。長野南バイパスは、無いと
 # 報告のあった事例である。国道19号で、開通から数十年経つのに、どのルートリレー

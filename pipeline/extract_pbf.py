@@ -41,6 +41,7 @@ from datetime import datetime, timezone
 import osmium
 
 from _paths import CACHE, PBF
+from freshness import STALE_AFTER_DAYS, age_days
 from regions import REGIONS, named_regions
 
 # 生成が読む way のタグはこれだけである。残りを保つとメモリが三倍になる。正典は
@@ -414,12 +415,11 @@ def main() -> None:
     wanted = named_regions(args)
 
     base_ts = read_header(path)
-    age = (datetime.now(timezone.utc)
-           - datetime.fromisoformat(base_ts.replace("Z", "+00:00"))).total_seconds()
+    age = age_days(base_ts)
     print(f"pbf: {path}")
-    print(f"data base: {base_ts}  age={age / 86400:.1f} days")
-    if age > 7 * 86400:
-        print("  WARNING: over 7 days old; verify.py will fail on freshness.")
+    print(f"data base: {base_ts}  age={age:.1f} days")
+    if age > STALE_AFTER_DAYS:
+        print(f"  WARNING: over {STALE_AFTER_DAYS} days old.")
 
     rels, _ = pass_relations(path)
     national = [rid for rid, r in rels.items() if is_national_relation(r["tags"])]
