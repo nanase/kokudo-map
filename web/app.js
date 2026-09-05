@@ -1807,6 +1807,9 @@ let prefSummaryPending = null;
 function loadPrefSummary() {
   if (prefSummaryPending) return prefSummaryPending;
   state.prefSummaryFailed = false;
+  // 取得を始めた直後にも描き直す。呼ばないと、初回は #pref-stats が空のまま、
+  // 失敗からの取り直しは前回の失敗表示のまま、取得が終わるまで残る。
+  if (state.meta) updateStats();
   prefSummaryPending = fetch(dataURL('pref/summary.json'))
     .then((r) => {
       if (!r.ok) throw new Error(`pref/summary.json: ${r.status}`);
