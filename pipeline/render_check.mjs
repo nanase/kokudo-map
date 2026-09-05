@@ -135,6 +135,23 @@ const settle = () =>
     SETTLE_CAP_MS,
   );
 
+/* 都道府県道の区画を開く openPrefDetail() はクリックを待たず、県別 meta を
+ * 非同期に取ってから detailBody を書き直す(app.js)。settle() が待つのは
+ * 地図の idle だけで、これは押した直後の仮の中身が padding を当てて出す idle
+ * であり、meta が届いた後の描き直しを待たない。だから idle が先に来た回、
+ * まだ仮の中身しか無いところを検査してしまう(#174)。
+ *
+ * meta が届けば区画に必ず現れる `.detail-cont` を、描き直しの完了そのものの
+ * 合図にする。現れなければ本物の不具合なので、待たずに元の assertion へ
+ * 渡して FAIL させる。上限は settle() と同じにする — 待ちの長さの決まりを
+ * 二箇所に置かないため。 */
+const settlePrefDetail = async () => {
+  await page
+    .waitForSelector('.detail-cont', { timeout: SETTLE_CAP_MS })
+    .catch(() => {});
+  await settle();
+};
+
 // 国土地理院は描く物が無い場所にラスタタイルを置かないので、大海原へ引くと 404
 // が返る。下地図が設計どおりに動いている姿で、海上国道の検査は意図してそこへ
 // 行く。それ以外の失敗した要求は本物の不具合なので、URL 付きで報告する。
@@ -1481,7 +1498,7 @@ for (const ref of [10, 4]) {
         await page.mouse.click(hit.x, hit.y);
         await settle();
         await page.click(`.maplibregl-popup .shield-btn[data-pref="${key}"]`);
-        await settle();
+        await settlePrefDetail();
         const shown = await page.evaluate(() => {
           const el = document.querySelector('.detail-cont');
           if (!el) return null;
@@ -1524,7 +1541,7 @@ for (const ref of [10, 4]) {
            * 開いた先の区画には必ず元の路線が居る。 */
           const other = want[0];
           await page.click(`.cont-chip[data-pref="${other}"]`);
-          await settle();
+          await settlePrefDetail();
           const back = await page.evaluate(
             (self) =>
               document.querySelectorAll(
