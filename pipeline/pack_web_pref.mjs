@@ -40,6 +40,7 @@ import {
   groupsOf,
   pickName,
   relationRouteName,
+  routeNameOf,
   sharedRouteName,
 } from './rollup.mjs';
 import { bboxOf, unionBbox, writeTiles } from './tiles.mjs';
@@ -128,7 +129,12 @@ const metas = [];
 const endpoints = new Map();
 const busy = new Set();
 /* 路線ごとの延長と、way が名乗った名前。どちらも組み合わせ表から足す。群の
- * 合算延長と路線名がここから出る。 */
+ * 合算延長と路線名がここから出る。
+ *
+ * 名前は `routeNameOf` で前置きを外してから積む。ここで外しておけば、路線名を
+ * 選ぶ側(`sharedRouteName`)と、選んだ名前を全員が名乗っているか確かめる側の
+ * どちらもが、同じ綴りを見る。meta に出る `combinations[].names` は OSM の
+ * 綴りのままで、こちらは触らない。 */
 const kmOf = new Map();
 const namesOf = new Map();
 /* 全国の番号だけの索引。県別 meta は路線の集計が丸ごと入って 47 本で 3.54 MB
@@ -243,7 +249,10 @@ for (const region of regions) {
         names = new Map();
         namesOf.set(key, names);
       }
-      for (const n of c.names) names.set(n, (names.get(n) ?? 0) + 1);
+      for (const n of c.names) {
+        const s = routeNameOf(n);
+        names.set(s, (names.get(s) ?? 0) + 1);
+      }
     }
 
   totalArcs += mine.length;
@@ -335,8 +344,8 @@ const continuations = groups.map((g, i) => {
    * (issue #162)。番号が揃わない群は way 名の一致だけを根拠にする。 */
   const by = oneNumber(g.refs) ? relNameOf.get(i) : undefined;
   const relName = by ? pickName(by) : null;
-  // リレーション名を優先し、無ければ way 名に落とす。両方を持つ 294 群のうち
-  // 291 群で一致する。どちらも無い 41 群では欄そのものを出さない。名前が無い
+  // リレーション名を優先し、無ければ way 名に落とす。両方を持つ 295 群のうち
+  // 292 群で一致する。どちらも無い 34 群では欄そのものを出さない。名前が無い
   // ことを理由に群を落とすことはしない。
   const name = relName ?? sharedRouteName(g.refs, namesOf);
   return {
