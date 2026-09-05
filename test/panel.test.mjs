@@ -218,7 +218,7 @@ describe('sharedHTML', () => {
 
   test('押すと何が起きるかを aria-label で伝える', () => {
     expect(sharedHTML([point])).toContain(
-      'aria-label="国道7・8・17号が起終点を共有する地点(北緯37.9100・東経139.0500)を地図で表示"',
+      'aria-label="国道7・8・17号の起終点が重なる地点(北緯37.9100・東経139.0500)を地図で表示"',
     );
   });
 
@@ -510,7 +510,7 @@ describe('freshnessHTML', () => {
     }
   });
 
-  test('区間の更新と取得元も述べる', () => {
+  test('区間の更新日と取得元も述べる', () => {
     const html = freshnessHTML(meta, at('2026-08-16T21:00:00Z'));
     expect(html).toContain('2009-08-14 〜 2026-08-16');
     expect(html).toContain('Geofabrik');

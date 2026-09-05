@@ -70,7 +70,7 @@ OSM だけを見ていても分かりません。参照データが必要です�
   - former 孤立候補は `region all` (`mise run compare-n13 all`) で出す
     - 地理院地図で指定解除済みかもしれない旧道のこと
     - 全国横断・重複排除・クラスタ単位。CASES.md 25 を参照
-  - 指定解除の機械確認は `pipeline/apply_n13.py` がビルドの一段として自動で行う
+  - 指定解除の機械確認は `pipeline/apply_n13.py` がビルドの一工程として自動で行う
     - 結果は `revoked` プロパティに書く(issue #9・RULES.md 旧道)
     - `compare_n13.py` はここでも読み取り専用。書き込みは `apply_n13.py` だけが行う
 - 道路統計年報 表 8(一般国道、全国計)

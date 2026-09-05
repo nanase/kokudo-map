@@ -85,7 +85,7 @@ def preflight() -> None:
             f"web/data/ に {', '.join(missing)} が無い。先に `mise run pack` を実行する。"
         )
     # 県が 1 つでも欠けた状態で上げない。欠けた県の路線はアーカイブにも入らない
-    # のに、R2 には前回の meta が残る。半分だけの配信物は、揃った物と見分けが
+    # のに、R2 には前回の meta が残る。半分だけの配信データは、揃った物と見分けが
     # 付かない。ここは配る直前の最後の関門なので、ここで数える。
     have = {name[len("pref/"):-len(".meta.json")] for name in pref_metas()}
     if have != set(REGIONS):

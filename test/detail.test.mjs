@@ -1,8 +1,8 @@
-/* 一つの国道の詳細パネルの中身。壊れやすいのは、区分別の距離(#58)・台帳の起終点
- * (#59)・旧道の距離(#84)が組み合わせ表と meta の欄が揃って初めて埋まることで、
- * 欄が無いときに出さないことと来たときに出すことの両方を検査します。もう
- * 一つは、地名が政令から来るとはいえ文字列を innerHTML に流す点はポップアップと
- * 同じであることです。
+/* 一つの国道の詳細パネルの中身。壊れやすいのは、区分別の距離(#58)・政令上の
+ * 起終点(#59)・旧道の距離(#84)が組み合わせ表と meta の欄が揃って初めて埋まる
+ * ことで、欄が無いときに出さないことと来たときに出すことの両方を検査します。
+ * もう一つは、地名が政令から来るとはいえ文字列を innerHTML に流す点は
+ * ポップアップと同じであることです。
  */
 import { describe, expect, test } from 'bun:test';
 
@@ -370,7 +370,7 @@ describe('relatedRoutesOf', () => {
     expect(refsOfGroup('cross')).toEqual([406]);
   });
 
-  test('同じ番号は最も強い関わりの節にだけ出す', () => {
+  test('同じ番号は最も強い関わりの区画にだけ出す', () => {
     // 19 は重用も起終点の共有も交差もしています。三つ全部に並べると、同じ
     // 標識が三度出るだけで、読む人が知ることは増えません。
     const groups = relatedRoutesOf(meta, 18);
@@ -379,7 +379,7 @@ describe('relatedRoutesOf', () => {
     expect(refsOfGroup('conc')).toContain(19);
     expect(refsOfGroup('termini')).not.toContain(19);
     expect(refsOfGroup('cross')).not.toContain(19);
-    // 292 は起終点を共有し、かつ交差もしています。
+    // 292 は起終点が重なり、かつ交差もしています。
     expect(refsOfGroup('cross')).not.toContain(292);
   });
 
@@ -393,15 +393,15 @@ describe('relatedRoutesOf', () => {
     }
   });
 
-  test('関わりの無い節は出さない', () => {
-    // 248 は起終点を共有するだけで、重用も交差もしていません。
+  test('関わりの無い区画は出さない', () => {
+    // 248 は起終点が重なるだけで、重用も交差もしていません。
     expect(relatedRoutesOf(meta, 248).map((g) => g.key)).toEqual(['termini']);
     expect(relatedRoutesOf(meta, 999)).toEqual([]);
   });
 
   test('欄そのものが無い meta でも落ちない', () => {
     // crossings は後から入った欄です。それより前に作った web/data が配られた
-    // ままでも、交差の節が出ないだけで他の節は出ます。
+    // ままでも、交差の区画が出ないだけで他の区画は出ます。
     const old = { ...meta, crossings: undefined };
     expect(relatedRoutesOf(old, 18).map((g) => g.key)).toEqual([
       'conc',
@@ -426,7 +426,7 @@ describe('detailHTML — 関わりのある国道', () => {
     expect(detailHTML({ route: route() })).not.toContain('detail-rel');
   });
 
-  test('節の見出しと標識を出す', () => {
+  test('区画の見出しと標識を出す', () => {
     const html = detailHTML({ route: route(), related });
     expect(html).toContain('重用する国道');
     expect(html).toContain('交差する国道');
@@ -484,7 +484,7 @@ describe('prefWikipediaURL', () => {
 
 describe('relatedRoutesOf — 都道府県道', () => {
   /* pack_web_pref.mjs が県ごとに書く二つの欄です。`shared_termini`
-   * はありません。都道府県道には全国 1 枚の起終点の台帳がないためです。 */
+   * はありません。都道府県道には全国 1 枚の起終点の表がないためです。 */
   const meta = {
     combinations: [
       { refs: ['nagano-60'], n: 1, km: 20 },
@@ -516,7 +516,7 @@ describe('relatedRoutesOf — 都道府県道', () => {
     expect(pick('cross')).not.toContain('nagano-399');
   });
 
-  test('起終点の節は出ない。県別 meta がその欄を持たない', () => {
+  test('起終点の区画は出ない。県別 meta がその欄を持たない', () => {
     expect(groups.map((g) => g.key)).toEqual(['conc', 'cross']);
   });
 
@@ -560,7 +560,7 @@ describe('prefDetailHTML', () => {
     expect(full()).toContain(`href="${prefWikipediaURL('長野県', 60)}"`);
   });
 
-  /* 操作パネルに都道府県道の節は無いので、選んでいることを示す場所も解除する
+  /* 操作パネルに都道府県道の区画は無いので、選んでいることを示す場所も解除する
    * 操作も、このボタンのほかにありません(#109)。 */
   test('「だけを表示」は県を伴う鍵を持つ', () => {
     expect(full({ region: 'nagano' })).toContain(
@@ -593,7 +593,7 @@ describe('prefDetailHTML', () => {
     expect(full({ region: 'nagano', failed: true })).toContain('detail-only');
   });
 
-  test('起終点は出さない。都道府県道に全国 1 枚の台帳が無い', () => {
+  test('起終点は出さない。都道府県道に全国 1 枚の起終点の表が無い', () => {
     expect(full()).not.toContain('detail-termini');
   });
 
@@ -664,7 +664,7 @@ describe('prefDetailHTML', () => {
   });
 });
 
-/* 県境で続く路線の節(#155・#162)。数え方は例外表を持たない規則なので、
+/* 県境で続く路線の区画(#155・#162)。数え方は例外表を持たない規則なので、
  * 都・道・府・県 の組み合わせを全部当てられます。567 群のうち 136 群は「県」
  * だけでは言えないので、ここが崩れると 4 分の 1 の群が嘘の見出しを持ちます。 */
 describe('continuationCountOf', () => {
@@ -728,7 +728,7 @@ describe('continuationOf', () => {
     expect(continuationOf(meta, 'nagano-152')).toBeNull();
   });
 
-  /* 欄は後から入りました。古い web/data を配ったままでも、節が出ないだけで
+  /* 欄は後から入りました。古い web/data を配ったままでも、区画が出ないだけで
    * 壊れてはいけません。`crossings` と同じ事情です。 */
   test('欄を持たない meta でも落ちない', () => {
     expect(continuationOf({}, 'nagano-1')).toBeNull();
@@ -736,7 +736,7 @@ describe('continuationOf', () => {
   });
 });
 
-describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
+describe('prefDetailHTML — 複数の都道府県にわたる区画', () => {
   const prefLabels = new Map([
     ['nagano', '長野県'],
     ['aichi', '愛知県'],
@@ -804,7 +804,7 @@ describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
     ).toContain('>4県にわたる都道府県道</span>');
   });
 
-  test('合算延長は節が持つ。統計の <dl> は県別の値のまま', () => {
+  test('合算延長は区画が持つ。統計の <dl> は県別の値のまま', () => {
     const html = panel('nagano', 1, NAGANO1);
     expect(html).toContain('あわせて 91.4 km');
     // 県別の延長は 45.0 km です。両方が同じ画面に出ますが、置き場所が違います。
@@ -831,7 +831,7 @@ describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
     expect(html).not.toContain('cont-name');
   });
 
-  test('相手のカードは県名を伴い、押せばその県の詳細に開き直る', () => {
+  test('相手のチップは県名を伴い、押せばその県の詳細に開き直る', () => {
     const html = panel('nagano', 1, NAGANO1);
     expect(html).toContain('data-pref="aichi-1"');
     expect(html).toContain('data-pref="shizuoka-1"');
@@ -842,20 +842,20 @@ describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
     expect(html).toContain('class="shield-btn cont-chip"');
   });
 
-  /* カードに並ぶ鍵。`refs` には自分自身も入っているので、外して並べます。
+  /* チップに並ぶ鍵。`refs` には自分自身も入っているので、外して並べます。
    * 自分の標識は見出しに出ています。 */
   const chipsOf = (html) =>
     [...html.matchAll(/cont-chip" data-pref="([^"]+)"/g)].map((m) => m[1]);
 
-  test('自分自身はカードに出さない。標識は見出しに出ている', () => {
+  test('自分自身はチップに出さない。標識は見出しに出ている', () => {
     const html = panel('nagano', 1, NAGANO1);
     expect(chipsOf(html)).toEqual(['aichi-1', 'shizuoka-1']);
-    // 見出しの「だけを表示」は自分を名指します。カードと同じ属性を使うので、
-    // 「出ていない」はパネル全体ではなくカードの中で言います。
+    // 見出しの「だけを表示」は自分を名指します。チップと同じ属性を使うので、
+    // 「出ていない」はパネル全体ではなくチップの中で言います。
     expect(html).toContain('class="icon-btn detail-only" data-pref="nagano-1"');
   });
 
-  test('カードは meta の並び(番号順・県名順)のまま出す', () => {
+  test('チップは meta の並び(番号順・県名順)のまま出す', () => {
     expect(
       chipsOf(
         panel('tochigi', 9, {
@@ -868,8 +868,8 @@ describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
   });
 
   /* 県境の向こうまで同じ道であることは、一点で交わることより強い関わりです。
-   * 節の順もそう並べます。 */
-  test('関わりの節より前に来る', () => {
+   * 区画の順もそう並べます。 */
+  test('関わりの区画より前に来る', () => {
     const html = panel('nagano', 1, NAGANO1);
     expect(html.indexOf('detail-cont')).toBeGreaterThan(-1);
     expect(html.indexOf('detail-cont')).toBeLessThan(
@@ -877,17 +877,18 @@ describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
     );
   });
 
-  /* 見出しのボタンだけを数えます。節の中にも漏斗が居る(#155)ので、パネル全体を
-   * 数えると節が出たかどうかで答えが変わってしまいます。 */
+  /* 見出しのボタンだけを数えます。区画の中にも絞り込みアイコンが居る(#155)
+   * ので、パネル全体を数えると区画が出たかどうかで答えが変わってしまいます。 */
   const headButtons = (html) =>
     html.slice(0, html.indexOf('</header>')).match(/class="icon-btn/g)
       ?.length ?? 0;
 
-  test('群に入らない路線では節そのものが出ない', () => {
+  test('群に入らない路線では区画そのものが出ない', () => {
     const html = panel('nagano', 152, null);
     expect(html).not.toContain('detail-cont');
     expect(html).not.toContain('にわたる都道府県道');
-    // 見出しのボタンの数は変わりません。Wikipedia と漏斗の二つのままです。
+    // 見出しのボタンの数は変わりません。Wikipedia と絞り込みアイコンの二つの
+    // ままです。
     expect(headButtons(html)).toBe(2);
   });
 
@@ -895,7 +896,7 @@ describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
     expect(headButtons(panel('nagano', 1, NAGANO1))).toBe(2);
   });
 
-  test('数が届く前は節も出ない', () => {
+  test('数が届く前は区画も出ない', () => {
     const html = prefDetailHTML({
       region: 'nagano',
       prefLabel: '長野県',
@@ -908,8 +909,8 @@ describe('prefDetailHTML — 複数の都道府県にわたる節', () => {
   });
 });
 
-/* 節の漏斗(#155)。見出しの漏斗と同じ部品で、鍵が群になり名乗りが変わるだけ
- * です。絵も押した状態の持ち方も同じにしてあります。 */
+/* 区画の絞り込みアイコン(#155)。見出しの絞り込みアイコンと同じ部品で、鍵が群
+ * になり名乗りが変わるだけです。絵も押した状態の持ち方も同じにしてあります。 */
 describe('onlyButtonHTML — 群', () => {
   const GROUP = ['aichi-1', 'nagano-1', 'shizuoka-1'];
   const btn = (over) =>
@@ -933,7 +934,7 @@ describe('onlyButtonHTML — 群', () => {
     );
   });
 
-  test('押した状態の持ち方は見出しの漏斗と同じである', () => {
+  test('押した状態の持ち方は見出しの絞り込みアイコンと同じである', () => {
     expect(btn()).toContain('class="icon-btn detail-only"');
     expect(btn()).toContain('aria-pressed="false"');
     expect(btn({ selected: true })).toContain(
@@ -942,9 +943,10 @@ describe('onlyButtonHTML — 群', () => {
     expect(btn({ selected: true })).toContain('aria-pressed="true"');
   });
 
-  /* 絵は変えません。範囲は絵ではなく置き場所が述べます。見出しの漏斗の隣には
-   * 標識と路線名があり、節の漏斗の隣には相手のカードがあります。 */
-  test('絵は見出しの漏斗と同じである', () => {
+  /* 絵は変えません。範囲は絵ではなく置き場所が述べます。見出しの絞り込み
+   * アイコンの隣には標識と路線名があり、区画の絞り込みアイコンの隣には相手の
+   * チップがあります。 */
+  test('絵は見出しの絞り込みアイコンと同じである', () => {
     const one = onlyButtonHTML({ ref: 18 });
     const icon = one.slice(one.indexOf('<svg'), one.indexOf('</button>'));
     expect(btn()).toContain(icon);

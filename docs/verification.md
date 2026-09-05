@@ -5,7 +5,7 @@
 | スクリプト | 何を見るか |
 | --- | --- |
 | `verify.py` | 地域ごとの整合性と既知の事実 |
-| `verify_national.py` | 結合後にしか答えられないこと。番号の漏れ、集計の突合、配信物、台帳の起終点 |
+| `verify_national.py` | 結合後にしか答えられないこと。番号の漏れ、集計の突合、配信データ、政令上の起終点 |
 | `check_expressions.mjs` | 式とスタイルが MapLibre 仕様に適合するか |
 | `render_check.mjs` | Chromium で実際に描画されるか。47 県ぶん確かめる |
 | `compare_sources.py` | Overpass 由来の基準と pbf 由来の生成物を突き合わせる |

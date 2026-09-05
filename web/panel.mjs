@@ -152,11 +152,11 @@ export const sharedHTML = (rows) =>
   rows.length
     ? rows
         .map((t) => {
-          // 同じ路線の組が離れた土地で複数回起終点を共有することがあり
+          // 同じ路線の組が離れた土地で複数回起終点が重なることがあり
           // (全国データで 32 組)、refs だけでは行を跨いで aria-label が
           // 重複する。座標を足して行ごとに一意にする。
           const label =
-            `${routeLabel(t.refs)}が起終点を共有する地点` +
+            `${routeLabel(t.refs)}の起終点が重なる地点` +
             `(北緯${t.lat.toFixed(4)}・東経${t.lon.toFixed(4)})を地図で表示`;
           return (
             `<button type="button" class="row" data-refs="${t.refs.join(',')}" ` +
@@ -311,7 +311,7 @@ export const legendKindHTML = () =>
  */
 export const PREF_CONCURRENCY_NOTES = [
   {
-    head: '表示されている重用部分は一部です',
+    head: '表示されている重用区間は一部です',
     body:
       '道路統計年報に記載の重用延長 11,562.9 km に対し、国道マップで表示して' +
       'いるのは 9,187.5 km（79.5%）です。',
@@ -342,7 +342,7 @@ export const prefConcurrencyHTML = () =>
       `<span>${esc(n.body)}</span></details>`,
   ).join('');
 
-/* ------------------------------------------------------------ データ基準 --- */
+/* -------------------------------------------------------------- 更新日時 --- */
 const utc = (d) =>
   `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-` +
   `${String(d.getUTCDate()).padStart(2, '0')} ${String(d.getUTCHours()).padStart(2, '0')}:` +
@@ -364,11 +364,11 @@ export function freshnessHTML(meta, now = Date.now()) {
   const ageText =
     ageDays <= 0 ? '当日' : ageDays === 1 ? '1 日前' : `${ageDays} 日前`;
   return (
-    '<dt>データ基準</dt>' +
+    '<dt>更新日時</dt>' +
     `<dd>${utc(base)}（${ageText}）</dd>` +
     '<dt>更新の間隔</dt>' +
     '<dd>不定期</dd>' +
-    '<dt>区間の更新</dt>' +
+    '<dt>区間の更新日</dt>' +
     `<dd>${esc(meta.oldest_edit)} 〜 ${esc(meta.newest_edit)}</dd>` +
     '<dt>OSM 取得元</dt>' +
     `<dd>${esc(meta.endpoints.join(' / '))}</dd>`

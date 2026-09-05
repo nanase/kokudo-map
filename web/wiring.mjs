@@ -114,9 +114,10 @@ export function applyRouteFilter(doc, state) {
  * 片方が暗黙のうちに古くなる。
  */
 export function syncDetailOnly(doc, state) {
-  // パネルには漏斗が二つ在ることがある。見出しの「この 1 本だけ」と、県境で
-  // 続く路線の節の「まとめて」である(#155)。どちらかだけを合わせると、
-  // 見出しの漏斗で 1 本に絞った後も節が押されたまま残る。
+  // パネルには絞り込みアイコンが二つ在ることがある。見出しの「この 1 本だけ」
+  // と、県境で続く路線の区画の「まとめて」である(#155)。どちらかだけを
+  // 合わせると、見出しの絞り込みアイコンで 1 本に絞った後も区画が押されたまま
+  // 残る。
   for (const btn of doc.querySelectorAll('#detail-body .detail-only')) {
     const { selected, html } = onlyStateOf(btn, state);
     const box = doc.createElement('div');
@@ -125,13 +126,13 @@ export function syncDetailOnly(doc, state) {
     for (const { name, value } of box.firstElementChild.attributes) {
       btn.setAttribute(name, value);
     }
-    // 節の漏斗は面も一緒に染める。漏斗は 15px しかなく、地図の上でパネルは
-    // 0.62 倍に見えるので、そこでは 9px になる。
+    // 区画の絞り込みアイコンは面も一緒に染める。絞り込みアイコンは 15px しか
+    // なく、地図の上でパネルは 0.62 倍に見えるので、そこでは 9px になる。
     btn.closest('.detail-cont')?.classList.toggle('on', selected);
   }
 }
 
-/** その漏斗が名指している物と、いまの選択から見た押した状態。 */
+/** その絞り込みアイコンが名指している物と、いまの選択から見た押した状態。 */
 function onlyStateOf(btn, state) {
   const labelOf = (key) => state.prefLabels.get(prefRegionOf(key)) ?? '';
   const group = btn.dataset.prefs;
@@ -226,18 +227,18 @@ export function clearSelection(doc, state, applyFilters) {
 }
 
 /**
- * いまこの群だけに絞っているか。詳細パネルの漏斗が押された状態かどうかの答え
- * である。一覧から余分に選んでいるあいだは押されていない(そこで押せば
- * 「だけ」になり、解除にはならない)。詳細パネルの描画(app.js)と下の三つの
- * トグルが同じ関数に聞く。
+ * いまこの群だけに絞っているか。詳細パネルの絞り込みアイコンが押された状態か
+ * どうかの答えである。一覧から余分に選んでいるあいだは押されていない(そこで
+ * 押せば「だけ」になり、解除にはならない)。詳細パネルの描画(app.js)と下の
+ * 三つのトグルが同じ関数に聞く。
  *
  * 両系統ぶん数える。国道 63 号と長野県道 63 号を選んでいる画面は 2 本を
  * 描いており、そこで国道のボタンが「解除」と名乗ってはならない。
  *
- * 群を表示している間に見出しの漏斗を押せば、その 1 本に絞れる(#155)。狭いほうが
- * 後から勝ち、そのとき群の側は自動的に「押していない」に戻る。二つの状態を
- * `state.prefSelected` 一つが持ち、ここはそこに群が全部入っているかを見るだけ
- * だからである。
+ * 群を表示している間に見出しの絞り込みアイコンを押せば、その 1 本に絞れる
+ * (#155)。狭いほうが後から勝ち、そのとき群の側は自動的に「押していない」に
+ * 戻る。二つの状態を `state.prefSelected` 一つが持ち、ここはそこに群が全部
+ * 入っているかを見るだけだからである。
  *
  * 空の群では答えない。何も選んでいない画面が「その空の群だけを表示している」に
  * なってしまう。
