@@ -135,15 +135,16 @@ def kept_tags(tags) -> dict[str, str]:
 def read_header(path: str) -> str:
     """切り出した時刻を、OSM の基準時刻として返す。
 
-    verify.py はデータが 1 週間以内であることを求め、ページはそれを データ基準
-    として出す。pbf も Overpass のミラーと同じことを述べねばならない。
+    verify.py はこの時刻が記録されていることだけを求め、古さは警告にとどめる
+    (pipeline/freshness.py)。ページはこれをデータ基準として出すので、pbf も
+    Overpass のミラーと同じことを述べねばならない。
     """
     header = osmium.io.Reader(path, osmium.osm.osm_entity_bits.NOTHING).header()
     ts = header.get("osmosis_replication_timestamp") or header.get("timestamp")
     if not ts:
         raise SystemExit(
             f"{path} carries no osmosis_replication_timestamp; its base time is "
-            "unknown and verify.py could not check freshness"
+            "unknown and verify.py could not confirm osm_timestamp is recorded"
         )
     return ts
 
