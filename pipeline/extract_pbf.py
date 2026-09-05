@@ -41,6 +41,7 @@ from datetime import datetime, timezone
 import osmium
 
 from _paths import CACHE, PBF
+from freshness import STALE_AFTER_DAYS, age_days, is_stale
 from regions import REGIONS, named_regions
 
 # 生成が読む way のタグはこれだけである。残りを保つとメモリが三倍になる。正典は
@@ -134,15 +135,16 @@ def kept_tags(tags) -> dict[str, str]:
 def read_header(path: str) -> str:
     """切り出した時刻を、OSM の基準時刻として返す。
 
-    verify.py はデータが 1 週間以内であることを求め、ページはそれを データ基準
-    として出す。pbf も Overpass のミラーと同じことを述べねばならない。
+    verify.py はこの時刻が記録されていることだけを求め、古さは警告にとどめる
+    (pipeline/freshness.py)。ページはこれをデータ基準として出すので、pbf も
+    Overpass のミラーと同じことを述べねばならない。
     """
     header = osmium.io.Reader(path, osmium.osm.osm_entity_bits.NOTHING).header()
     ts = header.get("osmosis_replication_timestamp") or header.get("timestamp")
     if not ts:
         raise SystemExit(
             f"{path} carries no osmosis_replication_timestamp; its base time is "
-            "unknown and verify.py could not check freshness"
+            "unknown and verify.py could not confirm osm_timestamp is recorded"
         )
     return ts
 
@@ -414,12 +416,11 @@ def main() -> None:
     wanted = named_regions(args)
 
     base_ts = read_header(path)
-    age = (datetime.now(timezone.utc)
-           - datetime.fromisoformat(base_ts.replace("Z", "+00:00"))).total_seconds()
+    age = age_days(base_ts)
     print(f"pbf: {path}")
-    print(f"data base: {base_ts}  age={age / 86400:.1f} days")
-    if age > 7 * 86400:
-        print("  WARNING: over 7 days old; verify.py will fail on freshness.")
+    print(f"data base: {base_ts}  age={age:.1f} days")
+    if is_stale(age):
+        print(f"  WARNING: over {STALE_AFTER_DAYS} days old.")
 
     rels, _ = pass_relations(path)
     national = [rid for rid, r in rels.items() if is_national_relation(r["tags"])]

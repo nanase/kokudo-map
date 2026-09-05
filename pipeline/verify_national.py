@@ -27,12 +27,12 @@ import math
 import sys
 from collections import Counter
 from itertools import combinations
-from datetime import datetime, timezone
 
 from pmtiles.reader import MmapSource, Reader
 
 from _paths import DATA, REGIONS
 from expectations import ROUTE_EXTENTS
+from freshness import STALE_AFTER_DAYS, age_days, is_stale
 
 VALID = (set(range(1, 59)) | set(range(101, 508))) - {109, 110, 111, 214, 215, 216}
 
@@ -226,15 +226,18 @@ crossing_routes = {r for p in crossings for r in p}
 print(f"NOTE  crossings {len(crossings):,} pairs over {len(crossing_routes)} routes; "
       f"concurrent pairs {len(concurrent_pairs):,}")
 
-# --- 新しさ ----------------------------------------------------------------
+# --- 新しさ ------------------------------------------------------------------
+# 記録されていることだけを検証で確かめる。古さそのものはミラーの都合で珍しく
+# ないので、検証は落とさず警告にとどめる(issue #179)。NOTE ではなく WARNING に
+# するのは verify.py と同じ理由による。
 check(
     bool(meta.get("osm_timestamp")),
     f"OSM data timestamp is recorded ({meta.get('osm_timestamp')})",
 )
 if meta.get("osm_timestamp"):
-    age = (datetime.now(timezone.utc)
-           - datetime.fromisoformat(meta["osm_timestamp"].replace("Z", "+00:00"))).days
-    check(age <= 7, f"OSM data is {age} days old (threshold 7)")
+    age = age_days(meta["osm_timestamp"])
+    if is_stale(age):
+        print(f"WARNING  OSM data is {age:.1f} days old (over {STALE_AFTER_DAYS})")
 
 # --- ブラウザが落としてくるアーカイブ --------------------------------------
 # アーカイブの何箇所にタイルを求めるか。読み戻して何も無いアーカイブを捕まえる
