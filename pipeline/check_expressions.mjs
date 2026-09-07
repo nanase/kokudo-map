@@ -13,7 +13,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { REGIONS, ROOT } from './_paths.mjs';
+import { PREFECTURAL, REGIONS, ROOT } from './_paths.mjs';
 
 // 相対の深さを決め打ちせず、ROOT からのパスで import する。
 const {
@@ -51,7 +51,8 @@ const spec = require('@maplibre/maplibre-gl-style-spec');
  * 1 節はスタイルと絞り込み式が MapLibre の仕様に適合するかを訊く。
  * コードについての問いなので、CI がデータの無い clone で走らせられる。2 節から
  * 5 節は同じ式を実データのアークで評価し、素の JavaScript と突き合わせる。
- * 地域が生成済みであることを要求する。
+ * その地域が build/regions と build/prefectural の両方に生成済みであることを
+ * 要求する。
  *
  * `--spec-only` は前半だけを求める。付けないときのデータ不足はエラーであって、
  * 検査を減らして済ませることではない。生成済みの木で自分の作業を確かめている
@@ -63,6 +64,9 @@ const REGION = args.find((a) => !a.startsWith('--')) || 'nagano';
 
 let geo = null;
 let meta = null;
+// 都道府県道は別の木に生成される(pipeline/_paths.mjs の PREFECTURAL)。国道と
+// 同じ形の GeoJSON なので、同じ突き合わせをそのまま回せる。
+let prefGeo = null;
 if (SPEC_ONLY) {
   console.log('--spec-only: 仕様の検査だけを行う(データを読まない)');
 } else {
@@ -81,7 +85,24 @@ if (SPEC_ONLY) {
     );
     process.exit(1);
   }
-  console.log(`region: ${REGION} (${meta.label})`);
+  try {
+    prefGeo = JSON.parse(
+      readFileSync(join(PREFECTURAL, `${REGION}.geojson`), 'utf8'),
+    );
+  } catch {
+    console.error(
+      `build/prefectural/ に ${REGION} が無い。
+` +
+        '  作る:      mise run build-pref\n' +
+        '  仕様だけ:  bun run check --spec-only',
+    );
+    process.exit(1);
+  }
+  console.log(
+    `region: ${REGION} (${meta.label}) — ` +
+      `${geo.features.length.toLocaleString()} national arcs, ` +
+      `${prefGeo.features.length.toLocaleString()} prefectural arcs`,
+  );
 }
 
 let pass = 0;
@@ -320,6 +341,8 @@ ${pass} passed, ${fails.length} failed(仕様のみ)`);
 }
 
 /* ---- 2. 絞り込みは素の JavaScript と同じアークを選ぶか ------------------- */
+/* 国道と都道府県道の両方に訊く。同じ buildFilter が式を組むが、選択の鍵の形も
+ * 層への重ね方も系統ごとに違うので、片方が通っても他方の答えにはならない。 */
 const compile = (expr) => {
   const r = spec.expression.createExpression(expr, { type: 'boolean' });
   if (r.result === 'error') {
@@ -345,26 +368,163 @@ function jsPredicate(selected, conc, showFormer) {
   };
 }
 
-for (const [selected, conc, showFormer, label] of scenarios) {
+/** 式を述語にする。選択も重用も旧道も無いときの真値をここで吸収する。 */
+function predicate(expr) {
+  if (expr === true) return () => true;
+  const fn = compile(expr);
+  return fn && ((f) => evaluate(fn, f) === true);
+}
+
+function matchesJs(features, selected, conc, showFormer, label) {
   const expr = buildFilter(selected, conc, showFormer);
   if (expr === true) {
     pass++;
     console.log(`PASS  ${label}: filter is literal true (everything shown)`);
-    continue;
+    return;
   }
-  const fn = compile(expr);
-  if (!fn) continue;
+  const fn = predicate(expr);
+  if (!fn) return;
   const js = jsPredicate(selected, conc, showFormer);
   let diff = 0;
   let hits = 0;
-  for (const f of geo.features) {
-    const a = evaluate(fn, f) === true;
+  for (const f of features) {
+    const a = fn(f);
     if (a) hits++;
     if (a !== js(f.properties)) diff++;
   }
   ok(
     diff === 0,
-    `${label}: matches the JS predicate on all ${geo.features.length} arcs (${hits} hits)`,
+    `${label}: matches the JS predicate on all ${features.length} arcs (${hits} hits)`,
+  );
+}
+
+for (const [selected, conc, showFormer, label] of scenarios) {
+  matchesJs(geo.features, selected, conc, showFormer, label);
+}
+
+/* 都道府県道にも同じ問いを向ける。式を組むのは国道と同じ buildFilter だが、
+ * 選択の鍵の形が違い(`nagano-63`)、アークも別の木から来る。国道だけを
+ * 突き合わせていたときは、都道府県道側が壊れてもこの節は通った。
+ *
+ * 場面はその県のデータから作る。最も深く重なっているアークの `refs_list` が、
+ * その県に実在する重用の組である。重用が無い県では、いちばん先頭の路線へ
+ * 落とす。この節が訊くのは式の意味であって、中の番号ではない。 */
+const prefDeepestArc = prefGeo.features.reduce(
+  (best, f) => (best && best.properties.n >= f.properties.n ? best : f),
+  null,
+);
+const prefDeepest =
+  prefDeepestArc?.properties.n >= 2
+    ? prefDeepestArc.properties.refs_list
+    : prefGeo.features.slice(0, 1).map((f) => f.properties.refs_list[0]);
+const prefSingle = prefDeepest[0];
+
+const prefEvalScenarios = [
+  [[], 'off', true, 'prefectural: no selection, no concurrency'],
+  [[prefSingle], 'off', true, 'prefectural: single route'],
+  [[], 'all', true, 'prefectural: all concurrency'],
+  [prefDeepest, 'off', true, 'prefectural: deepest selection'],
+  [
+    prefDeepest,
+    'all',
+    true,
+    'prefectural: deepest selection + all concurrency',
+  ],
+  [
+    prefDeepest,
+    'all',
+    false,
+    'prefectural: former hidden + deepest selection + all concurrency',
+  ],
+];
+
+for (const [selected, conc, showFormer, label] of prefEvalScenarios) {
+  matchesJs(prefGeo.features, selected, conc, showFormer, label);
+}
+
+/* 共有の式が正しくても、層へ重ねる順を誤れば画面は変わらない。都道府県道は
+ * 国道と順序が逆で、層が持つ区分の式へ共有の式を重ねる(resolvedPrefFilter)。
+ * 重ねた後の式が実データでどのアークを選ぶかを、ここで確かめる。
+ *
+ * 層がどの区分を通すかはここに書かない。書き写せばその写しを検査することに
+ * なる。同じ resolvedPrefFilter へ共有の式の代わりに真値を渡せば、層自身の
+ * 区分の式が出てくるので、それを土台に使う。重ねた式は、その土台と共有の式の
+ * 両方を満たすアークとちょうど一致しなければならない。 */
+const prefLayerScenarios = [
+  [[], 'off', true, true, 'prefectural layers: no filter'],
+  [[], 'all', true, true, 'prefectural layers: all concurrency'],
+  [
+    prefDeepest,
+    'all',
+    true,
+    true,
+    'prefectural layers: deepest selection + all concurrency',
+  ],
+  [
+    [],
+    'all',
+    true,
+    false,
+    'prefectural layers: all concurrency + expressway toggle off',
+  ],
+  [
+    [],
+    'all',
+    false,
+    true,
+    'prefectural layers: all concurrency + former hidden',
+  ],
+];
+
+for (const [
+  selected,
+  conc,
+  showFormer,
+  expressway,
+  label,
+] of prefLayerScenarios) {
+  const prefBase = buildFilter(selected, conc, showFormer);
+  const baseFn = predicate(prefBase);
+  if (!baseFn) continue;
+  for (const { id, excludeKinds, excludeToggle } of PREF_FILTERED_LAYERS) {
+    const kinds = excludeToggle && !expressway ? excludeKinds : null;
+    const defaultFilter = PREF_DEFAULT_FILTERS.get(id);
+    const kindFn = predicate(resolvedPrefFilter(defaultFilter, true, kinds));
+    const fn = predicate(resolvedPrefFilter(defaultFilter, prefBase, kinds));
+    if (!kindFn || !fn) continue;
+    let diff = 0;
+    let hits = 0;
+    for (const f of prefGeo.features) {
+      const a = fn(f);
+      if (a) hits++;
+      if (a !== (kindFn(f) && baseFn(f))) diff++;
+    }
+    ok(
+      diff === 0,
+      `${label} — ${id}: resolved filter == kind ∧ shared (${hits} hits)`,
+    );
+  }
+}
+
+// 上の一致は、層が 1 本も通さなければ空集合どうしの一致になり、何も述べない。
+// 都道府県道の重用が実際に残ることを、走れる車道の層で 1 度だけ断定する。
+const prefConcArcs = prefGeo.features.filter((f) => f.properties.n >= 2).length;
+if (!prefConcArcs) {
+  console.log(
+    'NOTE  この地域に都道府県道どうしの重用は無いので、この検査は行わない',
+  );
+} else {
+  const fn = predicate(
+    resolvedPrefFilter(
+      PREF_DEFAULT_FILTERS.get('pref-roads'),
+      buildFilter([], 'all'),
+    ),
+  );
+  const hits = prefGeo.features.filter((f) => fn(f)).length;
+  ok(
+    hits > 0 && hits <= prefConcArcs,
+    `pref-roads keeps ${hits} of the ${prefConcArcs} concurrent prefectural arcs ` +
+      'when "concurrency only" is on',
   );
 }
 

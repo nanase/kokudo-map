@@ -3,8 +3,13 @@
  * 評価します。そちらが確かめられないのは、何も選んでいないときに式が正しい
  * 意味になるか、app.js が層を動かすのに使う表が実在する層を指しているか、です。
  * どちらもコードの形についての問いなので、ここに置いてどこでも走らせます。
+ *
+ * 式を評価する検査も一つだけ置いています(「重用の絞り込みが層まで届く」)。
+ * 作り物のアークを相手にするので生成物が要らず、データを持たない clone でも
+ * 走ります。実データでの突き合わせは check_expressions.mjs の役目です。
  */
 import { describe, expect, test } from 'bun:test';
+import spec from '@maplibre/maplibre-gl-style-spec';
 
 import {
   buildFilter,
@@ -25,6 +30,7 @@ import {
   PREF_CASING_LAYER,
   PREF_CASING_PHOTO_MAJOR,
   PREF_CLICKABLE_LAYERS,
+  PREF_DEFAULT_FILTERS,
   PREF_FILTERED_LAYERS,
   PREF_GENERAL,
   PREF_GENERAL_INK,
@@ -222,6 +228,150 @@ describe('resolvedPrefFilter', () => {
       defaultFilter,
       ['!', kindTest(['expressway'])],
     ]);
+  });
+});
+
+/* 「重用区間のみ」は共有の buildFilter が持ちますが、画面に効くのは層ごとに
+ * 組み直した後の式です(app.js の applyFilters)。国道は共有の式へ区分を足し
+ * (withKind)、都道府県道は層が持つ区分の式へ共有の式を重ねます
+ * (resolvedPrefFilter)。順序が逆なので、片方だけを見ても足りません。
+ *
+ * ここは式の形ではなく、式を評価した結果を見ます。上の describe が確かめるのは
+ * 組み上がった配列の形で、その形が MapLibre の目にどのアークとして映るかまでは
+ * 述べていません。#187 で「重用区間のみ」が都道府県道に効かないという報告を
+ * 調べ、実装は正しいと分かりましたが、そのとき壊れていても検査は通ることも
+ * 分かりました。ここはその穴を塞ぎます。
+ *
+ * 層ごとの期待は書きません。どの区分を通すかは層自身が持っており、ここへ
+ * 書き写せば写しを検査することになります。代わりに同じ層へ「強調なし」と
+ * 「重用区間のみ」の二通りを通し、後者が前者の n>=2 の部分と過不足なく
+ * 一致することを見ます。層の区分を知らなくても言える不変です。
+ */
+describe('重用の絞り込みが層まで届く', () => {
+  /* 式を評価して確かめるための、作り物のアーク。区分は書き並べず、層が使う
+   * 区分の定義そのものから作ります。区分が増えたときに、この並びだけが古く
+   * なることを避けるためです。
+   *
+   * 系統ごとに 1 組ずつ持ちます。選択の鍵の形が違い(国道は番号、都道府県道は
+   * `nagano-63` の県つきの文字列)、実データでもアーカイブが分かれているため
+   * です。`refs` は `n` と辻褄が合う長さにし、先頭は必ず選択に使う 1 本に
+   * します。そうしないと、選択を重ねた場面で単独指定のアークが 1 本も残らず、
+   * 比べる土台が消えます。 */
+  const KINDS = [
+    ...new Set([...EXCLUDE_FROM_ROADS_LAYER, ...PREF_KIND_DRIVEABLE]),
+  ];
+  const GEOMETRY = {
+    type: 'LineString',
+    coordinates: [
+      [138, 36],
+      [138.1, 36.1],
+    ],
+  };
+  const arcsAnchoredOn = (anchor, others) =>
+    KINDS.flatMap((kind) =>
+      [1, 2, 3, 4].flatMap((n) =>
+        ['major', 'general'].map((rank) => ({
+          kind,
+          rank,
+          n,
+          former: 0,
+          refs: `,${[anchor, ...others].slice(0, n).join(',')},`,
+        })),
+      ),
+    );
+  const ARCS = arcsAnchoredOn(18, [117, 406, 292]);
+  const PREF_ARCS = arcsAnchoredOn('nagano-63', [
+    'nagano-80',
+    'nagano-14',
+    'nagano-2',
+  ]);
+
+  const compile = (filter) => {
+    // 選択も重用も旧道も無いとき、共有の式は真値そのものになります
+    // (buildFilter)。式ではないので createExpression には渡せません。
+    if (filter === true) return () => true;
+    const r = spec.expression.createExpression(filter, { type: 'boolean' });
+    expect(r.result).toBe('success');
+    return (properties) =>
+      r.value.evaluate(
+        { zoom: 10 },
+        { type: 'Feature', properties, geometry: GEOMETRY },
+      ) === true;
+  };
+
+  /** 式を通ったアーク。集合として比べるために添字で持ちます。 */
+  const passing = (filter, arcs) => {
+    const fn = compile(filter);
+    return new Set(arcs.map((a, i) => (fn(a) ? i : -1)).filter((i) => i >= 0));
+  };
+
+  const holds = (filterFor, arcs) => {
+    const off = passing(filterFor('off'), arcs);
+    // 層が単独指定も重用も通していなければ、下の一致は空集合どうしの一致に
+    // なり、何も述べません。先に土台を確かめます。
+    expect([...off].some((i) => arcs[i].n === 1)).toBe(true);
+    expect([...off].some((i) => arcs[i].n >= 2)).toBe(true);
+    expect(passing(filterFor('all'), arcs)).toEqual(
+      new Set([...off].filter((i) => arcs[i].n >= 2)),
+    );
+  };
+
+  test('国道の各層で、重用のみが強調なしの n>=2 の部分と一致する', () => {
+    for (const { kinds, negate } of FILTERED_LAYERS) {
+      holds((conc) => {
+        const base = buildFilter([], conc);
+        return kinds ? withKind(base, kinds, negate) : base;
+      }, ARCS);
+    }
+  });
+
+  test('都道府県道の各層でも一致する', () => {
+    for (const { id } of PREF_FILTERED_LAYERS) {
+      holds(
+        (conc) =>
+          resolvedPrefFilter(
+            PREF_DEFAULT_FILTERS.get(id),
+            buildFilter([], conc),
+          ),
+        PREF_ARCS,
+      );
+    }
+  });
+
+  /* 自動車専用道路のトグルが切のとき、都道府県道は層ごと消さずに区分だけを
+   * 外します(app.js の applyFilters)。式の重なりが一段深くなる経路なので、
+   * ここも通します。 */
+  test('自動車専用道路を外した都道府県道の層でも一致する', () => {
+    for (const { id, excludeKinds } of PREF_FILTERED_LAYERS) {
+      if (!excludeKinds) continue;
+      holds(
+        (conc) =>
+          resolvedPrefFilter(
+            PREF_DEFAULT_FILTERS.get(id),
+            buildFilter([], conc),
+            excludeKinds,
+          ),
+        PREF_ARCS,
+      );
+    }
+  });
+
+  test('路線を選んでいても、重用の絞り込みは同じように効く', () => {
+    // 重用は道路の性質であって選択の結果ではありません(buildFilter)。選択を
+    // 重ねても、残るのは選んだ路線の重用区間だけです。
+    holds(
+      (conc) =>
+        withKind(buildFilter([18], conc), EXCLUDE_FROM_ROADS_LAYER, true),
+      ARCS,
+    );
+    holds(
+      (conc) =>
+        resolvedPrefFilter(
+          PREF_DEFAULT_FILTERS.get('pref-roads'),
+          buildFilter(['nagano-63'], conc),
+        ),
+      PREF_ARCS,
+    );
   });
 });
 
