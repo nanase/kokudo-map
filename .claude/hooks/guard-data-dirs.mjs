@@ -21,6 +21,11 @@
  * ファイルシステムを見る。踏み込みは、cd の行き先の実在を existsSync で
  * 確かめているのと同じところまでに留める。
  *
+ * リンクの先は、名指しで消す命令より広く見る。保護対象の中を指すリンク
+ * (web/data/pref)も止める。名指しなら通す `rm -rf build/brand` と答えが
+ * 分かれるので、判定も hits() と touches() に分かれている。なぜ分けるかは
+ * touches() にある。
+ *
  * 辿るのは `git worktree remove` だけである。rm -rf・Remove-Item -Recurse・
  * cmd /c rmdir・git clean -xdf はどれも辿らないことを実測で確かめた。だから
  * 止めるのもこの形だけにする。gitignore の対象を指すリンクなら `--force` が
