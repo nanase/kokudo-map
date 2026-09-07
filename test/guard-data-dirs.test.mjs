@@ -20,7 +20,15 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,14 +45,78 @@ const NODE = 'node';
 
 /* 仮の木。守る場所と同じ形だけを作る。 */
 const REPO = mkdtempSync(join(tmpdir(), 'guard-')).replace(/\\/g, '/');
+/* 仮の worktree の置き場所。本物と同じ場所に置く。 */
+const WT = `${REPO}/.claude/worktrees`;
+/* worktree に張るリンクの種類。この環境で子セッションが張るのはジャンクション
+ * である。ディレクトリ symlink は管理者権限が要り、Git Bash の `ln -s` は
+ * 複製を作ってしまう。Node は type に 'junction' を渡せば権限なしに張れる。
+ * CI(ubuntu)にジャンクションは無いので、そちらでは通常の symlink にする。
+ * フックが見るのは lstat の isSymbolicLink() で、どちらも真になる。 */
+const LINK_TYPE = process.platform === 'win32' ? 'junction' : undefined;
 beforeAll(() => {
-  for (const dir of ['build/pbf', 'build/cache', 'web/data', 'docs']) {
+  for (const dir of [
+    'build/pbf',
+    'build/cache',
+    'web/data',
+    /* 保護対象の中。ここを指すリンクも辿られれば空になる。 */
+    'web/data/pref',
+    /* PROTECTED に入れないと決めた場所。入れるとリンクの検査で止まる。 */
+    'web/vendor',
+    'docs',
+  ]) {
     mkdirSync(join(REPO, dir), { recursive: true });
   }
+  for (const dir of [
+    'linked/web',
+    'plain/web',
+    'deep/a/b/c',
+    'vendor-only/web',
+    'unprotected',
+    'under-protected',
+    /* 読めなくして試す入れ子。 */
+    'locked/inner',
+  ]) {
+    mkdirSync(join(WT, dir), { recursive: true });
+  }
+  /* 2026-09-07 の事故と同じ形。リンクを外さないまま worktree を消した。 */
+  symlinkSync(`${REPO}/web/data`, `${WT}/linked/web/data`, LINK_TYPE);
+  /* 浅いところに無いリンク。木の下は全部歩く。 */
+  symlinkSync(`${REPO}/build`, `${WT}/deep/a/b/c/build`, LINK_TYPE);
+  /* web/vendor だけを指すリンク。6 秒で戻るので止めない。 */
+  symlinkSync(`${REPO}/web/vendor`, `${WT}/vendor-only/web/vendor`, LINK_TYPE);
+  /* 保護対象でない場所を指すリンク。 */
+  symlinkSync(`${REPO}/docs`, `${WT}/unprotected/docs`, LINK_TYPE);
+  /* 保護対象の中を指すリンク。本物の web/data には pref があり、
+   * build/regions には 47 都道府県ぶんが入る。名指しで消すのとは違い、
+   * worktree の削除で辿られると黙って空になる。 */
+  symlinkSync(`${REPO}/web/data/pref`, `${WT}/under-protected/pref`, LINK_TYPE);
+  /* リポジトリ自身をリンク越しに指す道。 */
+  symlinkSync(REPO, REPO_VIA_LINK, LINK_TYPE);
+  /* 予算の境目をまたぐための木。歩くのに少し時間がかかるだけの中身を先に置き、
+   * 保護対象を指すリンクは名前の順で最後に来る位置へ置く。予算を小さくすると
+   * リンクへ届く前に切れ、大きくすると届く。どちらでも通らないことを見る。 */
+  for (let i = 0; i < 40; i++) {
+    const dir = join(WT, 'budget', `a${String(i).padStart(3, '0')}`);
+    mkdirSync(dir, { recursive: true });
+    for (let j = 0; j < 10; j++) writeFileSync(join(dir, `f${j}.txt`), 'x');
+    /* 保護対象でないリンク。realpathSync を通る道を厚くする。 */
+    symlinkSync(`${REPO}/docs`, join(dir, 'docs-link'), LINK_TYPE);
+  }
+  mkdirSync(join(WT, 'budget', 'zzz-last'), { recursive: true });
+  symlinkSync(
+    `${REPO}/web/data`,
+    join(WT, 'budget', 'zzz-last', 'data'),
+    LINK_TYPE,
+  );
 });
 afterAll(() => {
+  /* リンクは先に外す。rmSync はリンクを辿らないが、辿ったとしても先は
+   * これから消す REPO の中である。 */
+  rmSync(REPO_VIA_LINK, { recursive: true, force: true });
   for (const dir of [REPO, AWAY]) rmSync(dir, { recursive: true, force: true });
 });
+/* リポジトリを、リンクを一段はさんで指した場所。realpathSync は REPO を返す。 */
+const REPO_VIA_LINK = `${REPO}-via-link`;
 /* 同じ場所の別の書き方。Windows の `d:/…` は Git Bash では `/d/…` になる。
  * ubuntu には drive letter が無いので、その場合は元のままになる。 */
 const REPO_POSIX = REPO.replace(/^([a-zA-Z]):/, '/$1');
@@ -62,6 +134,45 @@ const NAME = basename(REPO);
 /* 仮の木が載っている drive のルート。Git Bash では `/c` とも `/c/` とも
  * 書く。 */
 const DRIVE = REPO.replace(/^([a-zA-Z]):.*$/, '/$1');
+
+/* 読めなくして試すディレクトリ。 */
+const LOCKED_INNER = `${WT}/locked/inner`;
+
+/**
+ * ディレクトリを読めなくする。できたなら true。
+ *
+ * 手は環境で違う。POSIX は chmod、Windows は ACL(icacls)を使う。chmod は root
+ * に効かないので、効いたかどうかを readdirSync で確かめてから答える。効かない
+ * 環境では検査そのものを飛ばす。
+ */
+function denyRead(dir) {
+  if (process.platform === 'win32') {
+    execFileSync('icacls', [dir, '/deny', `${userName()}:(RX)`], {
+      stdio: 'ignore',
+    });
+  } else {
+    chmodSync(dir, 0o000);
+  }
+  try {
+    readdirSync(dir);
+  } catch {
+    return true;
+  }
+  /* 読めてしまった。戻してから飛ばす。 */
+  allowRead(dir);
+  return false;
+}
+
+/** denyRead で読めなくしたディレクトリを元に戻す。 */
+function allowRead(dir) {
+  if (process.platform === 'win32') {
+    execFileSync('icacls', [dir, '/remove:d', userName()], { stdio: 'ignore' });
+  } else {
+    chmodSync(dir, 0o755);
+  }
+}
+
+const userName = () => process.env.USERNAME ?? process.env.USER ?? '';
 
 /** フックに命令を渡し、止めたなら理由を、通したなら null を返す。 */
 const ask = (command, toolName = 'Bash') =>
@@ -424,6 +535,183 @@ describe('木ごと消す形を止める', () => {
   ])('%s', (command) => {
     expect(ask(command)).toContain('git clean -x');
   });
+});
+
+/* リンクの検査だけは、字ではなくファイルシステムを見る。仮の worktree に本物の
+ * リンクを張って確かめる。リンクの先はどれも仮の木の中なので、後片付けが
+ * 本物の生成物に届くことはない。 */
+describe('worktree の削除がリンクを辿るのを止める', () => {
+  // 2026-09-07 に実際に起きた形。git worktree remove だけがリンクを辿り、
+  // リンクの先の中身が消える。消す木そのものは保護対象ではないので、字だけを
+  // 見ていたころは素通りしていた。
+  test.each([
+    [`git worktree remove ${WT}/linked`],
+    ['git worktree remove .claude/worktrees/linked'],
+    // gitignore の対象を指すリンクなら --force が無くても通って消える。
+    // web/data はまさにそれなので、オプションでは見分けない。
+    [`git worktree remove --force ${WT}/linked`],
+    ['git worktree remove -f .claude/worktrees/linked'],
+    // 走る場所は cd でも -C でも移る。git clean と同じ読み方をする。
+    ['cd .claude/worktrees && git worktree remove linked'],
+    [`git -C ${REPO} worktree remove .claude/worktrees/linked`],
+    // 浅いところに無いリンクも見つける。
+    ['git worktree remove .claude/worktrees/deep'],
+    // 保護対象の中を指すリンクも止める。名指しで消す `rm -rf build/brand` は
+    // 通すが、辿られて黙って空になるのは形が違う。
+    ['git worktree remove .claude/worktrees/under-protected'],
+  ])('%s', (command) => {
+    // 文面は次にすることを述べる。外すリンクを名指しするので、探し回らずに
+    // 済む。
+    expect(ask(command)).toContain('cmd /c rmdir "');
+  });
+
+  // リポジトリ自身がリンク越しに指されていても止める。命令の中の場所は書かれた
+  // とおりに比べるが、リンクの先は realpathSync が解いた形で返る。書かれた
+  // とおりのルートだけで比べていたころ、この形は素通りしていた。
+  test('root がリンク越しでも止める', () => {
+    const reason = decide({
+      command: `git worktree remove ${REPO_VIA_LINK}/.claude/worktrees/linked`,
+      toolName: 'Bash',
+      root: REPO_VIA_LINK,
+    });
+    expect(reason).toContain('web/data を指すリンクです');
+  });
+
+  test('止めた文面が外すリンクを名指しする', () => {
+    const reason = ask(`git worktree remove ${WT}/linked`);
+    expect(reason).toContain(`cmd /c rmdir "${WT}/linked/web/data"`);
+    expect(reason).toContain('web/data を指すリンクです');
+  });
+
+  // 保護対象を指すリンクを持つ木は、予算をどこで切っても通さない。答えは
+  // 「リンクを見つけた」か「歩き切れなかった」のどちらかで、通す答えが出る隙は
+  // 無い。歩き切る前に諦めれば 'unknown' を返し、最後まで歩いたなら全部を見た
+  // 後だからである。
+  //
+  // リンクは名前の順で最後に来る位置に置いてある(zzz-last)。予算を細かく変えて
+  // 境目の付近を掃く。どこで切れても通らないことだけを見るので、答えがどちらに
+  // 転ぶかは機械の速さに任せてよい。
+  test('予算をどこで切っても、リンクのある木は通さない', () => {
+    const command = `git worktree remove ${WT}/budget`;
+    for (let ms = 0; ms <= 40; ms++) {
+      const reason = decide({
+        command,
+        toolName: 'Bash',
+        root: REPO,
+        walkBudgetMs: ms,
+      });
+      expect(reason).not.toBeNull();
+    }
+  });
+
+  // 読めない場所に当たったときも通さない。下にリンクがあっても分からないので、
+  // 予算切れと同じ態度で扱う。文面は読めなかった場所を名指しする。手当てが
+  // 違う(読めるようにする)ので、予算切れとは別の文面にしてある。
+  //
+  // 読めなくする手は環境で違う。POSIX は chmod、Windows は ACL を使う。root で
+  // 走ると chmod が効かないので、そのときは飛ばす。
+  test('読めない場所があれば通さない', () => {
+    if (!denyRead(LOCKED_INNER)) return;
+    try {
+      const reason = ask(`git worktree remove ${WT}/locked`);
+      expect(reason).toContain('を読めなかったので');
+      expect(reason).toContain(LOCKED_INNER);
+      /* 予算切れと取り違えない。手当てが違う。 */
+      expect(reason).not.toContain('大きすぎて');
+    } finally {
+      allowRead(LOCKED_INNER);
+    }
+  });
+
+  // 無い木は通す。木ごと消す命令が空振りするだけで、消える物は無い。読めない
+  // 場所と一緒にすると、片づけ済みの worktree を消し直せなくなる。
+  test.each([
+    [`git worktree remove ${WT}/does-not-exist`],
+    // ディレクトリでない物の下に木は無い。
+    [`git worktree remove ${REPO}/docs/nothing/here`],
+  ])('%s', allows);
+
+  // 両端は速さによらず決まる。予算 0 なら 1 つ目の入り口を見る前に切れ、既定の
+  // 予算(3 秒)ならこの大きさの木は必ず歩き切ってリンクへ届く。上の掃引が
+  // 予算切れの側だけを見ていないことが、これで言える。
+  test.each([
+    [0, '確かめられませんでした'],
+    [undefined, 'web/data を指すリンクです'],
+  ])('予算 %s のときの答え', (ms, expected) => {
+    const reason = decide({
+      command: `git worktree remove ${WT}/budget`,
+      toolName: 'Bash',
+      root: REPO,
+      walkBudgetMs: ms,
+    });
+    expect(reason).toContain(expected);
+  });
+
+  // 文面は保護対象の名前ではなく、リンクの実際の行き先を述べる。どこが危ないか
+  // は行き先のほうが分かる。
+  test('保護対象の中を指すリンクは、その行き先を述べる', () => {
+    const reason = ask(`git worktree remove ${WT}/under-protected`);
+    expect(reason).toContain('web/data/pref を指すリンクです');
+  });
+
+  // リンクの照合を広げても、名指しで消す側の線引きは変えない。ここを一緒に
+  // 広げると `rm -rf build/brand` のような正当な後始末まで塞ぐ。
+  test.each([
+    ['rm -rf build/brand'],
+    ['rm -rf web/data/pref'],
+    ['rm -rf build/regions/nagano'],
+  ])('%s は名指しなので通る', allows);
+
+  // 木が大きすぎて歩き切れなかったときは通さない。確かめずに通せば、守って
+  // いるつもりのままリンクの先が消える。予算を 0 にすれば、リンクの無い木でも
+  // この道に入る。
+  test('歩き切れなければ通さない', () => {
+    const reason = decide({
+      command: `git worktree remove ${WT}/plain`,
+      toolName: 'Bash',
+      root: REPO,
+      walkBudgetMs: 0,
+    });
+    expect(reason).toContain('確かめられませんでした');
+    // リンクを名指しできないので、見つけたときと同じ案内をしない。同じだと、
+    // リンクを張っていない木で止まった人が外すリンクを探し回る。
+    expect(reason).toContain('リンクが無いのに止まるなら');
+    expect(reason).not.toContain('cmd /c rmdir "');
+  });
+
+  // PowerShell から打っても同じである。
+  test('PowerShell から打っても止まる', () => {
+    expect(askPowerShell(`git worktree remove ${WT}/linked`)).toContain(
+      'cmd /c rmdir',
+    );
+  });
+
+  // リンクを持たない worktree の削除まで止めると迂回される。
+  test.each([
+    [`git worktree remove ${WT}/plain`],
+    ['git worktree remove .claude/worktrees/plain'],
+    [`git worktree remove --force ${WT}/plain`],
+    // web/vendor は PROTECTED に入れない。bun run vendor で 6 秒で戻るので、
+    // 「git では戻らず、取り直しに何時間もかかる」という基準に当たらない。
+    [`git worktree remove ${WT}/vendor-only`],
+    // 保護対象でない場所を指すリンク。
+    [`git worktree remove ${WT}/unprotected`],
+    // 木を消さない副命令。
+    ['git worktree add .claude/worktrees/new'],
+    ['git worktree list'],
+    ['git worktree prune'],
+    [`git worktree lock ${WT}/linked`],
+    // 辿るのは git worktree remove だけである。他の消し方はリンクそのものを
+    // 消すだけで、先の中身は残ることを実測で確かめた。ここを止めると、
+    // 事故のあとに残った worktree を片づける手が無くなる。
+    [`rm -rf ${WT}/linked`],
+    [`Remove-Item -Recurse -Force ${WT}/linked`],
+    [`cmd /c rmdir /s /q ${WT}/linked`],
+    // 案内する手順そのもの。リンクだけを外す形は辿らない。
+    [`cmd /c rmdir ${WT}/linked/web/data`],
+    // 字として並べるだけの命令。
+    [`echo git worktree remove ${WT}/linked`],
+  ])('%s', allows);
 });
 
 describe('後始末は通す', () => {
