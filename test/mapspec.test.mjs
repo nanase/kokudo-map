@@ -40,8 +40,10 @@ import {
   PREF_POPUP_MINZOOM,
   PREF_SOURCE,
   pickedFilter,
+  pickedGone,
   prefCasingColor,
   prefClickableHitLayers,
+  prefKindShown,
   prefLabelLayer,
   prefLayerFilter,
   prefLayers,
@@ -620,6 +622,139 @@ describe('pickedFilter', () => {
       base,
       ['==', ['get', 'id'], 42],
     ]);
+  });
+});
+
+/* 影とポップアップは一組で、押されているアークが地図から消えたときだけ一緒に
+ * 閉じます(#193)。「消えたか」の答えは、線の層の式そのものと一致していなければ
+ * なりません。区分の一覧をこちらへ書き写すと、層の区分が変わったときにここだけ
+ * 古くなります。 */
+describe('pickedGone', () => {
+  const KINDS = [...EXCLUDE_FROM_ROADS_LAYER, 'road'];
+
+  /** 層の式が、その区分のアークを通すか。式は本物から取ります。 */
+  function admits(expr, kind) {
+    if (expr === true) return true;
+    if (expr === NOTHING) return false;
+    const [op] = expr;
+    if (op === 'all') return expr.slice(1).every((e) => admits(e, kind));
+    if (op === '!') return !admits(expr[1], kind);
+    if (op === 'in') return expr[2][1].includes(kind);
+    throw new Error(`未知の式: ${JSON.stringify(expr)}`);
+  }
+
+  /** その区分の線を描く層が、いま一つでも残っているか。ラベルの層は線を
+   * 描かないので数えません。 */
+  const drawn = (table, filterOf, kind, state) =>
+    table
+      .filter((l) => !l.id.endsWith('labels'))
+      .some((l) => admits(filterOf(l, true, state), kind));
+
+  /** 押されているアークの印。app.js の pick() が置く形です。 */
+  const picked = ({ system = 'national', kind, former = false }, off = {}) => ({
+    ...toggles(off),
+    national: true,
+    pref: true,
+    former: true,
+    picked: system === 'pref' ? null : 1,
+    prefPicked: system === 'pref' ? 2 : null,
+    pickedKind: kind,
+    pickedFormer: former,
+  });
+
+  /* 区分のトグルの組み合わせ。書き写さず、表が持つ物から作ります。 */
+  const KIND_TOGGLES = ['special', 'ferry', 'expressway', 'prefSpecial'];
+  const COMBOS = [];
+  for (let bits = 0; bits < 1 << KIND_TOGGLES.length; bits++) {
+    COMBOS.push(
+      Object.fromEntries(
+        KIND_TOGGLES.map((name, i) => [name, ((bits >> i) & 1) === 0]),
+      ),
+    );
+  }
+
+  for (const [system, table, filterOf] of [
+    ['national', FILTERED_LAYERS, layerFilter],
+    ['pref', PREF_FILTERED_LAYERS, prefLayerFilter],
+  ]) {
+    test(`${system} — 消えたと答える区分が、線の消える区分と一致する`, () => {
+      for (const off of COMBOS) {
+        for (const kind of KINDS) {
+          const state = picked({ system, kind }, off);
+          expect([kind, off, pickedGone(state)]).toEqual([
+            kind,
+            off,
+            !drawn(table, filterOf, kind, state),
+          ]);
+        }
+      }
+    });
+  }
+
+  test('系統ごと消すトグルは、その系統のアークだけを消す', () => {
+    const nat = { system: 'national', kind: 'road' };
+    const pref = { system: 'pref', kind: 'road' };
+    expect(pickedGone({ ...picked(nat), national: false })).toBe(true);
+    expect(pickedGone({ ...picked(pref), national: false })).toBe(false);
+    expect(pickedGone({ ...picked(pref), pref: false })).toBe(true);
+    expect(pickedGone({ ...picked(nat), pref: false })).toBe(false);
+  });
+
+  /* 旧道は区分ではなく道の性質で、共有の絞り込み式が両系統に当てます。 */
+  test('旧道のトグルは、旧道のアークだけを消す', () => {
+    for (const system of ['national', 'pref']) {
+      const old = picked({ system, kind: 'road', former: true });
+      expect(pickedGone({ ...old, former: false })).toBe(true);
+      const now = picked({ system, kind: 'road' });
+      expect(pickedGone({ ...now, former: false })).toBe(false);
+    }
+  });
+
+  /* 「路線番号」「起点・終点」は線を消さないので、影もポップアップも残ります。 */
+  test('線を消さないトグルでは、消えたと答えない', () => {
+    for (const kind of KINDS) {
+      const state = picked({ kind });
+      expect(pickedGone({ ...state, labels: false, termini: false })).toBe(
+        false,
+      );
+    }
+  });
+
+  test('押していなければ、消えていない', () => {
+    const none = { ...picked({ kind: null }), picked: null, prefPicked: null };
+    // 系統も区分も全部切った画面でも、閉じる物が無い。
+    expect(
+      pickedGone({ ...none, national: false, pref: false, former: false }),
+    ).toBe(false);
+  });
+
+  test('way id は 0 でも押している', () => {
+    // `if (!id)` と書くと 0 が null と同じ扱いになります。
+    const state = { ...picked({ kind: 'road' }), picked: 0, national: false };
+    expect(pickedGone(state)).toBe(true);
+  });
+});
+
+describe('prefKindShown', () => {
+  test('全部入なら、どの区分も描かれる', () => {
+    for (const kind of [...EXCLUDE_FROM_ROADS_LAYER, 'road'])
+      expect(prefKindShown(kind, toggles({}))).toBe(true);
+  });
+
+  /* 走れない区分は一覧を持たない(「走れる区分ではないもの」)ので、残す側で
+   * 答えます。 */
+  test('走行不能区間を切ると、走れる区分だけが残る', () => {
+    const off = toggles({ prefSpecial: false });
+    for (const kind of PREF_KIND_DRIVEABLE)
+      expect(prefKindShown(kind, off)).toBe(true);
+    for (const kind of SPECIAL_KINDS)
+      expect(prefKindShown(kind, off)).toBe(false);
+  });
+
+  test('自動車専用道路を切ると、その区分だけが外れる', () => {
+    const off = toggles({ expressway: false });
+    expect(prefKindShown('expressway', off)).toBe(false);
+    expect(prefKindShown('road', off)).toBe(true);
   });
 });
 
