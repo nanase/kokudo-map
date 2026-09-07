@@ -340,6 +340,9 @@ describe('木ごと消す形を止める', () => {
     // shell は行の後ろにも来る。
     [["cat <<'EOF' | bash", 'rm -rf build', 'EOF'].join(NL)],
     [["cat <<'EOF' | sh", 'rm -rf build', 'EOF'].join(NL)],
+    // ファイル記述子を伴う向き先が挟まっても、後ろの shell は見る。
+    [["cat <<'EOF' 2>&1 | bash", 'rm -rf build', 'EOF'].join(NL)],
+    [["cat <<'EOF' &>out.log | bash", 'rm -rf build', 'EOF'].join(NL)],
     // find は探す場所を先に書く。rm の後ろにあるのは `{}` である。
     ['find build -type d -exec rm -rf {} +'],
     ['find web/data -delete'],
@@ -834,6 +837,17 @@ describe('後始末は通す', () => {
         'EOF',
       ],
     ],
+    // 向き先はファイル記述子を伴うこともある。数字は `[<>|]` の前に来る
+    // (`2>&1`)ので、`[<>|]` で始まるものしか許していないと当たらず、閉じ語を
+    // 探せずに中身が残っていた(#192)。
+    [["cat <<'EOF' 2>&1", 'rm -rf build と書いてある', 'EOF']],
+    [["cat <<'EOF' 1>out.log", 'rm -rf build と書いてある', 'EOF']],
+    [["cat <<'EOF' 2>>err.log", 'rm -rf build と書いてある', 'EOF']],
+    // `>&2` は元から当たる。`[<>|]+` が `>&` を食い、`\S+` が `2` を取る。
+    [["cat <<'EOF' >&2", 'rm -rf build と書いてある', 'EOF']],
+    // `&` は標準出力とエラーをまとめる `&>` の形でだけ前に置ける。
+    [["cat <<'EOF' &>out.log", 'rm -rf build と書いてある', 'EOF']],
+    [["cat <<'EOF' &>>out.log", 'rm -rf build と書いてある', 'EOF']],
   ])('%s', (lines) => allows(lines.join('\n')));
 
   // この木の外はフックの持ち場ではない。
