@@ -342,6 +342,7 @@ describe('木ごと消す形を止める', () => {
     [["cat <<'EOF' | sh", 'rm -rf build', 'EOF'].join(NL)],
     // ファイル記述子を伴う向き先が挟まっても、後ろの shell は見る。
     [["cat <<'EOF' 2>&1 | bash", 'rm -rf build', 'EOF'].join(NL)],
+    [["cat <<'EOF' &>out.log | bash", 'rm -rf build', 'EOF'].join(NL)],
     // find は探す場所を先に書く。rm の後ろにあるのは `{}` である。
     ['find build -type d -exec rm -rf {} +'],
     ['find web/data -delete'],
@@ -842,6 +843,11 @@ describe('後始末は通す', () => {
     [["cat <<'EOF' 2>&1", 'rm -rf build と書いてある', 'EOF']],
     [["cat <<'EOF' 1>out.log", 'rm -rf build と書いてある', 'EOF']],
     [["cat <<'EOF' 2>>err.log", 'rm -rf build と書いてある', 'EOF']],
+    // `>&2` は元から当たる。`[<>|]+` が `>&` を食い、`\S+` が `2` を取る。
+    [["cat <<'EOF' >&2", 'rm -rf build と書いてある', 'EOF']],
+    // `&` は標準出力とエラーをまとめる `&>` の形でだけ前に置ける。
+    [["cat <<'EOF' &>out.log", 'rm -rf build と書いてある', 'EOF']],
+    [["cat <<'EOF' &>>out.log", 'rm -rf build と書いてある', 'EOF']],
   ])('%s', (lines) => allows(lines.join('\n')));
 
   // この木の外はフックの持ち場ではない。
