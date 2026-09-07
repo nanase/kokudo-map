@@ -282,9 +282,9 @@ for (const [selected, conc, showFormer, label] of scenarios) {
 
 /* 都道府県道の選択・重用・旧道も妥当な式でなければならない。選択のキーは
  * `nagano-63` の文字列で、国道の番号とは型が違う。重ねる先も違う。国道は共有の
- * 式に区分を足すのに対し、都道府県道は層が持つ区分の式(PREF_DEFAULT_FILTERS)を
- * 土台にし、選択・重用・旧道を畳んだ式(buildFilter)を重ねる(mapspec.mjs の
- * resolvedPrefFilter)。画面が組む形(app.js の applyFilters)をそのまま組む。 */
+ * 式に区分を足すのに対し、都道府県道は層が持つ区分の式を土台にし、選択・重用・
+ * 旧道を畳んだ式(buildFilter)を重ねる。組み立ては画面と同じ物(mapspec.mjs の
+ * prefLayerFilter)を呼ぶので、ここで組み方を書き写すことはしない。 */
 const prefScenarios = [
   [[], 'off', true, true, 'no prefectural selection'],
   [['nagano-63'], 'off', true, true, 'single prefectural route'],
@@ -443,13 +443,14 @@ for (const [selected, conc, showFormer, label] of prefEvalScenarios) {
 }
 
 /* 共有の式が正しくても、層へ重ねる順を誤れば画面は変わらない。都道府県道は
- * 国道と順序が逆で、層が持つ区分の式へ共有の式を重ねる(resolvedPrefFilter)。
- * 重ねた後の式が実データでどのアークを選ぶかを、ここで確かめる。
+ * 国道と順序が逆で、層が持つ区分の式へ共有の式を重ねる。重ねた後の式が実データで
+ * どのアークを選ぶかを、ここで確かめる。
  *
- * 層がどの区分を通すかはここに書かない。書き写せばその写しを検査することに
- * なる。同じ resolvedPrefFilter へ共有の式の代わりに真値を渡せば、層自身の
- * 区分の式が出てくるので、それを土台に使う。重ねた式は、その土台と共有の式の
- * 両方を満たすアークとちょうど一致しなければならない。 */
+ * 組み立ては画面が呼ぶ物(prefLayerFilter)をそのまま呼ぶ。層がどの区分を通すかは
+ * ここに書かない。書き写せばその写しを検査することになる。同じ prefLayerFilter へ
+ * 共有の式の代わりに真値を渡せば、層自身の区分の式が出てくるので、それを土台に
+ * 使う。重ねた式は、その土台と共有の式の両方を満たすアークとちょうど一致しなけれ
+ * ばならない。 */
 const prefLayerScenarios = [
   [[], 'off', true, true, 'prefectural layers: no filter'],
   [[], 'all', true, true, 'prefectural layers: all concurrency'],
@@ -486,11 +487,10 @@ for (const [
   const prefBase = buildFilter(selected, conc, showFormer);
   const baseFn = predicate(prefBase);
   if (!baseFn) continue;
-  for (const { id, excludeKinds, excludeToggle } of PREF_FILTERED_LAYERS) {
-    const kinds = excludeToggle && !expressway ? excludeKinds : null;
-    const defaultFilter = PREF_DEFAULT_FILTERS.get(id);
-    const kindFn = predicate(resolvedPrefFilter(defaultFilter, true, kinds));
-    const fn = predicate(resolvedPrefFilter(defaultFilter, prefBase, kinds));
+  const toggles = { ...ALL_ON, expressway };
+  for (const layer of PREF_FILTERED_LAYERS) {
+    const kindFn = predicate(prefLayerFilter(layer, true, toggles));
+    const fn = predicate(prefLayerFilter(layer, prefBase, toggles));
     if (!kindFn || !fn) continue;
     let diff = 0;
     let hits = 0;
@@ -501,7 +501,7 @@ for (const [
     }
     ok(
       diff === 0,
-      `${label} — ${id}: resolved filter == kind ∧ shared (${hits} hits)`,
+      `${label} — ${layer.id}: resolved filter == kind ∧ shared (${hits} hits)`,
     );
   }
 }
@@ -515,9 +515,10 @@ if (!prefConcArcs) {
   );
 } else {
   const fn = predicate(
-    resolvedPrefFilter(
-      PREF_DEFAULT_FILTERS.get('pref-roads'),
+    prefLayerFilter(
+      PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-roads'),
       buildFilter([], 'all'),
+      ALL_ON,
     ),
   );
   const hits = prefGeo.features.filter((f) => fn(f)).length;

@@ -30,7 +30,6 @@ import {
   PREF_CASING_LAYER,
   PREF_CASING_PHOTO_MAJOR,
   PREF_CLICKABLE_LAYERS,
-  PREF_DEFAULT_FILTERS,
   PREF_FILTERED_LAYERS,
   PREF_GENERAL,
   PREF_GENERAL_INK,
@@ -70,6 +69,15 @@ function stopAdds(widenedExpr, baseExpr) {
 }
 
 /* -------------------------------------------------------------- 絞り込み --- */
+
+/* 「表示」の面のトグル。どれが在るかは層の表が答えるので、書き写さずに作ります。 */
+const ALL_ON = Object.fromEntries(
+  [...FILTERED_LAYERS, ...PREF_FILTERED_LAYERS]
+    .flatMap((l) => [l.toggle, l.excludeToggle, l.keepToggle])
+    .filter(Boolean)
+    .map((name) => [name, true]),
+);
+const toggles = (off) => ({ ...ALL_ON, ...off });
 
 /* 選択は系統をまたいで一つです。どちらかの系統で 1 本でも選んだら、地図に
  * 残るのは選んだ道路だけになります。 */
@@ -232,9 +240,11 @@ describe('resolvedPrefFilter', () => {
 });
 
 /* 「重用区間のみ」は共有の buildFilter が持ちますが、画面に効くのは層ごとに
- * 組み直した後の式です(app.js の applyFilters)。国道は共有の式へ区分を足し
- * (withKind)、都道府県道は層が持つ区分の式へ共有の式を重ねます
- * (resolvedPrefFilter)。順序が逆なので、片方だけを見ても足りません。
+ * 組み直した後の式です。国道は共有の式へ区分を足し、都道府県道は層が持つ区分の
+ * 式へ共有の式を重ねます。順序が逆なので、片方だけを見ても足りません。
+ *
+ * 組み直しは画面が呼ぶ物(layerFilter・prefLayerFilter)をそのまま呼びます。
+ * ここで組み方を書き写せば、写しを検査することになります。
  *
  * ここは式の形ではなく、式を評価した結果を見ます。上の describe が確かめるのは
  * 組み上がった配列の形で、その形が MapLibre の目にどのアークとして映るかまでは
@@ -317,41 +327,48 @@ describe('重用の絞り込みが層まで届く', () => {
   };
 
   test('国道の各層で、重用のみが強調なしの n>=2 の部分と一致する', () => {
-    for (const { kinds, negate } of FILTERED_LAYERS) {
-      holds((conc) => {
-        const base = buildFilter([], conc);
-        return kinds ? withKind(base, kinds, negate) : base;
-      }, ARCS);
+    for (const layer of FILTERED_LAYERS) {
+      holds((conc) => layerFilter(layer, buildFilter([], conc), ALL_ON), ARCS);
     }
   });
 
   test('都道府県道の各層でも一致する', () => {
-    for (const { id } of PREF_FILTERED_LAYERS) {
+    for (const layer of PREF_FILTERED_LAYERS) {
       holds(
-        (conc) =>
-          resolvedPrefFilter(
-            PREF_DEFAULT_FILTERS.get(id),
-            buildFilter([], conc),
-          ),
+        (conc) => prefLayerFilter(layer, buildFilter([], conc), ALL_ON),
         PREF_ARCS,
       );
     }
   });
 
-  /* 自動車専用道路のトグルが切のとき、都道府県道は層ごと消さずに区分だけを
-   * 外します(app.js の applyFilters)。式の重なりが一段深くなる経路なので、
-   * ここも通します。 */
-  test('自動車専用道路を外した都道府県道の層でも一致する', () => {
-    for (const { id, excludeKinds } of PREF_FILTERED_LAYERS) {
-      if (!excludeKinds) continue;
+  /* 区分のトグルが切のとき、都道府県道は層ごと消さずに区分だけを外します
+   * (app.js の applyFilters)。式の重なりが一段深くなる経路なので、ここも
+   * 通します。層ごと消える層(pref-special)は残るアークが無くなり、比べる土台が
+   * 消えるので外します。 */
+  test('区分を外した都道府県道の層でも一致する', () => {
+    for (const off of [{ expressway: false }, { prefSpecial: false }]) {
+      const state = toggles(off);
+      for (const layer of PREF_FILTERED_LAYERS) {
+        if (layer.toggle && !state[layer.toggle]) continue;
+        holds(
+          (conc) => prefLayerFilter(layer, buildFilter([], conc), state),
+          PREF_ARCS,
+        );
+      }
+    }
+  });
+
+  /* 国道のラベルも同じである。区分のトグルで層は残り、式だけが一段深くなる。 */
+  test('区分を外した国道のラベルでも一致する', () => {
+    const labels = FILTERED_LAYERS.find((l) => l.id === 'route-labels');
+    for (const off of [
+      { ferry: false },
+      { special: false },
+      { expressway: false },
+    ]) {
       holds(
-        (conc) =>
-          resolvedPrefFilter(
-            PREF_DEFAULT_FILTERS.get(id),
-            buildFilter([], conc),
-            excludeKinds,
-          ),
-        PREF_ARCS,
+        (conc) => layerFilter(labels, buildFilter([], conc), toggles(off)),
+        ARCS,
       );
     }
   });
@@ -359,17 +376,12 @@ describe('重用の絞り込みが層まで届く', () => {
   test('路線を選んでいても、重用の絞り込みは同じように効く', () => {
     // 重用は道路の性質であって選択の結果ではありません(buildFilter)。選択を
     // 重ねても、残るのは選んだ路線の重用区間だけです。
+    const roads = FILTERED_LAYERS.find((l) => l.id === 'roads');
+    const prefRoads = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-roads');
+    holds((conc) => layerFilter(roads, buildFilter([18], conc), ALL_ON), ARCS);
     holds(
       (conc) =>
-        withKind(buildFilter([18], conc), EXCLUDE_FROM_ROADS_LAYER, true),
-      ARCS,
-    );
-    holds(
-      (conc) =>
-        resolvedPrefFilter(
-          PREF_DEFAULT_FILTERS.get('pref-roads'),
-          buildFilter(['nagano-63'], conc),
-        ),
+        prefLayerFilter(prefRoads, buildFilter(['nagano-63'], conc), ALL_ON),
       PREF_ARCS,
     );
   });
@@ -412,15 +424,6 @@ describe('PREF_FILTERED_LAYERS', () => {
     expect(labels.toggle).toBe('labels');
   });
 });
-
-/* 「表示」の面のトグル。どれが在るかは層の表が答えるので、書き写さずに作ります。 */
-const ALL_ON = Object.fromEntries(
-  [...FILTERED_LAYERS, ...PREF_FILTERED_LAYERS]
-    .flatMap((l) => [l.toggle, l.excludeToggle, l.keepToggle])
-    .filter(Boolean)
-    .map((name) => [name, true]),
-);
-const toggles = (off) => ({ ...ALL_ON, ...off });
 
 describe('KINDS_BY_TOGGLE', () => {
   test('区分のトグルは、線の層が描く区分から導かれる', () => {
