@@ -371,6 +371,30 @@ function hits(rel) {
 }
 
 /**
+ * リンクの先が保護対象に触れるか。触れるなら、その保護対象を返す。
+ *
+ * hits() より広く見る。hits() が答えるのは「その場所を名指しで消せば保護対象を
+ * 巻き込むか」で、中を指しているだけの `build/brand` は巻き込まない扱いになる。
+ * リンクにはこの線引きが合わない。`rm -rf build/brand` は名指しの行いだが、
+ * worktree の削除がリンクを辿って `build/regions/nagano` を空にするのは、
+ * 名指ししていない場所が黙って消える形である。事故が起きたのは、消える物が
+ * 見えなかったからで、消える物が保護対象そのものだったからではない。
+ *
+ * 広げても正当な後始末は塞がらない。リンクを外す手(`cmd /c rmdir`)はいつでも
+ * 使えて、外すだけなら先の中身は消えないためである。hits() を広げると
+ * `rm -rf build/brand` まで塞ぐので、そちらは元のままにする。
+ */
+function touches(rel) {
+  if (rel.length === 0) return [...PROTECTED];
+  return PROTECTED.filter((p) => {
+    const parts = p.split('/');
+    const shared = Math.min(rel.length, parts.length);
+    for (let i = 0; i < shared; i++) if (!same(rel[i], parts[i])) return false;
+    return true;
+  });
+}
+
+/**
  * `build/{pbf,cache}` を `build/pbf` と `build/cache` に開く。開かないと、同じ
  * 物を消す命令が波括弧の位置だけで通ったり止まったりする。
  */
@@ -580,17 +604,20 @@ function findLink(dir) {
         /* 切れたリンクは辿っても何も消さない。 */
         continue;
       }
-      /* リンクは保護対象の第二の名前である。その名前を直に消す命令へ返すのと
-       * 同じ問いを立てる。判定を写さずに hits() をそのまま使う。
-       *
-       * 比べる相手は実パスのルートである。realpathSync が返すのはリンクを
+      /* 比べる相手は実パスのルートである。realpathSync が返すのはリンクを
        * 解いた形なので、書かれたとおりの ROOT_PARTS と突き合わせると、
        * リポジトリ自身がリンク越しに指されているときに当たらない。 */
       const rel = underRoot(toAbsParts(real, null), REAL_ROOT_PARTS);
       if (rel === null) continue;
-      const hit = hits(rel);
-      if (hit.length > 0) return { link: full, hit };
-      continue;
+      /* リンクは touches() で見る。保護対象の中を指すリンク(web/data/pref、
+       * build/regions/nagano)も、辿られれば黙って空になる。 */
+      if (touches(rel).length === 0) continue;
+      /* 先を名指しで述べる。どこが危ないのかは、保護対象の名前より実際の
+       * 行き先のほうが分かる。 */
+      return {
+        link: full,
+        target: rel.length === 0 ? 'リポジトリ全体' : rel.join('/'),
+      };
     }
     if (entry.isDirectory()) {
       const found = findLink(full);
@@ -625,7 +652,7 @@ function reportLinks(candidates, cwd) {
       );
     }
     deny(
-      `${found.link} は ${found.hit.join('・')} を指すリンクです。` +
+      `${found.link} は ${found.target} を指すリンクです。` +
         'git worktree remove はリンクを辿るので、この木を消すとリンクの先の' +
         '中身まで消えます。2026-09-07 に実際に起き、web/data/ と web/vendor/ が' +
         `空になりました。先に cmd /c rmdir "${found.link}" でリンクだけを外し、` +

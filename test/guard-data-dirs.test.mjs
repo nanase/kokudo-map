@@ -50,6 +50,8 @@ beforeAll(() => {
     'build/pbf',
     'build/cache',
     'web/data',
+    /* 保護対象の中。ここを指すリンクも辿られれば空になる。 */
+    'web/data/pref',
     /* PROTECTED に入れないと決めた場所。入れるとリンクの検査で止まる。 */
     'web/vendor',
     'docs',
@@ -62,6 +64,7 @@ beforeAll(() => {
     'deep/a/b/c',
     'vendor-only/web',
     'unprotected',
+    'under-protected',
   ]) {
     mkdirSync(join(WT, dir), { recursive: true });
   }
@@ -73,6 +76,10 @@ beforeAll(() => {
   symlinkSync(`${REPO}/web/vendor`, `${WT}/vendor-only/web/vendor`, LINK_TYPE);
   /* 保護対象でない場所を指すリンク。 */
   symlinkSync(`${REPO}/docs`, `${WT}/unprotected/docs`, LINK_TYPE);
+  /* 保護対象の中を指すリンク。本物の web/data には pref があり、
+   * build/regions には 47 都道府県ぶんが入る。名指しで消すのとは違い、
+   * worktree の削除で辿られると黙って空になる。 */
+  symlinkSync(`${REPO}/web/data/pref`, `${WT}/under-protected/pref`, LINK_TYPE);
   /* リポジトリ自身をリンク越しに指す道。 */
   symlinkSync(REPO, REPO_VIA_LINK, LINK_TYPE);
 });
@@ -484,6 +491,9 @@ describe('worktree の削除がリンクを辿るのを止める', () => {
     [`git -C ${REPO} worktree remove .claude/worktrees/linked`],
     // 浅いところに無いリンクも見つける。
     ['git worktree remove .claude/worktrees/deep'],
+    // 保護対象の中を指すリンクも止める。名指しで消す `rm -rf build/brand` は
+    // 通すが、辿られて黙って空になるのは形が違う。
+    ['git worktree remove .claude/worktrees/under-protected'],
   ])('%s', (command) => {
     // 文面は次にすることを述べる。外すリンクを名指しするので、探し回らずに
     // 済む。
@@ -507,6 +517,21 @@ describe('worktree の削除がリンクを辿るのを止める', () => {
     expect(reason).toContain(`cmd /c rmdir "${WT}/linked/web/data"`);
     expect(reason).toContain('web/data を指すリンクです');
   });
+
+  // 文面は保護対象の名前ではなく、リンクの実際の行き先を述べる。どこが危ないか
+  // は行き先のほうが分かる。
+  test('保護対象の中を指すリンクは、その行き先を述べる', () => {
+    const reason = ask(`git worktree remove ${WT}/under-protected`);
+    expect(reason).toContain('web/data/pref を指すリンクです');
+  });
+
+  // リンクの照合を広げても、名指しで消す側の線引きは変えない。ここを一緒に
+  // 広げると `rm -rf build/brand` のような正当な後始末まで塞ぐ。
+  test.each([
+    ['rm -rf build/brand'],
+    ['rm -rf web/data/pref'],
+    ['rm -rf build/regions/nagano'],
+  ])('%s は名指しなので通る', allows);
 
   // 木が大きすぎて歩き切れなかったときは通さない。確かめずに通せば、守って
   // いるつもりのままリンクの先が消える。予算を 0 にすれば、リンクの無い木でも
