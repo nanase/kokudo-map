@@ -199,9 +199,10 @@ function stripComments(text, posix) {
 function stripHeredocs(text) {
   /* 区切り語は行の終わりに来る(`cat > notes.md <<'EOF'`)。向き先が後ろに続く
    * `cat <<'EOF' > notes.md` も同じ形である。行の途中の `<<EOF` は文章の中の
-   * 文字列で、`<<<`(here-string)は区切り語を取らない。 */
+   * 文字列で、`<<<`(here-string)は区切り語を取らない。向き先はファイル記述子を
+   * 伴うこともある(`cat <<'EOF' 2>&1`)。数字は `[<>|]` の前だけに置ける。 */
   const OPEN =
-    /(?:^|[^<])<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*(?:[<>|]+\s*\S+\s*)*$/;
+    /(?:^|[^<])<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1\s*(?:\d*[<>|]+\s*\S+\s*)*$/;
   const lines = text.split('\n');
   const out = [];
   for (let i = 0; i < lines.length; i++) {
