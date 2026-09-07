@@ -604,14 +604,23 @@ function reportLinks(candidates, cwd) {
     if (parts === null) continue;
     const found = findLink(parts.join('/'));
     if (found === null) continue;
-    const what =
-      found === 'unknown'
-        ? `${candidate} は大きすぎて、保護対象を指すリンクが無いことを確かめられませんでした。`
-        : `${found.link} は ${found.hit.join('・')} を指すリンクです。`;
+    /* 歩き切れなかったときは、リンクを名指しできない。次にすることが違うので、
+     * 見つけたときと同じ文面にしない。同じにすると、リンクを張っていない木で
+     * 止まった人が、外すべきリンクを探し回ることになる。 */
+    if (found === 'unknown') {
+      deny(
+        `${candidate} は大きすぎて、保護対象を指すリンクが無いことを` +
+          '時間内に確かめられませんでした。git worktree remove はリンクを' +
+          '辿るので、確かめられないうちは通せません。木の下にリンクがあれば ' +
+          'cmd /c rmdir で外してから消し直してください。リンクが無いのに' +
+          '止まるなら、利用者に頼んでください。',
+      );
+    }
     deny(
-      `${what}git worktree remove はリンクを辿るので、この木を消すと` +
-        'リンクの先の中身まで消えます。2026-09-07 に実際に起き、web/data/ と ' +
-        'web/vendor/ が空になりました。先に cmd /c rmdir でリンクだけを外し、' +
+      `${found.link} は ${found.hit.join('・')} を指すリンクです。` +
+        'git worktree remove はリンクを辿るので、この木を消すとリンクの先の' +
+        '中身まで消えます。2026-09-07 に実際に起き、web/data/ と web/vendor/ が' +
+        `空になりました。先に cmd /c rmdir "${found.link}" でリンクだけを外し、` +
         'そのうえで消し直してください。リンクを外すだけなら先の中身は' +
         '消えません。',
     );

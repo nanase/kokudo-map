@@ -478,8 +478,15 @@ describe('worktree の削除がリンクを辿るのを止める', () => {
     // 浅いところに無いリンクも見つける。
     ['git worktree remove .claude/worktrees/deep'],
   ])('%s', (command) => {
-    // 文面は次にすることを述べる。先にリンクだけを外せばよい。
-    expect(ask(command)).toContain('cmd /c rmdir');
+    // 文面は次にすることを述べる。外すリンクを名指しするので、探し回らずに
+    // 済む。
+    expect(ask(command)).toContain('cmd /c rmdir "');
+  });
+
+  test('止めた文面が外すリンクを名指しする', () => {
+    const reason = ask(`git worktree remove ${WT}/linked`);
+    expect(reason).toContain(`cmd /c rmdir "${WT}/linked/web/data"`);
+    expect(reason).toContain('web/data を指すリンクです');
   });
 
   // 木が大きすぎて歩き切れなかったときは通さない。確かめずに通せば、守って
@@ -493,7 +500,10 @@ describe('worktree の削除がリンクを辿るのを止める', () => {
       walkBudgetMs: 0,
     });
     expect(reason).toContain('確かめられませんでした');
-    expect(reason).toContain('cmd /c rmdir');
+    // リンクを名指しできないので、見つけたときと同じ案内をしない。同じだと、
+    // リンクを張っていない木で止まった人が外すリンクを探し回る。
+    expect(reason).toContain('リンクが無いのに止まるなら');
+    expect(reason).not.toContain('cmd /c rmdir "');
   });
 
   // PowerShell から打っても同じである。
