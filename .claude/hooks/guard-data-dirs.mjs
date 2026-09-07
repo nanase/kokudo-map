@@ -576,7 +576,7 @@ function report(candidates, cwd) {
  * ここに当たるのは worktree として異様な木だけである。
  *
  * 諦めたときは通さない。確かめずに通せば、守っているつもりのままリンクの先が
- * 消える。 */
+ * 消える。読めない場所に当たったときも同じである。 */
 const WALK_BUDGET_MS = 3000;
 
 /* 歩くのをやめる時刻。decide() が入口で書き換える。上限に当たる形を検査
@@ -584,8 +584,15 @@ const WALK_BUDGET_MS = 3000;
 let DEADLINE = 0;
 
 /**
- * 木の下にある、保護対象を指すリンクを探す。見つけたら 1 本目を返し、予算を
- * 使い切ったら 'unknown' を返す。無ければ null。
+ * 木の下にある、保護対象を指すリンクを探す。返すのは 3 通りである。
+ *
+ * - `{ link, target }` — 保護対象に触れるリンクを見つけた
+ * - `{ unsure, at }` — 無いと言い切れなかった。理由は unsure が持つ
+ * - `null` — 木の下に、保護対象に触れるリンクは無い
+ *
+ * 言い切れないときに null を返さないのが要である。確かめずに通せば、守って
+ * いるつもりのままリンクの先が消える。予算切れも、読めない場所も、同じ態度で
+ * 扱う。
  *
  * リンクの先へは降りない。降りると保護対象の中まで歩くことになり、探している
  * のはリンクそのものなので何も足さない。
@@ -594,12 +601,18 @@ function findLink(dir) {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
-  } catch {
-    /* 読めない場所は歩けない。消す木がまだ無ければ、消えるものも無い。 */
-    return null;
+  } catch (err) {
+    /* 無い場所には消える物も無い。木ごと消す命令が空振りするだけである。
+     * ENOTDIR も同じで、ディレクトリでない物の下に木は無い。 */
+    if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return null;
+    /* それ以外(読む許可が無い、掴まれている)は、無いと言い切れない。下に
+     * リンクがあっても分からないので、止める側へ倒す。以前はここも null を
+     * 返しており、予算切れでは止めるのに読めない場所は通すという食い違いが
+     * あった。 */
+    return { unsure: 'unreadable', at: dir };
   }
   for (const entry of entries) {
-    if (Date.now() >= DEADLINE) return 'unknown';
+    if (Date.now() >= DEADLINE) return { unsure: 'budget', at: dir };
     const full = `${dir}/${entry.name}`;
     if (entry.isSymbolicLink()) {
       let real;
@@ -644,16 +657,26 @@ function reportLinks(candidates, cwd) {
     if (parts === null) continue;
     const found = findLink(parts.join('/'));
     if (found === null) continue;
-    /* 歩き切れなかったときは、リンクを名指しできない。次にすることが違うので、
+    /* 言い切れなかったときは、リンクを名指しできない。次にすることが違うので、
      * 見つけたときと同じ文面にしない。同じにすると、リンクを張っていない木で
-     * 止まった人が、外すべきリンクを探し回ることになる。 */
-    if (found === 'unknown') {
+     * 止まった人が、外すべきリンクを探し回ることになる。理由によって手当ても
+     * 違うので、予算切れと読めない場所も分ける。 */
+    if (found.unsure === 'budget') {
       deny(
         `${candidate} は大きすぎて、保護対象を指すリンクが無いことを` +
           '時間内に確かめられませんでした。git worktree remove はリンクを' +
           '辿るので、確かめられないうちは通せません。木の下にリンクがあれば ' +
           'cmd /c rmdir で外してから消し直してください。リンクが無いのに' +
           '止まるなら、利用者に頼んでください。',
+      );
+    }
+    if (found.unsure === 'unreadable') {
+      deny(
+        `${found.at} を読めなかったので、保護対象を指すリンクが無いことを` +
+          '確かめられませんでした。git worktree remove はリンクを辿るので、' +
+          '確かめられないうちは通せません。その場所を読めるようにするか、' +
+          '木の下のリンクを cmd /c rmdir で外してから消し直してください。' +
+          'それでも止まるなら、利用者に頼んでください。',
       );
     }
     deny(

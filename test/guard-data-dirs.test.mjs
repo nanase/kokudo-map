@@ -21,8 +21,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -71,6 +73,8 @@ beforeAll(() => {
     'vendor-only/web',
     'unprotected',
     'under-protected',
+    /* 読めなくして試す入れ子。 */
+    'locked/inner',
   ]) {
     mkdirSync(join(WT, dir), { recursive: true });
   }
@@ -130,6 +134,45 @@ const NAME = basename(REPO);
 /* 仮の木が載っている drive のルート。Git Bash では `/c` とも `/c/` とも
  * 書く。 */
 const DRIVE = REPO.replace(/^([a-zA-Z]):.*$/, '/$1');
+
+/* 読めなくして試すディレクトリ。 */
+const LOCKED_INNER = `${WT}/locked/inner`;
+
+/**
+ * ディレクトリを読めなくする。できたなら true。
+ *
+ * 手は環境で違う。POSIX は chmod、Windows は ACL(icacls)を使う。chmod は root
+ * に効かないので、効いたかどうかを readdirSync で確かめてから答える。効かない
+ * 環境では検査そのものを飛ばす。
+ */
+function denyRead(dir) {
+  if (process.platform === 'win32') {
+    execFileSync('icacls', [dir, '/deny', `${userName()}:(RX)`], {
+      stdio: 'ignore',
+    });
+  } else {
+    chmodSync(dir, 0o000);
+  }
+  try {
+    readdirSync(dir);
+  } catch {
+    return true;
+  }
+  /* 読めてしまった。戻してから飛ばす。 */
+  allowRead(dir);
+  return false;
+}
+
+/** denyRead で読めなくしたディレクトリを元に戻す。 */
+function allowRead(dir) {
+  if (process.platform === 'win32') {
+    execFileSync('icacls', [dir, '/remove:d', userName()], { stdio: 'ignore' });
+  } else {
+    chmodSync(dir, 0o755);
+  }
+}
+
+const userName = () => process.env.USERNAME ?? process.env.USER ?? '';
 
 /** フックに命令を渡し、止めたなら理由を、通したなら null を返す。 */
 const ask = (command, toolName = 'Bash') =>
@@ -560,6 +603,33 @@ describe('worktree の削除がリンクを辿るのを止める', () => {
       expect(reason).not.toBeNull();
     }
   });
+
+  // 読めない場所に当たったときも通さない。下にリンクがあっても分からないので、
+  // 予算切れと同じ態度で扱う。文面は読めなかった場所を名指しする。手当てが
+  // 違う(読めるようにする)ので、予算切れとは別の文面にしてある。
+  //
+  // 読めなくする手は環境で違う。POSIX は chmod、Windows は ACL を使う。root で
+  // 走ると chmod が効かないので、そのときは飛ばす。
+  test('読めない場所があれば通さない', () => {
+    if (!denyRead(LOCKED_INNER)) return;
+    try {
+      const reason = ask(`git worktree remove ${WT}/locked`);
+      expect(reason).toContain('を読めなかったので');
+      expect(reason).toContain(LOCKED_INNER);
+      /* 予算切れと取り違えない。手当てが違う。 */
+      expect(reason).not.toContain('大きすぎて');
+    } finally {
+      allowRead(LOCKED_INNER);
+    }
+  });
+
+  // 無い木は通す。木ごと消す命令が空振りするだけで、消える物は無い。読めない
+  // 場所と一緒にすると、片づけ済みの worktree を消し直せなくなる。
+  test.each([
+    [`git worktree remove ${WT}/does-not-exist`],
+    // ディレクトリでない物の下に木は無い。
+    [`git worktree remove ${REPO}/docs/nothing/here`],
+  ])('%s', allows);
 
   // 両端は速さによらず決まる。予算 0 なら 1 つ目の入り口を見る前に切れ、既定の
   // 予算(3 秒)ならこの大きさの木は必ず歩き切ってリンクへ届く。上の掃引が
