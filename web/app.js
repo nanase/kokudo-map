@@ -158,6 +158,11 @@ const state = {
   // 同じものの都道府県道の側。国道と重用する県道のアークは二つのアーカイブに
   // 同じ way id で入っているので、層と同じく状態も分ける。
   prefPicked: null,
+  // そのアークの区分と、旧道かどうか。表示のトグルでそのアークが地図から
+  // 消えたかを答えるのに使う(mapspec.mjs の pickedGone)。way id だけでは、
+  // 消える区分に当たるかどうかを聞けない。
+  pickedKind: null,
+  pickedFormer: false,
   conc: 'off',
   labels: true,
   termini: true,
@@ -1098,7 +1103,7 @@ async function boot() {
   );
 
   wirePopups();
-  wireControls(document, state, applyFilters);
+  wireControls(document, state, applyFilters, closePopup);
   wireShare(document, state);
 
   map.getSource('termini').setData(terminiFeatures(state.meta));
@@ -1427,12 +1432,26 @@ document.addEventListener('click', (ev) => {
  */
 let popup = null;
 
-function pick(id, prefId = null) {
+/**
+ * 押した印を置き直す。`arc` は押されたアークの属性(popup.mjs の deepest が
+ * 返す物)で、解くときは渡らない。区分と旧道を控えるのは、表示のトグルで
+ * そのアークが消えたかを後から聞けるようにするためである
+ * (mapspec.mjs の pickedGone)。
+ */
+function pick(id, prefId = null, arc = null) {
   state.picked = id;
   state.prefPicked = prefId;
+  state.pickedKind = arc?.kind ?? null;
+  state.pickedFormer = Number(arc?.former) === 1;
   applyFilters();
 }
 
+/**
+ * 影とポップアップを一緒に閉じる。二つは一組で、片方だけ残る画面を作らない。
+ * 影だけが残れば道の無い影になり、ポップアップだけが残れば地図に無い道の説明に
+ * なる。閉じる経路(✕、詳細パネル、次のアークを押す、表示のトグルで消えた)が
+ * どれであっても、ここを通す。
+ */
 function closePopup() {
   const p = popup;
   popup = null;
@@ -1509,7 +1528,7 @@ function wirePopups() {
     if (hits.length) {
       const p = deepest(hits);
       showPopup(ev.lngLat, popupHTML(p));
-      pick(p.id);
+      pick(p.id, null, p);
       return;
     }
 
@@ -1522,7 +1541,7 @@ function wirePopups() {
     const label = state.prefLabels.get(p.pref);
     if (!label) return;
     showPopup(ev.lngLat, prefPopupHTML(p, label));
-    pick(null, p.id);
+    pick(null, p.id, p);
   });
 }
 

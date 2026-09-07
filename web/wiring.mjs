@@ -8,6 +8,7 @@
  */
 
 import { continuationCountOf, onlyButtonHTML } from './detail.mjs';
+import { pickedGone } from './mapspec.mjs';
 import {
   PREF_LIST_ROWS,
   prefGroupLabel,
@@ -306,8 +307,14 @@ export function togglePrefGroup(doc, state, keys, applyFilters) {
 /** 画面が狭いと見なす幅。style.css の @media と同じ値である。 */
 export const NARROW_QUERY = '(max-width: 860px)';
 
-/** ポップオーバーの一覧・絞り込みと、表示のトグルを state へ配線する。 */
-export function wireControls(doc, state, applyFilters) {
+/**
+ * ポップオーバーの一覧・絞り込みと、表示のトグルを state へ配線する。
+ *
+ * `closePopup` を引数で受けるのは、閉じる手続きが地図を持つ app.js にあるため
+ * である。ここから import すると、`test/wiring.test.mjs` が地図ごと読むことに
+ * なる。`applyFilters` と同じ渡し方である。
+ */
+export function wireControls(doc, state, applyFilters, closePopup) {
   const $ = (sel) => doc.querySelector(sel);
   const list = $('#route-list');
 
@@ -350,11 +357,17 @@ export function wireControls(doc, state, applyFilters) {
   const toggle = (id, key) =>
     $(id).addEventListener('change', (e) => {
       state[key] = e.target.checked;
-      // 影の層は種別で絞っていない。押されているアークを地図から外す切り替え
-      // があると、そのままでは道の無い影だけが下地図の上に残る。国道・都道府県道
-      // どちらに効くトグルも増えたので、両方の押した状態を戻す。
-      state.picked = null;
-      state.prefPicked = null;
+      // 影とポップアップは一組である。押されているアークが地図から消えたなら、
+      // 影も説明も一緒に閉じる。片方だけ残すと、道の無い影(影の層は区分で
+      // 絞っていない)か、地図に無い道の説明が残る。消えたかどうかを答えるのは
+      // mapspec.mjs の pickedGone で、閉じる手続きは app.js の closePopup が
+      // 影(state.picked / state.prefPicked)も一緒に戻す。
+      //
+      // 消えていないアークには手を触れない。海上国道を切っただけで、読んで
+      // いた車道の説明を奪わないためである。
+      if (pickedGone(state)) closePopup();
+      // closePopup() も中で描き直すが、閉じなかった場合のためにここで必ず
+      // 呼ぶ。二度描いても結果は同じである。
       applyFilters();
     });
   toggle('#t-national', 'national');

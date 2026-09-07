@@ -954,6 +954,62 @@ export function prefLayerFilter(
   );
 }
 
+/**
+ * 都道府県道のその区分が、いまのトグルで描かれるか。国道の `hiddenKinds` に
+ * 当たる問いだが、都道府県道は消える区分を数え上げられない。走れない区分は
+ * 「走れる区分ではないもの」として `pref-special` 1 層にまとまっており、区分の
+ * 一覧を持たないためである。
+ *
+ * そこで PREF_FILTERED_LAYERS の書き方をそのまま読む。`excludeToggle` が切なら
+ * `excludeKinds` が外れ、`keepToggle` が切なら `keepKinds` 以外が外れる。ここへ
+ * 区分を書き写すと、層の区分が変わったときにこちらだけが古くなる。
+ */
+export function prefKindShown(kind, toggles) {
+  for (const layer of PREF_FILTERED_LAYERS) {
+    const { excludeKinds, excludeToggle, keepKinds, keepToggle } = layer;
+    if (
+      excludeToggle &&
+      !toggles[excludeToggle] &&
+      excludeKinds.includes(kind)
+    ) {
+      return false;
+    }
+    if (keepToggle && !toggles[keepToggle] && !keepKinds.includes(kind)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * ポップアップが説明しているアークが、「表示」のトグルで地図から消えたか。
+ *
+ * 影とポップアップは一組である。影はポップアップが指しているアークの下に敷く
+ * ものなので(app.js の wirePopups)、片方だけを残すと、道の無い影か、地図に
+ * 無い道の説明が残る。どちらを閉じるかを別々に決めないよう、答えはここ 1 つに
+ * 置く。
+ *
+ * 見るのは系統・区分・旧道の三つである。トグルが動いたときにしか呼ばれないので、
+ * 選択と重用は動かない。押した時点で描かれていたのだから、そちらは通ったまま
+ * である。
+ *
+ * 区分は層の定義から導く(`hiddenKinds`・`prefKindShown`)。押していなければ
+ * 消えていない。閉じる物が無い。
+ */
+export function pickedGone(state) {
+  const pref = state.prefPicked != null;
+  if (state.picked == null && !pref) return false;
+  // 系統ごと消すトグル。選択による系統の出し入れ(`shownSystems`)は、選択が
+  // 動いていない以上ここでは変わらない。
+  if (!state[pref ? 'pref' : 'national']) return true;
+  // 旧道は区分ではなく道の性質で、共有の絞り込み式が両系統に当てる
+  // (`buildFilter` の showFormer)。
+  if (state.pickedFormer && !state.former) return true;
+  return pref
+    ? !prefKindShown(state.pickedKind, state)
+    : hiddenKinds(state).includes(state.pickedKind);
+}
+
 export const CLICKABLE_LAYERS = [
   'roads',
   'expressway',
