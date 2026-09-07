@@ -17,7 +17,9 @@ import {
   hasRef,
   hitLayerId,
   inkByRank,
+  KINDS_BY_TOGGLE,
   kindTest,
+  layerFilter,
   NOTHING,
   PREF_CASING,
   PREF_CASING_LAYER,
@@ -36,6 +38,7 @@ import {
   prefCasingColor,
   prefClickableHitLayers,
   prefLabelLayer,
+  prefLayerFilter,
   prefLayers,
   prefLineLayers,
   resolvedPrefFilter,
@@ -258,6 +261,192 @@ describe('PREF_FILTERED_LAYERS', () => {
     const labels = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-labels');
     expect(labels.toggle).toBe('labels');
   });
+});
+
+/* 「表示」の面のトグル。どれが在るかは層の表が答えるので、書き写さずに作ります。 */
+const ALL_ON = Object.fromEntries(
+  [...FILTERED_LAYERS, ...PREF_FILTERED_LAYERS]
+    .flatMap((l) => [l.toggle, l.excludeToggle, l.keepToggle])
+    .filter(Boolean)
+    .map((name) => [name, true]),
+);
+const toggles = (off) => ({ ...ALL_ON, ...off });
+
+describe('KINDS_BY_TOGGLE', () => {
+  test('区分のトグルは、線の層が描く区分から導かれる', () => {
+    expect([...KINDS_BY_TOGGLE.keys()].sort()).toEqual([
+      'expressway',
+      'ferry',
+      'special',
+    ]);
+    expect(KINDS_BY_TOGGLE.get('expressway')).toEqual(['expressway']);
+    expect(KINDS_BY_TOGGLE.get('ferry')).toEqual(['ferry']);
+    // 「点線国道・工事中・未開通」は三つの層(construction・unopened・foot)を
+    // 一つのトグルで切ります。航路は別のトグルなので入りません。
+    expect(KINDS_BY_TOGGLE.get('special')).toEqual([
+      'construction',
+      'unopened',
+      'foot',
+      'steps',
+    ]);
+  });
+
+  test('区分を外す側の層(roads・casing)は、トグルの区分を答えない', () => {
+    // 負の層は「その区分を描く層」ではないので、混ぜると `road` まで隠れます。
+    for (const kinds of KINDS_BY_TOGGLE.values())
+      expect(kinds).not.toContain('road');
+  });
+});
+
+/* 区分のトグルを切ると、線と一緒に番号のラベルも消えます(#187)。ラベルの層は
+ * 区分をまたいで 1 つしかないので、層ごと消すのではなく式で区分を外します。 */
+describe('layerFilter', () => {
+  const labels = FILTERED_LAYERS.find((l) => l.id === 'route-labels');
+  const roads = FILTERED_LAYERS.find((l) => l.id === 'roads');
+  const ferry = FILTERED_LAYERS.find((l) => l.id === 'ferry');
+
+  test('区分を持つ層は、共有の式に区分を足す', () => {
+    const base = buildFilter([18], 'off');
+    expect(layerFilter(roads, base, ALL_ON)).toEqual(
+      withKind(base, EXCLUDE_FROM_ROADS_LAYER, true),
+    );
+  });
+
+  test('トグルが切なら、区分を持つ層は層ごと消える', () => {
+    expect(layerFilter(ferry, true, toggles({ ferry: false }))).toBe(NOTHING);
+  });
+
+  test('区分のトグルが全部入なら、ラベルは共有の式のままである', () => {
+    const base = buildFilter([18], 'all', false);
+    expect(layerFilter(labels, base, ALL_ON)).toBe(base);
+  });
+
+  test('海上国道を切ると、番号のラベルからも航路が外れる', () => {
+    expect(layerFilter(labels, true, toggles({ ferry: false }))).toEqual([
+      '!',
+      kindTest(['ferry']),
+    ]);
+  });
+
+  test('点線国道・工事中・未開通を切ると、その三つの区分が外れる', () => {
+    expect(layerFilter(labels, true, toggles({ special: false }))).toEqual([
+      '!',
+      kindTest(['construction', 'unopened', 'foot', 'steps']),
+    ]);
+  });
+
+  test('複数のトグルを切ると、消えた区分がまとめて外れる', () => {
+    const filter = layerFilter(
+      labels,
+      true,
+      toggles({ ferry: false, expressway: false }),
+    );
+    expect(filter).toEqual(['!', kindTest(['expressway', 'ferry'])]);
+  });
+
+  test('選択や旧道の絞り込みと重なっても、両方が効く', () => {
+    const base = buildFilter([18], 'off', false);
+    expect(layerFilter(labels, base, toggles({ ferry: false }))).toEqual([
+      'all',
+      base,
+      ['!', kindTest(['ferry'])],
+    ]);
+  });
+
+  /* 「路線番号」のトグルは番号を全部消すものなので、区分のトグルとは別物です。
+   * ラベルの層を層ごと消せるのはこちらだけです。 */
+  test('路線番号を切ると、区分に関わりなく層ごと消える', () => {
+    expect(layerFilter(labels, true, toggles({ labels: false }))).toBe(NOTHING);
+  });
+});
+
+describe('prefLayerFilter', () => {
+  const labels = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-labels');
+  const roads = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-roads');
+  const special = PREF_FILTERED_LAYERS.find((l) => l.id === 'pref-special');
+  const driveable = kindTest(PREF_KIND_DRIVEABLE);
+
+  test('区分のトグルが全部入なら、ラベルは共有の式のままである', () => {
+    const prefBase = buildFilter(['nagano-63'], 'off');
+    expect(prefLayerFilter(labels, prefBase, ALL_ON)).toBe(prefBase);
+  });
+
+  /* 走れない区分は一覧ではなく「走れる区分ではないもの」なので、外す側ではなく
+   * 残す側を書きます(pref-special の層の式と同じ分け方)。 */
+  test('走行不能区間を切ると、番号のラベルが走れる区分だけに絞られる', () => {
+    expect(
+      prefLayerFilter(labels, true, toggles({ prefSpecial: false })),
+    ).toEqual(driveable);
+  });
+
+  test('自動車専用道路を切ると、番号のラベルから自動車専用道路が外れる', () => {
+    expect(
+      prefLayerFilter(labels, true, toggles({ expressway: false })),
+    ).toEqual(['!', kindTest(['expressway'])]);
+  });
+
+  test('二つとも切ると、番号のラベルは一般の県道だけに残る', () => {
+    expect(
+      prefLayerFilter(
+        labels,
+        true,
+        toggles({ prefSpecial: false, expressway: false }),
+      ),
+    ).toEqual(['all', driveable, ['!', kindTest(['expressway'])]]);
+  });
+
+  test('走行不能区間を切っても、線の層(pref-roads)は巻き添えにならない', () => {
+    expect(
+      prefLayerFilter(roads, true, toggles({ prefSpecial: false })),
+    ).toEqual(driveable);
+  });
+
+  test('走行不能区間を切ると、pref-special は層ごと消える', () => {
+    expect(
+      prefLayerFilter(special, true, toggles({ prefSpecial: false })),
+    ).toBe(NOTHING);
+  });
+
+  test('路線番号を切ると、区分に関わりなく層ごと消える', () => {
+    expect(prefLayerFilter(labels, true, toggles({ labels: false }))).toBe(
+      NOTHING,
+    );
+  });
+
+  test('選択や旧道の絞り込みと重なっても、両方が効く', () => {
+    const prefBase = buildFilter(['nagano-63'], 'all', false);
+    expect(
+      prefLayerFilter(labels, prefBase, toggles({ prefSpecial: false })),
+    ).toEqual(['all', driveable, prefBase]);
+  });
+});
+
+/* 残る番号は、残る線と一致していなければなりません。線が消えた区分の番号が
+ * 地図に浮いたままになるのが #187 の不具合です。 */
+describe('線が消えた区分の番号は残らない', () => {
+  const labels = FILTERED_LAYERS.find((l) => l.id === 'route-labels');
+  /** その区分の線を描く層が、いま一つでも残っているか。 */
+  const drawn = (kind, state) =>
+    FILTERED_LAYERS.some(
+      (l) =>
+        l.kinds &&
+        !l.negate &&
+        l.kinds.includes(kind) &&
+        (!l.toggle || state[l.toggle]),
+    );
+
+  for (const off of ['special', 'ferry', 'expressway']) {
+    test(`${off} を切ったとき、残る番号の区分と残る線の区分が一致する`, () => {
+      const state = toggles({ [off]: false });
+      // `['!', ['in', ['get', 'kind'], ['literal', [...]]]]` の区分の一覧。
+      const filter = layerFilter(labels, true, state);
+      const hidden = filter === true ? [] : filter[1][2][1];
+      for (const kind of EXCLUDE_FROM_ROADS_LAYER)
+        expect(hidden.includes(kind)).toBe(!drawn(kind, state));
+      // `road` は区分のトグルを持たないので、いつでも番号が出ます。
+      expect(hidden).not.toContain('road');
+    });
+  }
 });
 
 describe('pickedFilter', () => {

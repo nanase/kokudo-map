@@ -786,7 +786,13 @@ export function prefLabelLayer() {
  * 使う。 */
 export const prefLayers = () => [...prefLineLayers(), prefLabelLayer()];
 
-/** 共有の絞り込み式を、どの層にどう当てるか。 */
+/**
+ * 共有の絞り込み式を、どの層にどう当てるか。
+ *
+ * `kinds` を持つ層はその区分だけを描くので、トグルが切なら層ごと消してよい。
+ * 持たない層(`route-labels`)は 1 層で全区分を描くので、層ごと消す代わりに、
+ * 切になっているトグルの区分を式で外す(`layerFilter`)。
+ */
 export const FILTERED_LAYERS = [
   { id: 'casing', kinds: EXCLUDE_FROM_ROADS_LAYER, negate: true },
   { id: 'roads', kinds: EXCLUDE_FROM_ROADS_LAYER, negate: true },
@@ -811,6 +817,8 @@ export const FILTERED_LAYERS = [
   { id: 'unopened', kinds: KIND_UNOPENED, negate: false, toggle: 'special' },
   { id: 'foot', kinds: KIND_FOOT, negate: false, toggle: 'special' },
   { id: 'ferry', kinds: KIND_FERRY, negate: false, toggle: 'ferry' },
+  // 番号のラベル。区分をまたいで 1 層で描くので `kinds` を持たない。区分の
+  // トグルは `layerFilter` が式で当てる。
   { id: 'route-labels', kinds: null, negate: false, toggle: 'labels' },
 ];
 
@@ -828,6 +836,12 @@ export const FILTERED_LAYERS = [
  * (工事中・未開通・徒歩道・階段・航路)は都道府県道側では `pref-special` 1 層に
  * まとまっており、区分ごとの呼び名も無いので、国道の `special`/`ferry` とは
  * 別の 1 つのトグル(`prefSpecial`)を持つ。
+ *
+ * `pref-labels` は三つ目の効き方をする。区分をまたいで 1 層で描くので、区分の
+ * トグルでは層を残したまま区分だけを外す。走行不能区間は区分の一覧を持たない
+ * (「走れる区分ではないもの」である)ので、外す側ではなく残す側を
+ * `keepKinds`/`keepToggle` に書く。`pref-special` の層の式が
+ * `PREF_KIND_DRIVEABLE` の否定であるのと、同じ区分の分け方に乗る。
  */
 export const PREF_FILTERED_LAYERS = [
   {
@@ -841,7 +855,14 @@ export const PREF_FILTERED_LAYERS = [
     excludeToggle: 'expressway',
   },
   { id: 'pref-special', toggle: 'prefSpecial' },
-  { id: 'pref-labels', toggle: 'labels' },
+  {
+    id: 'pref-labels',
+    toggle: 'labels',
+    keepKinds: PREF_KIND_DRIVEABLE,
+    keepToggle: 'prefSpecial',
+    excludeKinds: KIND_EXPRESSWAY,
+    excludeToggle: 'expressway',
+  },
 ];
 
 /**
@@ -858,6 +879,80 @@ export const PREF_DEFAULT_FILTERS = new Map(
     .filter((l) => l.id !== PREF_PICKED_LAYER)
     .map((l) => [l.id, l.filter ?? true]),
 );
+
+/**
+ * 区分のトグルと、そのトグルが消す区分の対応。線の層の定義(FILTERED_LAYERS)
+ * から導く。
+ *
+ * 番号のラベルは区分をまたいで 1 層で描くので、線が消えた区分の番号を落とすには
+ * 「どのトグルがどの区分を消すか」が要る。ここへ区分を書き写すと、線の層の区分が
+ * 変わったときにラベルだけが古くなる。
+ */
+export const KINDS_BY_TOGGLE = FILTERED_LAYERS.reduce(
+  (byToggle, { kinds, negate, toggle }) => {
+    // 区分を持たない層(ラベル)と、区分を外す側の層(roads・casing)は、
+    // 「そのトグルが何を描くか」を答えない。
+    if (!toggle || !kinds || negate) return byToggle;
+    const acc = byToggle.get(toggle) ?? [];
+    for (const kind of kinds) if (!acc.includes(kind)) acc.push(kind);
+    return byToggle.set(toggle, acc);
+  },
+  new Map(),
+);
+
+/**
+ * いま切になっている区分のトグルが消す区分をすべて挙げる。`toggles` は「表示」の
+ * 面のトグルの状態(app.js の state)である。全部入なら空の配列を返す。
+ */
+export function hiddenKinds(toggles) {
+  const hidden = [];
+  for (const [toggle, kinds] of KINDS_BY_TOGGLE) {
+    if (toggles[toggle]) continue;
+    for (const kind of kinds) if (!hidden.includes(kind)) hidden.push(kind);
+  }
+  return hidden;
+}
+
+/**
+ * 国道の層 1 つぶんの絞り込み式。`base` は選択・重用・旧道を畳んだ共有の式
+ * (buildFilter)、`toggles` は「表示」の面のトグルの状態である。
+ *
+ * 表示に適用する側(app.js の applyFilters)と検査する側
+ * (pipeline/check_expressions.mjs)の両方がここを呼ぶ。二箇所で組み直すと、
+ * 片方だけが古くなる。
+ */
+export function layerFilter({ kinds, negate, toggle }, base, toggles) {
+  if (toggle && !toggles[toggle]) return NOTHING;
+  if (kinds) return withKind(base, kinds, negate);
+  // 区分を持たない層(ラベル)は 1 層で全区分を描く。層ごと消すと「路線番号」の
+  // トグルと区別が付かなくなるので、消えた区分だけを式で外す。
+  const hidden = hiddenKinds(toggles);
+  return hidden.length ? withKind(base, hidden, true) : base;
+}
+
+/**
+ * 都道府県道の層 1 つぶんの絞り込み式。層が持つ既定の区分の式
+ * (PREF_DEFAULT_FILTERS)を土台に、選択・重用・旧道を畳んだ `prefBase` を重ねる
+ * (resolvedPrefFilter)。効き方の違いは PREF_FILTERED_LAYERS の説明にある。
+ *
+ * 国道の `layerFilter` と同じく、表示に適用する側と検査する側の両方がここを
+ * 呼ぶ。
+ */
+export function prefLayerFilter(
+  { id, excludeKinds, excludeToggle, keepKinds, keepToggle, toggle },
+  prefBase,
+  toggles,
+) {
+  if (toggle && !toggles[toggle]) return NOTHING;
+  const defaultFilter = PREF_DEFAULT_FILTERS.get(id);
+  return resolvedPrefFilter(
+    keepToggle && !toggles[keepToggle]
+      ? withKind(defaultFilter, keepKinds, false)
+      : defaultFilter,
+    prefBase,
+    excludeToggle && !toggles[excludeToggle] ? excludeKinds : null,
+  );
+}
 
 export const CLICKABLE_LAYERS = [
   'roads',

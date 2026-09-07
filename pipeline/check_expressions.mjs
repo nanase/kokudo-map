@@ -28,11 +28,11 @@ const {
   prefLayers,
   buildFilter,
   withKind,
-  resolvedPrefFilter,
+  layerFilter,
+  prefLayerFilter,
   pickedFilter,
   hasRef,
   FILTERED_LAYERS,
-  PREF_DEFAULT_FILTERS,
   PREF_FILTERED_LAYERS,
   PREF_PICKED_LAYER,
   SPECIAL_KINDS,
@@ -213,17 +213,50 @@ const scenarios = [
   ],
 ];
 
+/* 「表示」の面のトグルは、どれも既定で入である。どのトグルが在るかは層の表が
+ * 既に答えているので、書き写さずにそこから作る。 */
+const ALL_ON = Object.fromEntries(
+  [...FILTERED_LAYERS, ...PREF_FILTERED_LAYERS]
+    .flatMap((l) => [l.toggle, l.excludeToggle, l.keepToggle])
+    .filter(Boolean)
+    .map((name) => [name, true]),
+);
+
+/** 国道の層すべての絞り込み。当たり判定の透明な層も、見た目の層と同じ式を持つ
+ * (app.js の applyFilters)。片方しか組まないと、本物が組む式の半分しか検査
+ * していない。 */
+function nationalFilters(base, toggles) {
+  const filters = {};
+  for (const layer of FILTERED_LAYERS) {
+    const filter = layerFilter(layer, base, toggles);
+    filters[layer.id] = filter;
+    if (CLICKABLE_LAYERS.includes(layer.id)) {
+      filters[hitLayerId(layer.id)] = filter;
+    }
+  }
+  return filters;
+}
+
+/** 同じものの都道府県道の側。影の層は押されたアークが決めるので、層の表ではなく
+ * pickedFilter が組む。 */
+function prefFiltersFor(prefBase, toggles) {
+  const filters = { [PREF_PICKED_LAYER]: pickedFilter(prefBase, 1234567) };
+  for (const layer of PREF_FILTERED_LAYERS) {
+    const resolved = prefLayerFilter(layer, prefBase, toggles);
+    filters[layer.id] = resolved;
+    if (PREF_CLICKABLE_LAYERS.includes(layer.id)) {
+      filters[hitLayerId(layer.id)] = resolved;
+    }
+  }
+  return filters;
+}
+
 for (const [selected, conc, showFormer, label] of scenarios) {
   const base = buildFilter(selected, conc, showFormer);
-  const filters = {};
-  for (const { id, kinds, negate } of FILTERED_LAYERS) {
-    const filter = kinds ? withKind(base, kinds, negate) : base;
-    filters[id] = filter;
-    // 当たり判定の透明な層も、見た目の層と同じ絞り込みを持つ(app.js の
-    // applyFilters)。ここで検査しないと、本物が組む式の半分しか検査していない。
-    if (CLICKABLE_LAYERS.includes(id)) filters[hitLayerId(id)] = filter;
-  }
-  validate(styleWith(filters), `filters validate in the style — ${label}`);
+  validate(
+    styleWith(nationalFilters(base, ALL_ON)),
+    `filters validate in the style — ${label}`,
+  );
 }
 
 /* 都道府県道の選択・重用・旧道も妥当な式でなければならない。選択のキーは
@@ -249,21 +282,34 @@ const prefScenarios = [
 
 for (const [selected, conc, showFormer, expressway, label] of prefScenarios) {
   const prefBase = buildFilter(selected, conc, showFormer);
-  const prefFilters = { [PREF_PICKED_LAYER]: pickedFilter(prefBase, 1234567) };
-  for (const { id, excludeKinds, excludeToggle } of PREF_FILTERED_LAYERS) {
-    const resolved = resolvedPrefFilter(
-      PREF_DEFAULT_FILTERS.get(id),
-      prefBase,
-      excludeToggle && !expressway ? excludeKinds : null,
-    );
-    prefFilters[id] = resolved;
-    if (PREF_CLICKABLE_LAYERS.includes(id)) {
-      prefFilters[hitLayerId(id)] = resolved;
-    }
-  }
   validate(
-    styleWith(null, prefFilters),
+    styleWith(null, prefFiltersFor(prefBase, { ...ALL_ON, expressway })),
     `prefectural filters validate in the style — ${label}`,
+  );
+}
+
+/* 区分のトグルを切ると、線と一緒に番号のラベルも消える。ラベルの層は区分を
+ * またいで 1 つしかないので、層ごと消すのではなく式で区分を外す(mapspec.mjs の
+ * layerFilter・prefLayerFilter)。両系統を一度に組み、式が仕様に適合することを
+ * 確かめる。 */
+const kindToggleScenarios = [
+  [{ special: false }, 'special toggle off'],
+  [{ ferry: false }, 'ferry toggle off'],
+  [{ expressway: false }, 'expressway toggle off'],
+  [{ prefSpecial: false }, 'prefectural special toggle off'],
+  [
+    { special: false, ferry: false, expressway: false, prefSpecial: false },
+    'every kind toggle off',
+  ],
+  [{ labels: false }, 'labels toggle off'],
+];
+
+for (const [off, label] of kindToggleScenarios) {
+  const toggles = { ...ALL_ON, ...off };
+  const base = buildFilter([], 'off', true);
+  validate(
+    styleWith(nationalFilters(base, toggles), prefFiltersFor(base, toggles)),
+    `kind toggles validate in the style — ${label}`,
   );
 }
 

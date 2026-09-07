@@ -65,11 +65,11 @@ import {
   GSI_SHADE_PAINT,
   gsiLayerId,
   hitLayerId,
+  layerFilter,
   NOTHING,
   PMTILES_URL,
   PREF_CASING_LAYER,
   PREF_CLICKABLE_LAYERS,
-  PREF_DEFAULT_FILTERS,
   PREF_FILTERED_LAYERS,
   PREF_PICKED_LAYER,
   PREF_PMTILES_URL,
@@ -78,14 +78,13 @@ import {
   prefCasingColor,
   prefClickableHitLayers,
   prefLabelLayer,
+  prefLayerFilter,
   prefLayers,
   prefLineLayers,
-  resolvedPrefFilter,
   routeLayers,
   routeSources,
   shownSystems,
   terminiFilter,
-  withKind,
 } from './mapspec.mjs';
 import {
   clearLabel,
@@ -1215,17 +1214,16 @@ function applyFilters() {
   const base = buildFilter([...state.selected], state.conc, state.former);
   const { national, pref } = shown();
 
-  for (const { id, kinds, negate, toggle } of FILTERED_LAYERS) {
-    const filter =
-      !national || (toggle && !state[toggle])
-        ? NOTHING
-        : kinds
-          ? withKind(base, kinds, negate)
-          : base;
-    map.setFilter(id, filter);
+  for (const layer of FILTERED_LAYERS) {
+    // 層ごとの式は mapspec.mjs が組む(layerFilter)。区分のトグルは区分を持つ層
+    // では層ごと、持たない層(ラベル)では式で効く。
+    const filter = national ? layerFilter(layer, base, state) : NOTHING;
+    map.setFilter(layer.id, filter);
     // 当たり判定の透明な層は見た目の層と同じ絞り込みを持つ。消した区分の上に
     // 判定が残ると、見えない道が押せる。
-    if (CLICKABLE_LAYERS.includes(id)) map.setFilter(hitLayerId(id), filter);
+    if (CLICKABLE_LAYERS.includes(layer.id)) {
+      map.setFilter(hitLayerId(layer.id), filter);
+    }
   }
 
   map.setFilter(
@@ -1234,34 +1232,20 @@ function applyFilters() {
   );
 
   // 都道府県道の選択・重用・旧道。共有の buildFilter を都道府県道の選択で
-  // 呼び直し、層が持つ既定の区分の式へ重ねる(resolvedPrefFilter)。空選択は
+  // 呼び直し、層が持つ既定の区分の式へ重ねる(prefLayerFilter)。空選択は
   // 全部出す、国道の buildFilter と同じ約束である。
   const prefBase = buildFilter(
     [...state.prefSelected],
     state.conc,
     state.former,
   );
-  for (const {
-    id,
-    excludeKinds,
-    excludeToggle,
-    toggle,
-  } of PREF_FILTERED_LAYERS) {
-    const defaultFilter = PREF_DEFAULT_FILTERS.get(id);
-    // `toggle` は層ごと消す(pref-special・pref-labels)。`excludeToggle` は
-    // 層は残したまま区分だけ外す(pref-roads・pref-casing の自動車専用道路)。
-    // 後者を層ごと消すと、その層が持つ他の区分(road)まで道連れに消える。
-    const resolved =
-      !pref || (toggle && !state[toggle])
-        ? NOTHING
-        : resolvedPrefFilter(
-            defaultFilter,
-            prefBase,
-            excludeToggle && !state[excludeToggle] ? excludeKinds : null,
-          );
-    map.setFilter(id, resolved);
-    if (PREF_CLICKABLE_LAYERS.includes(id)) {
-      map.setFilter(hitLayerId(id), resolved);
+  for (const layer of PREF_FILTERED_LAYERS) {
+    // 層ごとの式は mapspec.mjs が組む(prefLayerFilter)。`toggle` は層ごと消し
+    // (pref-special)、`excludeToggle`/`keepToggle` は層を残して区分だけ動かす。
+    const resolved = pref ? prefLayerFilter(layer, prefBase, state) : NOTHING;
+    map.setFilter(layer.id, resolved);
+    if (PREF_CLICKABLE_LAYERS.includes(layer.id)) {
+      map.setFilter(hitLayerId(layer.id), resolved);
     }
   }
 
