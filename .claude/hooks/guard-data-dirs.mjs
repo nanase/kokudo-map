@@ -91,6 +91,12 @@ const deny = (reason) => {
  * 1 回の呼び出しで見る命令は 1 つなので、引数で持ち回らない。 */
 let ROOT = '';
 let ROOT_PARTS = [];
+/* 同じ場所を、リンクを解いた実パスで述べたもの。命令の中の場所は書かれたとおりに
+ * 比べるが、リンクの先は realpathSync が解いた形で返る。リポジトリ自身がリンク
+ * 越しに指されていると、この二つは同じ場所なのに字が違う。ROOT_PARTS だけで
+ * 比べていたころ、`D:/link-to-repo` を root として渡すと、保護対象を指す
+ * ジャンクションを含む worktree の削除が素通りしていた。 */
+let REAL_ROOT_PARTS = [];
 
 /* ------------------------------------------------------------- 場所を読む --- */
 
@@ -330,19 +336,17 @@ function matcher(part) {
  * 絶対パスをリポジトリからの相対にする。ルートそのものと祖先は空配列で、
  * 保護対象を全部巻き込む。木の外なら null。
  */
-function underRoot(parts) {
+function underRoot(parts, rootParts = ROOT_PARTS) {
   if (parts === null) return null;
   /* POSIX のルート。この下に無い物は無い。 */
   if (parts.length === 1 && parts[0] === '') return [];
-  const shared = Math.min(parts.length, ROOT_PARTS.length);
+  const shared = Math.min(parts.length, rootParts.length);
   for (let i = 0; i < shared; i++) {
     /* ここも glob で見る。パス要素の突き合わせだけを glob にしていたころ、
      * `rm -rf ../NationalRouteMap*` がリポジトリごと通っていた。 */
-    if (!same(parts[i], ROOT_PARTS[i])) return null;
+    if (!same(parts[i], rootParts[i])) return null;
   }
-  return parts.length <= ROOT_PARTS.length
-    ? []
-    : parts.slice(ROOT_PARTS.length);
+  return parts.length <= rootParts.length ? [] : parts.slice(rootParts.length);
 }
 
 /**
@@ -577,8 +581,12 @@ function findLink(dir) {
         continue;
       }
       /* リンクは保護対象の第二の名前である。その名前を直に消す命令へ返すのと
-       * 同じ問いを立てる。判定を写さずに hits() をそのまま使う。 */
-      const rel = underRoot(toAbsParts(real, null));
+       * 同じ問いを立てる。判定を写さずに hits() をそのまま使う。
+       *
+       * 比べる相手は実パスのルートである。realpathSync が返すのはリンクを
+       * 解いた形なので、書かれたとおりの ROOT_PARTS と突き合わせると、
+       * リポジトリ自身がリンク越しに指されているときに当たらない。 */
+      const rel = underRoot(toAbsParts(real, null), REAL_ROOT_PARTS);
       if (rel === null) continue;
       const hit = hits(rel);
       if (hit.length > 0) return { link: full, hit };
@@ -1108,6 +1116,17 @@ export function decide({ command, toolName, root, walkBudgetMs }) {
   if (!command.trim()) return null;
   ROOT = String(root).replace(/\\/g, '/').replace(/\/+$/, '');
   ROOT_PARTS = ROOT.toLowerCase().split('/');
+  /* 解けないとき(まだ無い場所を root として渡された)は、書かれたとおりの
+   * ルートで比べる。リンクの検査が届かなくなるだけで、字を見る判定は変わらない。 */
+  try {
+    REAL_ROOT_PARTS = realpathSync(ROOT)
+      .replace(/\\/g, '/')
+      .replace(/\/+$/, '')
+      .toLowerCase()
+      .split('/');
+  } catch {
+    REAL_ROOT_PARTS = ROOT_PARTS;
+  }
   DEADLINE = Date.now() + (walkBudgetMs ?? WALK_BUDGET_MS);
   /* 前の命令が覚えた変数を持ち越さない。 */
   vars.clear();

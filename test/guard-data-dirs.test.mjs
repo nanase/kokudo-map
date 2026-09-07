@@ -73,10 +73,17 @@ beforeAll(() => {
   symlinkSync(`${REPO}/web/vendor`, `${WT}/vendor-only/web/vendor`, LINK_TYPE);
   /* 保護対象でない場所を指すリンク。 */
   symlinkSync(`${REPO}/docs`, `${WT}/unprotected/docs`, LINK_TYPE);
+  /* リポジトリ自身をリンク越しに指す道。 */
+  symlinkSync(REPO, REPO_VIA_LINK, LINK_TYPE);
 });
 afterAll(() => {
+  /* リンクは先に外す。rmSync はリンクを辿らないが、辿ったとしても先は
+   * これから消す REPO の中である。 */
+  rmSync(REPO_VIA_LINK, { recursive: true, force: true });
   for (const dir of [REPO, AWAY]) rmSync(dir, { recursive: true, force: true });
 });
+/* リポジトリを、リンクを一段はさんで指した場所。realpathSync は REPO を返す。 */
+const REPO_VIA_LINK = `${REPO}-via-link`;
 /* 同じ場所の別の書き方。Windows の `d:/…` は Git Bash では `/d/…` になる。
  * ubuntu には drive letter が無いので、その場合は元のままになる。 */
 const REPO_POSIX = REPO.replace(/^([a-zA-Z]):/, '/$1');
@@ -481,6 +488,18 @@ describe('worktree の削除がリンクを辿るのを止める', () => {
     // 文面は次にすることを述べる。外すリンクを名指しするので、探し回らずに
     // 済む。
     expect(ask(command)).toContain('cmd /c rmdir "');
+  });
+
+  // リポジトリ自身がリンク越しに指されていても止める。命令の中の場所は書かれた
+  // とおりに比べるが、リンクの先は realpathSync が解いた形で返る。書かれた
+  // とおりのルートだけで比べていたころ、この形は素通りしていた。
+  test('root がリンク越しでも止める', () => {
+    const reason = decide({
+      command: `git worktree remove ${REPO_VIA_LINK}/.claude/worktrees/linked`,
+      toolName: 'Bash',
+      root: REPO_VIA_LINK,
+    });
+    expect(reason).toContain('web/data を指すリンクです');
   });
 
   test('止めた文面が外すリンクを名指しする', () => {
