@@ -63,6 +63,8 @@ function setup(routes = ROUTES) {
     listPref: true,
     picked: null,
     prefPicked: null,
+    pickedKind: null,
+    pickedFormer: false,
     conc: 'off',
     labels: true,
     termini: true,
@@ -81,10 +83,28 @@ function setup(routes = ROUTES) {
     // 本物の updateStats と同じ数え方。両系統の合計が 0 のあいだ ✕ は出ない。
     clear.hidden = state.selected.size + state.prefSelected.size === 0;
   };
+  // 本物は app.js にあり、地図の上のポップアップを外したうえで影
+  // (picked / prefPicked)を戻す。ここでは呼ばれた回数と、影を戻す一手だけを
+  // 写す。
+  const closeCalls = [];
+  const closePopup = () => {
+    closeCalls.push(true);
+    state.picked = null;
+    state.prefPicked = null;
+    state.pickedKind = null;
+    state.pickedFormer = false;
+  };
 
-  wireControls(document, state, applyFilters);
+  wireControls(document, state, applyFilters, closePopup);
   applyRouteFilter(document, state);
-  return { window, document, state, applyCalls, applyFilters };
+  return {
+    window,
+    document,
+    state,
+    applyCalls,
+    applyFilters,
+    closeCalls,
+  };
 }
 
 describe('wireControls — 路線の選択', () => {
@@ -468,21 +488,148 @@ describe('wireControls — 重用区間', () => {
   });
 });
 
+/* 影とポップアップは一組である。トグルを切って押されているアークが地図から
+ * 消えたら両方を閉じ、残っているなら両方をそのままにする。片方だけ残ると、
+ * 道の無い影か、地図に無い道の説明が残る(issue #193)。
+ *
+ * 以前はどのトグルでも無条件に影を戻していた。区分のトグルの穴を塞ぐための
+ * 近似で、「路線番号」を切っただけでも影が消えていた。消えたかどうかを聞ける
+ * ようになったので、聞いてから閉じる。 */
 describe('wireControls — 表示のトグル', () => {
-  test('表示のトグルが state を変え、state.picked と state.prefPicked を null に戻す', () => {
-    const { document, window, state } = setup();
-    state.picked = 12345;
-    state.prefPicked = 67890;
+  /** ポップアップが開いている状態。app.js の pick() が置く印と同じ形である。 */
+  function openPopup(state, { kind, pref = false, former = false }) {
+    state.picked = pref ? null : 12345;
+    state.prefPicked = pref ? 67890 : null;
+    state.pickedKind = kind;
+    state.pickedFormer = former;
+  }
 
-    const t = document.querySelector('#t-labels');
-    t.checked = false;
-    t.dispatchEvent(new window.Event('change', { bubbles: true }));
+  /** そのトグルを裏返す。 */
+  function flip(document, window, id) {
+    const el = document.querySelector(id);
+    el.checked = !el.checked;
+    el.dispatchEvent(new window.Event('change', { bubbles: true }));
+  }
 
-    expect(state.labels).toBe(false);
+  /** 閉じた——ポップアップを外し、影も戻した。 */
+  function expectClosed(state, closeCalls) {
+    expect(closeCalls).toHaveLength(1);
     expect(state.picked).toBeNull();
-    // labels は都道府県道の pref-labels にも効くので、県道側の影も戻す
-    // (issue #171)。
     expect(state.prefPicked).toBeNull();
+  }
+
+  /** 閉じていない——ポップアップも影もそのまま。 */
+  function expectKept(state, closeCalls, { pref = false } = {}) {
+    expect(closeCalls).toHaveLength(0);
+    expect(pref ? state.prefPicked : state.picked).not.toBeNull();
+  }
+
+  test('区分のトグルで消えたアークは、影もポップアップも閉じる', () => {
+    const { document, window, state, closeCalls } = setup();
+    openPopup(state, { kind: 'construction' });
+
+    flip(document, window, '#t-special');
+
+    expect(state.special).toBe(false);
+    expectClosed(state, closeCalls);
+  });
+
+  test('区分のトグルで消えないアークは、影もポップアップも残す', () => {
+    const { document, window, state, closeCalls } = setup();
+    openPopup(state, { kind: 'road' });
+
+    // 海上国道を切っただけで、読んでいた車道の説明を奪わない。
+    flip(document, window, '#t-ferry');
+
+    expect(state.ferry).toBe(false);
+    expectKept(state, closeCalls);
+  });
+
+  test('系統のトグルは、その系統のアークだけを閉じる', () => {
+    const nat = setup();
+    openPopup(nat.state, { kind: 'road' });
+    flip(nat.document, nat.window, '#t-national');
+    expectClosed(nat.state, nat.closeCalls);
+
+    // 国道を消しても、都道府県道のアークは地図に残る。
+    const pref = setup();
+    openPopup(pref.state, { kind: 'road', pref: true });
+    flip(pref.document, pref.window, '#t-national');
+    expectKept(pref.state, pref.closeCalls, { pref: true });
+  });
+
+  test('旧道のトグルは、旧道のアークだけを閉じる', () => {
+    const old = setup();
+    openPopup(old.state, { kind: 'road', former: true });
+    flip(old.document, old.window, '#t-former');
+    expectClosed(old.state, old.closeCalls);
+
+    const now = setup();
+    openPopup(now.state, { kind: 'road' });
+    flip(now.document, now.window, '#t-former');
+    expectKept(now.state, now.closeCalls);
+  });
+
+  /* 都道府県道の走れない区分は `pref-special` 1 層にまとまっており、国道の
+   * special・ferry とは別の 1 つのトグルが持つ(mapspec.mjs の
+   * PREF_FILTERED_LAYERS)。 */
+  test('都道府県道の走行不能区間のトグルが、その区分のアークを閉じる', () => {
+    const gone = setup();
+    openPopup(gone.state, { kind: 'construction', pref: true });
+    flip(gone.document, gone.window, '#t-pref-special');
+    expectClosed(gone.state, gone.closeCalls);
+
+    const kept = setup();
+    openPopup(kept.state, { kind: 'road', pref: true });
+    flip(kept.document, kept.window, '#t-pref-special');
+    expectKept(kept.state, kept.closeCalls, { pref: true });
+  });
+
+  test('自動車専用道路のトグルは、両系統のその区分を閉じる', () => {
+    for (const pref of [false, true]) {
+      const { document, window, state, closeCalls } = setup();
+      openPopup(state, { kind: 'expressway', pref });
+      flip(document, window, '#t-expressway');
+      expectClosed(state, closeCalls);
+    }
+  });
+
+  /* アークを消さないトグル。線は地図に残っているので、その説明も影も残す。
+   * 以前はここでも影だけが消えていた。 */
+  test('路線番号・起点終点のトグルでは、影もポップアップも残す', () => {
+    for (const id of ['#t-labels', '#t-termini']) {
+      const { document, window, state, closeCalls } = setup();
+      // 区分のトグルで消える区分のアークでも、これらのトグルでは消えない。
+      openPopup(state, { kind: 'construction' });
+
+      flip(document, window, id);
+
+      expectKept(state, closeCalls);
+      expect(state.pickedKind).toBe('construction');
+    }
+  });
+
+  test('ポップアップを開いていなければ、どのトグルでも閉じにいかない', () => {
+    const { document, window, state, closeCalls } = setup();
+
+    for (const id of ['#t-special', '#t-national', '#t-former']) {
+      flip(document, window, id);
+    }
+
+    expect(closeCalls).toHaveLength(0);
+    expect(state.picked).toBeNull();
+  });
+
+  test('閉じても閉じなくても、トグルは地図を描き直す', () => {
+    const gone = setup();
+    openPopup(gone.state, { kind: 'construction' });
+    flip(gone.document, gone.window, '#t-special');
+    expect(gone.applyCalls.length).toBeGreaterThan(0);
+
+    const kept = setup();
+    openPopup(kept.state, { kind: 'road' });
+    flip(kept.document, kept.window, '#t-special');
+    expect(kept.applyCalls.length).toBeGreaterThan(0);
   });
 
   test('9 つのトグルすべてが自分のキーだけを変える', () => {
