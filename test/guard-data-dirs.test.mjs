@@ -20,7 +20,13 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -82,6 +88,22 @@ beforeAll(() => {
   symlinkSync(`${REPO}/web/data/pref`, `${WT}/under-protected/pref`, LINK_TYPE);
   /* リポジトリ自身をリンク越しに指す道。 */
   symlinkSync(REPO, REPO_VIA_LINK, LINK_TYPE);
+  /* 予算の境目をまたぐための木。歩くのに少し時間がかかるだけの中身を先に置き、
+   * 保護対象を指すリンクは名前の順で最後に来る位置へ置く。予算を小さくすると
+   * リンクへ届く前に切れ、大きくすると届く。どちらでも通らないことを見る。 */
+  for (let i = 0; i < 40; i++) {
+    const dir = join(WT, 'budget', `a${String(i).padStart(3, '0')}`);
+    mkdirSync(dir, { recursive: true });
+    for (let j = 0; j < 10; j++) writeFileSync(join(dir, `f${j}.txt`), 'x');
+    /* 保護対象でないリンク。realpathSync を通る道を厚くする。 */
+    symlinkSync(`${REPO}/docs`, join(dir, 'docs-link'), LINK_TYPE);
+  }
+  mkdirSync(join(WT, 'budget', 'zzz-last'), { recursive: true });
+  symlinkSync(
+    `${REPO}/web/data`,
+    join(WT, 'budget', 'zzz-last', 'data'),
+    LINK_TYPE,
+  );
 });
 afterAll(() => {
   /* リンクは先に外す。rmSync はリンクを辿らないが、辿ったとしても先は
@@ -516,6 +538,43 @@ describe('worktree の削除がリンクを辿るのを止める', () => {
     const reason = ask(`git worktree remove ${WT}/linked`);
     expect(reason).toContain(`cmd /c rmdir "${WT}/linked/web/data"`);
     expect(reason).toContain('web/data を指すリンクです');
+  });
+
+  // 保護対象を指すリンクを持つ木は、予算をどこで切っても通さない。答えは
+  // 「リンクを見つけた」か「歩き切れなかった」のどちらかで、通す答えが出る隙は
+  // 無い。歩き切る前に諦めれば 'unknown' を返し、最後まで歩いたなら全部を見た
+  // 後だからである。
+  //
+  // リンクは名前の順で最後に来る位置に置いてある(zzz-last)。予算を細かく変えて
+  // 境目の付近を掃く。どこで切れても通らないことだけを見るので、答えがどちらに
+  // 転ぶかは機械の速さに任せてよい。
+  test('予算をどこで切っても、リンクのある木は通さない', () => {
+    const command = `git worktree remove ${WT}/budget`;
+    for (let ms = 0; ms <= 40; ms++) {
+      const reason = decide({
+        command,
+        toolName: 'Bash',
+        root: REPO,
+        walkBudgetMs: ms,
+      });
+      expect(reason).not.toBeNull();
+    }
+  });
+
+  // 両端は速さによらず決まる。予算 0 なら 1 つ目の入り口を見る前に切れ、既定の
+  // 予算(3 秒)ならこの大きさの木は必ず歩き切ってリンクへ届く。上の掃引が
+  // 予算切れの側だけを見ていないことが、これで言える。
+  test.each([
+    [0, '確かめられませんでした'],
+    [undefined, 'web/data を指すリンクです'],
+  ])('予算 %s のときの答え', (ms, expected) => {
+    const reason = decide({
+      command: `git worktree remove ${WT}/budget`,
+      toolName: 'Bash',
+      root: REPO,
+      walkBudgetMs: ms,
+    });
+    expect(reason).toContain(expected);
   });
 
   // 文面は保護対象の名前ではなく、リンクの実際の行き先を述べる。どこが危ないか
