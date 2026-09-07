@@ -14,6 +14,25 @@
  * いたころ、`rm -rf ..` は止まるのに `rm -rf <親ディレクトリ>` は通り、
  * `../NationalRouteMap-worktree` は誤って止まっていた。
  *
+ * 消す先そのものだけでなく、消す木の下にあるリンクの先も見る。2026-09-07、
+ * worktree に張った web/data・web/vendor へのジャンクションを外さないまま
+ * `git worktree remove` を走らせ、リンクを辿った削除でメイン側の中身が消えた。
+ * リンクが在るかどうかは命令の字からは分からないので、この判定だけは
+ * ファイルシステムを見る。踏み込みは、cd の行き先の実在を existsSync で
+ * 確かめているのと同じところまでに留める。
+ *
+ * 辿るのは `git worktree remove` だけである。rm -rf・Remove-Item -Recurse・
+ * cmd /c rmdir・git clean -xdf はどれも辿らないことを実測で確かめた。だから
+ * 止めるのもこの形だけにする。gitignore の対象を指すリンクなら `--force` が
+ * 無くても通って消えるので、オプションでは見分けない。ExitWorktree は削除の
+ * 前に自分で reparse point を外すので、この経路に危険は無い。
+ *
+ * web/vendor は PROTECTED に入れない。`bun run vendor` で 6 秒で戻るので、
+ * 「git では戻らず、取り直しと再生成に何時間もかかる」という PROTECTED の
+ * 基準に当たらない。入れると `rm -rf web/vendor && bun run vendor` という
+ * 貼り直しの手順まで塞ぐ。web/vendor だけを指すリンクを持つ worktree の削除は
+ * 通り、その代償は 6 秒である。
+ *
  * 判定は近似である。命令を正しく解釈するには shell を実装することになるので、
  * 消す形かどうかを形で見る。境目は test/guard-data-dirs.test.mjs が検査する。
  *
@@ -25,7 +44,13 @@
  * 前の呼び出しで build/ に入ったままの `rm -rf pbf` は通る。木の外で打たれた
  * 相対パスまで止めるほうが害が大きい。
  */
-import { existsSync, readFileSync, writeSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  writeSync,
+} from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 /* 木ごと消されては困る場所。リポジトリのルートからの相対で述べる。 */
@@ -510,6 +535,89 @@ function report(candidates, cwd) {
   }
 }
 
+/* ------------------------------------------------- リンクの先を見る --- */
+
+/* 木を歩くのに使ってよい時間。フックの timeout は 10 秒(.claude/settings.json)
+ * なので、そこへ届く前に諦める。実測では、node_modules と build/ をどちらも
+ * 抱えた最も重い worktree でも 1 万ほどの入り口を 0.25 秒で歩き切るので、
+ * ここに当たるのは worktree として異様な木だけである。
+ *
+ * 諦めたときは通さない。確かめずに通せば、守っているつもりのままリンクの先が
+ * 消える。 */
+const WALK_BUDGET_MS = 3000;
+
+/* 歩くのをやめる時刻。decide() が入口で書き換える。上限に当たる形を検査
+ * できるように、テストは decide() から短い予算を渡せる。 */
+let DEADLINE = 0;
+
+/**
+ * 木の下にある、保護対象を指すリンクを探す。見つけたら 1 本目を返し、予算を
+ * 使い切ったら 'unknown' を返す。無ければ null。
+ *
+ * リンクの先へは降りない。降りると保護対象の中まで歩くことになり、探している
+ * のはリンクそのものなので何も足さない。
+ */
+function findLink(dir) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    /* 読めない場所は歩けない。消す木がまだ無ければ、消えるものも無い。 */
+    return null;
+  }
+  for (const entry of entries) {
+    if (Date.now() >= DEADLINE) return 'unknown';
+    const full = `${dir}/${entry.name}`;
+    if (entry.isSymbolicLink()) {
+      let real;
+      try {
+        real = realpathSync(full);
+      } catch {
+        /* 切れたリンクは辿っても何も消さない。 */
+        continue;
+      }
+      /* リンクは保護対象の第二の名前である。その名前を直に消す命令へ返すのと
+       * 同じ問いを立てる。判定を写さずに hits() をそのまま使う。 */
+      const rel = underRoot(toAbsParts(real, null));
+      if (rel === null) continue;
+      const hit = hits(rel);
+      if (hit.length > 0) return { link: full, hit };
+      continue;
+    }
+    if (entry.isDirectory()) {
+      const found = findLink(full);
+      if (found !== null) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * `git worktree remove` が消す木を調べ、保護対象を指すリンクがあれば止める。
+ *
+ * 木そのものが保護対象かどうかは見ない。worktree は木の外にも置けるし、危ないのは
+ * 木の場所ではなくリンクの指す先である。
+ */
+function reportLinks(candidates, cwd) {
+  for (const candidate of candidates) {
+    const parts = toAbsParts(candidate, cwd);
+    if (parts === null) continue;
+    const found = findLink(parts.join('/'));
+    if (found === null) continue;
+    const what =
+      found === 'unknown'
+        ? `${candidate} は大きすぎて、保護対象を指すリンクが無いことを確かめられませんでした。`
+        : `${found.link} は ${found.hit.join('・')} を指すリンクです。`;
+    deny(
+      `${what}git worktree remove はリンクを辿るので、この木を消すと` +
+        'リンクの先の中身まで消えます。2026-09-07 に実際に起き、web/data/ と ' +
+        'web/vendor/ が空になりました。先に cmd /c rmdir でリンクだけを外し、' +
+        'そのうえで消し直してください。リンクを外すだけなら先の中身は' +
+        '消えません。',
+    );
+  }
+}
+
 /**
  * pipe の手前が並べている場所。分からなければ null を返し、消す先と
  * 決めつけない。`find build -type d | sort | xargs rm -rf` の sort のような段は
@@ -779,6 +887,29 @@ function scan(text, startCwd, depth, posix) {
       continue;
     }
 
+    /* `git worktree remove` はリンクを辿る。消す木の下に保護対象を指すリンクが
+     * あれば、そこを通ってリンクの先の中身が消える。消す木そのものは保護対象で
+     * ないので、字だけを見る report() では素通りしていた。 */
+    if (nameOf(verb) === 'git' && rest.includes('worktree')) {
+      const i = rest.indexOf('worktree');
+      /* git 自身の `-C <dir>` は走る場所を移す。git clean と同じ読み方をする。 */
+      let at = cwd;
+      for (let j = 0; j < i; j++) {
+        if (rest[j] === '-C' && rest[j + 1] !== undefined) {
+          at = toAbsParts(rest[++j], at);
+        }
+      }
+      const after = rest.slice(i + 1);
+      /* 消すのは remove だけである。add・list・prune は木を消さない。 */
+      if (after.find((w) => !isFlag(w)) === 'remove') {
+        reportLinks(
+          after.slice(after.indexOf('remove') + 1).filter((w) => !isFlag(w)),
+          at,
+        );
+      }
+      continue;
+    }
+
     if (nameOf(verb) === 'git' && rest.includes('clean')) {
       /* git 自身のオプションを読み飛ばして clean を探す。オプションの値
        * (`-c k=v` の k=v、`--git-dir .git` の .git)で打ち切らない。手前に
@@ -959,11 +1090,16 @@ function scan(text, startCwd, depth, posix) {
  * 入出力を持たないので、テストは import して繰り返し呼べる。1 例ごとに node を
  * 起こしていたころは、テストファイル 1 つで全体の 21 秒を使っていた。main() も
  * 同じ関数を呼ぶので、検査されるのは写しではなく本物である。
+ *
+ * walkBudgetMs はリンクを探す木歩きに使ってよい時間で、省くと WALK_BUDGET_MS
+ * になる。渡すのはテストだけで、予算を使い切ったときの答えを検査するための
+ * 入口である。
  */
-export function decide({ command, toolName, root }) {
+export function decide({ command, toolName, root, walkBudgetMs }) {
   if (!command.trim()) return null;
   ROOT = String(root).replace(/\\/g, '/').replace(/\/+$/, '');
   ROOT_PARTS = ROOT.toLowerCase().split('/');
+  DEADLINE = Date.now() + (walkBudgetMs ?? WALK_BUDGET_MS);
   /* 前の命令が覚えた変数を持ち越さない。 */
   vars.clear();
   /* フックは Bash と PowerShell の両方を見る(.claude/settings.json の
