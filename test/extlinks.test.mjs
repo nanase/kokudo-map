@@ -47,6 +47,11 @@ describe('googleMapsZoom', () => {
     expect(googleMapsZoom(21.01)).toBe(21);
     expect(googleMapsZoom(25)).toBe(21);
   });
+
+  test('境目の値そのものはそのまま通す', () => {
+    expect(googleMapsZoom(3)).toBe(3);
+    expect(googleMapsZoom(21)).toBe(21);
+  });
 });
 
 describe('gsiZoom', () => {
@@ -61,6 +66,11 @@ describe('gsiZoom', () => {
     expect(gsiZoom(0)).toBe(5);
     expect(gsiZoom(18.6)).toBe(18);
     expect(gsiZoom(25)).toBe(18);
+  });
+
+  test('境目の値そのものはそのまま通す', () => {
+    expect(gsiZoom(5)).toBe(5);
+    expect(gsiZoom(18)).toBe(18);
   });
 });
 
@@ -84,6 +94,14 @@ describe('googleMapsURL', () => {
       'https://www.google.com/maps/@0,-180,10z',
     );
   });
+
+  // 反対側は丸めても -180(範囲に含まれる下端)のままなので、こちらに壊れる
+  // 余地は無い。境目の両側を対にして残す。
+  test('反対側(-180 に丸まる値)は境目のまま変わらない', () => {
+    expect(googleMapsURL({ lat: 0, lng: -179.9999999, zoom: 10 })).toBe(
+      'https://www.google.com/maps/@0,-180,10z',
+    );
+  });
 });
 
 describe('gsiMapURL', () => {
@@ -96,6 +114,14 @@ describe('gsiMapURL', () => {
   test('丸めと正規化を通してから組む', () => {
     expect(gsiMapURL({ lat: -89.999999999, lng: -185, zoom: 1 })).toBe(
       'https://maps.gsi.go.jp/#5/-90/175/',
+    );
+  });
+
+  // googleMapsURL と同じ丸め→正規化→丸めを通すので、境目の繰り上がりは
+  // こちらでも正規化される。
+  test('丸めた結果が 180 になる値も正規化される', () => {
+    expect(gsiMapURL({ lat: 0, lng: 179.9999999, zoom: 12 })).toBe(
+      'https://maps.gsi.go.jp/#12/0/-180/',
     );
   });
 });
