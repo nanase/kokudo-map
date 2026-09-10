@@ -8,6 +8,7 @@
  */
 
 import { continuationCountOf, onlyButtonHTML } from './detail.mjs';
+import { googleMapsURL, gsiMapURL } from './extlinks.mjs';
 import { pickedGone } from './mapspec.mjs';
 import {
   PREF_LIST_ROWS,
@@ -499,3 +500,18 @@ const CHECK_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" ' +
   'fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" ' +
   'stroke-linejoin="round"/></svg>';
+
+/**
+ * 「外部サイトで開く」の配線。開閉そのものは他のポップオーバーと同じ
+ * registerPane()(app.js)に任せ、ここでは押した瞬間の位置・縮尺を 2 本の
+ * href に書くだけを持つ。`getCamera` は `() => map.getCenter()` 相当を返す
+ * 関数で、地図を作らずに検査できるよう値そのものではなく取得手段で受け取る。
+ */
+export function wireExternalLinks(doc, getCamera) {
+  const $ = (sel) => doc.querySelector(sel);
+  $('#ext-btn').addEventListener('click', () => {
+    const camera = getCamera();
+    $('#ext-link-google').href = googleMapsURL(camera);
+    $('#ext-link-gsi').href = gsiMapURL(camera);
+  });
+}

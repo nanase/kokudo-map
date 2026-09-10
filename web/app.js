@@ -119,6 +119,7 @@ import {
   togglePrefOnly,
   toggleRouteOnly,
   wireControls,
+  wireExternalLinks,
   wireShare,
 } from './wiring.mjs';
 
@@ -648,15 +649,17 @@ const PANE_GAP = 12;
 const panes = [];
 
 /**
- * 上端はボタンに合わせる。窓の下からはみ出すなら、はみ出したぶんだけ
- * 引き上げる。低い窓ではボタンに揃えることより中身が見えることが先である。
- * 引き上げても入らない高さは中でスクロールする(style.css の max-height)。
+ * 上端の位置は基本 CSS に任せる(側へ出すものは -1px、#ext-popover の
+ * 幅が無いときは下へ出す)。窓の下からはみ出すなら、CSS が決めた位置から
+ * はみ出したぶんだけ引き上げる。低い窓ではその位置に揃えることより中身が
+ * 見えることが先である。引き上げても入らない高さは中でスクロールする
+ * (style.css の max-height)。
  */
 function fitPane(pane) {
-  pane.style.top = '-1px';
+  pane.style.top = '';
   const over =
     pane.getBoundingClientRect().bottom - (window.innerHeight - PANE_GAP);
-  if (over > 0) pane.style.top = `${-1 - over}px`;
+  if (over > 0) pane.style.top = `${pane.offsetTop - over}px`;
 }
 
 function setPane(entry, open) {
@@ -718,6 +721,8 @@ for (const [btnId, paneId] of [
   const btn = $(btnId);
   registerPane(btn, $(paneId), btn.closest('.ui-ctrl'));
 }
+// 「外部サイトで開く」はグループではなく見出しのバー(#brand)に載っている。
+registerPane($('#ext-btn'), $('#ext-popover'), $('#brand'));
 // 「道路を選択」のポップオーバーは #ranking-btn のグループへ移してある
 // (index.html)ので、持ち物の範囲は両方のグループになる。
 const selectBtn = $('#select-btn');
@@ -1105,6 +1110,7 @@ async function boot() {
   wirePopups();
   wireControls(document, state, applyFilters, closePopup);
   wireShare(document, state);
+  wireExternalLinks(document, cameraNow);
 
   map.getSource('termini').setData(terminiFeatures(state.meta));
 
