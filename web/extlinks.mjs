@@ -30,7 +30,10 @@ export function gsiZoom(zoom) {
 /** Google マップの URL。`@lat,lng,zoomz` の形で、その地点・縮尺を開く。 */
 export function googleMapsURL({ lat, lng, zoom }) {
   const la = round6(lat);
-  const lo = round6(normalizeLng(lng));
+  // 先に丸めておかないと、境目の値(179.9999999 など)が丸めで 180 ちょうどに
+  // 繰り上がったまま外へ出て `< 180` の約束を破る。そのうえで正規化の
+  // 剰余演算が持ち込む浮動小数のごく小さな誤差を、もう一度丸めて洗い流す。
+  const lo = round6(normalizeLng(round6(lng)));
   const z = googleMapsZoom(zoom);
   return `https://www.google.com/maps/@${la},${lo},${z}z`;
 }
@@ -38,7 +41,10 @@ export function googleMapsURL({ lat, lng, zoom }) {
 /** 地理院地図の URL。ハッシュに `zoom/lat/lng/` を積む。 */
 export function gsiMapURL({ lat, lng, zoom }) {
   const la = round6(lat);
-  const lo = round6(normalizeLng(lng));
+  // 先に丸めておかないと、境目の値(179.9999999 など)が丸めで 180 ちょうどに
+  // 繰り上がったまま外へ出て `< 180` の約束を破る。そのうえで正規化の
+  // 剰余演算が持ち込む浮動小数のごく小さな誤差を、もう一度丸めて洗い流す。
+  const lo = round6(normalizeLng(round6(lng)));
   const z = gsiZoom(zoom);
   return `https://maps.gsi.go.jp/#${z}/${la}/${lo}/`;
 }

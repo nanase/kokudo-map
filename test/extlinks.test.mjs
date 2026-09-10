@@ -76,6 +76,14 @@ describe('googleMapsURL', () => {
       googleMapsURL({ lat: 35.12345678, lng: 185.123456789, zoom: 25 }),
     ).toBe('https://www.google.com/maps/@35.123457,-174.876543,21z');
   });
+
+  // 丸めで 180 ちょうどに繰り上がる値は、丸めた後にもう一度正規化しないと
+  // normalizeLng() の「180 未満」の約束を破って 180 のまま出てしまう。
+  test('丸めた結果が 180 になる値も正規化される', () => {
+    expect(googleMapsURL({ lat: 0, lng: 179.9999999, zoom: 10 })).toBe(
+      'https://www.google.com/maps/@0,-180,10z',
+    );
+  });
 });
 
 describe('gsiMapURL', () => {
