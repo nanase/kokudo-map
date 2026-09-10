@@ -21,6 +21,7 @@ import {
   togglePrefOnly,
   toggleRouteOnly,
   wireControls,
+  wireExternalLinks,
 } from '../web/wiring.mjs';
 
 const indexHtml = readFileSync(
@@ -693,7 +694,7 @@ describe('clearSelection — 両系統の選択解除', () => {
   });
 });
 
-/* 地図の上のボタンから出るポップオーバー。押すまで開かないので、最初は三つとも
+/* 地図の上のボタンから出るポップオーバー。押すまで開かないので、最初は四つとも
  * hidden である。開け閉ては app.js が持つので、ここが見るのは
  * 骨格だけである。 */
 describe('地図の上の面', () => {
@@ -707,13 +708,14 @@ describe('地図の上の面', () => {
     return window.document;
   };
 
-  test('三つの面はどの画面幅でも閉じて始まる', () => {
+  test('四つの面はどの画面幅でも閉じて始まる', () => {
     for (const width of [1280, 375]) {
       const document = load(width);
       for (const id of [
         '#select-popover',
         '#ranking-popover',
         '#shared-popover',
+        '#ext-popover',
       ]) {
         expect(document.querySelector(id).hidden).toBe(true);
       }
@@ -732,6 +734,14 @@ describe('地図の上の面', () => {
       const ctrl = document.querySelector(btn).closest('.ui-ctrl');
       expect(ctrl.contains(document.querySelector(pane))).toBe(true);
     }
+  });
+
+  /* 「外部サイトで開く」はグループ(.ui-ctrl)ではなく見出しのバー(#brand)に
+   * 載っている。持ち物の範囲はそちらになる(app.js の registerPane)。 */
+  test('「外部サイトで開く」の面は #brand の中にある', () => {
+    const document = load(1280);
+    const brand = document.querySelector('#brand');
+    expect(brand.contains(document.querySelector('#ext-popover'))).toBe(true);
   });
 
   /* 「道路を選択」のポップオーバーだけは #select-btn ではなく #ranking-btn の
@@ -1050,5 +1060,36 @@ describe('syncDetailOnly — 区画の絞り込みアイコン', () => {
     syncDetailOnly(document, state);
     expect(contFunnel(document)).toBeNull();
     expect(headFunnel(document).getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+/* 「外部サイトで開く」。開け閉ては app.js の registerPane が持つので、ここで
+ * 見るのは押した瞬間の位置・縮尺を 2 本の href へ書く配線だけである。 */
+describe('wireExternalLinks', () => {
+  test('押した時点の位置・縮尺で 2 本の href を書く', () => {
+    const window = new Window({ url: 'https://example.invalid/' });
+    const document = window.document;
+    document.write(indexHtml);
+
+    let camera = { lat: 36.651289, lng: 138.180962, zoom: 12.3 };
+    wireExternalLinks(document, () => camera);
+    document.querySelector('#ext-btn').click();
+
+    expect(document.querySelector('#ext-link-google').href).toBe(
+      'https://www.google.com/maps/@36.651289,138.180962,12.3z',
+    );
+    expect(document.querySelector('#ext-link-gsi').href).toBe(
+      'https://maps.gsi.go.jp/#12/36.651289/138.180962/',
+    );
+
+    // 押し直せば、そのときの位置・縮尺に差し替わる。
+    camera = { lat: 43.062096, lng: 141.354376, zoom: 9.8 };
+    document.querySelector('#ext-btn').click();
+    expect(document.querySelector('#ext-link-google').href).toBe(
+      'https://www.google.com/maps/@43.062096,141.354376,9.8z',
+    );
+    expect(document.querySelector('#ext-link-gsi').href).toBe(
+      'https://maps.gsi.go.jp/#10/43.062096/141.354376/',
+    );
   });
 });

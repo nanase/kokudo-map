@@ -171,6 +171,7 @@ body {
 /* グループと同じ地・角丸・影で書く。名前とボタンが一枚に載っているだけで、
    浮き方は他のボタンと変わらない。 */
 #brand {
+  position: relative;
   display: flex; align-items: center; gap: 7px; height: 32px;
   padding: 0 7px 0 10px;
   background: var(--panel); color: var(--ink);
@@ -819,6 +820,20 @@ input[type="search"]::placeholder { font-size: .82em; }
 .map-popover .radios,
 .map-popover .checks { flex-direction: column; gap: 8px; }
 
+/* 「外部サイトで開く」。文字リンク 2 本だけなので、他のポップオーバーの
+   300px は要らない。中身を測って崩れない幅にする。 */
+#ext-popover { padding: 6px; width: max-content; }
+.ext-links { display: flex; flex-direction: column; gap: 2px; }
+.ext-link {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 4px;
+  color: var(--ink); text-decoration: none;
+  font-size: .82rem; font-weight: 600; white-space: nowrap;
+}
+.ext-link:hover { background: var(--panel-2); color: var(--sign-blue); }
+.ext-link svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--ink-3); }
+.ext-link:hover svg { color: var(--sign-blue); }
+
 /* ボタンの状態を示す一瞬のラベル -----------------------------------------
    タップには hover の title が出せないので、一瞬だけ状態を返す。ボタンと
    同じグループの中に置き、左へ出す。ラベルが同居するとボタンは :only-child
@@ -828,6 +843,10 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* 左上のグループも同じ理由で手前にある。グループどうしは DOM の順で重なるので、
    開いているポップオーバーを持つグループを前に出す。 */
 .ui-ctrl:has(> .map-popover:not([hidden])) { z-index: 1; }
+/* #brand は先頭にあるので、素の DOM 順では後続のグループに隠れる側になる。
+   スマートフォン幅で #ext-popover が下へ落ちると、すぐ下のグループと
+   重なる高さに来るので、開いているあいだは #brand を前に出す。 */
+#brand:has(> .map-popover:not([hidden])) { z-index: 1; }
 /* 表示のポップオーバー(#display-popover)を持つこのグループは他より先に
    足してあるので、後のグループの state-tip がポップオーバーの上に出ていた。
    ポップオーバーのほうが手前だと決めておけば、足す順に左右されない。 */
@@ -1219,6 +1238,9 @@ input[type="search"]::placeholder { font-size: .82em; }
 
 @media (max-width: 860px) {
   #map-ui { left: 8px; top: 8px; }
+  /* この幅では #brand の右に 300px を割く余地が無い。バーの下へ落とし、
+     バーの右端(ボタン自身がある側)に揃える。 */
+  #ext-popover { top: calc(100% + 8px); left: auto; right: 0; }
   /* 横に 340px を割く幅が無いので、詳細は幅いっぱいの帯にして下端へ置く。高さは
      中身に合わせ、上限は画面の高さの 42% か 240px の小さいほうにする。 */
   #detail {

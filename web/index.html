@@ -84,6 +84,23 @@
           stroke-width="1.4"/>
     <rect x="2.5" y="5.2" width="7" height="5.1" rx="1.2" fill="currentColor"/>
   </symbol>
+  <!-- 角の欠けた四角と、そこから抜ける矢印。外部リンクの定番形で、押した先が
+       このページの外だと示す。「外部サイトで開く」のボタンだけが使う。 -->
+  <symbol id="icon-external" viewBox="0 0 24 24">
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+          fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M15 3h6v6" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M10 14 21 3" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <!-- 「外部サイトで開く」のメニュー行が地点を示すために使う。 -->
+  <symbol id="icon-pin" viewBox="0 0 24 24">
+    <path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z"
+          fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+    <circle cx="12" cy="9.5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+  </symbol>
 </svg>
 
 <div id="app">
@@ -113,6 +130,34 @@
         <button type="button" id="share-btn" class="brand-btn" title="共有" aria-label="共有">
           <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-share"/></svg>
         </button>
+        <button type="button" id="ext-btn" class="brand-btn"
+                aria-expanded="false" aria-controls="ext-popover"
+                title="外部サイトで開く" aria-label="外部サイトで開く">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-external"/></svg>
+        </button>
+        <!-- href は空のまま置き、押した瞬間の位置・縮尺で wireExternalLinks()
+             (wiring.mjs)が書く。動かしている最中の値を掴まないためで、
+             location.hash(moveend の後にしか更新されない)は読まない。
+
+             #ext-btn は #brand の最後の子である前提を置く。style.css の
+             #ext-popover(スマートフォン幅)は right:0 で #brand の右端に
+             揃えており、後ろにボタンが増えるとそこからずれる。 -->
+        <div id="ext-popover" class="map-popover to-right" hidden>
+          <section>
+            <div class="ext-links">
+              <a id="ext-link-google" class="ext-link" href="" target="_blank" rel="noopener"
+                 title="Google マップを新しいタブで開く" aria-label="Google マップを新しいタブで開く">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-pin"/></svg>
+                <span>Google マップ</span>
+              </a>
+              <a id="ext-link-gsi" class="ext-link" href="" target="_blank" rel="noopener"
+                 title="地理院地図を新しいタブで開く" aria-label="地理院地図を新しいタブで開く">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-pin"/></svg>
+                <span>地理院地図</span>
+              </a>
+            </div>
+          </section>
+        </div>
       </div>
 
       <!-- 一つのグループに「開く」と「消す」が並ぶ。選択は地図に効いており、
