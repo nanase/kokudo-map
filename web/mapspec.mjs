@@ -297,6 +297,7 @@ export function baseStyle(basemap = DEFAULT_BASEMAP, shade = DEFAULT_SHADE) {
       paint: {
         'raster-opacity': opacity,
         'raster-brightness-max': brightnessMax,
+        'raster-saturation': -1,
       },
     });
   }
