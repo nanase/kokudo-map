@@ -10,6 +10,13 @@ import {
   COLOR_FERRY,
   COLOR_FOOT,
   COLOR_UNOPENED,
+  GSI_BASEMAP_ORDER,
+  GSI_BASEMAPS,
+  GSI_SATURATION,
+  GSI_SATURATION_LABELS,
+  GSI_SATURATION_LEVELS,
+  GSI_SHADE_LABELS,
+  GSI_SHADE_LEVELS,
   N_COLORS,
   N_LABELS,
   PREF_GENERAL,
@@ -372,5 +379,121 @@ export function freshnessHTML(meta, now = Date.now()) {
     `<dd>${esc(meta.oldest_edit)} 〜 ${esc(meta.newest_edit)}</dd>` +
     '<dt>OSM 取得元</dt>' +
     `<dd>${esc(meta.endpoints.join(' / '))}</dd>`
+  );
+}
+
+/* ------------------------------------------------------------ 地図の面 --- */
+/** 地図の種類の見本の、画面での寸法。scripts/make_basemap_thumbs.mjs はこの
+ *  3 倍で焼く。 */
+export const BASEMAP_THUMB_SIZE = { width: 76, height: 58 };
+
+/**
+ * 明るさごとの、しずくの満ち方と水面の傾き。明るいは輪郭だけ、暗いは縁まで
+ * 満ちて平ら。ふつうは半分より少し下に傾いた水面を置く。この傾きが「液体」に
+ * 読め、抽象的な目盛りと見分けが付く。
+ */
+const SHADE_FILL = { light: 0, normal: 0.42, dark: 1 };
+const SHADE_TILT = { light: 0, normal: 10.4, dark: 0 }; // 幅18に対し約30度
+
+/** しずく。暗いほど下から満ちる。三つが同じ面に並ぶので、クリップの id は
+ *  明るさごとに分ける。 */
+export function shadeIcon(level) {
+  const drop =
+    'M12 2.4C12 2.4 5 11.2 5 15.6a7 7 0 0 0 14 0C19 11.2 12 2.4 12 2.4Z';
+  const clip = `shade-drop-clip-${level}`;
+  const top = 2.4;
+  const bottom = 22.6; // 15.6 + 7 の半径ぶん下
+  const fillH = (bottom - top) * SHADE_FILL[level];
+  const fillY = bottom - fillH;
+  const halfTilt = SHADE_TILT[level] / 2;
+  const leftY = (fillY + halfTilt).toFixed(2); // 左下から右上へ上がる液面
+  const rightY = (fillY - halfTilt).toFixed(2);
+  const below = (bottom + 3).toFixed(2); // クリップの外まで伸ばして隙間をなくす
+  const liquid =
+    fillH <= 0
+      ? ''
+      : `<g clip-path="url(#${clip})">` +
+        `<polygon points="3,${below} 3,${leftY} 21,${rightY} 21,${below}" fill="currentColor"/>` +
+        '</g>';
+  return (
+    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    `<defs><clipPath id="${clip}"><path d="${drop}"/></clipPath></defs>` +
+    liquid +
+    `<path d="${drop}" fill="none" stroke="currentColor" stroke-width="1.7"/>` +
+    '</svg>'
+  );
+}
+
+/**
+ * 色の見本。水・緑地・建物を思わせる三色の帯に、地図と同じ彩度を掛ける。
+ * `raster-saturation` の -0.6 は CSS の saturate(0.4) に当たる。値は
+ * mapspec.mjs の GSI_SATURATION だけが持つ。
+ */
+const saturationSwatch = (level) =>
+  `<span class="bm-swatch" style="filter:saturate(${1 + GSI_SATURATION[level]})"></span>`;
+
+/** 1 列ぶんのラジオボタン。選択は `:checked` が持ち、見た目は CSS が付ける。 */
+const radio = (name, value, current, inner, label) =>
+  `<label class="bm-opt" title="${label}">` +
+  `<input type="radio" name="${name}" value="${value}"` +
+  `${value === current ? ' checked' : ''} aria-label="${label}">` +
+  `${inner}</label>`;
+
+/**
+ * 「地図」パネルの中身。地図の種類・明るさ・色の三つである。
+ *
+ * 種類は見本の絵で選ばせる。見本には明るさと色を掛けない。モノクロにすると
+ * 三枚とも灰色になり、見分けるための絵にならない。
+ *
+ * 明るさと色はアイコンだけのボタンにし、いま選んでいる値を見出しの下に字で出す
+ * (`.bm-now`)。三つの字を並べるには幅が足りない。字を差し替えるのは app.js で
+ * ある。
+ */
+export function basemapPaneHTML({ basemap, shade, saturation }) {
+  const { width, height } = BASEMAP_THUMB_SIZE;
+  const kinds = GSI_BASEMAP_ORDER.map((id) => {
+    const { label, thumb } = GSI_BASEMAPS[id];
+    return radio(
+      'basemap',
+      id,
+      basemap,
+      `<img src="${thumb}" alt="" width="${width}" height="${height}">` +
+        `<span>${label}</span>`,
+      label,
+    );
+  }).join('');
+  const row = (key, heading, name, levels, labels, current, icon) =>
+    '<div class="bm-row">' +
+    `<div><h2 id="bm-${key}-h">${heading}</h2>` +
+    `<span class="bm-now" id="bm-${key}-now">${labels[current]}</span></div>` +
+    `<div class="bm-seg" role="radiogroup" aria-labelledby="bm-${key}-h">` +
+    levels
+      .map((lv) => radio(name, lv, current, icon(lv), labels[lv]))
+      .join('') +
+    '</div></div>';
+  return (
+    '<section><h2 id="bm-kind-h">地図の種類</h2>' +
+    `<div class="bm-kinds" role="radiogroup" aria-labelledby="bm-kind-h">${kinds}</div>` +
+    '</section>' +
+    '<section class="bm-rows">' +
+    row(
+      'shade',
+      '明るさ',
+      'gsi-shade',
+      GSI_SHADE_LEVELS,
+      GSI_SHADE_LABELS,
+      shade,
+      shadeIcon,
+    ) +
+    row(
+      'saturation',
+      '色',
+      'gsi-saturation',
+      GSI_SATURATION_LEVELS,
+      GSI_SATURATION_LABELS,
+      saturation,
+      saturationSwatch,
+    ) +
+    '</section>'
   );
 }

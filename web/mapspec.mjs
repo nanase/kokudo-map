@@ -42,29 +42,38 @@ export const GSI_TILES =
 /* 下地図は、上に載る国道に触れないまま別の地理院タイルへ差し替えられる。
  * タイルの切り方も出典も同じで、違うのは絵だけである。三つともラスタ層として
  * 描くので(baseStyle)、切り替えは表示・非表示の反転であって、ソースの
- * 作り直しではない。 */
+ * 作り直しではない。
+ *
+ * `thumb` は「地図」パネルが種類を選ばせる見本の絵で、
+ * scripts/make_basemap_thumbs.mjs が `tiles` から焼く。`label` は見本の下に
+ * 出すので、幅 76 px に収まる長さにする。写真は見本を見れば航空写真だと分かる。 */
 export const GSI_BASEMAPS = {
-  pale: { label: '淡色地図', tiles: GSI_TILES },
+  pale: { label: '淡色地図', tiles: GSI_TILES, thumb: 'basemaps/pale.png' },
   std: {
     label: '標準地図',
     tiles: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
+    thumb: 'basemaps/std.png',
   },
   photo: {
-    label: '写真（航空写真）',
+    label: '写真',
     tiles: 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg',
+    thumb: 'basemaps/photo.jpg',
   },
 };
 export const GSI_BASEMAP_ORDER = ['pale', 'std', 'photo'];
 export const DEFAULT_BASEMAP = 'pale';
 
-/* 下地図の濃さ。三つの下地図の層が同じ値を使うので、下地図を切り替えても濃さは
- * 残る。暗くするための層は別に持たない。
+/* 下地図の明るさ。三つの下地図の層が同じ値を使うので、下地図を切り替えても
+ * 明るさは残る。暗くするための層は別に持たない。
+ *
+ * 値の名前(light/normal/dark)は「濃さ」と呼んでいたころのままである。
+ * localStorage に残っている選択を読めるよう、呼び名だけを変えた。
  *
  * `raster-opacity` だけでは決まらない。これはタイルをページの地と混ぜるので、
  * 明るい配色では白に、暗い配色では黒に近づき、不透明度を上げると人によって
  * 明るくも暗くもなる。`raster-brightness-max` は混ぜる前にタイルの画素を
  * 縮めるので、下げればどの地の上でも暗くなる。不透明度はこのサイトがずっと
- * 配ってきた 0.82 のままにし、`light` は今までの絵を保つ。濃い側の二段だけが
+ * 配ってきた 0.82 のままにし、`light` は今までの絵を保つ。暗い側の二段だけが
  * 明るさを動かす。 */
 export const GSI_SHADE_LEVELS = ['light', 'normal', 'dark'];
 export const GSI_SHADE_PAINT = {
@@ -72,8 +81,30 @@ export const GSI_SHADE_PAINT = {
   normal: { opacity: 0.82, brightnessMax: 0.82 },
   dark: { opacity: 0.82, brightnessMax: 0.62 },
 };
-export const GSI_SHADE_LABELS = { light: '薄い', normal: '通常', dark: '濃い' };
+export const GSI_SHADE_LABELS = {
+  light: '明るい',
+  normal: 'ふつう',
+  dark: '暗い',
+};
 export const DEFAULT_SHADE = 'light';
+
+/* 下地図の色。国道と都道府県道の線は色で格を読ませるので、下地図の色が線に
+ * 混ざる。淡色地図では高速道路が薄い緑で描かれ、主要地方道の緑と見分けにくい
+ * (PR #200)。一方、色を抜くと海も川も灰色になり、地図としては読みにくくなる。
+ * どちらを取るかは見る物によるので、選ばせる。既定は今までの絵を保つカラーで
+ * ある。
+ *
+ * 値は `raster-saturation` にそのまま渡す。-1 で灰色、0 で元の色である。
+ * ひかえめの -0.6 は、水の青と高速道路の緑がうっすら残る値を目で決めた。
+ * 「地図」パネルの見本の色帯も、同じ値から CSS の saturate() を組む。 */
+export const GSI_SATURATION_LEVELS = ['color', 'soft', 'mono'];
+export const GSI_SATURATION = { color: 0, soft: -0.6, mono: -1 };
+export const GSI_SATURATION_LABELS = {
+  color: 'カラー',
+  soft: 'ひかえめ',
+  mono: 'モノクロ',
+};
+export const DEFAULT_SATURATION = 'color';
 
 /* このサイトから配る。ラベルは路線番号を `・` で繋いだ物なので、使う字は数字と
  * 区切りの 11 字、2 ファイル約 5 kB である。scripts/make_glyphs.mjs が Noto
@@ -271,7 +302,11 @@ function lineWidth({ add = 0, scaleByN = true } = {}) {
 /** 下地図の層の id。`gsi-pale` のような形で、どれを出すかを選ぶのにも使う。 */
 export const gsiLayerId = (basemap) => `gsi-${basemap}`;
 
-export function baseStyle(basemap = DEFAULT_BASEMAP, shade = DEFAULT_SHADE) {
+export function baseStyle(
+  basemap = DEFAULT_BASEMAP,
+  shade = DEFAULT_SHADE,
+  saturation = DEFAULT_SATURATION,
+) {
   const attribution =
     '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>';
   const { opacity, brightnessMax } = GSI_SHADE_PAINT[shade];
@@ -297,7 +332,7 @@ export function baseStyle(basemap = DEFAULT_BASEMAP, shade = DEFAULT_SHADE) {
       paint: {
         'raster-opacity': opacity,
         'raster-brightness-max': brightnessMax,
-        'raster-saturation': -1,
+        'raster-saturation': GSI_SATURATION[saturation],
       },
     });
   }

@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test';
 import spec from '@maplibre/maplibre-gl-style-spec';
 
 import {
+  baseStyle,
   buildFilter,
   CLICKABLE_LAYERS,
   clickableHitLayers,
@@ -19,6 +20,11 @@ import {
   EXCLUDE_FROM_ROADS_LAYER,
   FILTERED_LAYERS,
   formerOpacity,
+  GSI_BASEMAP_ORDER,
+  GSI_SATURATION,
+  GSI_SATURATION_LEVELS,
+  GSI_SHADE_LEVELS,
+  gsiLayerId,
   hasRef,
   hitLayerId,
   inkByRank,
@@ -969,6 +975,47 @@ describe('ソース', () => {
   test('起終点は GeoJSON で、最初は空である', () => {
     expect(sources.termini.type).toBe('geojson');
     expect(sources.termini.data.features).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------- 下地図 --- */
+describe('下地図', () => {
+  const rasters = (style) =>
+    GSI_BASEMAP_ORDER.map(
+      (id) => style.layers.find((l) => l.id === gsiLayerId(id)).paint,
+    );
+
+  test('既定の色はカラーで、PR #200 より前の絵を保つ', () => {
+    // 色を抜くのは選んだ人だけです。既定で抜くと、海も川も灰色の地図を全員に
+    // 配ることになります。
+    for (const paint of rasters(baseStyle())) {
+      expect(paint['raster-saturation']).toBe(0);
+    }
+  });
+
+  test('色の選択は三つの下地図すべてに同じ値で載る', () => {
+    // 種類を切り替えても色が残るのは、隠れている層にも同じ値があるからです。
+    for (const level of GSI_SATURATION_LEVELS) {
+      for (const paint of rasters(baseStyle('pale', 'light', level))) {
+        expect(paint['raster-saturation']).toBe(GSI_SATURATION[level]);
+      }
+    }
+  });
+
+  test('色は -1(灰色)から 0(元の色)の範囲で、カラーからモノクロへ抜けていく', () => {
+    const values = GSI_SATURATION_LEVELS.map((l) => GSI_SATURATION[l]);
+    expect(values[0]).toBe(0);
+    expect(values.at(-1)).toBe(-1);
+    expect([...values].sort((a, b) => b - a)).toEqual(values);
+  });
+
+  test('明るさと色のどの組み合わせも MapLibre のスタイルとして通る', () => {
+    for (const shade of GSI_SHADE_LEVELS) {
+      for (const level of GSI_SATURATION_LEVELS) {
+        const errors = spec.validateStyleMin(baseStyle('photo', shade, level));
+        expect(errors).toEqual([]);
+      }
+    }
   });
 });
 

@@ -2,15 +2,25 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { Window } from 'happy-dom';
 // 色の写しは置かない。凡例の見本が地図の線と同じ色かどうかを見るので、地図の
 // 定義そのものを読む。
 import {
+  GSI_BASEMAP_ORDER,
+  GSI_BASEMAPS,
+  GSI_SATURATION,
+  GSI_SATURATION_LABELS,
+  GSI_SATURATION_LEVELS,
+  GSI_SHADE_LABELS,
+  GSI_SHADE_LEVELS,
   PREF_CASING,
   PREF_GENERAL,
   PREF_MAJOR,
   PREF_MAJOR_INK,
 } from '../web/mapspec.mjs';
 import {
+  BASEMAP_THUMB_SIZE,
+  basemapPaneHTML,
   clearLabel,
   countLabel,
   freshnessHTML,
@@ -609,5 +619,95 @@ describe('prefGroupLabel', () => {
   test('切ったときは、切ったと言う', () => {
     // 暗黙のうちに落とすと「これで全部」と読まれます。
     expect(prefGroupLabel(200, 5123)).toBe('都道府県道 ── 上位 200 / 5,123 件');
+  });
+});
+
+describe('basemapPaneHTML', () => {
+  const html = basemapPaneHTML({
+    basemap: 'std',
+    shade: 'normal',
+    saturation: 'mono',
+  });
+  const { document: doc } = new Window();
+  doc.body.innerHTML = html;
+  const values = (name) =>
+    [...doc.querySelectorAll(`input[name="${name}"]`)].map((i) => i.value);
+  const checked = (name) =>
+    doc.querySelector(`input[name="${name}"]:checked`)?.value;
+
+  test('選択肢は mapspec.mjs の定義の並びそのままである', () => {
+    expect(values('basemap')).toEqual(GSI_BASEMAP_ORDER);
+    expect(values('gsi-shade')).toEqual(GSI_SHADE_LEVELS);
+    expect(values('gsi-saturation')).toEqual(GSI_SATURATION_LEVELS);
+  });
+
+  test('いまの選択に印が付き、見出しの下にその名前が出る', () => {
+    expect(checked('basemap')).toBe('std');
+    expect(checked('gsi-shade')).toBe('normal');
+    expect(checked('gsi-saturation')).toBe('mono');
+    expect(doc.querySelector('#bm-shade-now').textContent).toBe(
+      GSI_SHADE_LABELS.normal,
+    );
+    expect(doc.querySelector('#bm-saturation-now').textContent).toBe(
+      GSI_SATURATION_LABELS.mono,
+    );
+  });
+
+  test('アイコンだけの選択肢も、読み上げと title で名前を持つ', () => {
+    for (const [name, labels] of [
+      ['gsi-shade', GSI_SHADE_LABELS],
+      ['gsi-saturation', GSI_SATURATION_LABELS],
+    ]) {
+      for (const input of doc.querySelectorAll(`input[name="${name}"]`)) {
+        expect(input.getAttribute('aria-label')).toBe(labels[input.value]);
+        expect(input.closest('label').getAttribute('title')).toBe(
+          labels[input.value],
+        );
+      }
+    }
+  });
+
+  test('種類の見本は定義の絵を、画面の寸法で指す', () => {
+    const imgs = [...doc.querySelectorAll('.bm-kinds img')];
+    expect(imgs.map((i) => i.getAttribute('src'))).toEqual(
+      GSI_BASEMAP_ORDER.map((id) => GSI_BASEMAPS[id].thumb),
+    );
+    for (const img of imgs) {
+      expect(Number(img.getAttribute('width'))).toBe(BASEMAP_THUMB_SIZE.width);
+      expect(Number(img.getAttribute('height'))).toBe(
+        BASEMAP_THUMB_SIZE.height,
+      );
+    }
+  });
+
+  test('見本の絵は配るファイルとして在る', () => {
+    // scripts/make_basemap_thumbs.mjs が焼いて追跡しています。名前だけ変えて
+    // 焼き直し忘れると、パネルに壊れた画像が三つ並びます。
+    for (const id of GSI_BASEMAP_ORDER) {
+      expect(() =>
+        readFileSync(
+          new URL(`../web/${GSI_BASEMAPS[id].thumb}`, import.meta.url),
+        ),
+      ).not.toThrow();
+    }
+  });
+
+  test('色の見本は地図と同じ彩度を掛ける', () => {
+    // raster-saturation の -0.6 は CSS の saturate(0.4) に当たります。
+    const filters = [...doc.querySelectorAll('.bm-swatch')].map((s) =>
+      s.getAttribute('style'),
+    );
+    expect(filters).toEqual(
+      GSI_SATURATION_LEVELS.map(
+        (l) => `filter:saturate(${1 + GSI_SATURATION[l]})`,
+      ),
+    );
+  });
+
+  test('しずくのクリップは明るさごとに別の id を持つ', () => {
+    // 三つが同じ面に並びます。id が重なると、どの url(#…) がどれを指すかは
+    // ブラウザ任せになります。
+    const ids = [...doc.querySelectorAll('clipPath')].map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
