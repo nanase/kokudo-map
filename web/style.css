@@ -157,7 +157,7 @@ body {
    グループは MapLibre 自身のボタンと同じクラス(maplibregl-ctrl-group)で書く。
    地の色・角丸・影は vendor/maplibre-gl.css とこのファイルの
    `.maplibregl-ctrl-group` が持ち、ここが足すのは並べ方だけである。右上の拡大・
-   表示・地図の種類と寸法まで揃う。
+   表示・地図と寸法まで揃う。
 
    列そのものは地図を掴む操作を通す。バーとグループだけが受け取る。 */
 #map-ui {
@@ -736,25 +736,22 @@ input[type="search"]::placeholder { font-size: .82em; }
    形を揃えて読み込み順に頼らない。 */
 .hide-routes-ctrl button.active:hover { background: var(--danger-hover); }
 
-/* 地図の種類・濃さボタン ---------------------------------------------------
-   二つで一つのグループである。どちらも下地図の見え方を決めるので、離さない。 */
-.basemap-ctrl button {
-  display: grid; place-items: center; color: var(--ink-2);
-}
-.basemap-ctrl button svg { width: 17px; height: 17px; display: block; }
-
-/* 表示のボタンと、そこから出るポップオーバー ------------------------------
+/* 表示・地図のボタンと、そこから出るポップオーバー ------------------------
    ボタンは他と同じグループに載る。 */
-.display-ctrl button {
+.display-ctrl > button, .basemap-ctrl > button {
   display: grid; place-items: center; color: var(--ink-2);
 }
-.display-ctrl button svg { width: 17px; height: 17px; display: block; }
+.display-ctrl > button svg, .basemap-ctrl > button svg {
+  width: 17px; height: 17px; display: block;
+}
 /* ポップオーバーが開いているあいだ、ボタンは押されたままである。地の青と字の
    色を入れ替えて示す。 */
-.display-ctrl button.active { background: var(--sign-blue); color: var(--panel); }
+.display-ctrl > button.active, .basemap-ctrl > button.active {
+  background: var(--sign-blue); color: var(--panel);
+}
 /* maplibre-gl.css 側の hover 規則と同じ形で書いて、記述順に頼らず勝つ
    (.hide-routes-ctrl button.active:hover と同じ理由)。 */
-.display-ctrl button.active:hover {
+.display-ctrl button.active:hover, .basemap-ctrl button.active:hover {
   background-color: var(--sign-blue); filter: brightness(1.12);
 }
 
@@ -820,6 +817,55 @@ input[type="search"]::placeholder { font-size: .82em; }
 .map-popover .radios,
 .map-popover .checks { flex-direction: column; gap: 8px; }
 
+/* 地図の面 -----------------------------------------------------------------
+   種類は見本の絵、明るさと色はアイコンの 3 択である。どれもラジオボタンで、
+   丸は隠して枠と地で選択を示す。矢印キーで選び直せるのはラジオのままだから
+   である。 */
+.bm-kinds { display: grid; grid-template-columns: repeat(3, 76px); gap: 8px; }
+.bm-opt { position: relative; cursor: pointer; }
+.bm-opt input {
+  position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer;
+}
+.bm-opt:has(input:focus-visible) {
+  outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px;
+}
+.bm-kinds .bm-opt {
+  display: flex; flex-direction: column; gap: 5px;
+  color: var(--ink-2); font-size: .72rem; font-weight: 700; text-align: center;
+}
+/* 選んだ見本の枠は、絵と枠のあいだに地の色の隙間を挟んで二重にする。絵の端の
+   色に枠が溶けない。 */
+.bm-kinds img {
+  display: block; width: 76px; height: 58px; border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.bm-kinds .bm-opt:has(input:checked) { color: var(--sign-blue); }
+.bm-kinds .bm-opt:has(input:checked) img {
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--sign-blue);
+}
+.bm-rows { gap: 10px; }
+.bm-row {
+  display: grid; grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center; gap: 10px;
+}
+.bm-now { display: block; margin-top: 3px; font-size: .74rem; color: var(--ink-2); }
+.bm-seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.bm-seg .bm-opt {
+  display: grid; place-items: center; height: 32px; border-radius: 6px;
+  color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line);
+}
+.bm-seg .bm-opt:hover { background: var(--panel-2); }
+.bm-seg .bm-opt svg { width: 17px; height: 17px; }
+.bm-seg .bm-opt:has(input:checked) {
+  background: var(--sign-blue); color: var(--panel); box-shadow: none;
+}
+/* 色の見本。水・緑地・建物の三色に、地図と同じ彩度を掛ける(panel.mjs)。 */
+.bm-swatch {
+  width: 30px; height: 16px; border-radius: 3px;
+  background: linear-gradient(90deg, #8FC1EE 0 34%, #9ED08A 34% 67%, #F2B872 67%);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.14);
+}
+
 /* 「外部サイトで開く」。文字リンク 2 本だけなので、他のポップオーバーの
    300px は要らない。中身を測って崩れない幅にする。 */
 #ext-popover { padding: 6px; width: max-content; }
@@ -850,10 +896,9 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* 表示のポップオーバー(#display-popover)を持つこのグループは他より先に
    足してあるので、後のグループの state-tip がポップオーバーの上に出ていた。
    ポップオーバーのほうが手前だと決めておけば、足す順に左右されない。 */
-.display-ctrl { z-index: 1; }
+.display-ctrl, .basemap-ctrl { z-index: 1; }
 #pitch-btn:focus,
 #hide-routes-btn:focus,
-#gsi-shade-btn:focus,
 #basemap-btn:focus,
 #display-btn:focus {
   border-radius: inherit;

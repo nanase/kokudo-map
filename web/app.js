@@ -56,10 +56,13 @@ import {
   CLICKABLE_LAYERS,
   clickableHitLayers,
   DEFAULT_BASEMAP,
+  DEFAULT_SATURATION,
   DEFAULT_SHADE,
   FILTERED_LAYERS,
   GSI_BASEMAP_ORDER,
-  GSI_BASEMAPS,
+  GSI_SATURATION,
+  GSI_SATURATION_LABELS,
+  GSI_SATURATION_LEVELS,
   GSI_SHADE_LABELS,
   GSI_SHADE_LEVELS,
   GSI_SHADE_PAINT,
@@ -87,6 +90,7 @@ import {
   terminiFilter,
 } from './mapspec.mjs';
 import {
+  basemapPaneHTML,
   clearLabel,
   countLabel,
   freshnessHTML,
@@ -188,7 +192,7 @@ const $ = (sel) => document.querySelector(sel);
 maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
 
 /**
- * 前回選んだ下地図の種類と濃さ。地図を作る前に読んでスタイルへ渡し、既定で
+ * 前回選んだ下地図の種類・明るさ・色。地図を作る前に読んでスタイルへ渡し、既定で
  * 描いてから描き直す形にしない。
  */
 function readStored(key, allowed, fallback) {
@@ -201,6 +205,11 @@ function readStored(key, allowed, fallback) {
 }
 let basemap = readStored('gsi-basemap', GSI_BASEMAP_ORDER, DEFAULT_BASEMAP);
 let gsiShade = readStored('gsi-shade', GSI_SHADE_LEVELS, DEFAULT_SHADE);
+let gsiSaturation = readStored(
+  'gsi-saturation',
+  GSI_SATURATION_LEVELS,
+  DEFAULT_SATURATION,
+);
 
 /* ------------------------------------------------------------------ 配色 --- */
 /**
@@ -262,7 +271,7 @@ const map = new maplibregl.Map({
   // ここで使う字は数字と `・` だけで、すべて配ってあるので、端末で描いても得る
   // のは機械ごとに形の変わる区切りと、CJK の書体が無い端末での消失だけである。
   localIdeographFontFamily: false,
-  style: baseStyle(basemap, gsiShade),
+  style: baseStyle(basemap, gsiShade, gsiSaturation),
   // 既定の表示位置。全国が一枚に収まり、北海道から沖縄まで切れない位置を目で
   // 決めた(`#4.62/35.79/137.92`)。meta.bbox に自動で合わせると、南鳥島のような
   // 離れた点まで入れようとして日本が小さく片寄る。
@@ -500,8 +509,8 @@ function cycleButton(
  * 一つのグループにボタンを一つ以上載せる MapLibre の IControl。
  * `addControl(…, 'top-right')` するだけで角丸のグループごと縦に積まれる。
  *
- * グループを分けるかどうかがボタンの近さの表し方である。地図の種類と濃さの
- * ように同じ絵の見え方を決める二つは一つに載せ、役目の違うものは分ける。
+ * グループを分けるかどうかがボタンの近さの表し方である。同じ物の見え方を
+ * 決めるボタンは一つに載せ、役目の違うものは分ける。
  */
 function buildCycleControl(className, ...specs) {
   return class CycleControl {
@@ -634,13 +643,13 @@ const HideRoutesControl = buildCycleControl('hide-routes-ctrl', {
 /**
  * 地図の上のボタンを押すと、そのグループの脇から出るポップオーバー。左上の
  * 「道路を選択」「国道重用区間ランキング」「起点・終点が重なる地点」と、
- * 右上の「表示」の四つが同じ仕掛けで動く。
+ * 右上の「表示」「地図」が同じ仕掛けで動く。
  *
  * ポップオーバーはボタンと同じグループの中にあるので、位置合わせの計算は
  * 無くボタンを追う(state-tip と同じ)。CSS が向きを決め、左上からは右へ、
  * 右上からは左へ出る。窓の端しか無い側を避ける。
  *
- * 一度に開くのは一つだけにする。四つとも地図の上に浮くので、二枚並ぶと地図の
+ * 一度に開くのは一つだけにする。どれも地図の上に浮くので、二枚並ぶと地図の
  * 見える面積が急に減る。
  */
 const PANE_GAP = 12;
@@ -774,75 +783,7 @@ class DisplayControl {
   }
 }
 
-/* ------------------------------------------------------------ 地図の濃さ --- */
-/**
- * 濃さごとの、しずくの満ち方と水面の傾き。薄いは輪郭だけ、濃いは縁まで満ちて
- * 平ら。通常は半分より少し下に傾いた水面を置く。この傾きが「液体」に読め、
- * 抽象的な目盛りと見分けが付く。
- */
-const SHADE_FILL = { light: 0, normal: 0.42, dark: 1 };
-const SHADE_TILT = { light: 0, normal: 10.4, dark: 0 }; // 幅18に対し約30度
-
-/** しずく。いまの濃さのぶんだけ下から満ちる。 */
-function shadeIcon(level) {
-  const drop =
-    'M12 2.4C12 2.4 5 11.2 5 15.6a7 7 0 0 0 14 0C19 11.2 12 2.4 12 2.4Z';
-  const top = 2.4;
-  const bottom = 22.6; // 15.6 + 7 の半径ぶん下
-  const fillH = (bottom - top) * SHADE_FILL[level];
-  const fillY = bottom - fillH;
-  const halfTilt = SHADE_TILT[level] / 2;
-  const leftY = (fillY + halfTilt).toFixed(2); // 左下から右上へ上がる液面
-  const rightY = (fillY - halfTilt).toFixed(2);
-  const below = (bottom + 3).toFixed(2); // クリップの外まで伸ばして隙間をなくす
-  const liquid =
-    fillH <= 0
-      ? ''
-      : '<g clip-path="url(#shade-drop-clip)">' +
-        `<polygon points="3,${below} 3,${leftY} 21,${rightY} 21,${below}" fill="currentColor"/>` +
-        '</g>';
-  return (
-    '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-    `<defs><clipPath id="shade-drop-clip"><path d="${drop}"/></clipPath></defs>` +
-    liquid +
-    `<path d="${drop}" fill="none" stroke="currentColor" stroke-width="1.7"/>` +
-    '</svg>'
-  );
-}
-
-/**
- * 下地図の濃さ。薄い・通常・濃いをボタン 1 つで回す。表示の好みであって絞り込み
- * ではないので `state` にも URL にも触れないが、道路を隠すボタンと違って覚えて
- * おく値打ちがあるので localStorage に残す。
- */
-function applyGsiShade(level) {
-  gsiShade = level;
-  const { opacity, brightnessMax } = GSI_SHADE_PAINT[level];
-  for (const id of GSI_BASEMAP_ORDER) {
-    map.setPaintProperty(gsiLayerId(id), 'raster-opacity', opacity);
-    map.setPaintProperty(
-      gsiLayerId(id),
-      'raster-brightness-max',
-      brightnessMax,
-    );
-  }
-  try {
-    localStorage.setItem('gsi-shade', level);
-  } catch {
-    /* プライベートブラウズ: 選択がタブより長く残らないだけである。 */
-  }
-}
-
-const SHADE_BUTTON = {
-  id: 'gsi-shade-btn',
-  order: GSI_SHADE_LEVELS,
-  get: () => gsiShade,
-  apply: applyGsiShade,
-  icon: shadeIcon,
-  label: (level) => `地図の濃さ: ${GSI_SHADE_LABELS[level]}`,
-};
-
-/* ---------------------------------------------------------------- 下地図 --- */
+/* ---------------------------------------------------------------- 地図の面 --- */
 /**
  * 下地図ごとのアイコン。同じ形を塗り分けるのではなく、別の見立てにする。淡色
  * 地図は折り畳んだ紙の地図、標準地図は重ねた層、写真は写真の枠である。ラベルを
@@ -875,10 +816,20 @@ const BASEMAP_ICONS = {
     '</svg>',
 };
 
+/** 下地図の選択を覚える。表示の好みであって絞り込みではないので `state` にも
+ *  URL にも触れないが、次に来たときも同じ見え方で開くよう localStorage に残す。 */
+function store(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* プライベートブラウズ: 選択がタブより長く残らないだけである。 */
+  }
+}
+
 /**
  * 下地図の切り替え。三つとも常にスタイルの中にあるので(baseStyle)、層の表示・
- * 非表示の反転であって、ソースの作り直しではない。濃さの paint 属性は下地図の
- * 層すべてに載せてあるので、そのまま引き継ぐ。
+ * 非表示の反転であって、ソースの作り直しではない。明るさと色の paint 属性は
+ * 下地図の層すべてに載せてあるので、そのまま引き継ぐ。
  */
 function applyBasemap(id) {
   map.setLayoutProperty(gsiLayerId(basemap), 'visibility', 'none');
@@ -891,31 +842,90 @@ function applyBasemap(id) {
     'line-color',
     prefCasingColor(basemap),
   );
-  try {
-    localStorage.setItem('gsi-basemap', basemap);
-  } catch {
-    /* プライベートブラウズ: 選択がタブより長く残らないだけである。 */
-  }
+  store('gsi-basemap', basemap);
 }
 
-const BASEMAP_BUTTON = {
-  id: 'basemap-btn',
-  order: GSI_BASEMAP_ORDER,
-  get: () => basemap,
-  apply: applyBasemap,
-  icon: (bmId) => BASEMAP_ICONS[bmId],
-  label: (bmId) => `地図の種類: ${GSI_BASEMAPS[bmId].label}`,
-};
+function applyGsiShade(level) {
+  gsiShade = level;
+  const { opacity, brightnessMax } = GSI_SHADE_PAINT[level];
+  for (const id of GSI_BASEMAP_ORDER) {
+    map.setPaintProperty(gsiLayerId(id), 'raster-opacity', opacity);
+    map.setPaintProperty(
+      gsiLayerId(id),
+      'raster-brightness-max',
+      brightnessMax,
+    );
+  }
+  store('gsi-shade', level);
+}
+
+function applyGsiSaturation(level) {
+  gsiSaturation = level;
+  for (const id of GSI_BASEMAP_ORDER) {
+    map.setPaintProperty(
+      gsiLayerId(id),
+      'raster-saturation',
+      GSI_SATURATION[level],
+    );
+  }
+  store('gsi-saturation', level);
+}
 
 /**
- * 下地図の種類と濃さは同じ一枚の見え方なので、一つのグループに載せる。種類が
- * 先で、濃さがその下に付く。
+ * 下地図の種類・明るさ・色を決める面。三つとも同じ一枚の見え方なので、一つの
+ * ボタンから出る一枚にまとめる。以前は種類と濃さを押すたびに一つ進むボタン
+ * 二つで回していたが、色が加わると 3×3×3 通りをボタンで回すことになる。
+ *
+ * ボタンのアイコンは、いま出ている下地図の種類を示す。
  */
-const BasemapControl = buildCycleControl(
-  'basemap-ctrl',
-  BASEMAP_BUTTON,
-  SHADE_BUTTON,
-);
+const basemapPane = $('#basemap-popover');
+
+const BASEMAP_RADIOS = {
+  basemap: (v) => applyBasemap(v),
+  'gsi-shade': (v) => {
+    applyGsiShade(v);
+    $('#bm-shade-now').textContent = GSI_SHADE_LABELS[v];
+  },
+  'gsi-saturation': (v) => {
+    applyGsiSaturation(v);
+    $('#bm-saturation-now').textContent = GSI_SATURATION_LABELS[v];
+  },
+};
+
+class BasemapControl {
+  onAdd() {
+    const container = document.createElement('div');
+    container.className = 'maplibregl-ctrl maplibregl-ctrl-group basemap-ctrl';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'basemap-btn';
+    btn.title = '地図';
+    btn.setAttribute('aria-label', '地図');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-controls', 'basemap-popover');
+    const showIcon = () => {
+      btn.innerHTML = BASEMAP_ICONS[basemap];
+    };
+    showIcon();
+    basemapPane.innerHTML = basemapPaneHTML({
+      basemap,
+      shade: gsiShade,
+      saturation: gsiSaturation,
+    });
+    basemapPane.addEventListener('change', (ev) => {
+      const { name, value } = ev.target;
+      BASEMAP_RADIOS[name]?.(value);
+      if (name === 'basemap') showIcon();
+    });
+    container.append(btn, basemapPane);
+    registerPane(btn, basemapPane, container);
+    this._container = container;
+    return container;
+  }
+  onRemove() {
+    this._container.remove();
+  }
+}
 
 /* ---------------------------------------------------------- 地図をずらす --- */
 /**

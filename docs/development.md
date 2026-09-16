@@ -103,6 +103,7 @@ mise run pack-n13
 | --- | --- |
 | `bun run glyphs` | `web/glyphs/` — ラベルの SDF グリフ |
 | `bun run brand` | `web/favicon.svg`・`web/og.png`・`web/icons/` — ホーム画面アイコン一式 |
+| `bun run basemap-thumbs` | `web/basemaps/` — 「地図」パネルが下地図の種類を選ばせる見本の絵。地理院タイルを読む |
 
 共有カードは寸法を選べます。`bun run brand -- --card 1280x640 --out build/social.png` は、その寸法のカードだけをそこへ書きます。GitHub の Social preview は 1280x640 で、SNS のカードが期待する 1200x630 と合いません。設定画面に上げたら捨ててください。書き先が `build/` なのは追跡しないためで、追跡する木に置くと `git add -A` が拾います。
 
@@ -141,6 +142,7 @@ uvx ruff check pipeline      # Python の静的検査
 | `web/shield.mjs` | 国道番号標識(おにぎり)と都道府県道番号標識(ヘキサ)の形。画面も favicon も共有画像もここから描く |
 | `web/html.mjs` | エスケープ。OSM の文字は信用できない |
 | `web/glyphs/` | ラベルの SDF グリフ。数字と `・` の 11 字 |
+| `web/basemaps/` | 「地図」パネルの見本の絵。下地図の種類ごとに 1 枚 |
 | `scripts/` | 地図そのものの道具。データ生成には関わらない |
 | `pipeline/` | データ生成のコード一式。取得・判定・検証・タイル化。突き合わせ相手の年報の値もここに置く |
 | `test/` | データを持たずに答えられることの単体テスト |
