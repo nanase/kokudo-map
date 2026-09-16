@@ -21,7 +21,7 @@ mise activate fish | source    # fish
 済ませないまま進めるなら、各コマンドの前に `mise exec --` を置いてください。
 
 ```sh
-bun x playwright install chromium   # 実描画の確認にだけ必要
+bun x playwright install chromium   # 実描画の確認と、bun run brand・bun run basemap-thumbs に必要
 ```
 
 `bun install` は続けて `scripts/vendor_web.mjs` を走らせ、MapLibre と PMTiles と書体を `node_modules` から `web/vendor/` に複製します。地図はそこから読みます。CDN は読みません。
