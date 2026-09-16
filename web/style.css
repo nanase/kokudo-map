@@ -897,6 +897,10 @@ input[type="search"]::placeholder { font-size: .82em; }
    足してあるので、後のグループの state-tip がポップオーバーの上に出ていた。
    ポップオーバーのほうが手前だと決めておけば、足す順に左右されない。 */
 .display-ctrl, .basemap-ctrl { z-index: 1; }
+/* 右上の列(maplibre-gl.css で z-index: 2)は、凡例の帯(3)と左下の詳細(4)より
+   下にある。低い窓ではポップオーバーが下へ伸びて凡例に潜り、横向きのスマート
+   フォンでは下半分が読めなかった。開いているあいだは列ごと前に出す。 */
+.maplibregl-ctrl-top-right:has(.map-popover:not([hidden])) { z-index: 5; }
 #pitch-btn:focus,
 #hide-routes-btn:focus,
 #basemap-btn:focus,
