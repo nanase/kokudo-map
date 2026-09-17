@@ -1338,8 +1338,8 @@ body.changelog { height: auto; }
 }
 .log-items > li { color: var(--ink-2); }
 .log-items b { color: var(--ink); font-weight: 700; }
-/* 本文の中のリンク。いまは書体の名前(LINE Seed JP)だけが使う。下の
-   .log-commit と違い、地の文に混ざるので下線で示す。 */
+/* 本文の中のリンク。書体の名前(LINE Seed JP)や、提案してくれた人と PR に
+   使う。下の .log-commit と違い、地の文に混ざるので下線で示す。 */
 .log-link { color: var(--sign-blue); text-decoration-thickness: 1px; }
 .log-link:visited { color: var(--sign-blue); }
 .log-link:hover { color: var(--ink); }
