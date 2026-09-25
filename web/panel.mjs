@@ -63,7 +63,7 @@ export const statsHTML = (
   { arcs, km, conc },
   concLabel = '重用アーク',
 ) =>
-  `<dt>選択路線</dt><dd>${selectedCount || totalRoutes} / ${totalRoutes}</dd>` +
+  `<dt>選択路線</dt><dd>${(selectedCount || totalRoutes).toLocaleString()} / ${totalRoutes.toLocaleString()}</dd>` +
   `<dt>対象アーク</dt><dd>${arcs.toLocaleString()}</dd>` +
   `<dt>延長</dt><dd>${km.toLocaleString(undefined, { maximumFractionDigits: 0 })} km</dd>` +
   `<dt>${concLabel}</dt><dd>${conc.toLocaleString()}</dd>`;
