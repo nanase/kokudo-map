@@ -314,9 +314,9 @@
     <div id="legend-bar">
       <div id="legend-box" class="legend-box">
         <div class="legend-rows">
-          <div id="legend-n" class="legend"><span class="lead">国道</span><span class="item"><span class="swatch" style="border-top-color:#1B62C4"></span>単独指定</span><span class="item"><span class="swatch" style="border-top-color:#D98324"></span>二重用</span><span class="item"><span class="swatch" style="border-top-color:#C2352B"></span>三重用</span><span class="item"><span class="swatch" style="border-top-color:#7B3E9D"></span>四重用以上</span></div>
-          <div id="legend-kind" class="legend"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></div>
-          <div id="legend-pref" class="legend"><span class="lead">都道府県道</span><span class="item"><span class="swatch" style="border-top-color:#2BBB5E"></span>主要地方道</span><span class="item"><span class="swatch" style="border-top-color:#F2EB1F"></span>一般都道府県道</span><span class="item" title="工事中・事業中／未開通／徒歩道・階段／航路"><span class="swatch duo"><span style="color:#2BBB5E"></span><span style="color:#F2EB1F"></span></span>工事中・事業中など</span></div>
+          <div id="legend-n" class="legend"><span class="lead">国道</span><span class="items"><span class="item"><span class="swatch" style="border-top-color:#1B62C4"></span>単独指定</span><span class="item"><span class="swatch" style="border-top-color:#D98324"></span>二重用</span><span class="item"><span class="swatch" style="border-top-color:#C2352B"></span>三重用</span><span class="item"><span class="swatch" style="border-top-color:#7B3E9D"></span>四重用以上</span></span></div>
+          <div id="legend-kind" class="legend"><span class="items"><span class="item" title="徒歩道・階段"><span class="swatch" style="border-top-color:#4B5A6C;border-top-style:dashed"></span>点線国道</span><span class="item"><span class="swatch" style="border-top-color:#8A6A2F;border-top-style:dashed"></span>工事中・事業中</span><span class="item" title="計画・未着工"><span class="swatch" style="border-top-color:#7B4B94;border-top-style:dashed"></span>未開通区間</span><span class="item" title="航路"><span class="swatch" style="border-top-color:#0E7490;border-top-style:dashed"></span>海上国道</span></span></div>
+          <div id="legend-pref" class="legend"><span class="lead">都道府県道</span><span class="items"><span class="item"><span class="swatch" style="border-top-color:#2BBB5E"></span>主要地方道</span><span class="item"><span class="swatch" style="border-top-color:#F2EB1F"></span>一般都道府県道</span><span class="item" title="工事中・事業中／未開通／徒歩道・階段／航路"><span class="swatch duo"><span style="color:#2BBB5E"></span><span style="color:#F2EB1F"></span></span>工事中・事業中など</span></span></div>
         </div>
         <!-- 浮いているパネルは自分で閉じられる。開き直すのは同じ角に残る
              #legend-open である。 -->
@@ -423,14 +423,20 @@
     </p>
     <section>
       <h3>データ情報</h3>
-      <p class="stats-label">国道</p>
-      <dl id="stats" class="stats"></dl>
       <!-- 都道府県道の数は合算しない。国道と都道府県道の「重用アーク」は数え方が
-           違うので、足すと意味の違う数を足すことになる(issue #171)。取得は
-           「この地図について」を開いたときに遅延させ、起動時には読まない
-           (app.js の loadPrefSummary)。 -->
-      <p class="stats-label">都道府県道</p>
-      <dl id="pref-stats" class="stats"></dl>
+           違うので、足すと意味の違う数を足すことになる(issue #171)。系統ごとに
+           枠を分けて左右に並べる。取得は「この地図について」を開いたときに遅延
+           させ、起動時には読まない(app.js の loadPrefSummary)。 -->
+      <div class="stats-pair">
+        <div>
+          <p class="stats-label">国道</p>
+          <dl id="stats" class="stats"></dl>
+        </div>
+        <div>
+          <p class="stats-label">都道府県道</p>
+          <dl id="pref-stats" class="stats"></dl>
+        </div>
+      </div>
       <dl id="freshness" class="freshness"></dl>
     </section>
     <!-- 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではない。

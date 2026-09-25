@@ -114,13 +114,13 @@ describe('prefStatsHTML', () => {
 
   test('選択が空なら全路線を分子にする', () => {
     expect(prefStatsHTML(0, 13234, totals)).toContain(
-      '<dt>選択路線</dt><dd>13234 / 13234</dd>',
+      '<dt>選択路線</dt><dd>13,234 / 13,234</dd>',
     );
   });
 
   test('選択があればその数を出す', () => {
     expect(prefStatsHTML(3, 13234, totals)).toContain(
-      '<dt>選択路線</dt><dd>3 / 13234</dd>',
+      '<dt>選択路線</dt><dd>3 / 13,234</dd>',
     );
   });
 

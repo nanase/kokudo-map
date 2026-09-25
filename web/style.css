@@ -502,11 +502,21 @@ input[type="search"]::placeholder { font-size: .82em; }
   background: var(--panel); color: var(--ink);
   border-radius: 6px; box-shadow: 0 0 0 2px rgba(0,0,0,.1);
 }
-.legend-rows { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.legend {
-  display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: flex-end;
+/* 頭の語の列と見本の列の二列にする。三つの行は subgrid で同じ列を使うので、
+   見本はどの行でも同じ位置から始まる。頭の語を持たない種別の行も、国道の行の
+   続きとして同じ列に並ぶ。折り返しは見本の列の中で起き、頭の語の下へは
+   潜り込まない。 */
+.legend-rows {
+  display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px;
+  min-width: 0;
 }
-/* display:flex は hidden の既定(display:none)より強い。出ていない系統の行を
+.legend {
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid;
+}
+.legend .items {
+  grid-column: 2; display: flex; flex-wrap: wrap; gap: 2px 12px;
+}
+/* display:grid は hidden の既定(display:none)より強い。出ていない系統の行を
    app.js の syncLegend が hidden で隠すので、ここで明示する。 */
 .legend[hidden], #legend-bar[hidden] { display: none; }
 /* 行は字面の高さまで詰める。本文の 1.6 は読み下す文章のためのもので、
@@ -539,10 +549,11 @@ input[type="search"]::placeholder { font-size: .82em; }
   );
 }
 /* 行の頭の語。行ごとに色の意味が違う(国道は重用の深さ、都道府県道は格)ので、
-   どちらの話かを示す。見本の名前より一段淡くする。 */
+   どちらの話かを示す。見本の名前より一段淡くし、太字で見本の名前と分ける。 */
 .legend .lead {
-  font-size: .68rem; line-height: 1.35; color: var(--ink-3);
-  margin-right: 2px; white-space: nowrap;
+  grid-column: 1;
+  font-size: .68rem; font-weight: 700; line-height: 1.35; color: var(--ink-3);
+  white-space: nowrap;
 }
 /* title 属性を持つ項目だけ、補足があることをカーソルで示す。 */
 .legend .item[title] { cursor: help; }
@@ -644,20 +655,35 @@ input[type="search"]::placeholder { font-size: .82em; }
 /* データの出どころ。いつ時点の OSM か。出す場所は「国道マップについて」の
    ダイアログである。 */
 .stats, .freshness {
-  display: grid; grid-template-columns: max-content 1fr;
-  gap: 1px 10px; font-size: .68rem; line-height: 1.55;
+  display: grid; font-size: .68rem; line-height: 1.55;
+}
+/* 国道と都道府県道の数は、系統ごとの枠に分けて左右に並べる。一つの表に
+   まとめると、見出しの列の幅が「重用アーク(都道府県道どうし)」の長さで
+   決まり、短い見出しの数まで右へ押し出される。枠の中では見出しを数の上に
+   置くので、長い見出しは枠の中で折り返すだけで済む。 */
+.stats-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.stats-pair > div { display: flex; flex-direction: column; min-width: 0; }
+.stats {
+  flex: 1; align-content: start; margin: 0; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 4px;
 }
 /* 国道・都道府県道、二つの .stats を分ける小見出し。数を合算せず系統ごとに
    出す(issue #171)ので、どちらの数かを示す必要がある。h3(区画の見出し)より
    一段小さく、凡例の .lead と同じ重さにしてある。 */
 .stats-label {
-  margin: 10px 0 2px; font-size: .68rem; line-height: 1.35; color: var(--ink-3);
+  margin: 0 0 4px; font-size: .68rem; font-weight: 700; line-height: 1.35;
+  color: var(--ink-3);
 }
-.stats-label:first-of-type { margin-top: 0; }
-/* 更新日時以下との区切りとわかる程度の余白。 */
-.freshness { margin: 8px 0 0; }
+/* 更新日時以下は見出しと値を横に並べる。上の枠との区切りとわかる程度の
+   余白を置く。 */
+.freshness {
+  grid-template-columns: max-content 1fr; gap: 1px 10px; margin: 12px 0 0;
+}
 .stats dt, .freshness dt { color: var(--ink-3); }
 .stats dd, .freshness dd { margin: 0; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* 枠の中の数は見出しより大きくし、次の見出しとのあいだを空ける。 */
+.stats dd { font-size: .82rem; }
+.stats dd:not(:last-child) { margin-bottom: 4px; }
 
 /* ------------------------------------------------------------------ 地図 --- */
 /* 地図の上の部品 -----------------------------------------------------------
