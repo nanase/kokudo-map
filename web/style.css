@@ -502,11 +502,21 @@ input[type="search"]::placeholder { font-size: .82em; }
   background: var(--panel); color: var(--ink);
   border-radius: 6px; box-shadow: 0 0 0 2px rgba(0,0,0,.1);
 }
-.legend-rows { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.legend {
-  display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: flex-end;
+/* 頭の語の列と見本の列の二列にする。三つの行は subgrid で同じ列を使うので、
+   見本はどの行でも同じ位置から始まる。頭の語を持たない種別の行も、国道の行の
+   続きとして同じ列に並ぶ。折り返しは見本の列の中で起き、頭の語の下へは
+   潜り込まない。 */
+.legend-rows {
+  display: grid; grid-template-columns: max-content 1fr; gap: 3px 10px;
+  min-width: 0;
 }
-/* display:flex は hidden の既定(display:none)より強い。出ていない系統の行を
+.legend {
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid;
+}
+.legend .items {
+  grid-column: 2; display: flex; flex-wrap: wrap; gap: 2px 12px;
+}
+/* display:grid は hidden の既定(display:none)より強い。出ていない系統の行を
    app.js の syncLegend が hidden で隠すので、ここで明示する。 */
 .legend[hidden], #legend-bar[hidden] { display: none; }
 /* 行は字面の高さまで詰める。本文の 1.6 は読み下す文章のためのもので、
@@ -539,10 +549,11 @@ input[type="search"]::placeholder { font-size: .82em; }
   );
 }
 /* 行の頭の語。行ごとに色の意味が違う(国道は重用の深さ、都道府県道は格)ので、
-   どちらの話かを示す。見本の名前より一段淡くする。 */
+   どちらの話かを示す。見本の名前より一段淡くし、太字で見本の名前と分ける。 */
 .legend .lead {
-  font-size: .68rem; line-height: 1.35; color: var(--ink-3);
-  margin-right: 2px; white-space: nowrap;
+  grid-column: 1;
+  font-size: .68rem; font-weight: 700; line-height: 1.35; color: var(--ink-3);
+  white-space: nowrap;
 }
 /* title 属性を持つ項目だけ、補足があることをカーソルで示す。 */
 .legend .item[title] { cursor: help; }

@@ -265,8 +265,16 @@ const duoRule = (major, general) =>
  */
 const lead = (text) => `<span class="lead">${text}</span>`;
 
+/**
+ * 頭の語の後ろに並ぶ見本の群。頭の語と別の箱にするのは、項目の開始位置を頭の語の
+ * 右の列へ揃えるためである。折り返した項目も、頭の語を持たない種別の行
+ * (`legendKindHTML`)も同じ列から始まる(style.css の .legend-rows)。
+ */
+const items = (html) => `<span class="items">${html}</span>`;
+
 export const legendNHTML = () =>
-  lead('国道') + N_COLORS.map((c, i) => swatch(c, N_LABELS[i], false)).join('');
+  lead('国道') +
+  items(N_COLORS.map((c, i) => swatch(c, N_LABELS[i], false)).join(''));
 
 /**
  * 走れない都道府県道をひとまとめにした項目の、名前と補足。国道は区分ごとに行を
@@ -286,19 +294,28 @@ export const PREF_SPECIAL_TIP = '工事中・事業中／未開通／徒歩道�
  */
 export const legendPrefHTML = () =>
   lead('都道府県道') +
-  swatch(PREF_MAJOR, PREF_RANK_LABELS.major, false) +
-  swatch(PREF_GENERAL, PREF_RANK_LABELS.general, false) +
-  item(duoRule(PREF_MAJOR, PREF_GENERAL), PREF_SPECIAL_LABEL, PREF_SPECIAL_TIP);
+  items(
+    swatch(PREF_MAJOR, PREF_RANK_LABELS.major, false) +
+      swatch(PREF_GENERAL, PREF_RANK_LABELS.general, false) +
+      item(
+        duoRule(PREF_MAJOR, PREF_GENERAL),
+        PREF_SPECIAL_LABEL,
+        PREF_SPECIAL_TIP,
+      ),
+  );
 
+/** 国道の区分。頭の語を持たず、上の国道の行の続きとして読ませる。 */
 export const legendKindHTML = () =>
-  [
-    [COLOR_FOOT, '点線国道', '徒歩道・階段'],
-    [COLOR_CONSTRUCTION, '工事中・事業中', null],
-    [COLOR_UNOPENED, '未開通区間', '計画・未着工'],
-    [COLOR_FERRY, '海上国道', '航路'],
-  ]
-    .map(([c, t, tip]) => swatch(c, t, true, tip))
-    .join('');
+  items(
+    [
+      [COLOR_FOOT, '点線国道', '徒歩道・階段'],
+      [COLOR_CONSTRUCTION, '工事中・事業中', null],
+      [COLOR_UNOPENED, '未開通区間', '計画・未着工'],
+      [COLOR_FERRY, '海上国道', '航路'],
+    ]
+      .map(([c, t, tip]) => swatch(c, t, true, tip))
+      .join(''),
+  );
 
 /* ---------------------------------------------- 都道府県道の重用の考え方 --- */
 /**
