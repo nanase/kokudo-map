@@ -44,8 +44,17 @@ export const SHIELD_STROKE_WIDTH = 15.94;
  */
 export const SHIELD_ICON_STROKE_WIDTH = 56;
 
-/** `SHIELD_ICON_STROKE_WIDTH` と対で使う viewBox の余白。上を参照。 */
-export const SHIELD_ICON_PAD = 20;
+/**
+ * favicon の白い縁の外側に足す、暗い縁の幅(片側)。白い縁だけでは明るい地
+ * (ライトテーマのヘッダ、ブラウザのタブ)に溶け、青い面しか見えない。
+ */
+export const SHIELD_ICON_OUTLINE_WIDTH = 24;
+
+/**
+ * `SHIELD_ICON_STROKE_WIDTH` と `SHIELD_ICON_OUTLINE_WIDTH` の縁を描くために
+ * 足す viewBox の余白。上を参照。
+ */
+export const SHIELD_ICON_PAD = 44;
 
 /**
  * 番号を中に入れた標識(「おにぎり」)。配色は実物に合わせる(青地に白い番号、その

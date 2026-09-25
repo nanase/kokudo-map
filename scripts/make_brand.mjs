@@ -52,13 +52,15 @@ const {
   SHIELD_PATH,
   SHIELD_VIEWBOX,
   SHIELD_ICON_STROKE_WIDTH,
+  SHIELD_ICON_OUTLINE_WIDTH,
   SHIELD_ICON_PAD,
   shield,
 } = await import(new URL('../web/shield.mjs', import.meta.url).href);
 
-/* favicon は他のどこよりも小さく描かれるので、白い縁をここだけ太くする
- * (SHIELD_ICON_STROKE_WIDTH)。SHIELD_VIEWBOX の余白は約 10 単位しかなく
- * その太さの縁を描くには足りないので、SHIELD_ICON_PAD ぶん足す。 */
+/* favicon は他のどこよりも小さく描かれるので、白い縁をここだけ太くし
+ * (SHIELD_ICON_STROKE_WIDTH)、その外に暗い縁を足す(SHIELD_ICON_OUTLINE_WIDTH)。
+ * SHIELD_VIEWBOX の余白は約 10 単位しかなくその二重の縁を描くには足りないので、
+ * SHIELD_ICON_PAD ぶん足す。 */
 const [vx, vy, vw, vh] = SHIELD_VIEWBOX.split(' ').map(Number);
 const ICON_VIEWBOX =
   `${vx - SHIELD_ICON_PAD} ${vy - SHIELD_ICON_PAD} ` +
@@ -122,9 +124,17 @@ if (!opt.card) {
   /* 標識は単独で置かれ、後ろに溶け込む相手のページが無い。だから
    * `paint-order="stroke"` で、縁の内側半分の上に面を塗る。これが無いと既定の
    * 塗り順(面の上に縁)になり、縁の幅ぶんが面を食って、面が目に見えて小さく
-   * 読める。 */
+   * 読める。
+   *
+   * 白い縁の外の暗い縁は、同じ輪郭をもう一度、白と暗い縁を合わせた太さで先に
+   * 描いて作る。色はホーム画面アイコンの地(GROUND)の紺で、ダークテーマの地にも
+   * 近い。ホーム画面アイコンと共有カードの標識はその紺の地に載るので、白い縁が
+   * そのまま見え、この縁は要らない。 */
   const favicon = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${ICON_VIEWBOX}">`,
+    `<path d="${SHIELD_PATH}" fill="none" stroke="${GROUND}"`,
+    ` stroke-width="${SHIELD_ICON_STROKE_WIDTH + 2 * SHIELD_ICON_OUTLINE_WIDTH}"`,
+    ' stroke-linejoin="round"/>',
     `<path d="${SHIELD_PATH}" fill="${FACE}" stroke="${EDGE}"`,
     ` stroke-width="${SHIELD_ICON_STROKE_WIDTH}" stroke-linejoin="round"`,
     ' paint-order="stroke"/>',

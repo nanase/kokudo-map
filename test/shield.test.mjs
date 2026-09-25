@@ -12,6 +12,7 @@ import {
   HEX_VIEWBOX,
   hexShield,
   prefRouteName,
+  SHIELD_ICON_OUTLINE_WIDTH,
   SHIELD_ICON_PAD,
   SHIELD_ICON_STROKE_WIDTH,
   SHIELD_PATH,
@@ -72,12 +73,15 @@ describe('SHIELD_PATH', () => {
     }
   });
 
-  test('SHIELD_ICON_PAD は SHIELD_ICON_STROKE_WIDTH の縁を切らさない余白を持つ', () => {
+  test('SHIELD_ICON_PAD は白と暗色の二重の縁を切らさない余白を持つ', () => {
     // favicon 側(scripts/make_brand.mjs)は SHIELD_VIEWBOX を SHIELD_ICON_PAD
-    // ぶん広げてから太い縁を描く。広げた後の余白が縁の太さの半分を下回ると、
-    // 縁が viewBox の外へ切れて出る。
+    // ぶん広げてから、白い縁とその外の暗い縁を描く。広げた後の余白が外へ出る
+    // 縁の幅を下回ると、縁が viewBox の外へ切れて出る。
     const [, , vw, vh] = nums(SHIELD_VIEWBOX);
-    const margin = SHIELD_ICON_STROKE_WIDTH / 2 - SHIELD_ICON_PAD;
+    const margin =
+      SHIELD_ICON_STROKE_WIDTH / 2 +
+      SHIELD_ICON_OUTLINE_WIDTH -
+      SHIELD_ICON_PAD;
     for (const [x, y] of anchors(SHIELD_PATH)) {
       expect(x).toBeGreaterThanOrEqual(margin);
       expect(x).toBeLessThanOrEqual(vw - margin);
