@@ -113,6 +113,55 @@ const fontFace =
   '@font-face { font-family: Roboto; font-weight: 700; font-style: normal;' +
   ` src: url(data:font/woff2;base64,${roboto}) format('woff2'); }`;
 
+/* 題字と説明文は、操作パネルと同じ LINE Seed JP で組む。この機械に入っている
+ * 書体に任せると、Noto Sans JP の有無で字形が変わり、二度走らせて同じバイト列に
+ * なる性質が機械をまたいで崩れる。
+ *
+ * LINE Seed JP は約 120 片に分かれている(scripts/vendor_web.mjs)。web/vendor/ の
+ * スタイルシートを読み、`text` の字を含む片だけを埋め込む。片の割り振りを
+ * ここに写せば、どの字がどの片にあるかを述べる二つ目の場所になる。 */
+const VENDOR = join(WEB, 'vendor');
+const LINE_SEED_CSS = readFileSync(join(VENDOR, 'line-seed-jp.css'), 'utf8');
+
+function lineSeedFaces(text, weight) {
+  const want = [...new Set(text.replace(/\s/g, ''))].map((c) =>
+    c.codePointAt(0),
+  );
+  const missing = new Set(want);
+  const faces = [];
+  for (const [, body] of LINE_SEED_CSS.matchAll(/@font-face\s*\{([^}]*)\}/g)) {
+    if (!new RegExp(`font-weight:\\s*${weight};`).test(body)) continue;
+    const ranges = /unicode-range:\s*([^;]+);/
+      .exec(body)[1]
+      .split(',')
+      .map((r) =>
+        r
+          .trim()
+          .slice(2)
+          .split('-')
+          .map((h) => parseInt(h, 16)),
+      );
+    const hit = want.filter((cp) =>
+      ranges.some(([lo, hi = lo]) => lo <= cp && cp <= hi),
+    );
+    if (hit.length === 0) continue;
+    for (const cp of hit) missing.delete(cp);
+    faces.push(
+      `@font-face {${body.replace(
+        /url\(([\w.-]+\.woff2)\)/,
+        (_, name) =>
+          `url(data:font/woff2;base64,${readFileSync(join(VENDOR, name)).toString('base64')})`,
+      )}}`,
+    );
+  }
+  /* 片に無い字は端末の書体で出てしまい、機械ごとに絵が変わる。黙って描かない。 */
+  if (missing.size > 0) {
+    const chars = [...missing].map((cp) => String.fromCodePoint(cp)).join('');
+    throw new Error(`LINE Seed JP ${weight} に無い字がある: ${chars}`);
+  }
+  return faces.join('\n');
+}
+
 /* favicon・ホーム画面アイコン・カードは PNG に焼く必要があるので、まとめて
  * ブラウザを起こす。起動・終了を繰り返す理由が無い。 */
 const browser = await chromium.launch();
@@ -376,8 +425,8 @@ function streets(seed) {
 
 /* 本線の高さと、二本が突き当たる位置。ここを動かすと標識も一緒に動く。 */
 const ROAD_Y = 516;
-const JOIN_A = 314; /* 南から。ここから二重用 */
-const JOIN_B = 700; /* 北から。ここから三重用 */
+const JOIN_A = 287; /* 南から。ここから二重用 */
+const JOIN_B = 673; /* 北から。ここから三重用 */
 
 const road =
   line(JOIN_A, BOX.y1, JOIN_A, ROAD_Y, N_COLORS[0], 13) +
@@ -436,13 +485,18 @@ function signs(refs, x0, h) {
 
 /* 標識の三つの組。単独 → 二重用 → 三重用。深いほど大きく、右へ寄る。 */
 const GROUPS = [
-  { refs: [73], x0: 232, h: 86 },
-  { refs: [73, 110], x0: 430, h: 118 },
-  { refs: [73, 110, 215], x0: 790, h: 158 },
+  { refs: [73], x0: 205, h: 86 },
+  { refs: [73, 110], x0: 403, h: 118 },
+  { refs: [73, 110, 215], x0: 763, h: 158 },
 ];
 
-/* 題字の左上。style.css ではなくここが持つ。下の隙間の計算が読む。 */
-const TEXT_INSET = { top: 66, left: 92 };
+/* 題字の左上。style.css ではなくここが持つ。下の隙間の計算が読む。
+ *
+ * 左の余白は、右端の標識(215)の外の余白と揃える。どちらも描いた字と縁で
+ * 測ると約 74 px になる。題字の字面は箱より 9 px ほど内側から始まり、標識の
+ * 白い縁は placements() の幅より 3 px ほど内側で終わるので、数字は揃わない。
+ * 左だけ広いと、絵全体が右に寄って見える。 */
+const TEXT_INSET = { top: 66, left: 65 };
 
 /* ------------------------------------------------------------ 切り落とし ---
  * 求められた枠を覆うまで拡大してはみ出したぶんを切る作りなので、縦横比が
@@ -476,6 +530,7 @@ if (crop.w > CROP_MAX.w || crop.h > CROP_MAX.h) {
 const card = `<!doctype html><meta charset="utf-8">
 <style>
   ${fontFace}
+  ${lineSeedFaces(TITLE + TAGLINE.join(''), 700)}
   * { margin: 0; box-sizing: border-box; }
   body {
     width: ${OUT.w}px; height: ${OUT.h}px; position: relative; overflow: hidden;
@@ -487,19 +542,20 @@ const card = `<!doctype html><meta charset="utf-8">
     width: ${CARD.w}px; height: ${CARD.h}px;
     transform: translate(-50%, -50%) scale(${SCALE});
     color: #FFFFFF;
-    font-family: "Noto Sans JP", "Yu Gothic UI", sans-serif;
+    font-family: "LINE Seed JP", sans-serif; font-weight: 700;
   }
   .map { position: absolute; inset: 0; }
   .map svg { display: block; }
   /* 名前は説明文の 2.5 倍以上に取る。縮めて出されたとき、最後まで残るのは
-     ここだけなので。900 は Noto Sans JP が入っている機械でしか出ない。 */
+     ここだけなので。説明文も Bold にするのは同じ理由で、細い字は縮めると
+     地に沈む。 */
   .text {
     position: absolute; inset: ${TEXT_INSET.top}px auto auto 0;
     padding-left: ${TEXT_INSET.left}px; width: 700px;
     display: flex; flex-direction: column; gap: 26px;
   }
-  h1 { font-size: 108px; font-weight: 900; line-height: 1.05; letter-spacing: .02em; }
-  p { font-size: 42px; font-weight: 500; line-height: 1.5; color: ${INK_2}; }
+  h1 { font-size: 108px; line-height: 1.05; letter-spacing: .02em; }
+  p { font-size: 42px; line-height: 1.5; color: ${INK_2}; }
   /* 標識は絵の一部なので、地図の上に影を落として浮かせる。 */
   .pin {
     position: absolute; transform: translate(-50%, -50%);
