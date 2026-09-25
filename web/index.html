@@ -423,14 +423,20 @@
     </p>
     <section>
       <h3>データ情報</h3>
-      <p class="stats-label">国道</p>
-      <dl id="stats" class="stats"></dl>
       <!-- 都道府県道の数は合算しない。国道と都道府県道の「重用アーク」は数え方が
-           違うので、足すと意味の違う数を足すことになる(issue #171)。取得は
-           「この地図について」を開いたときに遅延させ、起動時には読まない
-           (app.js の loadPrefSummary)。 -->
-      <p class="stats-label">都道府県道</p>
-      <dl id="pref-stats" class="stats"></dl>
+           違うので、足すと意味の違う数を足すことになる(issue #171)。系統ごとに
+           枠を分けて左右に並べる。取得は「この地図について」を開いたときに遅延
+           させ、起動時には読まない(app.js の loadPrefSummary)。 -->
+      <div class="stats-pair">
+        <div>
+          <p class="stats-label">国道</p>
+          <dl id="stats" class="stats"></dl>
+        </div>
+        <div>
+          <p class="stats-label">都道府県道</p>
+          <dl id="pref-stats" class="stats"></dl>
+        </div>
+      </div>
       <dl id="freshness" class="freshness"></dl>
     </section>
     <!-- 都道府県道の重用は、国道の重用と同じ確かさで出ているわけではない。
