@@ -1138,19 +1138,31 @@ describe('blockPagePinch', () => {
     const canvas = document.querySelector('canvas');
     expect(fire(canvas, wheel(window, true))).toBe(false);
     expect(fire(canvas, gesture(window, 'gesturestart'))).toBe(false);
+    expect(fire(canvas, gesture(window, 'gesturechange'))).toBe(false);
   });
 
-  test('Ctrl の無いホイールとキー操作は止めない', () => {
+  test('Ctrl の無いホイールは止めない', () => {
     const { window, document } = setupPinch();
     const popup = document.querySelector('.maplibregl-popup p');
     expect(fire(popup, wheel(window, false))).toBe(false);
-    const key = new window.KeyboardEvent('keydown', {
-      bubbles: true,
-      cancelable: true,
-      key: '+',
-      ctrlKey: true,
+  });
+
+  /* document に付けた wheel は、Chrome では既定で passive になり、
+   * preventDefault が無視される。happy-dom は passive を見ないので、上の検査は
+   * 指定を外しても通る。登録のときの指定そのものを見る。 */
+  test('wheel は passive: false で登録する', () => {
+    const window = new Window({ url: 'https://example.invalid/' });
+    const document = window.document;
+    const calls = [];
+    const add = document.addEventListener.bind(document);
+    document.addEventListener = (type, fn, opts) => {
+      calls.push({ type, opts });
+      add(type, fn, opts);
+    };
+    blockPagePinch(document);
+    expect(calls.find((c) => c.type === 'wheel').opts).toEqual({
+      passive: false,
     });
-    expect(fire(popup, key)).toBe(false);
   });
 
   test('タッチのピンチは touch-action で止める', () => {

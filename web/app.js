@@ -264,6 +264,10 @@ for (const el of document.querySelectorAll('input[name=theme]')) {
  */
 const sharedView = Boolean(location.hash);
 
+// 地図を作る前に置く。読み込み中でもパネルやダイアログの上はピンチできるうえ、
+// 地図を作れない端末(WebGL が無いなど)でも止まらないようにする。
+blockPagePinch(document);
+
 const map = new maplibregl.Map({
   container: 'map',
   attributionControl: false,
@@ -292,9 +296,6 @@ const map = new maplibregl.Map({
 
 // 調査用と pipeline/render_check.mjs のために出しておく
 window.map = map;
-
-// 地図の読み込みを待たない。読み込み中でもパネルやダイアログの上はピンチできる。
-blockPagePinch(document);
 
 // 同期で登録する。`load` は一度しか発生しないが、`map.loaded()` はソースの
 // 取得中に false へ戻る。後者で場合分けすると、`load` が済んだ後に
