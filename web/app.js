@@ -114,6 +114,7 @@ import {
 } from './urlstate.mjs';
 import {
   applyRouteFilter,
+  blockPagePinch,
   isOnly,
   isOnlyGroup,
   NARROW_QUERY,
@@ -262,6 +263,10 @@ for (const el of document.querySelectorAll('input[name=theme]')) {
  * fitInitialView()は呼ばれず、`?region=` は誰にも届いていなかった。
  */
 const sharedView = Boolean(location.hash);
+
+// 地図を作る前に置く。読み込み中でもパネルやダイアログの上はピンチできるうえ、
+// 地図を作れない端末(WebGL が無いなど)でも止まらないようにする。
+blockPagePinch(document);
 
 const map = new maplibregl.Map({
   container: 'map',
