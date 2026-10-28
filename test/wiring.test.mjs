@@ -11,6 +11,7 @@ import { routeListHTML } from '../web/panel.mjs';
 import { decodeURLState, encodeState } from '../web/urlstate.mjs';
 import {
   applyRouteFilter,
+  blockPagePinch,
   clearSelection,
   isOnly,
   isOnlyGroup,
@@ -1091,5 +1092,69 @@ describe('wireExternalLinks', () => {
     expect(document.querySelector('#ext-link-gsi').href).toBe(
       'https://maps.gsi.go.jp/#10/43.062096/141.354376/',
     );
+  });
+});
+
+/* ピンチでのページ拡大。地図の描画面の外(ポップアップ・ダイアログ)では
+ * 止め、描画面の上は MapLibre に任せる。キーでの拡大は止めない。 */
+describe('blockPagePinch', () => {
+  const setupPinch = () => {
+    const window = new Window({ url: 'https://example.invalid/' });
+    const document = window.document;
+    document.write(indexHtml);
+    // MapLibre が #map の中に作る物の代わり。描画面とポップアップは兄弟である。
+    document.querySelector('#map').innerHTML =
+      '<div class="maplibregl-canvas-container"><canvas></canvas></div>' +
+      '<div class="maplibregl-popup"><p>国道 19 号</p></div>';
+    blockPagePinch(document);
+    return { window, document };
+  };
+  const fire = (target, ev) => {
+    target.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  };
+  // happy-dom の WheelEvent は init の ctrlKey を読まないので、後から載せる。
+  const wheel = (window, ctrlKey) =>
+    Object.defineProperty(
+      new window.WheelEvent('wheel', { bubbles: true, cancelable: true }),
+      'ctrlKey',
+      { value: ctrlKey },
+    );
+  const gesture = (window, type) =>
+    new window.Event(type, { bubbles: true, cancelable: true });
+
+  test('ポップアップとダイアログの上のピンチを止める', () => {
+    const { window, document } = setupPinch();
+    for (const sel of ['.maplibregl-popup p', '#share-dialog']) {
+      const el = document.querySelector(sel);
+      expect(fire(el, wheel(window, true))).toBe(true);
+      expect(fire(el, gesture(window, 'gesturestart'))).toBe(true);
+      expect(fire(el, gesture(window, 'gesturechange'))).toBe(true);
+    }
+  });
+
+  test('描画面の上は MapLibre に任せる', () => {
+    const { window, document } = setupPinch();
+    const canvas = document.querySelector('canvas');
+    expect(fire(canvas, wheel(window, true))).toBe(false);
+    expect(fire(canvas, gesture(window, 'gesturestart'))).toBe(false);
+  });
+
+  test('Ctrl の無いホイールとキー操作は止めない', () => {
+    const { window, document } = setupPinch();
+    const popup = document.querySelector('.maplibregl-popup p');
+    expect(fire(popup, wheel(window, false))).toBe(false);
+    const key = new window.KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: '+',
+      ctrlKey: true,
+    });
+    expect(fire(popup, key)).toBe(false);
+  });
+
+  test('タッチのピンチは touch-action で止める', () => {
+    const { document } = setupPinch();
+    expect(document.documentElement.style.touchAction).toBe('pan-x pan-y');
   });
 });

@@ -309,6 +309,38 @@ export function togglePrefGroup(doc, state, keys, applyFilters) {
 export const NARROW_QUERY = '(max-width: 860px)';
 
 /**
+ * ピンチでページ全体が拡大されないようにする。地図の上のピンチは MapLibre が
+ * 受けて縮尺に変えるが、ポップアップ・パネル・ダイアログは描画面の外にあり、
+ * そこでのピンチはブラウザに届く。Chrome のピンチ拡大はズーム率とは別物で
+ * ⌘0 でも戻らず、ポップアップを閉じると戻す手段が再読み込みしか残らなかった。
+ *
+ * 届き方はブラウザごとに違う。Chrome・Edge・Firefox は `ctrlKey` 付きの
+ * `wheel`、Safari(macOS・iOS)は `gesture*`、Android の Chrome はタッチで、
+ * これは `touch-action` でしか止まらない。Ctrl を押したマウスホイールは
+ * トラックパッドのピンチと区別できず、一緒に止まる。キーでの拡大は止めない。
+ *
+ * 描画面の上の `gesture*` には触れない。MapLibre は使っていないが、そこでの
+ * 振る舞いは問題になっておらず、変える理由が無い。
+ */
+export function blockPagePinch(doc) {
+  doc.documentElement.style.touchAction = 'pan-x pan-y';
+  const stop = (ev) => {
+    if (!ev.target.closest?.('.maplibregl-canvas-container')) {
+      ev.preventDefault();
+    }
+  };
+  doc.addEventListener(
+    'wheel',
+    (ev) => {
+      if (ev.ctrlKey) stop(ev);
+    },
+    { passive: false },
+  );
+  doc.addEventListener('gesturestart', stop);
+  doc.addEventListener('gesturechange', stop);
+}
+
+/**
  * ポップオーバーの一覧・絞り込みと、表示のトグルを state へ配線する。
  *
  * `closePopup` を引数で受けるのは、閉じる手続きが地図を持つ app.js にあるため

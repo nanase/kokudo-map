@@ -114,6 +114,7 @@ import {
 } from './urlstate.mjs';
 import {
   applyRouteFilter,
+  blockPagePinch,
   isOnly,
   isOnlyGroup,
   NARROW_QUERY,
@@ -291,6 +292,9 @@ const map = new maplibregl.Map({
 
 // 調査用と pipeline/render_check.mjs のために出しておく
 window.map = map;
+
+// 地図の読み込みを待たない。読み込み中でもパネルやダイアログの上はピンチできる。
+blockPagePinch(document);
 
 // 同期で登録する。`load` は一度しか発生しないが、`map.loaded()` はソースの
 // 取得中に false へ戻る。後者で場合分けすると、`load` が済んだ後に
