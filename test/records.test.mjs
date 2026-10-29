@@ -106,6 +106,21 @@ describe('recordsOf', () => {
     expect(r.desc).toContain('単独の区間は無い。');
   });
 
+  test('丸めて 100% でも単独の区間があれば、無いとは述べない', () => {
+    const almost = recordsOf({
+      ...META,
+      combinations: [
+        ...META.combinations,
+        row([1, 176], 99.6, { twin_km: 0 }),
+        row([176], 0.4, { twin_km: 0 }),
+      ],
+    });
+    const r = by(almost, 'concurrency');
+    expect(r.refs).toEqual([176]);
+    expect(r.value).toBe(100);
+    expect(r.desc).toContain('単独の区間は 1% に満たない。');
+  });
+
   test('起点と終点が同じ国道は、政令の地名で決める', () => {
     const r = by(records, 'loop');
     expect(r.refs).toEqual([175]);

@@ -295,6 +295,13 @@ export function recordsOf(meta) {
       (r) => Math.round((r.concKm / r.km) * 100),
     );
     const refs = items.map((r) => r.ref);
+    // 割合は丸めてあるので、100% でも単独の区間を持ちうる。有無は延長で決める。
+    const single =
+      best < 100
+        ? `単独の区間は ${100 - best}% だけ。`
+        : items.every((r) => r.km - r.concKm <= ROUNDING_KM)
+          ? '単独の区間は無い。'
+          : '単独の区間は 1% に満たない。';
     out.push({
       key: 'concurrency',
       tab: LINKS,
@@ -305,11 +312,7 @@ export function recordsOf(meta) {
       digits: 0,
       approx: false,
       reference: true,
-      desc: `${refs.length === 1 ? span(refs[0]) : ''}${
-        best === 100
-          ? '単独の区間は無い。'
-          : `単独の区間は ${100 - best}% だけ。`
-      }`,
+      desc: `${refs.length === 1 ? span(refs[0]) : ''}${single}`,
       bbox: boxOf(refs),
     });
   }
