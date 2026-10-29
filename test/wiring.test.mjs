@@ -17,6 +17,7 @@ import {
   isOnlyGroup,
   NARROW_QUERY,
   setSelection,
+  showRoutesOnly,
   syncDetailOnly,
   togglePrefGroup,
   togglePrefOnly,
@@ -157,6 +158,21 @@ describe('wireControls — 路線の選択', () => {
 /* 「この路線だけ表示」は選択を差し替えるだけである。「だけ」を成り立たせて
  * いるのは絞り込みの側(mapspec.mjs の shownSystems)で、押した場所によらず
  * 同じ絵になる。系統トグルは触らない。 */
+describe('showRoutesOnly — 記録の答えだけを選ぶ', () => {
+  test('何本でも選び、都道府県道の選択は空にし、二度押しても解かない', () => {
+    const { document, state, applyFilters } = setup();
+    state.prefSelected = new Set(['nagano-63']);
+    showRoutesOnly(document, state, [7, 8], applyFilters);
+    showRoutesOnly(document, state, [7, 8], applyFilters);
+
+    expect(state.selected).toEqual(new Set([7, 8]));
+    expect(state.prefSelected.size).toBe(0);
+    expect(document.querySelector('#route-list input[value="8"]').checked).toBe(
+      true,
+    );
+  });
+});
+
 describe('この路線だけ表示', () => {
   const tPref = (doc) => doc.querySelector('#t-pref');
   const tNational = (doc) => doc.querySelector('#t-national');

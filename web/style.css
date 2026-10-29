@@ -240,7 +240,7 @@ body {
 /* maplibre-gl.css は焦点の当たったボタンの角を縦積み前提で丸め直す
    (button:focus:first-child は上の二隅)。横並びのグループでは直角の下辺になる
    ので、id で押し戻す。#display-btn の :focus と同じ手当てである。 */
-#ranking-btn:focus, #shared-btn:focus { border-radius: 4px; }
+#ranking-btn:focus, #shared-btn:focus, #records-btn:focus { border-radius: 4px; }
 #select-btn:focus { border-radius: 4px 0 0 4px; }
 #sel-none:focus { border-radius: 0 4px 4px 0; }
 .ui-ctrl-row:has(> .ui-btn[hidden]) > #select-btn:focus { border-radius: 4px; }
@@ -618,6 +618,96 @@ input[type="search"]::placeholder { font-size: .82em; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ranking .empty { font-size: .75rem; color: var(--ink-3); }
+
+/* 記録的な国道 ----------------------------------------------------------
+   1 件ずつめくるカードである。全件を一覧にしないのは、1 件ごとの驚きが
+   表の 1 行に埋もれるためである。 */
+.rec-nav { display: flex; gap: 4px; }
+/* この面のボタンは、どれも #records-popover から書き起こす。面は
+   maplibregl-ctrl-group の中にあり、maplibre-gl.css の
+   `.maplibregl-ctrl-group button`(地を透かし、余白を 0 にする)、
+   `button + button`(上に区切り線を引く)、
+   `.maplibregl-ctrl button:not(:disabled):hover`(地を灰にする)がクラス
+   一つ二つの規則に勝つ。区切り線がタブと極点の行に引かれ、押したタブが
+   ホバーで地を失っていた。 */
+/* 前後の矢印は面と同じ地にする。灰の地は押せない物に見える。 */
+#records-popover .icon-btn {
+  width: 26px; height: 26px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.rec-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+#records-popover .rec-tab {
+  font: inherit; font-size: .68rem; line-height: 1.5; padding: 1px 8px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: none; color: var(--ink-2); cursor: pointer;
+}
+#records-popover .rec-tab:hover:not(:disabled) { border-color: var(--sign-blue); }
+#records-popover .rec-tab[aria-pressed="true"] {
+  background: var(--sign-blue); border-color: var(--sign-blue); color: var(--panel);
+}
+#records-popover .rec-tab:disabled { opacity: .45; cursor: default; }
+.records { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.rec-slot { align-self: stretch; }
+/* 高さを揃える。めくるたびに下のボタンが上下すると、続けて押せない。 */
+.rec-card {
+  min-height: 200px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 16px 14px; border-radius: 6px;
+  background: var(--panel-2); text-align: center;
+}
+.rec-card p { margin: 0; }
+.rec-shields { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.rec-shields.one .shield { height: 54px; }
+.rec-title { font-size: .72rem; font-weight: 700; letter-spacing: .06em; color: var(--sign-blue); }
+.rec-route { font-size: 1.05rem; font-weight: 700; color: var(--ink); }
+.rec-val {
+  font-family: Roboto, var(--ui-font); font-size: 1.75rem; font-weight: 700;
+  line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums;
+}
+/* 「約」と単位は数より小さく薄い。数が主役である。 */
+.rec-val small {
+  font-family: var(--ui-font); font-size: .8rem; font-weight: 400;
+  color: var(--ink-3); margin-left: 2px;
+}
+.rec-val small.pre { margin: 0 3px 0 0; }
+/* 路線名のすぐ下に 1 行で置く。値の横に置くと、数の一部に読める。枠も地も
+   付けない薄い字にする。注意書きであって、目を引く物ではない。 */
+.rec-ref { font-size: .68rem; line-height: 1.3; color: var(--ink-3); }
+.rec-desc { font-size: .75rem; line-height: 1.6; color: var(--ink-2); text-wrap: pretty; }
+.rec-ends {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; width: 100%;
+}
+.rec-end { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#records-popover .rec-goto-end {
+  display: grid; padding: 2px 4px; border: 0; border-radius: 4px;
+  background: none; font: inherit; color: var(--ink); text-align: left; cursor: pointer;
+}
+#records-popover .rec-goto-end:hover { background: var(--line-2); }
+.rec-goto-end b { font-size: .75rem; line-height: 1.3; }
+.rec-goto-end small {
+  font-size: .68rem; color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+/* 位置の点。見た目は 6px の点のままで、押せる範囲だけを 11 × 18px に広げる。
+   点どうしの間隔も以前の 11px のままである。 */
+.rec-dots { display: flex; justify-content: center; }
+#records-popover .rec-dot {
+  width: 11px; height: 18px; padding: 0; border: 0; border-radius: 3px;
+  display: grid; place-items: center; background: none; cursor: pointer;
+}
+.rec-dot i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+#records-popover .rec-dot:hover i { background: var(--ink-3); }
+.rec-dot[aria-current="true"] i,
+#records-popover .rec-dot[aria-current="true"]:hover i { background: var(--sign-blue); }
+#records-popover .rec-goto {
+  font: inherit; font-size: .75rem; font-weight: 700; padding: 6px 11px;
+  border: 0; border-radius: 5px; cursor: pointer;
+  background: var(--sign-blue); color: var(--panel);
+}
+#records-popover .rec-goto:hover {
+  background-color: var(--sign-blue); filter: brightness(1.12);
+}
+/* 極点の行の標識も、上の区切り線を受けないようにする。 */
+#records-popover .shield-btn { border: 0; }
 
 /* おにぎり(国道番号標識)-------------------------------------------------
    実物と同じ配色である。白い縁は明るい配色の面では見えないが、暗い面では標識と

@@ -17,7 +17,7 @@
  *
  * 使い方:  node pipeline/pack_web.mjs [--maxzoom 14]
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { DATA, DECREE, REGIONS, ROOT } from './_paths.mjs';
@@ -87,6 +87,44 @@ for (const f of features) {
   };
   f.bbox = bboxOf(f.geometry.coordinates);
   f.refs_list = list;
+}
+
+/* ランプと上下線。台帳と同じ数え方の延長を集計が出すための物で、測るのは
+ * carriageways.py である。way の写しの選び方(regions.json の順で最初の物)が
+ * 上の結合と同じなので、id で引けば測った写しにそのまま当たる。無いまま進むと
+ * 行から欄が黙って消え、画面は上下線を 2 本ぶん数えた延長を台帳の数え方として
+ * 出すので、ここで止める。 */
+const carriagewaysPath = join(REGIONS, 'carriageways.json');
+let carriageways;
+try {
+  carriageways = JSON.parse(readFileSync(carriagewaysPath, 'utf8'));
+} catch (e) {
+  throw new Error(
+    `${carriagewaysPath} is unreadable (${e.code ?? e.message}); ` +
+      'run `uv run pipeline/carriageways.py` first',
+  );
+}
+// 地域を 1 つ作り直したあとの古い表も、読めてしまうので同じく止める。新しい way は
+// 表に無く、黙って 2 本ぶん数えられる。
+const measuredAt = statSync(carriagewaysPath).mtimeMs;
+const newer = index
+  .map((r) => r.region)
+  .filter(
+    (region) =>
+      statSync(join(REGIONS, `${region}.geojson`)).mtimeMs > measuredAt,
+  );
+if (newer.length) {
+  throw new Error(
+    `${carriagewaysPath} is older than ${newer.join(', ')}; ` +
+      'run `uv run pipeline/carriageways.py` again',
+  );
+}
+const ramps = new Set(carriageways.link);
+for (const f of features) {
+  const id = f.properties.id;
+  if (ramps.has(id)) f.link = true;
+  const twin = carriageways.twin_m[id];
+  if (twin) f.twin_km = twin / 1000;
 }
 
 /* MVT に null は無い。欠けた属性を vt-pbf は「どの field も立っていない値」と
@@ -164,8 +202,8 @@ const meta = {
   newest_edit: max(metas.map((m) => m.newest_edit)),
   endpoints: [...new Set(metas.map((m) => new URL(m.endpoint).host))],
   arc_count: features.length,
-  total_km:
-    Math.round(features.reduce((s, f) => s + f.properties.km, 0) * 10) / 10,
+  // 行と同じ、台帳の数え方の延長である(rollup.mjs の combinationsOf)。
+  total_km: Math.round(combos.reduce((s, c) => s + c.km, 0) * 10) / 10,
   bbox: dataBbox.map((v) => Math.round(v * 1e5) / 1e5),
   source: {
     type: 'vector',

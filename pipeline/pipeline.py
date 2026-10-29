@@ -72,6 +72,10 @@ def main() -> None:
     ]
     if not no_pack:
         stages += [
+            # pack_web.mjs は地域のファイルより古い表では止まる。作り直した地域の
+            # way は古い表に無いからである。
+            ("上下線 — ランプと上下線に分かれた道を測る",
+             ["uv", "run", str(HERE / "carriageways.py")]),
             ("配信データ — 地域を結合してタイルを切る",
              ["node", "--max-old-space-size=1024", str(HERE / "pack_web.mjs")]),
             ("配信データ — PMTiles にまとめる",

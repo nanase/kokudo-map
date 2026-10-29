@@ -29,7 +29,9 @@
   上下線分離      同じ番号の way が並んで走り、どちらも一方通行である way。
                   車道が二本で道は一本である。測り方は paired_fraction を参照。
                   台帳は 1 本ぶん、地図は 2 本ぶんなので、並走の長さの半分が
-                  超過ぶんになる。
+                  超過ぶんになる。画面が台帳の数え方で延長を出すときも、
+                  carriageways.py がこの判定(is_dual)を読み込んで way ごとに
+                  当てる。is_dual を変えれば両方が動く。
   旧道            両方とも数える(台帳は実延長の中の専用の欄)ので、分類の差で
                   あって延長の差ではない。台帳の旧道の欄の隣に並べ、計算からは
                   外す。
@@ -266,6 +268,38 @@ def paired_fraction(arc: dict, ai: int, arcs: list[dict], grid, cell: float,
     return out
 
 
+def is_dual(key: tuple[str, str, bool]) -> bool:
+    """paired_fraction のキーが、差の内訳で「上下線分離」に入る並走か。
+
+    供用中どうしは両方が一方通行のときだけである。片方が対面通行なら、並んで
+    いるのは側道で、台帳も別の道として数える。工事中どうしは一方通行を問わない。
+    向きが付く前の道が多いからである。供用中の道の隣で工事中の道が並ぶのは
+    造り直しであって上下線ではない。
+
+    carriageways.py も way ごとにこれで判定する。年報との突き合わせと画面の
+    延長が同じ判定に立つよう、判定はここに一つだけ置く。
+    """
+    mine, other, both_oneway = key
+    group = KIND_GROUP[mine]
+    if group != other:
+        return False
+    return both_oneway if group == "open" else True
+
+
+def require_oneway(oneway_arcs: int) -> None:
+    """一方通行の way が 1 本も無ければ止める。
+
+    `oneway` を持つ前に切ったキャッシュでは、どの way も一方通行でなく読める。
+    すると is_dual は供用中の上下線を 1 組も認めず、誤りではなく 0 を返す。
+    carriageways.py も同じキャッシュを読むので、ここで同じように止める。
+    """
+    if not oneway_arcs:
+        raise SystemExit(
+            "no way in build/cache carries `oneway`, so no carriageway pair can be "
+            "recognised. The cache was cut before build_routes.TAGS_USED gained the "
+            "tag; run `mise run extract` again.")
+
+
 # ----------------------------------------------------------------- measure ---
 def measure(reach: float) -> dict:
     """全国の way を一度ずつ。並走の長さは、その way が属する地域の中で測る。
@@ -399,11 +433,7 @@ def main() -> None:
     print(f"上下線の判定: 側方 {reach:.0f} m 以内、{SAMPLE_M:.0f} m ごとに測る\n")
 
     m = measure(reach)
-    if not m["oneway_arcs"]:
-        raise SystemExit(
-            "no way in build/cache carries `oneway`, so no carriageway pair can be "
-            "recognised. The cache was cut before build_routes.TAGS_USED gained the "
-            "tag; run `mise run extract` again.")
+    require_oneway(m["oneway_arcs"])
     kind, link = m["km_by_kind"], m["link_km_by_kind"]
 
     dedup_km = sum(kind.values())
@@ -422,13 +452,17 @@ def main() -> None:
                    if KIND_GROUP[mine] == group and other == neighbour
                    and (both_oneway is None or one == both_oneway))
 
+    def dual_sum(group: str) -> float:
+        return sum(v for key, v in paired.items()
+                   if is_dual(key) and KIND_GROUP[key[0]] == group)
+
     # 半分にする。二つの車道は互いを見つけるので、1 本の道が並走の合計へ自分の
     # 長さを二度持ち込む。超過はその二つ目の写しだけである。
-    dual_km = paired_sum("open", "open", True) / 2
-    dual_by_kind = {mine: v / 2 for (mine, other, one), v in paired.items()
-                    if other == "open" and one and KIND_GROUP[mine] == "open"}
+    dual_km = dual_sum("open") / 2
+    dual_by_kind = {key[0]: v / 2 for key, v in paired.items()
+                    if is_dual(key) and KIND_GROUP[key[0]] == "open"}
     parallel_km = paired_sum("open", "open", False) / 2
-    build_dual_km = paired_sum("build", "build") / 2
+    build_dual_km = dual_sum("build") / 2
     # こちらは半分にせず、しかもこの向きだけを数える。隣の開通済みの道こそ台帳が
     # 既に数えている物なので、工事中の way は丸ごと超過である。
     rebuild_km = paired_sum("build", "open")

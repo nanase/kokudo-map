@@ -320,10 +320,13 @@ const formerRowHTML = (formerKm) => {
  * 同じ `.shield-btn` で、押せばその路線の詳細に開き直る(app.js の委譲)。
  * 標識そのものが路線の名前なので、脇にボタンを足すより標識自体を的にするほうが
  * 短い。数が多い区画では 30 を超える(国道 4 号の交差は 31 路線)。小さいほうの
- * 標識で折り返し、入り切らないぶんは .detail-scroll がスクロールする。 */
-const relShieldHTML = (ref) =>
+ * 標識で折り返し、入り切らないぶんは .detail-scroll がスクロールする。
+ *
+ * 記録的な国道のカード(panel.mjs)も同じ物を使う。押したときの動きを一つに
+ * 揃えるためで、カードは大きいほうの標識で出す。 */
+export const shieldButtonHTML = (ref, small = true) =>
   `<button type="button" class="shield-btn" data-ref="${ref}" ` +
-  `title="国道${ref}号の詳細">${shield(ref, true)}</button>`;
+  `title="国道${ref}号の詳細">${shield(ref, small)}</button>`;
 
 /* 都道府県道の側。標識はヘキサで、キーは県を伴う。番号だけでは 47 本のどれか
  * 決まらない。 */
@@ -398,7 +401,7 @@ const continuationHTML = (key, cont, prefLabels, selected) => {
   );
 };
 
-const relatedHTML = (groups, shieldOf = relShieldHTML) =>
+const relatedHTML = (groups, shieldOf = (ref) => shieldButtonHTML(ref)) =>
   groups
     .map(
       (g) =>

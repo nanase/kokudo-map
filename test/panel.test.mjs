@@ -35,12 +35,140 @@ import {
   prefRowsHTML,
   prefStatsHTML,
   rankingHTML,
+  recordCardHTML,
+  recordDotsHTML,
+  recordGotoHTML,
+  recordTabsHTML,
   routeListHTML,
   sharedHTML,
   shareSummaryHTML,
   shareText,
   statsHTML,
 } from '../web/panel.mjs';
+
+describe('recordCardHTML', () => {
+  const doc = (html) => {
+    const d = new Window().document;
+    d.body.innerHTML = html;
+    return d;
+  };
+  const record = (over = {}) => ({
+    key: 'shortest',
+    tab: 1,
+    title: '最も短い国道',
+    refs: [174],
+    value: 0.23,
+    unit: 'km',
+    digits: 1,
+    approx: true,
+    reference: true,
+    desc: '神戸港から神戸市中央区まで。',
+    bbox: [135.19, 34.68, 135.2, 34.69],
+    ...over,
+  });
+
+  test('値は桁で丸めて「約」を付け、「参考」は路線名のすぐ下に置く', () => {
+    const d = doc(recordCardHTML(record()));
+    const val = d.querySelector('.rec-val');
+    expect(val.querySelector('small.pre').textContent).toBe('約');
+    expect(val.textContent).toBe('約0.2km');
+    const route = d.querySelector('.rec-route');
+    expect(route.textContent).toBe('国道174号');
+    expect(route.nextElementSibling.textContent).toBe('参考');
+  });
+
+  test('路線名の無いカードでは、「参考」は記録の名前のすぐ下に置く', () => {
+    const d = doc(recordCardHTML(record({ refs: [1, 2] })));
+    const title = d.querySelector('.rec-title');
+    expect(title.nextElementSibling.textContent).toBe('参考');
+  });
+
+  test('確かな値には何も付けない', () => {
+    const d = doc(recordCardHTML(record({ approx: false, reference: false })));
+    expect(d.querySelector('.rec-val small.pre')).toBeNull();
+    expect(d.querySelector('.rec-ref')).toBeNull();
+  });
+
+  test('標識は詳細パネルを開く .shield-btn で、路線が複数なら路線名を出さない', () => {
+    const d = doc(recordCardHTML(record({ refs: [1, 2] })));
+    const shields = [...d.querySelectorAll('.shield-btn')];
+    expect(shields.map((b) => b.dataset.ref)).toEqual(['1', '2']);
+    expect(d.querySelector('.rec-route')).toBeNull();
+  });
+
+  test('「この場所を見る」は答えの路線と行き先の広がりを持つ', () => {
+    const d = doc(recordGotoHTML(record({ refs: [450, 468] })));
+    const go = d.querySelector('.rec-goto');
+    expect(go.dataset.refs).toBe('450,468');
+    expect(go.dataset.bbox).toBe('135.19,34.68,135.2,34.69');
+  });
+
+  test('位置の点はどれも押せて、いまの 1 つだけが点く', () => {
+    const records = Array.from({ length: 13 }, (_, i) =>
+      record({ title: `記録${i}` }),
+    );
+    const d = doc(recordDotsHTML(records, 4));
+    const dots = [...d.querySelectorAll('button.rec-dot')];
+    expect(dots).toHaveLength(13);
+    expect(dots.map((b) => b.getAttribute('aria-current'))).toEqual(
+      dots.map((_, i) => (i === 4 ? 'true' : null)),
+    );
+    expect(dots[4].getAttribute('aria-label')).toBe('5 件目：記録4');
+  });
+
+  test('極点は 4 行で、行ごとに行き先を持ち、カード全体の場所のボタンは出さない', () => {
+    const ends = ['北', '東', '西', '南'].map((dir, i) => ({
+      dir,
+      ref: 238 + i,
+      deg: 45.52228,
+      axis: dir === '北' || dir === '南' ? 'N' : 'E',
+      bbox: [141, 45, 142, 45.5],
+    }));
+    const r = record({ key: 'ends', value: null, refs: [238], ends });
+    const d = doc(recordCardHTML(r));
+    const rows = [...d.querySelectorAll('.rec-goto-end')];
+    expect(rows).toHaveLength(4);
+    expect(rows[0].textContent).toBe('北　238号45.52°N');
+    // 行ごとに、その端の路線だけを選ぶ。
+    expect(rows.map((b) => b.dataset.refs)).toEqual([
+      '238',
+      '239',
+      '240',
+      '241',
+    ]);
+    expect(recordGotoHTML(r)).toBe('');
+    expect(d.querySelector('.rec-val')).toBeNull();
+  });
+});
+
+describe('recordTabsHTML', () => {
+  test('いまの分類が押され、記録の無い分類は押せない', () => {
+    const d = new Window().document;
+    d.body.innerHTML = recordTabsHTML([{ tab: 0 }, { tab: 1 }], 1);
+    const tabs = [...d.querySelectorAll('.rec-tab')];
+    expect(tabs.map((t) => t.textContent)).toEqual([
+      '珍しい道',
+      '線形',
+      '交わり',
+      '極点',
+      '番号',
+    ]);
+    expect(tabs.map((t) => t.getAttribute('aria-pressed'))).toEqual([
+      'false',
+      'true',
+      'false',
+      'false',
+      'false',
+    ]);
+    expect(tabs.map((t) => t.disabled)).toEqual([
+      false,
+      false,
+      true,
+      true,
+      true,
+    ]);
+  });
+});
 
 /** 呼び出しが多いので短く別名を置く。 */
 const freshness = freshnessHTML;

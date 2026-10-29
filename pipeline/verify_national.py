@@ -106,6 +106,29 @@ former_km = sum(c.get("former_km", 0) for c in combos)
 check(0 < former_km < meta["total_km"],
       f"旧道 is part of the total and not all of it ({former_km:,.1f} km)")
 
+# --- 延長は台帳と同じ数え方 --------------------------------------------------
+# 行の km はランプと上下線の片側を引いた長さで、引いたぶんは link_km と twin_km
+# にある(rollup.mjs の combinationsOf)。どちらも年報との突き合わせが全国で
+# 測った値と同じ大きさになる。docs/results.md の「ランプ・連結路」+627.6 km、
+# 「上下線分離」+9,705 km と「工事中どうしの上下線分離」+109 km である。測り方は
+# 同じ物を読み込んでいるので、離れるのは地域の読み順かデータが変わったときだけ
+# である。
+link_km = sum(c.get("link_km", 0) for c in combos)
+check(500 < link_km < 750,
+      f"the ramps left out of the lengths match the annual-report comparison "
+      f"({link_km:,.1f} km, measured there as about 628 km)")
+twin_km = sum(c.get("twin_km", 0) for c in combos)
+check(9_300 < twin_km < 10_300,
+      f"the dual-carriageway over-count left out matches the annual-report comparison "
+      f"({twin_km:,.1f} km, measured there as about 9,814 km)")
+
+# 公式の延長が分かっている最短の国道。地図の線では 312 m あり、国道 2 号側の約
+# 100 m が上下 2 本である。台帳と同じ数え方なら公式の 187.1 m に近づく。
+km_174 = sum(c["km"] for c in combos if 174 in c["refs"])
+check(0.15 <= km_174 <= 0.30,
+      f"route 174 is counted as the ledger does, close to its official 0.187 km "
+      f"({km_174:.2f} km)")
+
 invalid = set(routes) - VALID
 check(not invalid, f"no impossible route numbers ({sorted(invalid)})")
 

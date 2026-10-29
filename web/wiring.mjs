@@ -275,8 +275,17 @@ export function toggleRouteOnly(doc, state, ref, applyFilters) {
     clearSelection(doc, state, applyFilters);
     return;
   }
+  showRoutesOnly(doc, state, [ref], applyFilters);
+}
+
+/**
+ * 国道の何本かだけを選ぶ。都道府県道の選択は空にする。「だけ」の意味は
+ * toggleRouteOnly と同じで、こちらは解かない。記録的な国道の「この場所を見る」が
+ * 呼ぶ。記録の答えは 1 本とはかぎらない(全線が自動車専用道路は 5 本)。
+ */
+export function showRoutesOnly(doc, state, refs, applyFilters) {
   state.prefSelected = new Set();
-  setSelection(doc, state, [ref], applyFilters);
+  setSelection(doc, state, refs, applyFilters);
 }
 
 /**
