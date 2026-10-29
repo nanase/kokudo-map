@@ -39,15 +39,30 @@ describe('combinationsOf のランプと上下線', () => {
     ...extra,
   });
 
-  test('上下線の片側とランプを、行の延長とは別の欄に足す', () => {
+  test('延長と区分と旧道から上下線の片側とランプを引き、引いたぶんは別の欄に置く', () => {
     const [row] = combinationsOf([
       piece(1, 0.1),
       piece(2, 0.1, { twin_km: 0.05 }),
       piece(3, 0.11, { twin_km: 0.05 }),
       piece(4, 0.02, { link: true }),
+      piece(5, 0.04, {
+        properties: {
+          id: 5,
+          refs: '|174|',
+          n: 1,
+          km: 0.04,
+          kind: 'road',
+          former: 1,
+          name: '',
+        },
+        twin_km: 0.02,
+      }),
     ]);
-    expect(row.km).toBe(0.33);
-    expect(row.twin_km).toBe(0.1);
+    // 線は 0.37 km。上下線の片側 0.12 km とランプ 0.02 km を引いて 0.23 km。
+    expect(row.km).toBe(0.23);
+    expect(row.kinds).toEqual({ road: 0.23 });
+    expect(row.former_km).toBe(0.02);
+    expect(row.twin_km).toBe(0.12);
     expect(row.link_km).toBe(0.02);
   });
 

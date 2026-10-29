@@ -39,11 +39,13 @@ const km2 = (v) => Math.round(v * 100) / 100;
  * 名指しするのは 1 つか 2 つである。0 を書き並べれば何も述べないまま表が
  * 三倍になる。
  *
- * `link_km` と `twin_km` は、延長のうち台帳が路線の延長に数えないぶんである。
- * `link_km` はランプ・連結路、`twin_km` は上下線に分かれた道を 2 本ぶん数えた
- * うちの片側で、`km - link_km - twin_km` が台帳と同じ数え方の延長になる。
- * アークの `link`・`twin_km` から足し、0 は書かない。アークが持つのは国道だけ
- * である(pipeline/carriageways.py)。都道府県道の行にこの欄は出ない。
+ * 延長は台帳と同じ数え方で数える。ランプ・連結路は路線の延長ではなく、上下線に
+ * 分かれた道は 1 本である。地図の線を足すと国道174号は 0.31 km になり、公式の
+ * 0.187 km とずれる。`km`・`kinds`・`former_km` はどれも、アークの長さから
+ * ランプのぶんと上下線の片側(`twin_km`)を引いて足す。引いたぶんは `link_km` と
+ * `twin_km` に置く。足し戻せば地図に描いた線の長さになる。アークの `link` と
+ * `twin_km` は国道だけが持つ(pipeline/carriageways.py)ので、都道府県道の行は
+ * 線の長さのままで、二つの欄も出ない。
  *
  * `extra` は、その路線の格に固有の欄を 1 行ごとに足す。都道府県道は
  * 主要地方道かどうかをここで持つ。境目の値を持つのは判定(build_prefectural.py)
@@ -70,12 +72,16 @@ export function combinationsOf(feats, extra = null) {
       };
       by.set(p.refs, e);
     }
-    e.km += p.km;
+    // 台帳と同じ数え方の長さ。上下線の片側は並走の半分なので、アークの長さを
+    // 超えない。
+    const twin = f.twin_km ?? 0;
+    const len = f.link ? 0 : Math.max(0, p.km - twin);
+    e.km += len;
     e.arcs++;
-    e.kinds.set(p.kind, (e.kinds.get(p.kind) || 0) + p.km);
-    if (p.former) e.former += p.km;
+    e.kinds.set(p.kind, (e.kinds.get(p.kind) || 0) + len);
+    if (p.former) e.former += len;
     if (f.link) e.link += p.km;
-    e.twin += f.twin_km ?? 0;
+    else e.twin += p.km - len;
     if (p.name) e.names.set(p.name, (e.names.get(p.name) || 0) + 1);
     e.bbox = [
       Math.min(e.bbox[0], f.bbox[0]),

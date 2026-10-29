@@ -4,10 +4,10 @@
  * そのためである。
  *
  * 値には確かさの差がある。路線の数・位置・政令の文言は確かだが、延長は OSM に
- * 描かれた線の長さで、公式の延長とは測り方が違う。順位は確かでも値はずれる
- * (海上区間は OSM の路線に入っている航路の線しか無く、58 号は公式 609.5 km に
- * 対して 559 km である)。延長を使う記録は `reference` を立て、画面が「参考」の印を
- * 付ける。
+ * 描かれた線から測った値で、台帳と同じ数え方(ランプを除き、上下線を 1 本)に
+ * 直してあっても公式の延長とはずれる。順位は確かでも値はずれる(海上区間は OSM の
+ * 路線に入っている航路の線しか無く、58 号は公式 609.5 km に対して 559 km である)。
+ * 延長を使う記録は `reference` を立て、画面が「参考」の印を付ける。
  *
  * markup は panel.mjs の recordCardHTML が組む。ここは数と文だけを返す。
  * test/records.test.mjs を参照。
@@ -18,14 +18,9 @@ export const RECORD_TABS = ['珍しい道', '線形', '交わり', '極点', '�
 
 const [RARE, SHAPE, LINKS, ENDS, NUMBER] = RECORD_TABS.keys();
 
-/* 1 行が名指しする延長のうち、台帳が路線の延長に数えない物を引いた残り。
- * `link_km` と `twin_km` の意味は pipeline/rollup.mjs の combinationsOf にある。 */
-const ledgerKm = (c) => c.km - (c.link_km ?? 0) - (c.twin_km ?? 0);
-
 /* 丸めの尾。行は 10 m 単位で配られるので、引き算の結果がそれ未満なら 0 と読む。
- * 1 行の km・区分・ランプはそれぞれ ±5 m まで丸めてあり、三つを引けば 15 m まで
- * ずれうる。 */
-const ROUNDING_KM = 0.015;
+ * 1 行の km と区分はそれぞれ ±5 m まで丸めてあり、引けば 10 m までずれうる。 */
+const ROUNDING_KM = 0.01;
 
 const union = (a, b) => [
   Math.min(a[0], b[0]),
@@ -94,12 +89,12 @@ function routeTable(combos) {
     for (const ref of c.refs) {
       let e = by.get(ref);
       if (!e) {
-        e = { ref, rows: [], ledger: 0, concLedger: 0 };
+        e = { ref, rows: [], km: 0, concKm: 0 };
         by.set(ref, e);
       }
       e.rows.push(c);
-      e.ledger += ledgerKm(c);
-      if (c.n >= 2) e.concLedger += ledgerKm(c);
+      e.km += c.km;
+      if (c.n >= 2) e.concKm += c.km;
     }
   }
   return [...by.values()].sort((a, b) => a.ref - b.ref);
@@ -127,10 +122,10 @@ const kindKm = (route, kind) =>
  * | `bbox`      | 「この場所を見る」の行き先                               |
  * | `ends`      | 極点の記録だけ。方角ごとの路線・緯度経度・行き先         |
  *
- * 上下線を数え直した延長(`twin_km`)を持たない古い meta では、それを要る記録を
- * 出さない。web/data は追跡していないので、古い meta が配信されたまま新しい
- * コードが出ることがある。そのとき上下線を 2 本ぶん数えた値を台帳の数え方として
- * 出すよりは、出さないほうがよい。
+ * 延長を台帳と同じ数え方にする前の古い meta(行が `twin_km` を持たない)では、
+ * それを要る記録を出さない。web/data は追跡していないので、古い meta が配信された
+ * まま新しいコードが出ることがある。そのとき上下線を 2 本ぶん数えた値を出すよりは、
+ * 出さないほうがよい。
  */
 export function recordsOf(meta) {
   const combos = meta?.combinations ?? [];
@@ -196,18 +191,15 @@ export function recordsOf(meta) {
     'まだ道の無い区間が残る。',
   );
 
-  // 全線が自動車専用道路。どの行も、自動車専用道路とランプのほかに何も持たない。
+  // 全線が自動車専用道路。どの行の延長も、自動車専用道路だけでできている。
+  // ランプは延長に入っていない(古い meta では入っているので、この記録を出さない)。
   // 行ごとに見るのは、丸めの尾が路線ぶん積もらないようにするためである。
   if (hasLedger) {
     const refs = routes
       .filter(
         (r) =>
           kindKm(r, 'expressway') > 0 &&
-          r.rows.every(
-            (c) =>
-              c.km - (c.kinds?.expressway ?? 0) - (c.link_km ?? 0) <=
-              ROUNDING_KM,
-          ),
+          r.rows.every((c) => c.km - (c.kinds?.expressway ?? 0) <= ROUNDING_KM),
       )
       .map((r) => r.ref);
     if (refs.length) {
@@ -229,7 +221,7 @@ export function recordsOf(meta) {
 
   /* 線形。 */
   if (hasLedger) {
-    const { best, items } = leaders(routes, (r) => -r.ledger);
+    const { best, items } = leaders(routes, (r) => -r.km);
     const refs = items.map((r) => r.ref);
     out.push({
       key: 'shortest',
@@ -346,8 +338,8 @@ export function recordsOf(meta) {
 
   if (hasLedger) {
     const { best, items } = leaders(
-      routes.filter((r) => r.ledger > 0),
-      (r) => Math.round((r.concLedger / r.ledger) * 100),
+      routes.filter((r) => r.km > 0),
+      (r) => Math.round((r.concKm / r.km) * 100),
     );
     const refs = items.map((r) => r.ref);
     out.push({

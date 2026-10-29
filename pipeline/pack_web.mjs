@@ -187,8 +187,8 @@ const meta = {
   newest_edit: max(metas.map((m) => m.newest_edit)),
   endpoints: [...new Set(metas.map((m) => new URL(m.endpoint).host))],
   arc_count: features.length,
-  total_km:
-    Math.round(features.reduce((s, f) => s + f.properties.km, 0) * 10) / 10,
+  // 行と同じ、台帳の数え方の延長である(rollup.mjs の combinationsOf)。
+  total_km: Math.round(combos.reduce((s, c) => s + c.km, 0) * 10) / 10,
   bbox: dataBbox.map((v) => Math.round(v * 1e5) / 1e5),
   source: {
     type: 'vector',
