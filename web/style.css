@@ -636,9 +636,10 @@ input[type="search"]::placeholder { font-size: .82em; }
    `.maplibregl-ctrl button:not(:disabled):hover`(地を灰にする)がクラス
    一つ二つの規則に勝つ。区切り線がタブと極点の行に引かれ、押したタブが
    ホバーで地を失っていた。 */
+/* 前後の矢印は面と同じ地にする。灰の地は押せない物に見える。 */
 #records-popover .icon-btn {
   width: 26px; height: 26px;
-  background: var(--panel-2); border: 1px solid var(--line);
+  background: var(--panel); border: 1px solid var(--line);
 }
 .rec-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
 #records-popover .rec-tab {
