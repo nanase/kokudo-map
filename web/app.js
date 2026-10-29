@@ -1461,12 +1461,16 @@ $('#rec-tabs').addEventListener('click', (ev) => {
   renderRecords();
 });
 // 矢印キーでもめくる。ポップオーバーの中に文字を打つ欄は無いので、左右は
-// いつでもめくる操作に使える。
+// いつでもめくる操作に使える。カードの中の標識や「この場所を見る」に居た
+// フォーカスは、めくると要素ごと消えて body へ落ち、次のキーが届かなくなる。
+// めくった向きの矢印へ移しておく。
 $('#records-popover').addEventListener('keydown', (ev) => {
-  if (ev.key === 'ArrowLeft') stepRecord(-1);
-  else if (ev.key === 'ArrowRight') stepRecord(1);
-  else return;
+  const step = { ArrowLeft: -1, ArrowRight: 1 }[ev.key];
+  if (!step) return;
   ev.preventDefault();
+  const replaced = ev.target.closest('#rec-card, #rec-goto');
+  stepRecord(step);
+  if (replaced) $(step < 0 ? '#rec-prev' : '#rec-next').focus();
 });
 // 「この場所を見る」と、極点の記録の各行。記録の場所へ地図を寄せ、答えの
 // 路線だけを選ぶ。ランキングの行は選択を変えないが、あちらは選択を映す一覧で、
