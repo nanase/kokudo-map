@@ -98,6 +98,8 @@ import {
   prefStatsHTML,
   RANKING_ROWS,
   rankingHTML,
+  recordCardHTML,
+  recordTabsHTML,
   routeListHTML,
   SHARED_ROWS,
   sharedHTML,
@@ -105,6 +107,7 @@ import {
 } from './panel.mjs';
 import { deepest, popupHTML, prefPopupHTML } from './popup.mjs';
 import { comparePrefKeys, prefRefOf, prefRegionOf } from './prefroute.mjs';
+import { recordsOf } from './records.mjs';
 import { terminiFeatures } from './termini.mjs';
 import {
   decodeRoutes,
@@ -726,11 +729,12 @@ document.addEventListener('click', (ev) => {
   }
 });
 
-/* 左上の三つ。markup は index.html が持ち、データが届く前から state と
+/* 左上の四つ。markup は index.html が持ち、データが届く前から state と
  * 結べる。 */
 for (const [btnId, paneId] of [
   ['#ranking-btn', '#ranking-popover'],
   ['#shared-btn', '#shared-popover'],
+  ['#records-btn', '#records-popover'],
 ]) {
   const btn = $(btnId);
   registerPane(btn, $(paneId), btn.closest('.ui-ctrl'));
@@ -1339,6 +1343,8 @@ function buildUI() {
   $('#freshness').innerHTML = freshnessHTML(state.meta);
   $('#pref-concurrency').innerHTML = prefConcurrencyHTML();
   renderShared();
+  records = recordsOf(state.meta);
+  renderRecords();
 }
 
 function updateStats() {
@@ -1403,6 +1409,75 @@ function renderShared() {
   $('#shared').innerHTML = sharedHTML(rows);
 }
 
+/* 国道の記録。数は buildUI() が meta から一度だけ数える。選択や表示の切り替え
+ * では変わらない。全国の国道を比べた事実だからである。 */
+let records = [];
+let recordIndex = 0;
+
+function renderRecords() {
+  if (!records.length) return;
+  const r = records[recordIndex];
+  // タブは作り直さず、押された印だけを移す。押したタブを入れ替えると、
+  // そのクリックが届く頃には要素が文書の外にあり、「持ち物の外を押した」と
+  // 読まれてポップオーバーが閉じる。
+  const tabs = $('#rec-tabs');
+  if (!tabs.childElementCount) tabs.innerHTML = recordTabsHTML(records, r.tab);
+  for (const t of tabs.querySelectorAll('.rec-tab')) {
+    t.setAttribute('aria-pressed', String(Number(t.dataset.tab) === r.tab));
+  }
+  $('#records').innerHTML = recordCardHTML(r, recordIndex, records.length);
+}
+
+/** 前後にめくる。端まで来たら反対の端へ回る。 */
+function stepRecord(delta) {
+  if (!records.length) return;
+  recordIndex = (recordIndex + delta + records.length) % records.length;
+  renderRecords();
+}
+
+$('#rec-prev').addEventListener('click', () => stepRecord(-1));
+$('#rec-next').addEventListener('click', () => stepRecord(1));
+$('#rec-tabs').addEventListener('click', (ev) => {
+  const tab = ev.target.closest('.rec-tab');
+  if (!tab || tab.disabled) return;
+  const i = records.findIndex((r) => r.tab === Number(tab.dataset.tab));
+  if (i < 0) return;
+  recordIndex = i;
+  renderRecords();
+});
+// 矢印キーでもめくる。ポップオーバーの中に文字を打つ欄は無いので、左右は
+// いつでもめくる操作に使える。
+$('#records-popover').addEventListener('keydown', (ev) => {
+  if (ev.key === 'ArrowLeft') stepRecord(-1);
+  else if (ev.key === 'ArrowRight') stepRecord(1);
+  else return;
+  ev.preventDefault();
+});
+// 「この場所を見る」と、端点の記録の各行。どちらも行き先の広がりを持つ。
+// 押してもポップオーバーは閉じない。ランキングの行と同じで、続けて
+// 次の記録へめくれる。
+$('#records').addEventListener('click', (ev) => {
+  const go = ev.target.closest('.rec-goto, .rec-goto-end');
+  if (go) fitBbox(go.dataset.bbox);
+});
+
+/**
+ * 広がり(`"w,s,e,n"`)が収まるように地図を寄せる。
+ *
+ * 短い重用区間は数 m の車道でありうるし、アーク 1 本ぶんなら広がりを
+ * 持たない。潰れた bbox が無限の縮尺を要求しないよう、maxZoom で止める。
+ */
+function fitBbox(bbox) {
+  const [w, s, e, n] = bbox.split(',').map(Number);
+  map.fitBounds(
+    [
+      [w, s],
+      [e, n],
+    ],
+    { padding: 80, maxZoom: 14 },
+  );
+}
+
 /**
  * 重用ランキングと起終点共有の行を押すと、その場所へ飛ぶ。
  *
@@ -1430,16 +1505,7 @@ document.addEventListener('click', (ev) => {
     map.flyTo({ center: [lon, lat], zoom: 12 });
     return;
   }
-  // 短い重用区間は数 m の車道でありうるし、アーク 1 本ぶんなら広がりを
-  // 持たない。潰れた bbox が無限の縮尺を要求しないよう、maxZoom で止める。
-  const [w, s, e, n] = row.dataset.bbox.split(',').map(Number);
-  map.fitBounds(
-    [
-      [w, s],
-      [e, n],
-    ],
-    { padding: 80, maxZoom: 14 },
-  );
+  fitBbox(row.dataset.bbox);
 });
 
 /* ---------------------------------------------------------- ポップアップ --- */

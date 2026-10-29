@@ -4,6 +4,7 @@
  * 純関数なので検査できる場所に置く。どの文字列をどの要素へいつ入れるかは app.js
  * が持つ。
  */
+import { shieldButtonHTML } from './detail.mjs';
 import { esc } from './html.mjs';
 import {
   COLOR_CONSTRUCTION,
@@ -23,6 +24,7 @@ import {
   PREF_MAJOR,
   PREF_RANK_LABELS,
 } from './mapspec.mjs';
+import { RECORD_TABS } from './records.mjs';
 import { hexShield, prefRouteName, shieldRow } from './shield.mjs';
 
 /* ポップオーバーが出す行数。どちらもビルドが並べ替えて配るので、頭から取れば
@@ -175,6 +177,83 @@ export const sharedHTML = (rows) =>
         })
         .join('')
     : '<p class="empty">該当地点はありません。</p>';
+
+/* ------------------------------------------------------------------ 記録 --- */
+/* 数えるのは records.mjs の recordsOf()。ここはその 1 件をカードにする。 */
+
+/** 分類のタブ。記録を 1 件も持たない分類(古い meta で起きる)は押せない。 */
+export const recordTabsHTML = (records, current) =>
+  RECORD_TABS.map((label, i) => {
+    const has = records.some((r) => r.tab === i);
+    return (
+      `<button type="button" class="rec-tab" data-tab="${i}" ` +
+      `aria-pressed="${i === current}"${has ? '' : ' disabled'}>${label}</button>`
+    );
+  }).join('');
+
+const fmtValue = (r) =>
+  r.value.toLocaleString(undefined, {
+    minimumFractionDigits: r.digits,
+    maximumFractionDigits: r.digits,
+  });
+
+/* 値の行。「約」と単位は数より一段小さく薄くする。値の主役は数である。
+ * 延長を使う値には「参考」の印を付ける。印だけにして、理由の文は添えない。 */
+const recordValueHTML = (r) =>
+  r.value === null
+    ? ''
+    : '<p class="rec-val">' +
+      (r.approx ? '<small class="pre">約</small>' : '') +
+      `${fmtValue(r)}<small>${esc(r.unit)}</small>` +
+      (r.reference ? '<span class="rec-ref">参考</span>' : '') +
+      '</p>';
+
+/* 端点の 4 行。標識は詳細パネルを開き、隣の文字はその端へ地図を寄せる。
+ * 一枚の「この場所を見る」では 4 つの端を一度に見せられない。 */
+const recordEndsHTML = (ends) =>
+  '<div class="rec-ends">' +
+  ends
+    .map((e) => {
+      const deg = `${e.deg.toFixed(2)}°${e.axis}`;
+      return (
+        `<div class="rec-end">${shieldButtonHTML(e.ref)}` +
+        `<button type="button" class="rec-goto-end" data-bbox="${e.bbox.join(',')}" ` +
+        `aria-label="最も${e.dir}の端、国道${e.ref}号（${deg}）を地図で表示">` +
+        `<b>${e.dir}　${e.ref}号</b><small>${deg}</small></button></div>`
+      );
+    })
+    .join('') +
+  '</div>';
+
+/**
+ * 記録 1 件のカード。`index` と `total` は位置の点に使う。標識は詳細パネルの
+ * 「関わりのある国道」と同じ `.shield-btn` で、押せばその路線の詳細が開く。
+ */
+export function recordCardHTML(r, index, total) {
+  const one = r.refs.length === 1 && !r.ends;
+  const shields = r.ends
+    ? recordEndsHTML(r.ends)
+    : `<div class="rec-shields${one ? ' one' : ''}">` +
+      r.refs.map((ref) => shieldButtonHTML(ref, !one)).join('') +
+      '</div>';
+  const dots = Array.from(
+    { length: total },
+    (_, i) => `<i${i === index ? ' class="on"' : ''}></i>`,
+  ).join('');
+  return (
+    `<div class="rec-card" data-key="${r.key}">${shields}` +
+    `<p class="rec-title">${esc(r.title)}</p>` +
+    (one ? `<p class="rec-route">国道${r.refs[0]}号</p>` : '') +
+    recordValueHTML(r) +
+    (r.desc ? `<p class="rec-desc">${esc(r.desc)}</p>` : '') +
+    '</div>' +
+    `<div class="rec-dots" aria-hidden="true">${dots}</div>` +
+    (r.ends
+      ? ''
+      : `<button type="button" class="rec-goto" data-bbox="${r.bbox.join(',')}">` +
+        'この場所を見る</button>')
+  );
+}
 
 /* ------------------------------------------------------------------ 共有 --- */
 /**

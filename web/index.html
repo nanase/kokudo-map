@@ -294,6 +294,44 @@
           </section>
         </div>
       </div>
+
+      <div class="maplibregl-ctrl maplibregl-ctrl-group ui-ctrl">
+        <!-- 王冠。「いちばん」の印である。順位の一覧であるランキングの優勝
+             カップとは、29px でも形で見分けられる。 -->
+        <button type="button" id="records-btn" class="ui-btn"
+                aria-expanded="false" aria-controls="records-popover"
+                title="国道の記録" aria-label="国道の記録">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 18.5 3 7.5l5 4 4-6.5 4 6.5 5-4-1 11Z" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <!-- 記録は 1 件ずつめくる。中身は app.js が panel.mjs の
+             recordCardHTML() で入れる。 -->
+        <div id="records-popover" class="map-popover to-right" hidden>
+          <section>
+            <div class="pane-hd">
+              <h2>国道の記録</h2>
+              <span class="rec-nav">
+                <button type="button" id="rec-prev" class="icon-btn" aria-label="前の記録">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M15 5 8 12l7 7" fill="none" stroke="currentColor"
+                          stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button type="button" id="rec-next" class="icon-btn" aria-label="次の記録">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m9 5 7 7-7 7" fill="none" stroke="currentColor"
+                          stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </span>
+            </div>
+            <div id="rec-tabs" class="rec-tabs" role="group" aria-label="記録の分類"></div>
+            <div id="records" class="records" aria-live="polite"></div>
+          </section>
+        </div>
+      </div>
     </div>
 
     <!-- 路線の詳細。ポップアップの標識を押すと app.js が中身を入れて出す。

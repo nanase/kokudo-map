@@ -35,12 +35,122 @@ import {
   prefRowsHTML,
   prefStatsHTML,
   rankingHTML,
+  recordCardHTML,
+  recordTabsHTML,
   routeListHTML,
   sharedHTML,
   shareSummaryHTML,
   shareText,
   statsHTML,
 } from '../web/panel.mjs';
+
+describe('recordCardHTML', () => {
+  const doc = (html) => {
+    const d = new Window().document;
+    d.body.innerHTML = html;
+    return d;
+  };
+  const record = (over = {}) => ({
+    key: 'shortest',
+    tab: 1,
+    title: '最も短い国道',
+    refs: [174],
+    value: 0.23,
+    unit: 'km',
+    digits: 1,
+    approx: true,
+    reference: true,
+    desc: '神戸港から神戸市中央区まで。',
+    bbox: [135.19, 34.68, 135.2, 34.69],
+    ...over,
+  });
+
+  test('値は桁で丸め、「約」と「参考」を付ける', () => {
+    const d = doc(recordCardHTML(record(), 0, 13));
+    const val = d.querySelector('.rec-val');
+    expect(val.querySelector('small.pre').textContent).toBe('約');
+    expect(val.textContent).toBe('約0.2km参考');
+    expect(d.querySelector('.rec-route').textContent).toBe('国道174号');
+  });
+
+  test('確かな値には何も付けない', () => {
+    const d = doc(
+      recordCardHTML(record({ approx: false, reference: false }), 0, 13),
+    );
+    expect(d.querySelector('.rec-val small.pre')).toBeNull();
+    expect(d.querySelector('.rec-ref')).toBeNull();
+  });
+
+  test('標識は詳細パネルを開く .shield-btn で、場所のボタンは広がりを持つ', () => {
+    const d = doc(recordCardHTML(record({ refs: [1, 2] }), 0, 13));
+    const shields = [...d.querySelectorAll('.shield-btn')];
+    expect(shields.map((b) => b.dataset.ref)).toEqual(['1', '2']);
+    // 路線が 2 本なら、路線名の行は出さない。
+    expect(d.querySelector('.rec-route')).toBeNull();
+    expect(d.querySelector('.rec-goto').dataset.bbox).toBe(
+      '135.19,34.68,135.2,34.69',
+    );
+  });
+
+  test('位置の点は件数ぶん並び、いまの 1 つだけが点く', () => {
+    const d = doc(recordCardHTML(record(), 4, 13));
+    const dots = [...d.querySelectorAll('.rec-dots i')];
+    expect(dots).toHaveLength(13);
+    expect(dots.findIndex((i) => i.classList.contains('on'))).toBe(4);
+  });
+
+  test('端点は 4 行で、行ごとに行き先を持ち、カード全体の場所のボタンは出さない', () => {
+    const ends = ['北', '南', '東', '西'].map((dir, i) => ({
+      dir,
+      ref: 238 + i,
+      deg: 45.52228,
+      axis: dir === '北' || dir === '南' ? 'N' : 'E',
+      bbox: [141, 45, 142, 45.5],
+    }));
+    const d = doc(
+      recordCardHTML(
+        record({ key: 'ends', value: null, refs: [238], ends }),
+        0,
+        13,
+      ),
+    );
+    expect(d.querySelectorAll('.rec-goto-end')).toHaveLength(4);
+    expect(d.querySelector('.rec-goto-end').textContent).toBe(
+      '北　238号45.52°N',
+    );
+    expect(d.querySelector('.rec-goto')).toBeNull();
+    expect(d.querySelector('.rec-val')).toBeNull();
+  });
+});
+
+describe('recordTabsHTML', () => {
+  test('いまの分類が押され、記録の無い分類は押せない', () => {
+    const d = new Window().document;
+    d.body.innerHTML = recordTabsHTML([{ tab: 0 }, { tab: 1 }], 1);
+    const tabs = [...d.querySelectorAll('.rec-tab')];
+    expect(tabs.map((t) => t.textContent)).toEqual([
+      '珍しい道',
+      '線形',
+      '交わり',
+      '端点',
+      '番号',
+    ]);
+    expect(tabs.map((t) => t.getAttribute('aria-pressed'))).toEqual([
+      'false',
+      'true',
+      'false',
+      'false',
+      'false',
+    ]);
+    expect(tabs.map((t) => t.disabled)).toEqual([
+      false,
+      false,
+      true,
+      true,
+      true,
+    ]);
+  });
+});
 
 /** 呼び出しが多いので短く別名を置く。 */
 const freshness = freshnessHTML;
