@@ -225,7 +225,8 @@ for (const region of regions) {
     n03_vintage: built.n03_vintage,
     arc_count: built.arc_count,
     // 重複排除の延長。同じ道を何本の県道が指定していても 1 度しか数えない。
-    // 国道の meta が `total_km` と呼ぶのと同じ量である。
+    // 国道の meta の `total_km` とは量が違う。あちらはランプを除き上下線を
+    // 1 本に数えた台帳の数え方で、こちらは線の長さをそのまま足す。
     total_km: built.arc_km,
     // 指定延長。重用区間を指定した路線の数だけ数えた物で、年報の 総延長 に
     // 当たる。
