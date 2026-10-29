@@ -21,9 +21,8 @@
           ある。二つの車道は互いを見つけるので、並走の長さを両方に半分ずつ
           持たせると、足したときにちょうど 1 本ぶんが残る
 
-上下線と見なすのは compare_annual_report.py が「上下線分離」と呼ぶ二つである。
-供用中の車道どうしで両方が一方通行のもの、工事中どうしで並ぶもの。供用中の道の
-隣で工事中の道が並ぶのは造り直しであって上下線ではないので、ここでは引かない。
+上下線と見なすのは compare_annual_report.py が「上下線分離」と呼ぶ並走で、
+判定はあちらの is_dual をそのまま使う。
 
 way は地域の重なりで二度現れる。pack_web.mjs は regions.json の順に読んで最初の
 写しを採るので、ここも同じ順で最初の写しを測る。並走の相手はその地域のファイル
@@ -44,25 +43,12 @@ from compare_annual_report import (
     KIND_GROUP,
     PAIR_DISTANCE_M,
     build_grid,
+    is_dual,
     load_region,
     paired_fraction,
 )
 
 OUT = REGIONS / "carriageways.json"
-
-
-def is_twin(kind: str, neighbour: str, both_oneway: bool) -> bool:
-    """compare_annual_report.py の差の内訳で「上下線分離」に入る並走か。
-
-    供用中どうしは両方が一方通行のときだけである。片方が対面通行なら、並んで
-    いるのは側道で、台帳も別の道として数える。工事中どうしは一方通行を問わない。
-    向きが付く前の道が多いからで、あちらの `paired_sum("build", "build")` も
-    問わない。
-    """
-    group = KIND_GROUP[kind]
-    if group != neighbour:
-        return False
-    return both_oneway if group == "open" else True
 
 
 def measure_region(region: str, seen: set[int]) -> tuple[list[int], dict[int, float]]:
@@ -84,9 +70,9 @@ def measure_region(region: str, seen: set[int]) -> tuple[list[int], dict[int, fl
         if a["id"] not in own or a["km"] == 0.0:
             continue
         metres = sum(
-            m for (kind, neighbour, one), m in paired_fraction(
+            m for key, m in paired_fraction(
                 a, i, pool, grid, PAIR_DISTANCE_M, PAIR_DISTANCE_M).items()
-            if is_twin(kind, neighbour, one))
+            if is_dual(key))
         if metres > 0:
             twins[a["id"]] = round(metres / 2, 1)
     return links, twins
