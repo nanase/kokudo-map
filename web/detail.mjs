@@ -322,7 +322,7 @@ const formerRowHTML = (formerKm) => {
  * 短い。数が多い区画では 30 を超える(国道 4 号の交差は 31 路線)。小さいほうの
  * 標識で折り返し、入り切らないぶんは .detail-scroll がスクロールする。
  *
- * 国道の記録のカード(panel.mjs)も同じ物を使う。押したときの動きを一つに
+ * 記録的な国道のカード(panel.mjs)も同じ物を使う。押したときの動きを一つに
  * 揃えるためで、カードは大きいほうの標識で出す。 */
 export const shieldButtonHTML = (ref, small = true) =>
   `<button type="button" class="shield-btn" data-ref="${ref}" ` +

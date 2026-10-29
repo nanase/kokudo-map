@@ -1409,7 +1409,7 @@ function renderShared() {
   $('#shared').innerHTML = sharedHTML(rows);
 }
 
-/* 国道の記録。数は buildUI() が meta から一度だけ数える。選択や表示の切り替え
+/* 記録的な国道。数は buildUI() が meta から一度だけ数える。選択や表示の切り替え
  * では変わらない。全国の国道を比べた事実だからである。 */
 let records = [];
 let recordIndex = 0;

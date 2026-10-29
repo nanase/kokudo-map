@@ -754,7 +754,7 @@ if (!target) {
     const el = document.querySelector('.maplibregl-popup-content');
     return {
       text: el ? el.innerText.replace(/\n/g, ' | ') : null,
-      // ポップアップの中だけを数える。国道の記録のカードも同じ .shield-btn を
+      // ポップアップの中だけを数える。記録的な国道のカードも同じ .shield-btn を
       // 持ち、閉じていても文書の中にある。
       shields: el
         ? [...el.querySelectorAll('.shield-btn')].map((b) => b.dataset.ref)
