@@ -17,7 +17,7 @@
  *
  * 使い方:  node pipeline/pack_web.mjs [--maxzoom 14]
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { DATA, DECREE, REGIONS, ROOT } from './_paths.mjs';
@@ -102,6 +102,21 @@ try {
   throw new Error(
     `${carriagewaysPath} is unreadable (${e.code ?? e.message}); ` +
       'run `uv run pipeline/carriageways.py` first',
+  );
+}
+// 地域を 1 つ作り直したあとの古い表も、読めてしまうので同じく止める。新しい way は
+// 表に無く、黙って 2 本ぶん数えられる。
+const measuredAt = statSync(carriagewaysPath).mtimeMs;
+const newer = index
+  .map((r) => r.region)
+  .filter(
+    (region) =>
+      statSync(join(REGIONS, `${region}.geojson`)).mtimeMs > measuredAt,
+  );
+if (newer.length) {
+  throw new Error(
+    `${carriagewaysPath} is older than ${newer.join(', ')}; ` +
+      'run `uv run pipeline/carriageways.py` again',
   );
 }
 const ramps = new Set(carriageways.link);
