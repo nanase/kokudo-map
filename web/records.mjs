@@ -305,7 +305,11 @@ export function recordsOf(meta) {
       digits: 0,
       approx: false,
       reference: true,
-      desc: `${refs.length === 1 ? span(refs[0]) : ''}単独の区間は ${100 - best}% だけ。`,
+      desc: `${refs.length === 1 ? span(refs[0]) : ''}${
+        best === 100
+          ? '単独の区間は無い。'
+          : `単独の区間は ${100 - best}% だけ。`
+      }`,
       bbox: boxOf(refs),
     });
   }

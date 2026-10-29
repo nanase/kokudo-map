@@ -95,6 +95,17 @@ describe('recordsOf', () => {
     expect(by(tied, 'crossings').refs).toEqual([1, 2, 3, 174]);
   });
 
+  test('全線が重用の路線では、単独の区間が無いと述べる', () => {
+    const all = recordsOf({
+      ...META,
+      combinations: [...META.combinations, row([1, 176], 5, { twin_km: 0 })],
+    });
+    const r = by(all, 'concurrency');
+    expect(r.refs).toEqual([176]);
+    expect(r.value).toBe(100);
+    expect(r.desc).toContain('単独の区間は無い。');
+  });
+
   test('起点と終点が同じ国道は、政令の地名で決める', () => {
     const r = by(records, 'loop');
     expect(r.refs).toEqual([175]);
