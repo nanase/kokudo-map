@@ -36,6 +36,8 @@ import {
   prefStatsHTML,
   rankingHTML,
   recordCardHTML,
+  recordDotsHTML,
+  recordGotoHTML,
   recordTabsHTML,
   routeListHTML,
   sharedHTML,
@@ -65,38 +67,53 @@ describe('recordCardHTML', () => {
     ...over,
   });
 
-  test('値は桁で丸め、「約」と「参考」を付ける', () => {
-    const d = doc(recordCardHTML(record(), 0, 13));
+  test('値は桁で丸めて「約」を付け、「参考」は路線名のすぐ下に置く', () => {
+    const d = doc(recordCardHTML(record()));
     const val = d.querySelector('.rec-val');
     expect(val.querySelector('small.pre').textContent).toBe('約');
-    expect(val.textContent).toBe('約0.2km参考');
-    expect(d.querySelector('.rec-route').textContent).toBe('国道174号');
+    expect(val.textContent).toBe('約0.2km');
+    const route = d.querySelector('.rec-route');
+    expect(route.textContent).toBe('国道174号');
+    expect(route.nextElementSibling.textContent).toBe('参考');
+  });
+
+  test('路線名の無いカードでは、「参考」は記録の名前のすぐ下に置く', () => {
+    const d = doc(recordCardHTML(record({ refs: [1, 2] })));
+    const title = d.querySelector('.rec-title');
+    expect(title.nextElementSibling.textContent).toBe('参考');
   });
 
   test('確かな値には何も付けない', () => {
-    const d = doc(
-      recordCardHTML(record({ approx: false, reference: false }), 0, 13),
-    );
+    const d = doc(recordCardHTML(record({ approx: false, reference: false })));
     expect(d.querySelector('.rec-val small.pre')).toBeNull();
     expect(d.querySelector('.rec-ref')).toBeNull();
   });
 
-  test('標識は詳細パネルを開く .shield-btn で、場所のボタンは広がりを持つ', () => {
-    const d = doc(recordCardHTML(record({ refs: [1, 2] }), 0, 13));
+  test('標識は詳細パネルを開く .shield-btn で、路線が複数なら路線名を出さない', () => {
+    const d = doc(recordCardHTML(record({ refs: [1, 2] })));
     const shields = [...d.querySelectorAll('.shield-btn')];
     expect(shields.map((b) => b.dataset.ref)).toEqual(['1', '2']);
-    // 路線が 2 本なら、路線名の行は出さない。
     expect(d.querySelector('.rec-route')).toBeNull();
-    expect(d.querySelector('.rec-goto').dataset.bbox).toBe(
-      '135.19,34.68,135.2,34.69',
-    );
   });
 
-  test('位置の点は件数ぶん並び、いまの 1 つだけが点く', () => {
-    const d = doc(recordCardHTML(record(), 4, 13));
-    const dots = [...d.querySelectorAll('.rec-dots i')];
+  test('「この場所を見る」は答えの路線と行き先の広がりを持つ', () => {
+    const d = doc(recordGotoHTML(record({ refs: [450, 468] })));
+    const go = d.querySelector('.rec-goto');
+    expect(go.dataset.refs).toBe('450,468');
+    expect(go.dataset.bbox).toBe('135.19,34.68,135.2,34.69');
+  });
+
+  test('位置の点はどれも押せて、いまの 1 つだけが点く', () => {
+    const records = Array.from({ length: 13 }, (_, i) =>
+      record({ title: `記録${i}` }),
+    );
+    const d = doc(recordDotsHTML(records, 4));
+    const dots = [...d.querySelectorAll('button.rec-dot')];
     expect(dots).toHaveLength(13);
-    expect(dots.findIndex((i) => i.classList.contains('on'))).toBe(4);
+    expect(dots.map((b) => b.getAttribute('aria-current'))).toEqual(
+      dots.map((_, i) => (i === 4 ? 'true' : null)),
+    );
+    expect(dots[4].getAttribute('aria-label')).toBe('5 件目：記録4');
   });
 
   test('極点は 4 行で、行ごとに行き先を持ち、カード全体の場所のボタンは出さない', () => {
@@ -107,18 +124,19 @@ describe('recordCardHTML', () => {
       axis: dir === '北' || dir === '南' ? 'N' : 'E',
       bbox: [141, 45, 142, 45.5],
     }));
-    const d = doc(
-      recordCardHTML(
-        record({ key: 'ends', value: null, refs: [238], ends }),
-        0,
-        13,
-      ),
-    );
-    expect(d.querySelectorAll('.rec-goto-end')).toHaveLength(4);
-    expect(d.querySelector('.rec-goto-end').textContent).toBe(
-      '北　238号45.52°N',
-    );
-    expect(d.querySelector('.rec-goto')).toBeNull();
+    const r = record({ key: 'ends', value: null, refs: [238], ends });
+    const d = doc(recordCardHTML(r));
+    const rows = [...d.querySelectorAll('.rec-goto-end')];
+    expect(rows).toHaveLength(4);
+    expect(rows[0].textContent).toBe('北　238号45.52°N');
+    // 行ごとに、その端の路線だけを選ぶ。
+    expect(rows.map((b) => b.dataset.refs)).toEqual([
+      '238',
+      '239',
+      '240',
+      '241',
+    ]);
+    expect(recordGotoHTML(r)).toBe('');
     expect(d.querySelector('.rec-val')).toBeNull();
   });
 });

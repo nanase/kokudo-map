@@ -328,7 +328,14 @@
               </span>
             </div>
             <div id="rec-tabs" class="rec-tabs" role="group" aria-label="記録の分類"></div>
-            <div id="records" class="records" aria-live="polite"></div>
+            <!-- 押した物を作り直すと、そのクリックは文書の外を押したと読まれて
+                 面が閉じる。タブと点は作り直さず印だけを移すので、カードとは
+                 別の入れ物に置く。 -->
+            <div class="records">
+              <div id="rec-card" class="rec-slot" aria-live="polite"></div>
+              <div id="rec-dots" class="rec-dots"></div>
+              <div id="rec-goto"></div>
+            </div>
           </section>
         </div>
       </div>

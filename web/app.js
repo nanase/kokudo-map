@@ -99,6 +99,8 @@ import {
   RANKING_ROWS,
   rankingHTML,
   recordCardHTML,
+  recordDotsHTML,
+  recordGotoHTML,
   recordTabsHTML,
   routeListHTML,
   SHARED_ROWS,
@@ -121,6 +123,7 @@ import {
   isOnly,
   isOnlyGroup,
   NARROW_QUERY,
+  showRoutesOnly,
   syncDetailOnly,
   syncRouteList,
   togglePrefGroup,
@@ -1417,15 +1420,27 @@ let recordIndex = 0;
 function renderRecords() {
   if (!records.length) return;
   const r = records[recordIndex];
-  // タブは作り直さず、押された印だけを移す。押したタブを入れ替えると、
-  // そのクリックが届く頃には要素が文書の外にあり、「持ち物の外を押した」と
-  // 読まれてポップオーバーが閉じる。
+  // タブと点は作り直さず、印だけを移す。押した物を入れ替えると、そのクリック
+  // が届く頃には要素が文書の外にあり、「持ち物の外を押した」と読まれて
+  // ポップオーバーが閉じる。
   const tabs = $('#rec-tabs');
   if (!tabs.childElementCount) tabs.innerHTML = recordTabsHTML(records, r.tab);
   for (const t of tabs.querySelectorAll('.rec-tab')) {
     t.setAttribute('aria-pressed', String(Number(t.dataset.tab) === r.tab));
   }
-  $('#records').innerHTML = recordCardHTML(r, recordIndex, records.length);
+  const dots = $('#rec-dots');
+  if (!dots.childElementCount) {
+    dots.innerHTML = recordDotsHTML(records, recordIndex);
+  }
+  for (const d of dots.querySelectorAll('.rec-dot')) {
+    if (Number(d.dataset.index) === recordIndex) {
+      d.setAttribute('aria-current', 'true');
+    } else {
+      d.removeAttribute('aria-current');
+    }
+  }
+  $('#rec-card').innerHTML = recordCardHTML(r);
+  $('#rec-goto').innerHTML = recordGotoHTML(r);
 }
 
 /** 前後にめくる。端まで来たら反対の端へ回る。 */
@@ -1453,12 +1468,27 @@ $('#records-popover').addEventListener('keydown', (ev) => {
   else return;
   ev.preventDefault();
 });
-// 「この場所を見る」と、極点の記録の各行。どちらも行き先の広がりを持つ。
-// 押してもポップオーバーは閉じない。ランキングの行と同じで、続けて
-// 次の記録へめくれる。
-$('#records').addEventListener('click', (ev) => {
+// 「この場所を見る」と、極点の記録の各行。記録の場所へ地図を寄せ、答えの
+// 路線だけを選ぶ。ランキングの行は選択を変えないが、あちらは選択を映す一覧で、
+// 選ぶと指の下で組み直る。記録は選択に依らないので、選んでも動かない。
+// 押してもポップオーバーは閉じない。続けて次の記録へめくれる。
+$('#records-popover').addEventListener('click', (ev) => {
   const go = ev.target.closest('.rec-goto, .rec-goto-end');
-  if (go) fitBbox(go.dataset.bbox);
+  if (!go) return;
+  showRoutesOnly(
+    document,
+    state,
+    go.dataset.refs.split(',').map(Number),
+    applyFilters,
+  );
+  fitBbox(go.dataset.bbox);
+});
+// 位置の点は、その記録へ飛ぶ。
+$('#rec-dots').addEventListener('click', (ev) => {
+  const dot = ev.target.closest('.rec-dot');
+  if (!dot) return;
+  recordIndex = Number(dot.dataset.index);
+  renderRecords();
 });
 
 /**

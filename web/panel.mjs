@@ -197,19 +197,16 @@ const fmtValue = (r) =>
     maximumFractionDigits: r.digits,
   });
 
-/* 値の行。「約」と単位は数より一段小さく薄くする。値の主役は数である。
- * 延長を使う値には「参考」の印を付ける。印だけにして、理由の文は添えない。 */
+/* 値の行。「約」と単位は数より一段小さく薄くする。値の主役は数である。 */
 const recordValueHTML = (r) =>
   r.value === null
     ? ''
     : '<p class="rec-val">' +
       (r.approx ? '<small class="pre">約</small>' : '') +
-      `${fmtValue(r)}<small>${esc(r.unit)}</small>` +
-      (r.reference ? '<span class="rec-ref">参考</span>' : '') +
-      '</p>';
+      `${fmtValue(r)}<small>${esc(r.unit)}</small></p>`;
 
-/* 極点の 4 行。標識は詳細パネルを開き、隣の文字はその端へ地図を寄せる。
- * 一枚の「この場所を見る」では 4 つの端を一度に見せられない。 */
+/* 極点の 4 行。標識は詳細パネルを開き、隣の文字はその端へ地図を寄せて、その
+ * 路線を選ぶ。一枚の「この場所を見る」では 4 つの端を一度に見せられない。 */
 const recordEndsHTML = (ends) =>
   '<div class="rec-ends">' +
   ends
@@ -217,7 +214,8 @@ const recordEndsHTML = (ends) =>
       const deg = `${e.deg.toFixed(2)}°${e.axis}`;
       return (
         `<div class="rec-end">${shieldButtonHTML(e.ref)}` +
-        `<button type="button" class="rec-goto-end" data-bbox="${e.bbox.join(',')}" ` +
+        `<button type="button" class="rec-goto-end" data-refs="${e.ref}" ` +
+        `data-bbox="${e.bbox.join(',')}" ` +
         `aria-label="最も${e.dir}の端、国道${e.ref}号（${deg}）を地図で表示">` +
         `<b>${e.dir}　${e.ref}号</b><small>${deg}</small></button></div>`
       );
@@ -226,34 +224,47 @@ const recordEndsHTML = (ends) =>
   '</div>';
 
 /**
- * 記録 1 件のカード。`index` と `total` は位置の点に使う。標識は詳細パネルの
- * 「関わりのある国道」と同じ `.shield-btn` で、押せばその路線の詳細が開く。
+ * 記録 1 件のカード。標識は詳細パネルの「関わりのある国道」と同じ
+ * `.shield-btn` で、押せばその路線の詳細が開く。延長を使う値には、路線名
+ * (無ければ記録の名前)のすぐ下に「参考」の印を付ける。印だけにして、理由の
+ * 文は添えない。
  */
-export function recordCardHTML(r, index, total) {
+export function recordCardHTML(r) {
   const one = r.refs.length === 1 && !r.ends;
   const shields = r.ends
     ? recordEndsHTML(r.ends)
     : `<div class="rec-shields${one ? ' one' : ''}">` +
       r.refs.map((ref) => shieldButtonHTML(ref, !one)).join('') +
       '</div>';
-  const dots = Array.from(
-    { length: total },
-    (_, i) => `<i${i === index ? ' class="on"' : ''}></i>`,
-  ).join('');
   return (
     `<div class="rec-card" data-key="${r.key}">${shields}` +
     `<p class="rec-title">${esc(r.title)}</p>` +
     (one ? `<p class="rec-route">国道${r.refs[0]}号</p>` : '') +
+    (r.reference ? '<p><span class="rec-ref">参考</span></p>' : '') +
     recordValueHTML(r) +
     (r.desc ? `<p class="rec-desc">${esc(r.desc)}</p>` : '') +
-    '</div>' +
-    `<div class="rec-dots" aria-hidden="true">${dots}</div>` +
-    (r.ends
-      ? ''
-      : `<button type="button" class="rec-goto" data-bbox="${r.bbox.join(',')}">` +
-        'この場所を見る</button>')
+    '</div>'
   );
 }
+
+/** 位置の点。どれもその記録へ飛ぶボタンで、いまの 1 件が点く。 */
+export const recordDotsHTML = (records, index) =>
+  records
+    .map(
+      (r, i) =>
+        `<button type="button" class="rec-dot" data-index="${i}" ` +
+        `aria-label="${i + 1} 件目：${esc(r.title)}"` +
+        `${i === index ? ' aria-current="true"' : ''}><i></i></button>`,
+    )
+    .join('');
+
+/** 「この場所を見る」。記録の場所へ寄せ、答えの路線を選ぶ。極点の記録は
+ *  行ごとに持つので出さない。 */
+export const recordGotoHTML = (r) =>
+  r.ends
+    ? ''
+    : `<button type="button" class="rec-goto" data-refs="${r.refs.join(',')}" ` +
+      `data-bbox="${r.bbox.join(',')}">この場所を見る</button>`;
 
 /* ------------------------------------------------------------------ 共有 --- */
 /**
