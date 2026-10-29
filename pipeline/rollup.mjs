@@ -11,7 +11,9 @@
  *
  * 受け取るアークは `{properties: {refs, n, km, kind, former, name}, refs_list,
  * bbox, geometry}` の形である。`refs` は区切り文字で囲んだキー、`refs_list` は
- * その中身の並びである。
+ * その中身の並びである。国道のアークはさらに `link` と `twin_km` を持つ
+ * (pack_web.mjs が carriageways.json から付ける)。タイルに載せない値なので
+ * `properties` の外に置く。
  *
  * 終わりの七つ(`addEndpoints` から `pickName` まで)を読むのは都道府県道
  * だけである。県境で続く路線を束ねるための物で、国道の番号は全国で一意なので
@@ -37,6 +39,12 @@ const km2 = (v) => Math.round(v * 100) / 100;
  * 名指しするのは 1 つか 2 つである。0 を書き並べれば何も述べないまま表が
  * 三倍になる。
  *
+ * `link_km` と `twin_km` は、延長のうち台帳が路線の延長に数えないぶんである。
+ * `link_km` はランプ・連結路、`twin_km` は上下線に分かれた道を 2 本ぶん数えた
+ * うちの片側で、`km - link_km - twin_km` が台帳と同じ数え方の延長になる。
+ * アークの `link`・`twin_km` から足し、0 は書かない。アークが持つのは国道だけ
+ * である(pipeline/carriageways.py)。都道府県道の行にこの欄は出ない。
+ *
  * `extra` は、その路線の格に固有の欄を 1 行ごとに足す。都道府県道は
  * 主要地方道かどうかをここで持つ。境目の値を持つのは判定(build_prefectural.py)
  * なので、JS 側が番号から決め直すと同じ問いに二箇所で答えることになる。
@@ -54,6 +62,8 @@ export function combinationsOf(feats, extra = null) {
         arcs: 0,
         kinds: new Map(),
         former: 0,
+        link: 0,
+        twin: 0,
         names: new Map(),
         bbox: [Infinity, Infinity, -Infinity, -Infinity],
         extra: extra ? extra(f) : null,
@@ -64,6 +74,8 @@ export function combinationsOf(feats, extra = null) {
     e.arcs++;
     e.kinds.set(p.kind, (e.kinds.get(p.kind) || 0) + p.km);
     if (p.former) e.former += p.km;
+    if (f.link) e.link += p.km;
+    e.twin += f.twin_km ?? 0;
     if (p.name) e.names.set(p.name, (e.names.get(p.name) || 0) + 1);
     e.bbox = [
       Math.min(e.bbox[0], f.bbox[0]),
@@ -82,6 +94,8 @@ export function combinationsOf(feats, extra = null) {
         .filter(([, v]) => v > 0)
         .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
       const former = km2(e.former);
+      const link = km2(e.link);
+      const twin = km2(e.twin);
       return {
         refs: e.refs,
         n: e.n,
@@ -89,6 +103,8 @@ export function combinationsOf(feats, extra = null) {
         arcs: e.arcs,
         kinds: Object.fromEntries(kinds),
         ...(former > 0 ? { former_km: former } : {}),
+        ...(link > 0 ? { link_km: link } : {}),
+        ...(twin > 0 ? { twin_km: twin } : {}),
         names: [...e.names.entries()]
           .sort((a, b) => b[1] - a[1])
           .slice(0, 3)

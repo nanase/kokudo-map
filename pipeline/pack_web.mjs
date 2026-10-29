@@ -89,6 +89,29 @@ for (const f of features) {
   f.refs_list = list;
 }
 
+/* ランプと上下線。台帳と同じ数え方の延長を集計が出すための物で、測るのは
+ * carriageways.py である。way の写しの選び方(regions.json の順で最初の物)が
+ * 上の結合と同じなので、id で引けば測った写しにそのまま当たる。無いまま進むと
+ * 行から欄が黙って消え、画面は上下線を 2 本ぶん数えた延長を台帳の数え方として
+ * 出すので、ここで止める。 */
+const carriagewaysPath = join(REGIONS, 'carriageways.json');
+let carriageways;
+try {
+  carriageways = JSON.parse(readFileSync(carriagewaysPath, 'utf8'));
+} catch (e) {
+  throw new Error(
+    `${carriagewaysPath} is unreadable (${e.code ?? e.message}); ` +
+      'run `uv run pipeline/carriageways.py` first',
+  );
+}
+const ramps = new Set(carriageways.link);
+for (const f of features) {
+  const id = f.properties.id;
+  if (ramps.has(id)) f.link = true;
+  const twin = carriageways.twin_m[id];
+  if (twin) f.twin_km = twin / 1000;
+}
+
 /* MVT に null は無い。欠けた属性を vt-pbf は「どの field も立っていない値」と
  * して書き、MapLibre は "unknown feature value" と答えてタイルを丸ごと捨てる。
  * アーク 1 本の欄が 1 つ欠けるだけでそのタイルの道が全部消え、それが起きるのは
