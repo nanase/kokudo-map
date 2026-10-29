@@ -117,7 +117,7 @@ describe('recordCardHTML', () => {
   });
 
   test('極点は 4 行で、行ごとに行き先を持ち、カード全体の場所のボタンは出さない', () => {
-    const ends = ['北', '南', '東', '西'].map((dir, i) => ({
+    const ends = ['北', '東', '西', '南'].map((dir, i) => ({
       dir,
       ref: 238 + i,
       deg: 45.52228,

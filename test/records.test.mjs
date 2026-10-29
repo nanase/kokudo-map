@@ -141,8 +141,9 @@ describe('recordsOf', () => {
     const r = by(records, 'ends');
     const at = Object.fromEntries(r.ends.map((e) => [e.dir, e.ref]));
     // 1 号は九州の行で南と西の端を、本州の行で北と東の端を持ちます。
+    expect(r.ends.map((e) => e.dir)).toEqual(['北', '東', '西', '南']);
     expect(at).toEqual({ 北: 1, 南: 1, 東: 1, 西: 1 });
-    expect(r.desc).toBe('1号は北と南と東と西の端を一つで持つ。');
+    expect(r.desc).toBe('1号は北と東と西と南の端を一つで持つ。');
   });
 
   test('最も大きい番号', () => {

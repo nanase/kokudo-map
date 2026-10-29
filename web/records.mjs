@@ -370,9 +370,9 @@ export function recordsOf(meta) {
   };
   const ends = [
     extreme('北', 3, 1, 'N'),
-    extreme('南', 1, -1, 'N'),
     extreme('東', 2, 1, 'E'),
     extreme('西', 0, -1, 'E'),
+    extreme('南', 1, -1, 'N'),
   ];
   const holders = new Map();
   for (const e of ends)
