@@ -1464,9 +1464,10 @@ $('#rec-tabs').addEventListener('click', (ev) => {
 // いつでもめくる操作に使える。カードの中の標識や「この場所を見る」に居た
 // フォーカスは、めくると要素ごと消えて body へ落ち、次のキーが届かなくなる。
 // めくった向きの矢印へ移しておく。
+// 修飾キー付きはブラウザの操作(Alt+← で戻るなど)なので通す。
 $('#records-popover').addEventListener('keydown', (ev) => {
   const step = { ArrowLeft: -1, ArrowRight: 1 }[ev.key];
-  if (!step) return;
+  if (!step || ev.altKey || ev.ctrlKey || ev.metaKey) return;
   ev.preventDefault();
   const replaced = ev.target.closest('#rec-card, #rec-goto');
   stepRecord(step);
