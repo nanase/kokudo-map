@@ -208,7 +208,7 @@ const recordValueHTML = (r) =>
       (r.reference ? '<span class="rec-ref">参考</span>' : '') +
       '</p>';
 
-/* 端点の 4 行。標識は詳細パネルを開き、隣の文字はその端へ地図を寄せる。
+/* 極点の 4 行。標識は詳細パネルを開き、隣の文字はその端へ地図を寄せる。
  * 一枚の「この場所を見る」では 4 つの端を一度に見せられない。 */
 const recordEndsHTML = (ends) =>
   '<div class="rec-ends">' +

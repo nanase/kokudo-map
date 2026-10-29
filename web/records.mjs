@@ -14,7 +14,7 @@
  */
 
 /** カードの分類。並びはタブの並びである。 */
-export const RECORD_TABS = ['珍しい道', '線形', '交わり', '端点', '番号'];
+export const RECORD_TABS = ['珍しい道', '線形', '交わり', '極点', '番号'];
 
 const [RARE, SHAPE, LINKS, ENDS, NUMBER] = RECORD_TABS.keys();
 
@@ -125,7 +125,7 @@ const kindKm = (route, kind) =>
  * | `reference` | 延長を使う値か。画面が「参考」の印を付ける               |
  * | `desc`      | 説明の 1 文。政令の起点・終点と、記録ごとの定型文で作る |
  * | `bbox`      | 「この場所を見る」の行き先                               |
- * | `ends`      | 端点の記録だけ。方角ごとの路線・緯度経度・行き先         |
+ * | `ends`      | 極点の記録だけ。方角ごとの路線・緯度経度・行き先         |
  *
  * 上下線を数え直した延長(`twin_km`)を持たない古い meta では、それを要る記録を
  * 出さない。web/data は追跡していないので、古い meta が配信されたまま新しい
@@ -365,7 +365,7 @@ export function recordsOf(meta) {
     });
   }
 
-  /* 端点。行の広がりの端で比べる。路線の線そのものの端なので確かである。 */
+  /* 極点。行の広がりの端で比べる。路線の線そのものの端なので確かである。 */
   const extreme = (dir, edge, sign, axis) => {
     let best = null;
     for (const r of routes) {

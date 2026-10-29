@@ -1453,7 +1453,7 @@ $('#records-popover').addEventListener('keydown', (ev) => {
   else return;
   ev.preventDefault();
 });
-// 「この場所を見る」と、端点の記録の各行。どちらも行き先の広がりを持つ。
+// 「この場所を見る」と、極点の記録の各行。どちらも行き先の広がりを持つ。
 // 押してもポップオーバーは閉じない。ランキングの行と同じで、続けて
 // 次の記録へめくれる。
 $('#records').addEventListener('click', (ev) => {

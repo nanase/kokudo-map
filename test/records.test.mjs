@@ -136,7 +136,7 @@ describe('recordsOf', () => {
     expect(r.desc).toBe('175号は横浜市。');
   });
 
-  test('端点は行の広がりの端で、一つの路線が二つの端を持てる', () => {
+  test('極点は行の広がりの端で、一つの路線が二つの端を持てる', () => {
     const r = by(records, 'ends');
     const at = Object.fromEntries(r.ends.map((e) => [e.dir, e.ref]));
     // 1 号は九州の行で南と西の端を、本州の行で北と東の端を持ちます。

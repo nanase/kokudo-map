@@ -99,7 +99,7 @@ describe('recordCardHTML', () => {
     expect(dots.findIndex((i) => i.classList.contains('on'))).toBe(4);
   });
 
-  test('端点は 4 行で、行ごとに行き先を持ち、カード全体の場所のボタンは出さない', () => {
+  test('極点は 4 行で、行ごとに行き先を持ち、カード全体の場所のボタンは出さない', () => {
     const ends = ['北', '南', '東', '西'].map((dir, i) => ({
       dir,
       ref: 238 + i,
@@ -132,7 +132,7 @@ describe('recordTabsHTML', () => {
       '珍しい道',
       '線形',
       '交わり',
-      '端点',
+      '極点',
       '番号',
     ]);
     expect(tabs.map((t) => t.getAttribute('aria-pressed'))).toEqual([
