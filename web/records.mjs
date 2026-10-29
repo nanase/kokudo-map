@@ -310,30 +310,6 @@ export function recordsOf(meta) {
       desc: '平面で交わるほかの国道の数。',
       bbox: boxOf(refs),
     });
-
-    // 交差・重用・起終点の共有のどれも無い。どれも詳細パネルの「関わりのある
-    // 国道」の区画で、そこが空になる路線である(detail.mjs の relatedRoutesOf)。
-    const related = new Set(crossCount.keys());
-    for (const c of combos)
-      if (c.n >= 2) for (const r of c.refs) related.add(r);
-    for (const t of meta.shared_termini ?? [])
-      for (const r of t.refs) related.add(r);
-    const alone = routes.filter((r) => !related.has(r.ref)).map((r) => r.ref);
-    if (alone.length) {
-      out.push({
-        key: 'alone',
-        tab: LINKS,
-        title: 'どの国道とも交わらず、重ならない',
-        refs: alone,
-        value: alone.length,
-        unit: '本',
-        digits: 0,
-        approx: false,
-        reference: false,
-        desc: '交差・重用・起終点の共有のどれも無い。',
-        bbox: boxOf(alone),
-      });
-    }
   }
 
   if (hasLedger) {

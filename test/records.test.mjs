@@ -120,11 +120,6 @@ describe('recordsOf', () => {
     expect(by(tied, 'crossings').refs).toEqual([1, 2, 3, 174]);
   });
 
-  test('どの国道とも交わらず重ならない路線は、交差・重用・起終点の共有を持たない', () => {
-    // 1 号と 3 号は重用、2 号と 175 号は交差を持ちます。
-    expect(by(records, 'alone').refs).toEqual([174]);
-  });
-
   test('経過地は括弧の外の空白で数える', () => {
     const r = by(records, 'via');
     expect(r.refs).toEqual([1]);
