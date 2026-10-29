@@ -240,7 +240,7 @@ export function recordCardHTML(r) {
     `<div class="rec-card" data-key="${r.key}">${shields}` +
     `<p class="rec-title">${esc(r.title)}</p>` +
     (one ? `<p class="rec-route">国道${r.refs[0]}号</p>` : '') +
-    (r.reference ? '<p><span class="rec-ref">参考</span></p>' : '') +
+    (r.reference ? '<p class="rec-ref">参考</p>' : '') +
     recordValueHTML(r) +
     (r.desc ? `<p class="rec-desc">${esc(r.desc)}</p>` : '') +
     '</div>'
