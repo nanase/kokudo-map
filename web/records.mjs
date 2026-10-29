@@ -59,29 +59,6 @@ function distanceKm(a, b) {
   return 2 * 6371 * Math.asin(Math.sqrt(h));
 }
 
-/**
- * 政令の「重要な経過地」の欄を地名に分ける。地名は全角の空白で区切ってあるが、
- * 括弧の中にも空白が入る(国道 1 号の「平塚市（浅間町　袖ケ浜）」は 1 か所で
- * ある)。括弧の外の空白だけで切る。
- */
-export function viaPlaces(via) {
-  const out = [];
-  let depth = 0;
-  let cur = '';
-  for (const ch of via ?? '') {
-    if (ch === '（' || ch === '(') depth++;
-    if (ch === '）' || ch === ')') depth = Math.max(0, depth - 1);
-    if (depth === 0 && /\s/.test(ch)) {
-      if (cur) out.push(cur);
-      cur = '';
-    } else {
-      cur += ch;
-    }
-  }
-  if (cur) out.push(cur);
-  return out;
-}
-
 /** 路線ごとの集まり。組み合わせ表を 1 度だけ辿る。 */
 function routeTable(combos) {
   const by = new Map();
@@ -371,26 +348,7 @@ export function recordsOf(meta) {
     ends,
   });
 
-  /* 番号と政令。 */
-  const vias = [...decree.values()].filter((d) => byRef.has(Number(d.ref)));
-  if (vias.length) {
-    const { best, items } = leaders(vias, (d) => viaPlaces(d.via).length);
-    const refs = items.map((d) => Number(d.ref));
-    out.push({
-      key: 'via',
-      tab: NUMBER,
-      title: '経過地が最も多い国道',
-      refs,
-      value: best,
-      unit: 'か所',
-      digits: 0,
-      approx: false,
-      reference: false,
-      desc: `${refs.length === 1 ? span(refs[0]) : ''}政令の「重要な経過地」の数。`,
-      bbox: boxOf(refs),
-    });
-  }
-
+  /* 番号。 */
   const top = routes[routes.length - 1].ref;
   out.push({
     key: 'largest',

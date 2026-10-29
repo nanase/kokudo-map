@@ -4,14 +4,10 @@
  * meta は上下線を 2 本ぶん数えており、国道174号が 0.3 km になって公式の
  * 0.187 km とずれます。古い meta でも「最も短い国道」は 174 号のままなので、
  * 答えを見ただけでは気付けません。だから延長を使う記録は、古い meta では出しません。
- *
- * 経過地の数え方も同じ形の罠を持ちます。地名は全角の空白で区切ってありますが、
- * 括弧の中にも空白が入ります。空白だけで切ると国道 1 号は 55 か所になり、1 位の
- * まま 1 か所多く数えます。
  */
 import { describe, expect, test } from 'bun:test';
 
-import { RECORD_TABS, recordsOf, viaPlaces } from '../web/records.mjs';
+import { RECORD_TABS, recordsOf } from '../web/records.mjs';
 
 const row = (refs, km, extra = {}) => ({
   refs,
@@ -23,11 +19,10 @@ const row = (refs, km, extra = {}) => ({
   ...extra,
 });
 
-const decreeRow = (ref, start, end, via = '', coords = {}) => ({
+const decreeRow = (ref, start, end) => ({
   ref,
-  via,
-  start: { name: start, ...(coords.start ?? {}) },
-  end: { name: end, ...(coords.end ?? {}) },
+  start: { name: start },
+  end: { name: end },
 });
 
 /* 行は台帳の数え方の延長を持ちます。174 号は 0.31 km の線のうち 0.08 km が
@@ -52,13 +47,8 @@ const META = {
   shared_termini: [],
   decree: {
     routes: [
-      decreeRow(
-        1,
-        '東京都中央区',
-        '大阪市',
-        '横浜市　平塚市（浅間町　袖ケ浜）　小田原市',
-      ),
-      decreeRow(2, '大阪市', '北九州市', '神戸市'),
+      decreeRow(1, '東京都中央区', '大阪市'),
+      decreeRow(2, '大阪市', '北九州市'),
       decreeRow(3, '北九州市', '鹿児島市'),
       decreeRow(174, '神戸港', '神戸市中央区'),
       decreeRow(175, '横浜市', '横浜市'),
@@ -67,21 +57,6 @@ const META = {
 };
 
 const by = (records, key) => records.find((r) => r.key === key);
-
-describe('viaPlaces', () => {
-  test('括弧の中の空白では切らない', () => {
-    expect(viaPlaces('横浜市　平塚市（浅間町　袖ケ浜）　小田原市')).toEqual([
-      '横浜市',
-      '平塚市（浅間町　袖ケ浜）',
-      '小田原市',
-    ]);
-  });
-
-  test('空の欄は 0 か所', () => {
-    expect(viaPlaces('')).toEqual([]);
-    expect(viaPlaces(undefined)).toEqual([]);
-  });
-});
 
 describe('recordsOf', () => {
   const records = recordsOf(META);
@@ -118,12 +93,6 @@ describe('recordsOf', () => {
       ],
     });
     expect(by(tied, 'crossings').refs).toEqual([1, 2, 3, 174]);
-  });
-
-  test('経過地は括弧の外の空白で数える', () => {
-    const r = by(records, 'via');
-    expect(r.refs).toEqual([1]);
-    expect(r.value).toBe(3);
   });
 
   test('起点と終点が同じ国道は、政令の地名で決める', () => {
