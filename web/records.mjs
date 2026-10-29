@@ -248,7 +248,7 @@ export function recordsOf(meta) {
     out.push({
       key: 'farthest',
       tab: SHAPE,
-      title: '起点と終点が直線で最も遠い国道',
+      title: '起点と終点が直線距離で最も離れている国道',
       refs,
       // 起点・終点の座標は市区町村の中の端点で、政令の地点そのものではない。
       // 10 km の桁に丸め、「約」を付ける。
