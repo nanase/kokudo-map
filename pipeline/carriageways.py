@@ -46,18 +46,20 @@ from compare_annual_report import (
     is_dual,
     load_region,
     paired_fraction,
+    require_oneway,
 )
 
 OUT = REGIONS / "carriageways.json"
 
 
-def measure_region(region: str, seen: set[int]) -> tuple[list[int], dict[int, float]]:
-    """1 地域ぶんの、まだ測っていない way のランプと上下線。"""
+def measure_region(region: str, seen: set[int]) -> tuple[list[int], dict[int, float], int]:
+    """1 地域ぶんの、まだ測っていない way のランプと上下線と、一方通行の本数。"""
     arcs = load_region(region)
     own = {a["id"] for a in arcs} - seen
     seen |= own
 
     links = [a["id"] for a in arcs if a["id"] in own and a["link"]]
+    oneway = sum(1 for a in arcs if a["id"] in own and a["oneway"])
 
     # 測る相手の集め方は compare_annual_report.measure と同じである。旧道は
     # 迂回した道の写しではなく、ランプはランプとして数えてあるので、どちらも
@@ -75,7 +77,7 @@ def measure_region(region: str, seen: set[int]) -> tuple[list[int], dict[int, fl
             if is_dual(key))
         if metres > 0:
             twins[a["id"]] = round(metres / 2, 1)
-    return links, twins
+    return links, twins, oneway
 
 
 def main() -> None:
@@ -87,13 +89,16 @@ def main() -> None:
     seen: set[int] = set()
     links: list[int] = []
     twins: dict[int, float] = {}
+    oneway = 0
     for entry in index:
         region = entry["region"]
-        ramps, pairs = measure_region(region, seen)
+        ramps, pairs, n = measure_region(region, seen)
         links += ramps
         twins.update(pairs)
+        oneway += n
         print(f"  {region:12} ランプ {len(ramps):5,}  上下線 {len(pairs):6,}",
               flush=True)
+    require_oneway(oneway)
 
     write_atomic(OUT, json.dumps({
         "reach_m": PAIR_DISTANCE_M,

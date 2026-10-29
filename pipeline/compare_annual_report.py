@@ -286,6 +286,20 @@ def is_dual(key: tuple[str, str, bool]) -> bool:
     return both_oneway if group == "open" else True
 
 
+def require_oneway(oneway_arcs: int) -> None:
+    """一方通行の way が 1 本も無ければ止める。
+
+    `oneway` を持つ前に切ったキャッシュでは、どの way も一方通行でなく読める。
+    すると is_dual は供用中の上下線を 1 組も認めず、誤りではなく 0 を返す。
+    carriageways.py も同じキャッシュを読むので、ここで同じように止める。
+    """
+    if not oneway_arcs:
+        raise SystemExit(
+            "no way in build/cache carries `oneway`, so no carriageway pair can be "
+            "recognised. The cache was cut before build_routes.TAGS_USED gained the "
+            "tag; run `mise run extract` again.")
+
+
 # ----------------------------------------------------------------- measure ---
 def measure(reach: float) -> dict:
     """全国の way を一度ずつ。並走の長さは、その way が属する地域の中で測る。
@@ -419,11 +433,7 @@ def main() -> None:
     print(f"上下線の判定: 側方 {reach:.0f} m 以内、{SAMPLE_M:.0f} m ごとに測る\n")
 
     m = measure(reach)
-    if not m["oneway_arcs"]:
-        raise SystemExit(
-            "no way in build/cache carries `oneway`, so no carriageway pair can be "
-            "recognised. The cache was cut before build_routes.TAGS_USED gained the "
-            "tag; run `mise run extract` again.")
+    require_oneway(m["oneway_arcs"])
     kind, link = m["km_by_kind"], m["link_km_by_kind"]
 
     dedup_km = sum(kind.values())
